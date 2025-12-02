@@ -1,0 +1,73 @@
+---
+description: Основные правила проекта ArbitroPLEXbot
+globs: ["**/*"]
+alwaysApply: true
+---
+
+# 📋 Правила проекта ArbitroPLEXbot
+
+## Информация о проекте
+
+- **Название:** ArbitroPLEXbot
+- **Тип:** Telegram бот
+- **Репозиторий:** https://github.com/Avertenandor/ArbitroPLEXbot
+- **Сервер:** instance-20251107-043512 (35.228.48.9)
+- **Документация сервера:** `SERVER_INFO.md` (ЛОКАЛЬНО, не в Git!)
+
+## Технический стек
+
+- Python 3.11+
+- aiogram 3.x (Telegram Bot API)
+- PostgreSQL + asyncpg
+- Redis
+- Docker + Docker Compose
+- GCP (Google Cloud Platform)
+
+## Команды деплоя
+
+```bash
+# SSH на сервер
+gcloud compute ssh instance-20251107-043512 --zone=europe-north1-a --project=telegram-bot-444304
+
+# С командой
+gcloud compute ssh instance-20251107-043512 --zone=europe-north1-a --project=telegram-bot-444304 --command="<CMD>"
+
+# Rebuild
+gcloud compute ssh instance-20251107-043512 --zone=europe-north1-a --project=telegram-bot-444304 --command="cd /opt/arbitragebot && sudo git pull && sudo docker compose up -d --build"
+```
+
+## Правила разработки
+
+1. **Язык общения:** Русский
+2. **Код:** Английский (переменные, функции, комментарии в коде)
+3. **Типизация:** Обязательна для всех публичных функций
+4. **Докстринги:** Google Style
+5. **Линтеры:** ruff, mypy, black
+
+## Структура проекта
+
+```
+arbitragebot/
+├── app/
+│   ├── bot/           # Telegram bot handlers
+│   ├── api/           # FastAPI (если нужен)
+│   ├── models/        # SQLAlchemy models
+│   ├── services/      # Business logic
+│   └── config.py      # Settings
+├── alembic/           # Migrations
+├── tests/             # Tests
+├── docker-compose.yml
+├── Dockerfile
+├── .env               # ЛОКАЛЬНО! НЕ В GIT!
+├── .env.example       # Шаблон (в Git)
+└── requirements.txt
+```
+
+## Чек-лист перед коммитом
+
+- [ ] Нет секретов в коде
+- [ ] Нет `.env` в staged files
+- [ ] Нет `SERVER_INFO.md` в staged files
+- [ ] Типы добавлены
+- [ ] Линтеры пройдены
+- [ ] Тесты работают

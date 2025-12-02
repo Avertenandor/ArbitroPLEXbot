@@ -1,0 +1,46 @@
+# Core Framework
+aiogram==3.4.1
+aiohttp==3.9.1
+
+# Database
+sqlalchemy[asyncio]==2.0.25
+alembic==1.13.1
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+
+# Settings & Configuration
+pydantic==2.5.3
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+
+# Blockchain & Web3
+web3==6.15.0
+eth-account==0.11.0
+eth-utils==3.0.0
+mnemonic==0.20
+
+# Security & Encryption
+bcrypt==4.1.2
+cryptography==42.0.0
+
+# Task Queue & Background Jobs
+dramatiq[redis]==1.15.0
+redis==5.0.1
+apscheduler==3.10.4
+
+# Logging & Monitoring
+loguru==0.7.2
+
+# Utilities
+python-dateutil==2.8.2
+openpyxl==3.1.2
+
+# Development & Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+ruff==0.6.4
+# black==23.12.1
+# flake8==7.0.0
+# mypy==1.8.0

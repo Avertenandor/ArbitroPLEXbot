@@ -1,0 +1,122 @@
+# ========================================
+# ArbitroPLEXbot - STRICT SECURITY RULES
+# ========================================
+# ЗАПРЕЩЕНО отправлять в репозиторий!
+
+# ==================
+# СЕКРЕТЫ И КЛЮЧИ
+# ==================
+.env
+.env.*
+*.env
+secrets.json
+secrets*.json
+*_secrets.json
+credentials.json
+credentials*.json
+*.pem
+*.key
+*.p12
+*.pfx
+private_key*
+*_private*
+*secret*
+*token*
+api_keys*
+keys.json
+
+# ==================
+# ДОКУМЕНТАЦИЯ БОТА
+# ==================
+SERVER_INFO.md
+SERVER_ACCESS.md
+DEPLOY_INFO.md
+CREDENTIALS.md
+KEYS.md
+*.credentials.md
+*_ACCESS.md
+*_INFO.md
+docs/private/
+docs/secrets/
+docs/deploy/
+
+# ==================
+# КОНФИГУРАЦИИ
+# ==================
+config.local.*
+*.local.json
+*.local.yml
+*.local.yaml
+settings.local.*
+production.env
+staging.env
+
+# ==================
+# БАЗЫ ДАННЫХ
+# ==================
+*.db
+*.sqlite
+*.sqlite3
+data/
+database/
+
+# ==================
+# ЛОГИ
+# ==================
+*.log
+logs/
+*.jsonl
+
+# ==================
+# PYTHON
+# ==================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+ENV/
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# ==================
+# IDE И РЕДАКТОРЫ
+# ==================
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ==================
+# DOCKER
+# ==================
+docker-compose.override.yml
+docker-compose.local.yml
+
+# ==================
+# ВРЕМЕННЫЕ ФАЙЛЫ
+# ==================
+tmp/
+temp/
+*.tmp
+*.bak
+*.backup
+
+# ==================
+# SSH КЛЮЧИ (на случай копирования)
+# ==================
+*.ppk
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+google_compute_engine*
+
