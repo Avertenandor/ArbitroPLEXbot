@@ -68,8 +68,7 @@ USDT_ABI = [
 ]
 
 # USDT decimals (BEP-20 USDT uses 18 decimals)
-USDT_# PLEX uses 9 decimals
-        decimals = 9
+USDT_DECIMALS = 18
 
 # Gas settings for BSC
 # 0.1 Gwei = 100_000_000 Wei (1 Gwei = 10^9 Wei)
