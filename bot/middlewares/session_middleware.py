@@ -84,7 +84,7 @@ class SessionMiddleware(BaseMiddleware):
         user_id = tg_user.id
         logger.debug(f"SessionMiddleware: user_id={user_id}")
 
-        # Allow specific commands/callbacks always
+        # Allow /start command always
         if isinstance(actual_event, Message) and actual_event.text:
             logger.debug(f"SessionMiddleware: message text={actual_event.text!r}")
             if actual_event.text.startswith("/start"):
@@ -93,6 +93,40 @@ class SessionMiddleware(BaseMiddleware):
                     f"passing through for user {user_id}"
                 )
                 return await handler(event, data)
+            
+            # Allow authorization buttons (Reply keyboard)
+            auth_buttons = {
+                "✅ Я оплатил",
+                "🔄 Проверить снова", 
+                "❌ Отмена",
+                "🚀 Начать работу",
+                "🔄 Обновить депозит",
+            }
+            if actual_event.text in auth_buttons:
+                logger.info(
+                    f"SessionMiddleware: auth button '{actual_event.text}' detected, "
+                    f"passing through for user {user_id}"
+                )
+                return await handler(event, data)
+
+        # Check FSM state - allow auth states without session
+        state: FSMContext | None = data.get("state")
+        if state:
+            current_state = await state.get_state()
+            if current_state:
+                # Import auth states
+                from bot.states.auth import AuthStates
+                auth_state_names = {
+                    AuthStates.waiting_for_wallet.state,
+                    AuthStates.waiting_for_payment.state,
+                    AuthStates.waiting_for_payment_wallet.state,
+                }
+                if current_state in auth_state_names:
+                    logger.info(
+                        f"SessionMiddleware: auth FSM state '{current_state}', "
+                        f"passing through for user {user_id}"
+                    )
+                    return await handler(event, data)
 
         if isinstance(actual_event, CallbackQuery) and actual_event.data:
             logger.debug(f"SessionMiddleware: callback data={actual_event.data!r}")
