@@ -306,27 +306,81 @@ class PlexPaymentRepository:
     async def reset_to_active(self, payment_id: int) -> PlexPaymentRequirement | None:
         """
         Reset payment status to active (for admin use).
-        
+
         Args:
             payment_id: Payment requirement ID
-            
+
         Returns:
             Updated payment or None
         """
         payment = await self.get_by_id(payment_id)
         if not payment:
             return None
-        
+
         now = datetime.now(UTC)
         payment.status = PlexPaymentStatus.ACTIVE
         payment.next_payment_due = now + timedelta(hours=24)
         payment.warning_due = now + timedelta(hours=25)
         payment.block_due = now + timedelta(hours=49)
         payment.warning_sent_at = None
-        
+
         await self._session.flush()
         await self._session.refresh(payment)
-        
+
         logger.info(f"Reset PLEX payment to active: payment_id={payment_id}")
         return payment
+
+    async def get_pending_activation_payments(
+        self, limit: int = 100
+    ) -> Sequence[PlexPaymentRequirement]:
+        """
+        Get payment requirements waiting for first payment (deposit not active).
+
+        Returns payments where is_work_active = False (deposit not yet activated).
+        These deposits need their first PLEX payment to start working.
+        """
+        result = await self._session.execute(
+            select(PlexPaymentRequirement)
+            .where(
+                and_(
+                    PlexPaymentRequirement.is_work_active == False,
+                    PlexPaymentRequirement.status.in_([
+                        PlexPaymentStatus.ACTIVE,
+                        PlexPaymentStatus.WARNING_SENT,
+                    ])
+                )
+            )
+            .options(selectinload(PlexPaymentRequirement.user))
+            .options(selectinload(PlexPaymentRequirement.deposit))
+            .order_by(PlexPaymentRequirement.created_at.asc())
+            .limit(limit)
+        )
+        return result.scalars().all()
+
+    async def get_active_working_payments(
+        self, limit: int = 100
+    ) -> Sequence[PlexPaymentRequirement]:
+        """
+        Get payment requirements for active working deposits.
+
+        Returns payments where is_work_active = True (deposit activated).
+        """
+        result = await self._session.execute(
+            select(PlexPaymentRequirement)
+            .where(
+                and_(
+                    PlexPaymentRequirement.is_work_active == True,
+                    PlexPaymentRequirement.status.in_([
+                        PlexPaymentStatus.ACTIVE,
+                        PlexPaymentStatus.WARNING_SENT,
+                        PlexPaymentStatus.PAID,
+                    ])
+                )
+            )
+            .options(selectinload(PlexPaymentRequirement.user))
+            .options(selectinload(PlexPaymentRequirement.deposit))
+            .order_by(PlexPaymentRequirement.next_payment_due.asc())
+            .limit(limit)
+        )
+        return result.scalars().all()
 

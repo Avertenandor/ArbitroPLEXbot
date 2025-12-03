@@ -18,6 +18,19 @@ LEVELS = {
 # Daily PLEX cost per dollar of deposit
 PLEX_PER_DOLLAR_DAILY = 10
 
+# Minimum PLEX balance required to work with system
+MINIMUM_PLEX_BALANCE = 5000
+
+# Maximum deposits per user
+MAX_DEPOSITS_PER_USER = 5
+
+# Work status constants
+class WorkStatus:
+    """User work status constants."""
+    ACTIVE = "active"                       # Normal operation
+    SUSPENDED_NO_PLEX = "suspended_no_plex"  # Balance < 5000 PLEX
+    SUSPENDED_NO_PAYMENT = "suspended_no_payment"  # PLEX payment not received
+
 # System wallet for PLEX payments
 SYSTEM_WALLET = "0x1C67E0Ff6C76270498525590BE85DD138702Bf67"
 
