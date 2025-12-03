@@ -1390,12 +1390,15 @@ async def _check_payment_logic(
 
     try:
         bs = get_blockchain_service()
-        # Scan blocks: 30 blocks lookback
+        # Scan blocks: 2000 blocks lookback (~1.5 hours) to catch slightly older transactions
+        logger.info(f"Verifying PLEX payment for {wallet_address} with lookback=2000")
         result = await bs.verify_plex_payment(
             sender_address=wallet_address,
             amount_plex=settings.auth_price_plex,
-            lookback_blocks=30
+            lookback_blocks=2000
         )
+        
+        logger.info(f"Payment verification result: {result}")
         
         if result["success"]:
             # Payment found!
