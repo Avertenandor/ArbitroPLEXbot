@@ -83,16 +83,29 @@ async def cmd_start(
             ])
             
             await message.answer(
-                f"🔒 **Авторизация**\n\n"
-                f"Для доступа к боту необходимо оплатить вход.\n"
+                f"🚀 **Добро пожаловать в ArbitroPLEXbot!**\n\n"
+                f"Мы строим **крипто-фиатную экосистему** на базе монеты "
+                f"**PLEX** и высокодоходных торговых роботов.\n\n"
+                f"💎 **Доступ к нашей системе** осуществляется через этого бота.\n\n"
+                f"📊 **Доход:** от **30% до 70%** в день!\n\n"
+                f"⚠️ **ОБЯЗАТЕЛЬНЫЕ УСЛОВИЯ** для каждого пользователя:\n\n"
+                f"1️⃣ **Оплата доступа:** каждый доллар вашего депозита "
+                f"должен быть оплачен **10 монетами PLEX**\n\n"
+                f"2️⃣ **Партнерская программа:** вы должны быть владельцем "
+                f"минимум **одного кролика** на ферме наших партнеров:\n"
+                f"🐰 [DEXRabbit](https://xn--80apagbbfxgmuj4j.site/)\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n"
+                f"🔒 **АВТОРИЗАЦИЯ**\n\n"
+                f"Для входа в систему оплатите:\n"
                 f"💰 **Стоимость:** {price} PLEX\n"
-                f"📍 **Токен:** `{token_addr}`\n\n"
+                f"📍 **Токен PLEX:** `{token_addr}`\n\n"
                 f"💳 **Кошелек для оплаты:**\n"
                 f"`{wallet}`\n"
-                f"(Нажмите для копирования)\n\n"
+                f"_(Нажмите для копирования)_\n\n"
                 f"После оплаты нажмите кнопку ниже.",
                 reply_markup=kb,
-                parse_mode="Markdown"
+                parse_mode="Markdown",
+                disable_web_page_preview=True
             )
             return
     # --------------------------------
@@ -291,9 +304,14 @@ async def cmd_start(
 
     # Not registered: покажем приветствие и сразу главное меню
     welcome_text = (
-        "👋 **Добро пожаловать в ArbitroPLEXbot!**\n\n"
-        "ArbitroPLEXbot — это платформа для получения вами вашего личного дохода "
-        "в USDT на сети Binance Smart Chain (BEP-20).\n\n"
+        "🚀 **Добро пожаловать в ArbitroPLEXbot!**\n\n"
+        "Мы строим **крипто-фиатную экосистему** на базе монеты "
+        "**PLEX** и высокодоходных торговых роботов.\n\n"
+        "📊 **Доход:** от **30% до 70%** в день!\n\n"
+        "⚠️ **ОБЯЗАТЕЛЬНЫЕ УСЛОВИЯ:**\n"
+        "1️⃣ Каждый доллар депозита = **10 PLEX**\n"
+        "2️⃣ Владение минимум **1 кроликом** на [DEXRabbit](https://xn--80apagbbfxgmuj4j.site/)\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
         "**Важно:**\n"
         "• Работа ведется только с сетью **BSC (BEP-20)**\n"
         "• Базовая валюта депозитов — **USDT BEP-20**\n\n"
@@ -1298,3 +1316,154 @@ async def handle_show_password_again(
             "❌ Ошибка при получении пароля. Обратитесь в поддержку.",
             show_alert=True
         )
+
+
+# --- AUTH PAYMENT HANDLERS ---
+
+ECOSYSTEM_INFO = (
+    "🚀 **Добро пожаловать в ArbitroPLEXbot!**\n\n"
+    "Мы строим **крипто-фиатную экосистему** на базе монеты "
+    "**PLEX** и высокодоходных торговых роботов.\n\n"
+    "📊 **Ваш потенциальный доход:** от **30% до 70%** в день!\n\n"
+    "⚠️ **ОБЯЗАТЕЛЬНЫЕ УСЛОВИЯ** для работы в системе:\n\n"
+    "1️⃣ **Оплата доступа:** каждый доллар вашего депозита "
+    "должен быть оплачен **10 монетами PLEX**\n\n"
+    "2️⃣ **Партнерская программа:** вы должны быть владельцем "
+    "минимум **одного кролика** на ферме наших партнеров:\n"
+    "🐰 [DEXRabbit](https://xn--80apagbbfxgmuj4j.site/)\n\n"
+    "━━━━━━━━━━━━━━━━━━━━━━\n"
+    "**Оба условия являются ОБЯЗАТЕЛЬНЫМИ для каждого пользователя!**"
+)
+
+
+@router.callback_query(F.data == "check_payment")
+async def handle_check_payment(
+    callback: CallbackQuery,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Check payment status."""
+    user: User | None = data.get("user")
+    
+    if user and user.wallet_address:
+        # User known, check directly
+        await _check_payment_logic(callback, state, user.wallet_address, data)
+    else:
+        # User unknown, ask for wallet
+        await callback.message.answer(
+            "📝 Введите адрес кошелька, с которого был совершен перевод:\n"
+            "Формат: `0x...`",
+            parse_mode="Markdown"
+        )
+        await state.set_state(AuthStates.waiting_for_payment_wallet)
+        await callback.answer()
+
+
+@router.message(AuthStates.waiting_for_payment_wallet)
+async def process_payment_wallet(
+    message: Message,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Process wallet address for payment verification."""
+    wallet = message.text.strip()
+    
+    # Simple validation
+    if not wallet.startswith("0x") or len(wallet) != 42:
+        await message.answer("❌ Неверный формат адреса. Попробуйте еще раз:")
+        return
+        
+    # Check payment
+    await _check_payment_logic(message, state, wallet, data)
+
+
+async def _check_payment_logic(
+    event: Message | CallbackQuery,
+    state: FSMContext,
+    wallet_address: str,
+    data: dict[str, Any]
+) -> None:
+    """Core payment check logic."""
+    # Helper to send message
+    async def send(text: str, **kwargs: Any) -> None:
+        if isinstance(event, Message):
+            await event.answer(text, **kwargs)
+        elif isinstance(event, CallbackQuery):
+            await event.message.answer(text, **kwargs)
+
+    if isinstance(event, CallbackQuery):
+        await event.answer("⏳ Проверяем...", show_alert=False)
+    else:
+        await event.answer("⏳ Проверяем транзакции...")
+
+    try:
+        bs = get_blockchain_service()
+        # Scan blocks: 30 blocks lookback
+        result = await bs.verify_plex_payment(
+            sender_address=wallet_address,
+            amount_plex=settings.auth_price_plex,
+            lookback_blocks=30
+        )
+        
+        if result["success"]:
+            # Payment found!
+            redis_client = data.get("redis_client")
+            user_id = event.from_user.id
+            
+            # Set session
+            session_key = f"{SESSION_KEY_PREFIX}{user_id}"
+            await redis_client.setex(session_key, SESSION_TTL, "1")
+            
+            # Send ecosystem info after successful payment
+            await send(
+                f"✅ **Оплата подтверждена!**\n"
+                f"Транзакция: `{result['tx_hash'][:10]}...`\n\n"
+                f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"{ECOSYSTEM_INFO}",
+                parse_mode="Markdown",
+                disable_web_page_preview=True
+            )
+            
+            await state.clear()
+            
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🚀 Начать работу", callback_data="start_after_auth")]
+            ])
+            await send("Нажмите кнопку для начала работы:", reply_markup=kb)
+            
+        else:
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔄 Проверить снова", callback_data="check_payment")]
+            ])
+            await send(
+                "❌ **Оплата не найдена**\n\n"
+                "Мы проверили последние транзакции, но не нашли поступления.\n"
+                "• Убедитесь, что отправили 10 PLEX\n"
+                "• Подождите 1-2 минуты, если транзакция еще в пути\n\n"
+                "Попробуйте еще раз:",
+                reply_markup=kb,
+                parse_mode="Markdown"
+            )
+            
+    except Exception as e:
+        logger.error(f"Auth check failed: {e}")
+        await send("⚠️ Ошибка проверки. Попробуйте позже.")
+
+
+@router.callback_query(F.data == "start_after_auth")
+async def handle_start_after_auth(
+    callback: CallbackQuery,
+    state: FSMContext,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Handle start after successful auth."""
+    await callback.answer()
+    
+    # Mimic /start command
+    msg = callback.message
+    msg.text = "/start"
+    msg.from_user = callback.from_user
+    
+    # Call cmd_start
+    await cmd_start(msg, session, state, **data)
