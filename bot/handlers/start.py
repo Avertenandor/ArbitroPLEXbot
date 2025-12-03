@@ -1606,11 +1606,12 @@ async def handle_wallet_input(
     # Save wallet to FSM
     await state.update_data(auth_wallet=wallet)
     
-    # Step 2: Show invoice
+    # Step 2: Show invoice with QR code
     price = settings.auth_price_plex
     system_wallet = settings.auth_system_wallet_address
     token_addr = settings.auth_plex_token_address
     
+    # Send text message first
     await message.answer(
         f"✅ **Кошелёк принят!**\n"
         f"`{wallet[:6]}...{wallet[-4:]}`\n\n"
@@ -1621,10 +1622,25 @@ async def handle_wallet_input(
         f"_(Нажмите для копирования)_\n\n"
         f"📍 **Контракт PLEX:**\n"
         f"`{token_addr}`\n\n"
+        f"📱 **QR-код ниже** — отсканируйте в кошельке для быстрой отправки.\n\n"
         f"После оплаты нажмите кнопку ниже.",
         reply_markup=auth_payment_keyboard(),
         parse_mode="Markdown"
     )
+    
+    # Send QR code as photo
+    from bot.utils.qr_generator import generate_payment_qr
+    from aiogram.types import BufferedInputFile
+    
+    qr_bytes = generate_payment_qr(system_wallet)
+    if qr_bytes:
+        qr_file = BufferedInputFile(qr_bytes, filename="payment_qr.png")
+        await message.answer_photo(
+            photo=qr_file,
+            caption=f"📱 QR-код кошелька для оплаты\n`{system_wallet}`",
+            parse_mode="Markdown"
+        )
+    
     await state.set_state(AuthStates.waiting_for_payment)
 
 
