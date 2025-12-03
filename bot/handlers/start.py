@@ -1686,7 +1686,7 @@ async def handle_payment_confirmed_reply(
     await _check_payment_logic(message, state, wallet, data)
 
 
-@router.message(F.text == "рџљЂ РќР°С‡Р°С‚СЊ СЂР°Р±РѕС‚Сѓ")
+@router.message(F.text == "🚀 Начать работу")
 async def handle_start_work_reply(
     message: Message,
     state: FSMContext,
@@ -1745,7 +1745,7 @@ async def handle_rescan_deposits_reply(
         )
 
 
-@router.message(F.text == "рџљЂ РџСЂРѕРґРѕР»Р¶РёС‚СЊ (Р±РµР· РґРµРїРѕР·РёС‚Р°)")
+@router.message(F.text == "🚀 Продолжить (без депозита)")
 async def handle_continue_without_deposit_reply(
     message: Message,
     state: FSMContext,
@@ -1786,7 +1786,7 @@ async def handle_retry_payment_reply(
     await _check_payment_logic(message, state, wallet, data)
 
 
-@router.message(F.text == "рџ”‘ РџРѕРєР°Р·Р°С‚СЊ РїР°СЂРѕР»СЊ РµС‰С‘ СЂР°Р·")
+@router.message(F.text == "🔑 Показать пароль ещё раз")
 async def handle_show_password_reply(
     message: Message,
     state: FSMContext,
@@ -1839,3 +1839,4 @@ async def handle_show_password_reply(
             exc_info=True
         )
         await message.answer("вќЊ РћС€РёР±РєР° РїСЂРё РїРѕР»СѓС‡РµРЅРёРё РїР°СЂРѕР»СЏ. РћР±СЂР°С‚РёС‚РµСЃСЊ РІ РїРѕРґРґРµСЂР¶РєСѓ.")
+
