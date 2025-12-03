@@ -10,36 +10,42 @@ from decimal import Decimal
 from typing import Any
 
 from loguru import logger
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import settings
-from app.models.admin_action_escrow import AdminActionEscrow
 from app.models.enums import TransactionStatus, TransactionType
 from app.models.transaction import Transaction
 from app.models.user import User
-from app.models.global_settings import GlobalSettings
 from app.repositories.admin_action_escrow_repository import (
     AdminActionEscrowRepository,
 )
 from app.repositories.deposit_repository import DepositRepository
-from app.repositories.global_settings_repository import GlobalSettingsRepository
+from app.repositories.global_settings_repository import (
+    GlobalSettingsRepository,
+)
 from app.repositories.transaction_repository import TransactionRepository
+from app.services.base_service import BaseService
+from app.services.withdrawal.withdrawal_balance_manager import (
+    WithdrawalBalanceManager,
+)
+from app.services.withdrawal.withdrawal_validator import WithdrawalValidator
 
 # R9-2: Maximum retries for race condition conflicts
 MAX_RETRIES = 3
 RETRY_DELAY_BASE = 1.0  # Base delay in seconds
 
 
-class WithdrawalService:
+class WithdrawalService(BaseService):
     """Withdrawal service for managing withdrawal requests."""
 
     def __init__(self, session: AsyncSession) -> None:
         """Initialize withdrawal service."""
-        self.session = session
+        super().__init__(session)
         self.transaction_repo = TransactionRepository(session)
         self.settings_repo = GlobalSettingsRepository(session)
+        self.balance_manager = WithdrawalBalanceManager(session)
 
     async def get_min_withdrawal_amount(self) -> Decimal:
         """
@@ -47,56 +53,6 @@ class WithdrawalService:
         """
         settings = await self.settings_repo.get_settings()
         return settings.min_withdrawal_amount
-
-    async def _check_auto_withdrawal_eligibility(
-        self,
-        user_id: int,
-        amount: Decimal,
-        settings: GlobalSettings
-    ) -> bool:
-        """
-        Check if withdrawal is eligible for auto-approval.
-        
-        Logic:
-        1. Auto-withdrawal must be enabled globally.
-        2. x5 Rule: (Total Withdrawn + Request) <= (Total Deposited * 5)
-        3. Global Daily Limit: Today's Total + Request <= Limit (if enabled)
-        """
-        if not settings.auto_withdrawal_enabled:
-            return False
-
-        # 1. Check x5 Rule (Math Validation)
-        deposit_repo = DepositRepository(self.session)
-        total_deposited = await deposit_repo.get_total_deposited(user_id)
-        
-        # If no deposits, no auto withdrawal
-        if total_deposited <= 0:
-            return False
-            
-        max_payout = total_deposited * Decimal("5.0")
-        
-        total_withdrawn = await self.transaction_repo.get_total_withdrawn(user_id)
-        
-        if (total_withdrawn + amount) > max_payout:
-            logger.info(
-                f"Auto-withdrawal denied for user {user_id}: Limit x5 exceeded. "
-                f"Deposited: {total_deposited}, Max Payout: {max_payout}, "
-                f"Withdrawn: {total_withdrawn}, Request: {amount}"
-            )
-            return False
-            
-        # 2. Check Global Daily Limit (Circuit Breaker)
-        if settings.is_daily_limit_enabled and settings.daily_withdrawal_limit:
-            today_total = await self.transaction_repo.get_total_withdrawn_today()
-            if (today_total + amount) > settings.daily_withdrawal_limit:
-                logger.warning(
-                    f"Auto-withdrawal denied: Global daily limit exceeded. "
-                    f"Today: {today_total}, Request: {amount}, "
-                    f"Limit: {settings.daily_withdrawal_limit}"
-                )
-                return False
-                
-        return True
 
     async def request_withdrawal(
         self,
@@ -118,32 +74,25 @@ class WithdrawalService:
         # Load global settings
         global_settings = await self.settings_repo.get_settings()
 
-        # R17-3: Check emergency stop (DB flag or static config flag)
-        if (
-            settings.emergency_stop_withdrawals
-            or getattr(global_settings, "emergency_stop_withdrawals", False)
-        ):
-            logger.warning(
-                "Withdrawal blocked by emergency stop for user %s", user_id
-            )
-            return (
-                None,
-                (
-                    "⚠️ Временная приостановка выводов из-за технических работ.\n\n"
-                    "Ваши средства в безопасности, выводы будут доступны после "
-                    "восстановления.\n\n"
-                    "Следите за обновлениями в нашем канале."
-                ),
-                False,
-            )
-        min_amount = global_settings.min_withdrawal_amount
+        # Create validator with global settings
+        validator = WithdrawalValidator(self.session, global_settings)
 
-        # Validate amount
-        if amount < min_amount:
-            return None, (
-                f"Минимальная сумма вывода: "
-                f"{min_amount} USDT"
-            ), False
+        # Run all validations
+        validation_result = await validator.validate_withdrawal_request(
+            user_id, amount, available_balance
+        )
+
+        if not validation_result.is_valid:
+            # If finpass recovery is active, freeze pending withdrawals
+            if validation_result.error_code == "FINPASS_RECOVERY":
+                from app.services.finpass_recovery_service import (
+                    FinpassRecoveryService,
+                )
+                finpass_service = FinpassRecoveryService(self.session)
+                if await finpass_service.has_active_recovery(user_id):
+                    await self._freeze_pending_withdrawals(user_id)
+
+            return None, validation_result.error_message, False
 
         # R9-2: Retry logic for race condition conflicts
         for attempt in range(MAX_RETRIES):
@@ -160,77 +109,8 @@ class WithdrawalService:
                 if not user:
                     return None, "Пользователь не найден", False
 
-                # R15-1: Check if user is banned
-                if user.is_banned:
-                    return None, (
-                        "Ваш аккаунт заблокирован. "
-                        "Обратитесь в поддержку для выяснения причин."
-                    ), False
-
-                # R10-1: Check if withdrawals are blocked
-                if user.withdrawal_blocked:
-                    return None, (
-                        "Вывод средств заблокирован. "
-                        "Обратитесь в поддержку для выяснения причин."
-                    ), False
-
-                # R15-3: Check if finpass recovery is active
-                from app.services.finpass_recovery_service import (
-                    FinpassRecoveryService,
-                )
-
-                finpass_service = FinpassRecoveryService(self.session)
-                if await finpass_service.has_active_recovery(user_id):
-                    # R15-3: Freeze existing PENDING withdrawals
-                    await self._freeze_pending_withdrawals(user_id)
-
-                    return None, (
-                        "Вывод средств временно заблокирован "
-                        "из-за активного процесса восстановления "
-                        "финансового пароля. "
-                        "Дождитесь завершения процедуры восстановления."
-                    ), False
-
-                # R10-1: Check fraud risk before withdrawal
-                from app.services.fraud_detection_service import (
-                    FraudDetectionService,
-                )
-
-                fraud_service = FraudDetectionService(self.session)
-                fraud_check = await fraud_service.check_and_block_if_needed(
-                    user_id
-                )
-
-                if fraud_check.get("blocked"):
-                    return None, (
-                        "Вывод средств временно заблокирован "
-                        "из-за подозрительной активности. "
-                        "Обратитесь в поддержку."
-                    ), False
-
-                # Check balance
-                if available_balance < amount:
-                    return None, (
-                        f"Недостаточно средств. Доступно: "
-                        f"{available_balance:.2f} USDT"
-                    ), False
-
-                # R-NEW: Daily ROI limit disabled by admin request to allow full balance withdrawal
-                # daily_limit_check = await self._check_daily_withdrawal_limit(
-                #    user_id, amount
-                # )
-                # if daily_limit_check["exceeded"]:
-                #    return None, (
-                #        f"❌ Превышен дневной лимит вывода!\n\n"
-                #        f"💰 Ваш ROI за сегодня: *{daily_limit_check['daily_roi']:.2f} USDT*\n"
-                #        f"💸 Уже выведено сегодня: *{daily_limit_check['withdrawn_today']:.2f} USDT*\n"
-                #        f"📊 Доступно для вывода: *{daily_limit_check['remaining']:.2f} USDT*\n\n"
-                #        f"_Лимит обновляется в 00:00 UTC._"
-                #    ), False
-
-                # Calculate Fee
-                service_fee_percent = getattr(global_settings, "withdrawal_service_fee", Decimal("0"))
-                fee_amount = amount * (service_fee_percent / Decimal("100"))
+                # Calculate Fee using balance manager
+                fee_amount = await self.balance_manager.calculate_fee(amount)
                 net_amount = amount - fee_amount
 
                 # Deduct balance BEFORE creating transaction (Gross amount)
@@ -239,10 +119,10 @@ class WithdrawalService:
                 balance_after = user.balance
 
                 # Check Auto-Withdrawal Eligibility
-                is_auto = await self._check_auto_withdrawal_eligibility(
-                    user_id, amount, global_settings
+                is_auto = await validator.check_auto_withdrawal_eligibility(
+                    user_id, amount
                 )
-                
+
                 status = TransactionStatus.PROCESSING.value if is_auto else TransactionStatus.PENDING.value
 
                 # Create withdrawal transaction
@@ -397,18 +277,14 @@ class WithdrawalService:
             if not transaction:
                 return False, "Заявка не найдена или не может быть отменена"
 
-            # Get user with lock
-            stmt_user = (
-                select(User).where(User.id == user_id).with_for_update()
+            # CRITICAL: Return balance to user using balance manager
+            success = await self.balance_manager.restore_balance(
+                user_id, transaction.amount, transaction_id
             )
-            result_user = await self.session.execute(stmt_user)
-            user = result_user.scalar_one_or_none()
 
-            if not user:
-                return False, "Пользователь не найден"
-
-            # CRITICAL: Return balance to user
-            user.balance = user.balance + transaction.amount
+            if not success:
+                await self.session.rollback()
+                return False, "Ошибка возврата баланса"
 
             # Update transaction status
             transaction.status = TransactionStatus.FAILED.value
@@ -421,7 +297,6 @@ class WithdrawalService:
                     "transaction_id": transaction_id,
                     "user_id": user_id,
                     "amount": str(transaction.amount),
-                    "new_balance": str(user.balance),
                 },
             )
 
@@ -473,7 +348,7 @@ class WithdrawalService:
             # If we pass tx_hash, it means it is DONE (or submitted).
             # Usually approve_withdrawal marks it as PROCESSING, and blockchain callback marks as COMPLETED.
             # But here we pass tx_hash, so it means it was sent.
-            
+
             # Let's keep it PROCESSING for now, background job will check receipt.
             withdrawal.status = TransactionStatus.PROCESSING.value
             withdrawal.tx_hash = tx_hash
@@ -581,16 +456,14 @@ class WithdrawalService:
             if not withdrawal:
                 return (False, "Заявка на вывод не найдена или уже обработана")
 
-            stmt_user = (
-                select(User)
-                .where(User.id == withdrawal.user_id)
-                .with_for_update()
+            # CRITICAL: Return balance to user using balance manager
+            success = await self.balance_manager.restore_balance(
+                withdrawal.user_id, withdrawal.amount, transaction_id
             )
-            result_user = await self.session.execute(stmt_user)
-            user = result_user.scalar_one_or_none()
 
-            if user:
-                user.balance = user.balance + withdrawal.amount
+            if not success:
+                await self.session.rollback()
+                return False, "Ошибка возврата баланса"
 
             withdrawal.status = TransactionStatus.FAILED.value
             await self.session.commit()
@@ -601,7 +474,6 @@ class WithdrawalService:
                     "transaction_id": transaction_id,
                     "user_id": withdrawal.user_id,
                     "amount": str(withdrawal.amount),
-                    "new_balance": str(user.balance) if user else "N/A",
                     "reason": reason,
                 },
             )
@@ -637,14 +509,13 @@ class WithdrawalService:
         Returns:
             Dict with exceeded, daily_roi, withdrawn_today, remaining
         """
-        from datetime import UTC, datetime, timezone
+        from datetime import UTC, datetime
 
         from app.models.deposit_reward import DepositReward
-        from app.repositories.deposit_repository import DepositRepository
 
         # Create timezone-aware datetime for DepositReward.calculated_at (has timezone=True)
         today = datetime.now(UTC).date()
-        today_start_aware = datetime(today.year, today.month, today.day, tzinfo=timezone.utc)
+        today_start_aware = datetime(today.year, today.month, today.day, tzinfo=UTC)
         # Create naive datetime for Transaction.created_at (TIMESTAMP WITHOUT TIME ZONE)
         today_start_naive = datetime(today.year, today.month, today.day)
 
@@ -706,16 +577,13 @@ class WithdrawalService:
         if not pending:
             return
 
-        stmt = select(User).where(User.id == user_id).with_for_update()
-        result = await self.session.execute(stmt)
-        user = result.scalar_one_or_none()
-
-        if not user:
-            return
-
         for withdrawal in pending:
-            user.balance = user.balance + withdrawal.amount
-            withdrawal.status = TransactionStatus.FAILED.value
+            # Restore balance using balance manager
+            success = await self.balance_manager.restore_balance(
+                user_id, withdrawal.amount, withdrawal.id
+            )
+            if success:
+                withdrawal.status = TransactionStatus.FAILED.value
 
         await self.session.commit()
 

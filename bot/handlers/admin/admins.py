@@ -12,11 +12,15 @@ from aiogram.types import Message
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.admin import Admin
-from app.services.admin_service import AdminService
 from app.services.admin_log_service import AdminLogService
+from app.services.admin_service import AdminService
+from app.validators.common import validate_telegram_id
+from bot.handlers.admin.utils.admin_checks import (
+    format_role_display,
+    get_admin_or_deny,
+    is_last_super_admin,
+)
 from bot.keyboards.reply import (
-    admin_keyboard,
     admin_management_keyboard,
     cancel_keyboard,
 )
@@ -37,17 +41,8 @@ async def show_admin_management(
 
     Only accessible to super_admin.
     """
-    is_admin = data.get("is_admin", False)
-    admin: Admin | None = data.get("admin")
-
-    if not is_admin or not admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
-        return
-
-    if not admin.is_super_admin:
-        await message.answer(
-            "❌ Эта функция доступна только супер-администраторам"
-        )
+    admin = await get_admin_or_deny(message, session, require_super=True, **data)
+    if not admin:
         return
 
     text = """
@@ -75,17 +70,8 @@ async def handle_create_admin(
 
     Only accessible to super_admin.
     """
-    is_admin = data.get("is_admin", False)
-    admin: Admin | None = data.get("admin")
-
-    if not is_admin or not admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
-        return
-
-    if not admin.is_super_admin:
-        await message.answer(
-            "❌ Эта функция доступна только супер-администраторам"
-        )
+    admin = await get_admin_or_deny(message, session, require_super=True, **data)
+    if not admin:
         return
 
     await state.set_state(AdminManagementStates.awaiting_admin_telegram_id)
@@ -112,11 +98,8 @@ async def handle_admin_telegram_id(
         state: FSM context
         **data: Handler data
     """
-    is_admin = data.get("is_admin", False)
-    admin: Admin | None = data.get("admin")
-
-    if not is_admin or not admin or not admin.is_super_admin:
-        await message.answer("❌ Доступ запрещен")
+    admin = await get_admin_or_deny(message, session, require_super=True, **data)
+    if not admin:
         await clear_state_preserve_admin_token(state)
         return
 
@@ -131,15 +114,11 @@ async def handle_admin_telegram_id(
 
     telegram_id_str = message.text.strip() if message.text else ""
 
-    if not telegram_id_str:
-        await message.answer("❌ Telegram ID не может быть пустым")
-        return
-
-    try:
-        telegram_id = int(telegram_id_str)
-    except ValueError:
+    # Validate telegram_id using validator
+    is_valid, telegram_id, error = validate_telegram_id(telegram_id_str)
+    if not is_valid:
         await message.answer(
-            "❌ Неверный формат Telegram ID. "
+            f"❌ {error}\n\n"
             "Введите числовое значение:"
         )
         return
@@ -197,11 +176,8 @@ async def handle_admin_role_selection(
         state: FSM context
         **data: Handler data
     """
-    is_admin = data.get("is_admin", False)
-    admin: Admin | None = data.get("admin")
-
-    if not is_admin or not admin or not admin.is_super_admin:
-        await message.answer("❌ Доступ запрещен")
+    admin = await get_admin_or_deny(message, session, require_super=True, **data)
+    if not admin:
         return
 
     role_input = message.text.strip() if message.text else ""
@@ -270,11 +246,7 @@ async def handle_admin_role_selection(
     )
 
     # Send confirmation
-    role_display = {
-        "admin": "Admin",
-        "extended_admin": "Extended Admin",
-        "super_admin": "Super Admin",
-    }.get(role, role)
+    role_display = await format_role_display(role)
 
     await message.answer(
         f"✅ **Админ успешно создан**\n\n"
@@ -331,17 +303,8 @@ async def handle_list_admins(
 
     Only accessible to super_admin.
     """
-    is_admin = data.get("is_admin", False)
-    admin: Admin | None = data.get("admin")
-
-    if not is_admin or not admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
-        return
-
-    if not admin.is_super_admin:
-        await message.answer(
-            "❌ Эта функция доступна только супер-администраторам"
-        )
+    admin = await get_admin_or_deny(message, session, require_super=True, **data)
+    if not admin:
         return
 
     admin_service = AdminService(session)
@@ -354,11 +317,7 @@ async def handle_list_admins(
     text = "📋 **Список админов**\n\n"
 
     for idx, a in enumerate(admins, 1):
-        role_display = {
-            "admin": "Admin",
-            "extended_admin": "Extended Admin",
-            "super_admin": "Super Admin",
-        }.get(a.role, a.role)
+        role_display = await format_role_display(a.role)
 
         creator_info = ""
         if a.created_by:
@@ -369,7 +328,7 @@ async def handle_list_admins(
         text += (
             f"{idx}. {a.display_name}\n"
             f"   ID: `{a.telegram_id}`\n"
-            f"   Роль: `{role_display}`{creator_info}\n\n"
+            f"   Роль: {role_display}{creator_info}\n\n"
         )
 
     await message.answer(
@@ -391,17 +350,8 @@ async def handle_delete_admin(
 
     Only accessible to super_admin.
     """
-    is_admin = data.get("is_admin", False)
-    admin: Admin | None = data.get("admin")
-
-    if not is_admin or not admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
-        return
-
-    if not admin.is_super_admin:
-        await message.answer(
-            "❌ Эта функция доступна только супер-администраторам"
-        )
+    admin = await get_admin_or_deny(message, session, require_super=True, **data)
+    if not admin:
         return
 
     # Get all admins
@@ -412,9 +362,8 @@ async def handle_delete_admin(
         await message.answer("📋 Список админов пуст")
         return
 
-    # Check if there's only one super_admin
-    super_admins = [a for a in admins if a.is_super_admin]
-    if len(super_admins) == 1 and super_admins[0].id == admin.id:
+    # Check if this is the last super_admin
+    if is_last_super_admin(admin, admins):
         await message.answer(
             "❌ Нельзя удалить последнего супер-администратора"
         )
@@ -425,11 +374,7 @@ async def handle_delete_admin(
     text += "**Список админов:**\n"
 
     for idx, a in enumerate(admins, 1):
-        role_display = {
-            "admin": "Admin",
-            "extended_admin": "Extended Admin",
-            "super_admin": "Super Admin",
-        }.get(a.role, a.role)
+        role_display = await format_role_display(a.role)
 
         text += f"{idx}. {a.display_name} (ID: `{a.telegram_id}`, {role_display})\n"
 
@@ -458,25 +403,18 @@ async def handle_delete_admin_telegram_id(
         state: FSM context
         **data: Handler data
     """
-    is_admin = data.get("is_admin", False)
-    admin: Admin | None = data.get("admin")
-
-    if not is_admin or not admin or not admin.is_super_admin:
-        await message.answer("❌ Доступ запрещен")
+    admin = await get_admin_or_deny(message, session, require_super=True, **data)
+    if not admin:
         await clear_state_preserve_admin_token(state)
         return
 
     telegram_id_str = message.text.strip() if message.text else ""
 
-    if not telegram_id_str:
-        await message.answer("❌ Telegram ID не может быть пустым")
-        return
-
-    try:
-        telegram_id = int(telegram_id_str)
-    except ValueError:
+    # Validate telegram_id using validator
+    is_valid, telegram_id, error = validate_telegram_id(telegram_id_str)
+    if not is_valid:
         await message.answer(
-            "❌ Неверный формат Telegram ID. "
+            f"❌ {error}\n\n"
             "Введите числовое значение:"
         )
         return
@@ -502,8 +440,7 @@ async def handle_delete_admin_telegram_id(
 
     # Check if trying to delete last super_admin
     all_admins = await admin_service.list_all_admins()
-    super_admins = [a for a in all_admins if a.is_super_admin]
-    if admin_to_delete.is_super_admin and len(super_admins) == 1:
+    if is_last_super_admin(admin_to_delete, all_admins):
         await message.answer(
             "❌ Нельзя удалить последнего супер-администратора"
         )
@@ -554,17 +491,8 @@ async def handle_emergency_block_admin(
 
     Only accessible to super_admin.
     """
-    is_admin = data.get("is_admin", False)
-    admin: Admin | None = data.get("admin")
-
-    if not is_admin or not admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
-        return
-
-    if not admin.is_super_admin:
-        await message.answer(
-            "❌ Эта функция доступна только супер-администраторам"
-        )
+    admin = await get_admin_or_deny(message, session, require_super=True, **data)
+    if not admin:
         return
 
     # Get all admins
@@ -575,9 +503,8 @@ async def handle_emergency_block_admin(
         await message.answer("📋 Список админов пуст")
         return
 
-    # Check if there's only one super_admin
-    super_admins = [a for a in admins if a.is_super_admin]
-    if len(super_admins) == 1 and super_admins[0].id == admin.id:
+    # Check if this is the last super_admin
+    if is_last_super_admin(admin, admins):
         await message.answer(
             "❌ Нельзя заблокировать последнего супер-администратора"
         )
@@ -595,11 +522,7 @@ async def handle_emergency_block_admin(
     )
 
     for idx, a in enumerate(admins, 1):
-        role_display = {
-            "admin": "Admin",
-            "extended_admin": "Extended Admin",
-            "super_admin": "Super Admin",
-        }.get(a.role, a.role)
+        role_display = await format_role_display(a.role)
 
         text += f"{idx}. {a.display_name} (ID: `{a.telegram_id}`, {role_display})\n"
 
@@ -627,25 +550,18 @@ async def handle_emergency_block_admin_telegram_id(
     2. Delete admin
     3. Ban user if exists
     """
-    is_admin = data.get("is_admin", False)
-    admin: Admin | None = data.get("admin")
-
-    if not is_admin or not admin or not admin.is_super_admin:
-        await message.answer("❌ Доступ запрещен")
+    admin = await get_admin_or_deny(message, session, require_super=True, **data)
+    if not admin:
         await clear_state_preserve_admin_token(state)
         return
 
     telegram_id_str = message.text.strip() if message.text else ""
 
-    if not telegram_id_str:
-        await message.answer("❌ Telegram ID не может быть пустым")
-        return
-
-    try:
-        telegram_id = int(telegram_id_str)
-    except ValueError:
+    # Validate telegram_id using validator
+    is_valid, telegram_id, error = validate_telegram_id(telegram_id_str)
+    if not is_valid:
         await message.answer(
-            "❌ Неверный формат Telegram ID. "
+            f"❌ {error}\n\n"
             "Введите числовое значение:"
         )
         return
@@ -669,8 +585,7 @@ async def handle_emergency_block_admin_telegram_id(
 
     # Check if trying to block last super_admin
     all_admins = await admin_service.list_all_admins()
-    super_admins = [a for a in all_admins if a.is_super_admin]
-    if admin_to_block.is_super_admin and len(super_admins) == 1:
+    if is_last_super_admin(admin_to_block, all_admins):
         await message.answer(
             "❌ Нельзя заблокировать последнего супер-администратора"
         )
@@ -680,8 +595,8 @@ async def handle_emergency_block_admin_telegram_id(
     # Atomic operation: block and delete
     try:
         from app.models.blacklist import BlacklistActionType
-        from app.services.blacklist_service import BlacklistService
         from app.repositories.user_repository import UserRepository
+        from app.services.blacklist_service import BlacklistService
 
         # 1. Add to blacklist (TERMINATED)
         blacklist_service = BlacklistService(session)
@@ -756,8 +671,9 @@ async def handle_emergency_block_admin_telegram_id(
 
         # Notify all super_admins
         try:
-            from app.config.settings import settings
             from aiogram import Bot
+
+            from app.config.settings import settings
 
             bot = Bot(token=settings.telegram_bot_token)
             notification_text = (
@@ -774,6 +690,8 @@ async def handle_emergency_block_admin_telegram_id(
                 f"✅ Все сессии деактивированы"
             )
 
+            # Get super_admins for notification
+            super_admins = [a for a in all_admins if a.is_super_admin]
             for super_admin in super_admins:
                 if super_admin.id != admin.id:
                     try:
@@ -814,4 +732,3 @@ async def handle_emergency_block_admin_telegram_id(
             f"❌ Ошибка при экстренной блокировке: {e}"
         )
         await clear_state_preserve_admin_token(state)
-

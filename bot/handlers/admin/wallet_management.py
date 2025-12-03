@@ -43,26 +43,26 @@ async def show_wallet_dashboard(
 async def _show_dashboard(message: Message, state: FSMContext) -> None:
     """Render the wallet dashboard."""
     await state.set_state(WalletManagementStates.menu)
-    
+
     bs = get_blockchain_service()
     if not bs:
         await message.answer("❌ Сервис блокчейна недоступен.")
         return
-    
+
     # Hot Wallet (Output)
     hot_address = bs.wallet_address
     hot_bnb_bal = await bs.get_native_balance(hot_address)
     hot_usdt_bal = await bs.get_usdt_balance(hot_address)
     hot_plex_bal = await bs.get_plex_balance(hot_address)
-    
+
     # System Wallet (Input/Cold) - if configured different from Hot
     cold_address = bs.system_wallet_address
     cold_bnb_bal = Decimal("0")
     cold_usdt_bal = Decimal("0")
     cold_plex_bal = Decimal("0")
-    
+
     has_cold = cold_address and cold_address.lower() != hot_address.lower()
-    
+
     if has_cold:
         cold_bnb_bal = await bs.get_native_balance(cold_address) or Decimal("0")
         cold_usdt_bal = await bs.get_usdt_balance(cold_address) or Decimal("0")
@@ -88,7 +88,7 @@ async def _show_dashboard(message: Message, state: FSMContext) -> None:
         f"💵 USDT: **{fmt_usdt(hot_usdt_bal)}**\n"
         f"💎 PLEX: **{fmt_plex(hot_plex_bal)}**\n"
     )
-    
+
     if has_cold:
         text += (
             "\n❄️ **INPUT WALLET (Приемный)**\n"
@@ -98,7 +98,7 @@ async def _show_dashboard(message: Message, state: FSMContext) -> None:
             f"💎 PLEX: **{fmt_plex(cold_plex_bal)}**\n"
             "_(Только просмотр, ключи не хранятся)_\n"
         )
-        
+
     text += "\n👇 Выберите действие:"
 
     await message.answer(
@@ -127,19 +127,19 @@ async def show_receive_info(message: Message):
     bs = get_blockchain_service()
     hot_address = bs.wallet_address
     cold_address = bs.system_wallet_address
-    
+
     text = (
         "📥 **Получение средств**\n\n"
         "🔥 **Hot Wallet (Для пополнения газа):**\n"
         f"`{hot_address}`\n\n"
     )
-    
+
     if cold_address and cold_address.lower() != hot_address.lower():
         text += (
             "❄️ **Input Wallet (Для депозитов):**\n"
             f"`{cold_address}`\n"
         )
-        
+
     await message.answer(
         text,
         parse_mode="Markdown",
@@ -199,7 +199,7 @@ async def select_currency(message: Message, state: FSMContext):
     currency = "BNB" if "BNB" in message.text else "USDT"
     await state.update_data(send_currency=currency)
     await state.set_state(WalletManagementStates.input_address_to_send)
-    
+
     await message.answer(
         f"📤 **Отправка {currency}**\n\n"
         "Введите адрес получателя (BSC/BEP-20):",
@@ -217,7 +217,7 @@ async def input_address(message: Message, state: FSMContext):
 
     address = message.text.strip()
     bs = get_blockchain_service()
-    
+
     if not await bs.validate_wallet_address(address):
         await message.answer(
             "❌ Неверный формат адреса. Попробуйте еще раз:",
@@ -228,7 +228,7 @@ async def input_address(message: Message, state: FSMContext):
     await state.update_data(send_address=address)
     data = await state.get_data()
     currency = data["send_currency"]
-    
+
     await state.set_state(WalletManagementStates.input_amount_to_send)
     await message.answer(
         f"📤 **Отправка {currency}**\n"
@@ -249,9 +249,9 @@ async def process_amount_input(message: Message, state: FSMContext):
     bs = get_blockchain_service()
     data = await state.get_data()
     currency = data["send_currency"]
-    
+
     amount = None
-    
+
     # Handle Percentage Buttons
     if message.text in ["25%", "50%", "MAX"]:
         # Get balance
@@ -259,22 +259,22 @@ async def process_amount_input(message: Message, state: FSMContext):
             balance = await bs.get_native_balance(bs.wallet_address)
         else:
             balance = await bs.get_usdt_balance(bs.wallet_address)
-            
+
         if not balance:
             await message.answer("❌ Ошибка получения баланса")
             return
 
         percent_map = {"25%": 25, "50%": 50, "MAX": 100}
         percent = percent_map[message.text]
-        
+
         # Calculate amount
         amount = balance * Decimal(percent) / Decimal(100)
-        
+
         # Leave some dust for gas if BNB and MAX
         if currency == "BNB" and percent == 100:
-            amount = amount - Decimal("0.002") # Safety margin
+            amount = amount - Decimal("0.002")  # Safety margin
             if amount < 0: amount = Decimal(0)
-            
+
     else:
         # Handle Manual Input
         try:
@@ -294,9 +294,9 @@ async def _show_confirmation(message: Message, state: FSMContext):
     currency = data["send_currency"]
     address = data["send_address"]
     amount = Decimal(data["send_amount"])
-    
+
     await state.set_state(WalletManagementStates.confirm_transaction)
-    
+
     text = (
         "📝 **Подтверждение транзакции**\n\n"
         f"💸 Сумма: **{amount} {currency}**\n"
@@ -304,7 +304,7 @@ async def _show_confirmation(message: Message, state: FSMContext):
         "📡 Сеть: BSC (Binance Smart Chain)\n\n"
         "Проверьте данные и подтвердите отправку."
     )
-    
+
     await message.answer(text, parse_mode="Markdown", reply_markup=wallet_confirm_keyboard())
 
 
@@ -315,17 +315,17 @@ async def execute_transaction(message: Message, state: FSMContext):
     currency = data["send_currency"]
     address = data["send_address"]
     amount = float(data["send_amount"])
-    
+
     await message.answer("⏳ **Отправка транзакции...**\nОжидайте подтверждения сети.")
-    
+
     bs = get_blockchain_service()
-    
+
     try:
         if currency == "BNB":
             result = await bs.send_native_token(address, amount)
         else:
             result = await bs.send_payment(address, amount)
-            
+
         if result["success"]:
             await message.answer(
                 f"✅ **Транзакция отправлена!**\n\n"
@@ -341,7 +341,7 @@ async def execute_transaction(message: Message, state: FSMContext):
                 f"Причина: {result['error']}",
                 reply_markup=wallet_back_keyboard()
             )
-            
+
     except Exception as e:
         logger.error(f"Wallet send error: {e}")
         await message.answer(

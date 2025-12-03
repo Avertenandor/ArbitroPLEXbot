@@ -10,7 +10,6 @@ import os
 from typing import Any
 
 from aiogram import F, Router
-from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
@@ -42,7 +41,7 @@ async def handle_wallet_menu(message: Message, state: FSMContext, **data: Any) -
     user = data.get("event_from_user")
     if not user:
         user = message.from_user
-        
+
     admin_ids = settings.get_admin_ids()
     if not admin_ids or not user or user.id != admin_ids[0]:
         await message.answer("❌ Команда доступна только главному администратору")
@@ -56,7 +55,6 @@ async def handle_wallet_menu(message: Message, state: FSMContext, **data: Any) -
 
 # Old handlers replaced by wallet_management.py
 # Keeping file for backward compatibility of existing FSM states if any user is stuck
-
 
 
 @router.message(F.text == "📊 Статус кошельков")
@@ -83,7 +81,7 @@ async def start_input_wallet_setup(message: Message, state: FSMContext, **data: 
         return
 
     from bot.keyboards.reply import cancel_keyboard
-    
+
     await state.set_state(WalletSetupStates.setting_input_wallet)
     await message.answer(
         "📥 **НАСТРОЙКА КОШЕЛЬКА ДЛЯ ВХОДА**\n\n"
@@ -100,7 +98,7 @@ async def start_input_wallet_setup(message: Message, state: FSMContext, **data: 
 async def process_input_wallet(message: Message, state: FSMContext):
     """Validate input wallet address."""
     address = message.text.strip()
-    
+
     if message.text == "❌ Отмена":
         await handle_wallet_menu(message, state)
         return
@@ -121,9 +119,9 @@ async def process_input_wallet(message: Message, state: FSMContext):
 
     # Save to state
     await state.update_data(new_input_wallet=checksum_address)
-    
+
     from bot.keyboards.reply import confirmation_keyboard
-    
+
     await state.set_state(WalletSetupStates.confirming_input)
     await message.answer(
         f"📥 **Подтверждение ВХОДНОГО кошелька**\n\n"
@@ -146,7 +144,7 @@ async def confirm_input_wallet(message: Message, state: FSMContext):
 
     data = await state.get_data()
     new_address = data.get("new_input_wallet")
-    
+
     if not new_address:
         await message.answer("❌ Ошибка данных. Начните заново.")
         await handle_wallet_menu(message, state)
@@ -155,17 +153,17 @@ async def confirm_input_wallet(message: Message, state: FSMContext):
     try:
         # Update .env
         update_env_variable("system_wallet_address", new_address)
-        
+
         # Update settings in memory (hacky but works until restart)
         settings.system_wallet_address = new_address
-        
+
         await message.answer(
             "✅ **Кошелек для входа успешно обновлен!**\n\n"
             "Для полного применения изменений рекомендуется перезапуск.",
             parse_mode="Markdown",
         )
         await handle_wallet_menu(message, state)
-        
+
     except Exception as e:
         await message.answer(f"❌ Ошибка при сохранении: {e}")
         await handle_wallet_menu(message, state)
@@ -183,7 +181,7 @@ async def start_output_wallet_setup(message: Message, state: FSMContext, **data:
         return
 
     from bot.keyboards.reply import cancel_keyboard
-    
+
     await state.set_state(WalletSetupStates.setting_output_key)
     await message.answer(
         "📤 **НАСТРОЙКА КОШЕЛЬКА ДЛЯ ВЫДАЧИ**\n\n"
@@ -202,7 +200,7 @@ async def start_output_wallet_setup(message: Message, state: FSMContext, **data:
 async def process_output_key(message: Message, state: FSMContext):
     """Process private key or seed phrase."""
     text = message.text.strip()
-    
+
     if text == "❌ Отмена":
         await handle_wallet_menu(message, state)
         return
@@ -223,7 +221,7 @@ async def process_output_key(message: Message, state: FSMContext):
             pk_candidate = text[2:]
         else:
             pk_candidate = text
-            
+
         if len(pk_candidate) == 64:
             account = Account.from_key(pk_candidate)
             private_key = pk_candidate
@@ -238,7 +236,7 @@ async def process_output_key(message: Message, state: FSMContext):
             if mnemo.check(text):
                 # Valid seed found - ask for derivation index
                 await state.update_data(temp_seed_phrase=text)
-                
+
                 from bot.keyboards.reply import cancel_keyboard
                 await state.set_state(WalletSetupStates.setting_derivation_index)
                 await message.answer(
@@ -263,9 +261,9 @@ async def process_output_key(message: Message, state: FSMContext):
 
     # Save to state (Private Key flow)
     await state.update_data(new_private_key=private_key, new_output_address=wallet_address)
-    
+
     from bot.keyboards.reply import confirmation_keyboard
-    
+
     await state.set_state(WalletSetupStates.confirming_output)
     await message.answer(
         f"📤 **Подтверждение ВЫХОДНОГО кошелька**\n\n"
@@ -283,7 +281,7 @@ async def process_output_key(message: Message, state: FSMContext):
 async def process_derivation_index(message: Message, state: FSMContext):
     """Process derivation index for Seed Phrase."""
     text = message.text.strip()
-    
+
     if text == "❌ Отмена":
         await handle_wallet_menu(message, state)
         return
@@ -298,7 +296,7 @@ async def process_derivation_index(message: Message, state: FSMContext):
 
     data = await state.get_data()
     seed_phrase = data.get("temp_seed_phrase")
-    
+
     if not seed_phrase:
         await message.answer("❌ Ошибка: Seed-фраза потеряна. Начните заново.")
         await handle_wallet_menu(message, state)
@@ -311,20 +309,20 @@ async def process_derivation_index(message: Message, state: FSMContext):
                 Account.enable_unaudited_hdwallet_features()
             except Exception:
                 pass
-        
+
         # Derive account
         # Standard Ethereum/BSC path: m/44'/60'/0'/0/{index}
         path = f"m/44'/60'/0'/0/{index}"
         account = Account.from_mnemonic(seed_phrase, account_path=path)
-        
+
         private_key = account.key.hex()[2:]  # remove 0x
         wallet_address = account.address
-        
+
         # Save to state
         await state.update_data(new_private_key=private_key, new_output_address=wallet_address)
-        
+
         from bot.keyboards.reply import confirmation_keyboard
-        
+
         await state.set_state(WalletSetupStates.confirming_output)
         await message.answer(
             f"📤 **Подтверждение ВЫХОДНОГО кошелька**\n\n"
@@ -352,7 +350,7 @@ async def confirm_output_wallet(message: Message, state: FSMContext):
     data = await state.get_data()
     private_key = data.get("new_private_key")
     address = data.get("new_output_address")
-    
+
     if not private_key or not address:
         await message.answer("❌ Ошибка данных.")
         await handle_wallet_menu(message, state)
@@ -362,7 +360,7 @@ async def confirm_output_wallet(message: Message, state: FSMContext):
         # Update .env
         update_env_variable("wallet_private_key", private_key)
         update_env_variable("wallet_address", address)
-        
+
         # Force restart via exit
         await message.answer(
             "✅ **Кошелек для выдачи сохранен!**\n\n"
@@ -371,7 +369,7 @@ async def confirm_output_wallet(message: Message, state: FSMContext):
         )
         await clear_state_preserve_admin_token(state)
         os._exit(0)
-        
+
     except Exception as e:
         await message.answer(f"❌ Ошибка при сохранении: {e}")
         await handle_wallet_menu(message, state)
@@ -380,32 +378,32 @@ async def confirm_output_wallet(message: Message, state: FSMContext):
 def update_env_variable(key: str, value: str) -> None:
     """Update environment variable in .env file."""
     env_file = "/app/.env"
-    
+
     if not os.path.exists(env_file):
         # Try local path if container path fails (for dev)
         env_file = ".env"
 
     try:
-        with open(env_file, "r") as f:
+        with open(env_file) as f:
             lines = f.readlines()
     except FileNotFoundError:
         lines = []
 
     new_lines = []
     updated = False
-    
+
     for line in lines:
         if line.startswith(f"{key}="):
             new_lines.append(f"{key}={value}\n")
             updated = True
         else:
             new_lines.append(line)
-            
+
     if not updated:
         if new_lines and not new_lines[-1].endswith('\n'):
             new_lines.append('\n')
         new_lines.append(f"{key}={value}\n")
-        
+
     # Write directly to file to avoid "Device or resource busy" with Docker bind mounts
     with open(env_file, "w") as f:
         f.writelines(new_lines)

@@ -21,9 +21,12 @@ from aiogram.types import Message
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.admin_service import AdminService
 from app.services.admin_log_service import AdminLogService
-from bot.keyboards.reply import master_key_management_reply_keyboard, main_menu_reply_keyboard
+from app.services.admin_service import AdminService
+from bot.keyboards.reply import (
+    main_menu_reply_keyboard,
+    master_key_management_reply_keyboard,
+)
 from bot.states.admin import AdminMasterKeyStates
 from bot.utils.admin_utils import clear_state_preserve_admin_token
 
@@ -67,7 +70,7 @@ async def show_master_key_menu(
     - Logs all access attempts
     """
     telegram_id = message.from_user.id if message.from_user else None
-    
+
     # SECURITY CHECK 1: Only super admin by telegram_id
     if not is_super_admin(telegram_id):
         logger.warning(
@@ -78,11 +81,11 @@ async def show_master_key_menu(
             "Эта функция доступна только главному администратору."
         )
         return
-    
+
     # SECURITY CHECK 2: Verify user is actually an admin in database
     admin_service = AdminService(session)
     admin = await admin_service.get_admin_by_telegram_id(telegram_id)
-    
+
     if not admin:
         logger.error(
             f"[SECURITY] User {telegram_id} tried to access master key "
@@ -90,7 +93,7 @@ async def show_master_key_menu(
         )
         await message.answer("❌ Администратор не найден в базе данных")
         return
-    
+
     # SECURITY CHECK 3: Verify role is super_admin
     if admin.role != "super_admin":
         logger.warning(
@@ -103,7 +106,7 @@ async def show_master_key_menu(
             f"Ваша роль: {admin.role}"
         )
         return
-    
+
     # SECURITY CHECK 4: Verify admin is not blocked
     if admin.is_blocked:
         logger.warning(
@@ -114,18 +117,18 @@ async def show_master_key_menu(
             "Ваш аккаунт администратора заблокирован."
         )
         return
-    
+
     await clear_state_preserve_admin_token(state)
-    
+
     # Check if master key exists
     has_master_key = admin.master_key is not None and admin.master_key != ""
-    
+
     # Build message
     text_lines = [
         "🔑 **Управление мастер-ключом**",
         "",
     ]
-    
+
     if has_master_key:
         text_lines.extend([
             "✅ **Статус:** Мастер-ключ установлен",
@@ -156,15 +159,15 @@ async def show_master_key_menu(
             "",
             "Нажмите кнопку ниже для создания."
         ])
-    
+
     text = "\n".join(text_lines)
-    
+
     # Log access
     logger.info(
         f"[MASTER_KEY] Super admin {telegram_id} opened master key menu "
         f"(has_key={has_master_key})"
     )
-    
+
     await message.answer(
         text,
         reply_markup=master_key_management_reply_keyboard(),
@@ -186,14 +189,14 @@ async def show_master_key_status(
     - Security information
     """
     telegram_id = message.from_user.id if message.from_user else None
-    
+
     if not is_super_admin(telegram_id):
         await message.answer("❌ Доступ запрещен")
         return
-    
+
     admin_service = AdminService(session)
     admin = await admin_service.get_admin_by_telegram_id(telegram_id)
-    
+
     if not admin or not admin.master_key:
         await message.answer(
             "⚠️ **Мастер-ключ не установлен**\n\n"
@@ -202,7 +205,7 @@ async def show_master_key_status(
             reply_markup=master_key_management_reply_keyboard()
         )
         return
-    
+
     # Build status message
     text_lines = [
         "📋 **Статус мастер-ключа**",
@@ -220,11 +223,11 @@ async def show_master_key_status(
         "• Новый ключ будет показан один раз",
         "• Сохраните его в надежном месте",
     ]
-    
+
     text = "\n".join(text_lines)
-    
+
     logger.info(f"[MASTER_KEY] Super admin {telegram_id} viewed key status")
-    
+
     await message.answer(
         text,
         parse_mode="Markdown",
@@ -245,17 +248,17 @@ async def confirm_regenerate_master_key(
     This is a critical operation that will invalidate the old key.
     """
     telegram_id = message.from_user.id if message.from_user else None
-    
+
     if not is_super_admin(telegram_id):
         await message.answer("❌ Доступ запрещен")
         return
-    
+
     # Check if admin has existing key
     admin_service = AdminService(session)
     admin = await admin_service.get_admin_by_telegram_id(telegram_id)
-    
+
     has_existing_key = admin and admin.master_key is not None and admin.master_key != ""
-    
+
     if has_existing_key:
         # Ask for confirmation
         text = (
@@ -269,7 +272,7 @@ async def confirm_regenerate_master_key(
             "Введите слово **ПОДТВЕРЖДАЮ** для продолжения\n"
             "или нажмите '◀️ Главное меню' для отмены."
         )
-        
+
         await state.set_state(AdminMasterKeyStates.awaiting_confirmation)
         await message.answer(text, parse_mode="Markdown", reply_markup=master_key_management_reply_keyboard())
     else:
@@ -286,12 +289,12 @@ async def process_confirmation(
 ) -> None:
     """Process confirmation for master key regeneration."""
     telegram_id = message.from_user.id if message.from_user else None
-    
+
     if not is_super_admin(telegram_id):
         await message.answer("❌ Доступ запрещен")
         await clear_state_preserve_admin_token(state)
         return
-    
+
     if message.text and message.text.strip().upper() == "ПОДТВЕРЖДАЮ":
         await regenerate_master_key(message, session, state, **data)
     else:
@@ -320,38 +323,38 @@ async def regenerate_master_key(
     - Logs action for security audit
     """
     telegram_id = message.from_user.id if message.from_user else None
-    
+
     if not is_super_admin(telegram_id):
         await message.answer("❌ Доступ запрещен")
         await clear_state_preserve_admin_token(state)
         return
-    
+
     await clear_state_preserve_admin_token(state)
-    
+
     admin_service = AdminService(session)
     admin = await admin_service.get_admin_by_telegram_id(telegram_id)
-    
+
     if not admin:
         await message.answer("❌ Администратор не найден")
         return
-    
+
     # Check if this is first key or regeneration
     is_first_key = admin.master_key is None or admin.master_key == ""
-    
+
     # Generate new master key
     plain_master_key = admin_service.generate_master_key()
     hashed_master_key = admin_service.hash_master_key(plain_master_key)
-    
+
     # Update admin with new master key
     admin.master_key = hashed_master_key
     await session.commit()
-    
+
     # Log action for security audit
     action_type = "MASTER_KEY_CREATED" if is_first_key else "MASTER_KEY_REGENERATED"
     logger.warning(
         f"[SECURITY] {action_type} for super admin {telegram_id} (admin_id: {admin.id})"
     )
-    
+
     # Log to admin_actions table
     try:
         admin_log_service = AdminLogService(session)
@@ -366,7 +369,7 @@ async def regenerate_master_key(
         await session.commit()
     except Exception as e:
         logger.error(f"Failed to log master key action: {e}")
-    
+
     # Show new key to user (ONLY ONCE!)
     text_lines = [
         "✅ **Новый мастер-ключ сгенерирован!**" if not is_first_key else "✅ **Мастер-ключ создан!**",
@@ -385,22 +388,22 @@ async def regenerate_master_key(
         "• Не храните в открытом виде",
         "• Не передавайте третьим лицам",
     ]
-    
+
     text = "\n".join(text_lines)
-    
+
     await message.answer(text, parse_mode="Markdown")
-    
+
     # Send key in separate message for easy copying
     await message.answer(
         f"📋 **Мастер-ключ для копирования:**\n\n`{plain_master_key}`",
         parse_mode="Markdown"
     )
-    
+
     # Send instructions with main menu keyboard
     user = data.get("user")
     blacklist_entry = data.get("blacklist_entry")
     is_admin = data.get("is_admin", False)
-    
+
     await message.answer(
         "ℹ️ **Как использовать:**\n\n"
         "1. Нажмите кнопку '👑 Админ-панель' в главном меню\n"
@@ -421,21 +424,21 @@ async def back_to_main_menu(
     Return to main menu from master key management.
     """
     telegram_id = message.from_user.id if message.from_user else None
-    
+
     if not is_super_admin(telegram_id):
         return  # Let other handlers process this
-    
+
     await clear_state_preserve_admin_token(state)
-    
+
     user = data.get("user")
     blacklist_entry = data.get("blacklist_entry")
     is_admin = data.get("is_admin", False)
-    
+
     await message.answer(
         "📊 **Главное меню**\n\n"
         "Выберите действие:",
         parse_mode="Markdown",
         reply_markup=main_menu_reply_keyboard(user=user, blacklist_entry=blacklist_entry, is_admin=is_admin)
     )
-    
+
     logger.info(f"[MASTER_KEY] Super admin {telegram_id} returned to main menu")

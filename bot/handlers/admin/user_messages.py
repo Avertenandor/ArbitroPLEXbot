@@ -16,7 +16,6 @@ from app.models.admin import Admin
 from app.services.user_message_log_service import UserMessageLogService
 from app.services.user_service import UserService
 from bot.keyboards.reply import (
-    admin_keyboard,
     get_admin_keyboard_from_data,
     user_messages_navigation_keyboard,
 )
@@ -86,7 +85,7 @@ async def process_user_id_for_messages(
         return
 
     # Parse telegram_id or username
-    
+
     # Breakout for financial reports (navigation fix)
     if message.text and "Финансовая" in message.text:
         await clear_state_preserve_admin_token(state)

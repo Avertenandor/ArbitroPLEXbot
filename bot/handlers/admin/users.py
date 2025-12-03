@@ -10,28 +10,32 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
 from loguru import logger
+from sqlalchemy import desc, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.admin import Admin
-from app.models.user import User
 from app.models.transaction import Transaction
+from app.models.user import User
 from app.services.admin_log_service import AdminLogService
-from app.services.blacklist_service import BlacklistService, BlacklistActionType
-from app.services.user_service import UserService
+from app.services.blacklist_service import (
+    BlacklistActionType,
+    BlacklistService,
+)
 from app.services.referral_service import ReferralService
+from app.services.user_service import UserService
+from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
 from bot.keyboards.reply import (
-    admin_users_keyboard,
-    cancel_keyboard,
     admin_user_list_keyboard,
     admin_user_profile_keyboard,
+    admin_users_keyboard,
+    cancel_keyboard,
     main_menu_reply_keyboard,
 )
 from bot.states.admin_states import AdminStates
 from bot.utils.admin_utils import clear_state_preserve_admin_token
-from bot.utils.menu_buttons import is_menu_button
 from bot.utils.formatters import escape_md
+from bot.utils.menu_buttons import is_menu_button
+from bot.utils.user_loader import UserLoader
 
 router = Router(name="admin_users")
 
@@ -40,15 +44,16 @@ router = Router(name="admin_users")
 async def handle_admin_users_menu(
     message: Message,
     state: FSMContext,
+    session: AsyncSession,
     **data: Any,
 ) -> None:
     """Show admin users menu"""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     await clear_state_preserve_admin_token(state)
-    
+
     await message.answer(
         "👥 **Управление пользователями**\n\n"
         "Выберите действие:",
@@ -67,8 +72,8 @@ async def cmd_search_user(
     """
     Quick search user by command: /search @username or /search 0x... or /search 123456
     """
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     # Parse argument
@@ -85,21 +90,7 @@ async def cmd_search_user(
         return
 
     query = args[1].strip()
-    user_service = UserService(session)
-    user = None
-
-    # Search by wallet address
-    if query.startswith("0x") and len(query) == 42:
-        user = await user_service.get_by_wallet(query)
-    # Search by ID
-    elif query.isdigit():
-        user = await user_service.get_by_telegram_id(int(query))
-        if not user:
-            user = await user_service.get_by_id(int(query))
-    # Search by username
-    else:
-        username = query.lstrip("@")
-        user = await user_service.find_by_username(username)
+    user = await UserLoader.search_user(session, query)
 
     if not user:
         await message.answer(
@@ -116,15 +107,16 @@ async def cmd_search_user(
 async def handle_find_user(
     message: Message,
     state: FSMContext,
+    session: AsyncSession,
     **data: Any,
 ) -> None:
     """Start find user flow"""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     await state.set_state(AdminStates.finding_user)
-    
+
     await message.answer(
         "🔍 **Поиск пользователя**\n\n"
         "Отправьте **Username** (с @ или без), **Telegram ID**, **User ID** "
@@ -145,7 +137,7 @@ async def process_find_user_input(
 ) -> None:
     """Process find user input"""
     if message.text == "❌ Отмена":
-        await handle_admin_users_menu(message, state, **data)
+        await handle_admin_users_menu(message, state, session, **data)
         return
 
     if is_menu_button(message.text):
@@ -153,24 +145,14 @@ async def process_find_user_input(
         return
 
     identifier = message.text.strip()
-    user_service = UserService(session)
-    user = None
 
-    # Try by wallet address
-    if identifier.startswith("0x") and len(identifier) == 42:
-        user = await user_service.get_by_wallet(identifier)
-    # Try by ID
-    elif identifier.isdigit():
-        # Try as Telegram ID first (more common input)
-        user = await user_service.get_by_telegram_id(int(identifier))
-        # If not found, try as User ID
-        if not user:
-            user = await user_service.get_by_id(int(identifier))
-    
-    # Try by Username
-    if not user:
-        username = identifier.lstrip("@")
-        user = await user_service.find_by_username(username)
+    # Try multiple search strategies using UserLoader
+    user = await UserLoader.search_user(session, identifier)
+
+    # If not found by standard search, try as User ID (database primary key)
+    if not user and identifier.isdigit():
+        user_service = UserService(session)
+        user = await user_service.get_by_id(int(identifier))
 
     if not user:
         await message.reply(
@@ -193,24 +175,24 @@ async def handle_list_users(
     **data: Any,
 ) -> None:
     """Show paginated list of users"""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     user_service = UserService(session)
     limit = 10
     offset = (page - 1) * limit
-    
+
     # Fetch users sorted by created_at desc
     stmt = select(User).order_by(desc(User.created_at)).limit(limit).offset(offset)
     result = await session.execute(stmt)
     users = result.scalars().all()
-    
+
     total_users = await user_service.get_total_users()
     total_pages = (total_users + limit - 1) // limit if total_users > 0 else 1
 
     await state.update_data(current_user_list_page=page)
-    
+
     if not users:
         await message.answer(
             "👥 Пользователи не найдены.",
@@ -239,11 +221,11 @@ async def handle_profile_by_id_command(
     Open user profile card by explicit command: 'профиль <User ID>'.
     Удобно вызывать из других админских разделов (например, заявок на вывод).
     """
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
+    import re
     match = re.match(r"^профиль\s+(\d+)$", message.text.strip(), re.IGNORECASE)
     if not match:
         await message.answer(
@@ -273,12 +255,12 @@ async def handle_user_list_pagination(
     """Handle list pagination"""
     state_data = await state.get_data()
     current_page = state_data.get("current_user_list_page", 1)
-    
+
     if message.text == "⬅ Предыдущая":
         page = max(1, current_page - 1)
     else:
         page = current_page + 1
-        
+
     await handle_list_users(message, session, state, page=page, **data)
 
 
@@ -293,15 +275,15 @@ async def handle_user_selection(
     match = F.text.regexp(r"^🆔 (\d+):").resolve(message)
     if not match:
         return
-        
+
     user_id = int(match.group(1))
     user_service = UserService(session)
     user = await user_service.get_by_id(user_id)
-    
+
     if not user:
         await message.answer("❌ Пользователь не найден")
         return
-        
+
     await show_user_profile(message, user, state, session)
 
 
@@ -314,13 +296,13 @@ async def show_user_profile(
     """Show user profile and actions"""
     await clear_state_preserve_admin_token(state)
     await state.update_data(selected_user_id=user.id)
-    
+
     user_service = UserService(session)
     balance_data = await user_service.get_user_balance(user.id)
-    
+
     status_emoji = "🚫" if user.is_banned else "✅"
     status_text = "Заблокирован" if user.is_banned else "Активен"
-    
+
     # Get additional info
     referrer_info = "Не приглашен"
     if user.referrer_id:
@@ -328,18 +310,18 @@ async def show_user_profile(
         if referrer:
             r_username = escape_md(referrer.username) if referrer.username else None
             referrer_info = f"@{r_username}" if r_username else f"ID {referrer.telegram_id}"
-    
+
     fin_pass_status = "🔑 Установлен (Hash)" if user.financial_password else "❌ Не установлен"
     fin_pass_hash = f"`{user.financial_password[:15]}...`" if user.financial_password else ""
-    
+
     verification_status = "✅ Да" if user.is_verified else "❌ Нет"
-    
+
     phone = escape_md(user.phone) if user.phone else "Не указан"
     email = escape_md(user.email) if user.email else "Не указан"
     wallet = f"`{user.wallet_address}`" if user.wallet_address else "Не указан"
-    
+
     last_active = user.last_active.strftime('%d.%m.%Y %H:%M') if user.last_active else "Неизвестно"
-    
+
     # Flags
     flags = []
     if user.is_admin: flags.append("👑 Админ")
@@ -347,7 +329,7 @@ async def show_user_profile(
     if user.withdrawal_blocked: flags.append("⛔️ Вывод заблокирован")
     if user.suspicious: flags.append("⚠️ Подозрительный")
     flags_text = ", ".join(flags) if flags else "Нет особых отметок"
-    
+
     username_display = escape_md(user.username) if user.username else "Не указан"
 
     text = (
@@ -386,7 +368,7 @@ async def show_user_profile(
         f"• Последнее сканирование: {user.last_deposit_scan_at.strftime('%d.%m.%Y %H:%M') if user.last_deposit_scan_at else 'Не сканировался'}\n\n"
         f"Выберите действие:"
     )
-    
+
     await message.answer(
         text,
         parse_mode="Markdown",
@@ -402,9 +384,8 @@ async def handle_profile_balance(
     **data: Any,
 ) -> None:
     """Start balance change flow"""
-    admin = data.get("admin")
-    if not admin or admin.role not in ["extended_admin", "super_admin"]:
-        await message.answer("⛔ У вас недостаточно прав для этой операции.")
+    admin = await get_admin_or_deny(message, session, require_extended=True, **data)
+    if not admin:
         return
 
     state_data = await state.get_data()
@@ -414,7 +395,7 @@ async def handle_profile_balance(
         return
 
     await state.set_state(AdminStates.changing_user_balance)
-    
+
     await message.answer(
         "💳 **Изменение баланса**\n\n"
         "Введите сумму для начисления (положительное число) "
@@ -475,14 +456,14 @@ async def process_balance_change(
         return
 
     await user_service.update_profile(user_id, balance=new_balance)
-    
+
     admin = data.get("admin")
     admin_id = admin.id if admin else None
-    
+
     # Security log (simplified usage)
     from loguru import logger
     logger.warning(f"Admin {admin_id} changed balance for user {user_id} by {amount}. New: {new_balance}")
-    
+
     admin_log = AdminLogService(session)
     action = "Начисление" if amount > 0 else "Списание"
     await admin_log.log_action(
@@ -499,7 +480,7 @@ async def process_balance_change(
         f"{action}: {amount} USDT\n"
         f"Новый баланс: {new_balance} USDT"
     )
-    
+
     await show_user_profile(message, user, state, session)
 
 
@@ -539,10 +520,10 @@ async def handle_profile_block_toggle(
         entry = await blacklist_service.repo.find_by_telegram_id(user.telegram_id)
         if entry and entry.is_active:
             await blacklist_service.repo.update(entry.id, is_active=False)
-        
+
         user.is_banned = False
         await message.answer("✅ Пользователь разблокирован.")
-    
+
     await session.commit()
     await show_user_profile(message, user, state, session)
 
@@ -555,9 +536,8 @@ async def handle_profile_terminate(
     **data: Any,
 ) -> None:
     """Terminate account"""
-    admin = data.get("admin")
-    if not admin or admin.role not in ["extended_admin", "super_admin"]:
-        await message.answer("⛔ У вас недостаточно прав для этой операции.")
+    admin = await get_admin_or_deny(message, session, require_extended=True, **data)
+    if not admin:
         return
 
     state_data = await state.get_data()
@@ -586,7 +566,7 @@ async def handle_profile_terminate(
     )
     user.is_banned = True
     await session.commit()
-    
+
     await message.answer("✅ Аккаунт терминирован.")
     await show_user_profile(message, user, state, session)
 
@@ -606,11 +586,11 @@ async def handle_profile_history(
     stmt = select(Transaction).where(Transaction.user_id == user_id).order_by(desc(Transaction.created_at)).limit(10)
     result = await session.execute(stmt)
     txs = result.scalars().all()
-    
+
     if not txs:
         await message.answer("📜 История транзакций пуста.")
         return
-        
+
     text = "📜 **Последние 10 транзакций:**\n\n"
     for tx in txs:
         status_map = {
@@ -623,7 +603,7 @@ async def handle_profile_history(
         text += f"{status} `{tx.created_at.strftime('%d.%m %H:%M')}`: {tx.type} **{tx.amount} USDT**\n"
         if tx.tx_hash:
             text += f"   🔗 `{tx.tx_hash}`\n"
-        
+
     await message.answer(text, parse_mode="Markdown")
 
 
@@ -636,44 +616,44 @@ async def handle_admin_scan_deposit(
 ) -> None:
     """Admin: Force scan user deposits from blockchain."""
     from app.services.deposit_scan_service import DepositScanService
-    
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
+
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
-    
+
     state_data = await state.get_data()
     user_id = state_data.get("selected_user_id")
     if not user_id:
         await message.answer("❌ Пользователь не выбран")
         return
-    
+
     user_service = UserService(session)
     user = await user_service.get_by_id(user_id)
     if not user:
         await message.answer("❌ Пользователь не найден")
         return
-    
+
     await message.answer("⏳ Сканируем депозиты пользователя...")
-    
+
     try:
         deposit_service = DepositScanService(session)
         scan_result = await deposit_service.scan_user_deposits(user_id)
-        
+
         if not scan_result.get("success"):
             await message.answer(
                 f"⚠️ Ошибка сканирования: {scan_result.get('error', 'Неизвестная ошибка')}"
             )
             return
-        
+
         await session.commit()
-        
+
         total = scan_result.get("total_amount", 0)
         tx_count = scan_result.get("tx_count", 0)
         is_active = scan_result.get("is_active", False)
         required_plex = scan_result.get("required_plex", 0)
-        
+
         status_emoji = "✅" if is_active else "❌"
-        
+
         await message.answer(
             f"🔄 **Результаты сканирования:**\n\n"
             f"👤 Пользователь: `{user.username or user.telegram_id}`\n"
@@ -683,11 +663,11 @@ async def handle_admin_scan_deposit(
             f"💎 PLEX в сутки: `{int(required_plex):,}`",
             parse_mode="Markdown"
         )
-        
+
         # Refresh user and show profile
         user = await user_service.get_by_id(user_id)
         await show_user_profile(message, user, state, session)
-        
+
     except Exception as e:
         logger.error(f"Admin deposit scan error: {e}")
         await message.answer("⚠️ Произошла ошибка при сканировании.")
@@ -707,7 +687,7 @@ async def handle_profile_referrals(
 
     service = ReferralService(session)
     stats = await service.get_referral_stats(user_id)
-    
+
     text = (
         "👥 **Реферальная статистика**\n\n"
         f"Level 1: **{stats['level_1_count']}** партнёров\n"
@@ -715,7 +695,7 @@ async def handle_profile_referrals(
         f"Level 3: **{stats['level_3_count']}** партнёров\n\n"
         f"💰 Всего заработано: **{stats['total_earned']:.2f} USDT**"
     )
-    
+
     await message.answer(text, parse_mode="Markdown")
 
 
@@ -751,12 +731,12 @@ async def handle_back_to_admin_panel(
 async def handle_start_block_user(
     message: Message,
     state: FSMContext,
+    session: AsyncSession,
     **data: Any,
 ) -> None:
     """Start block user flow"""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     await state.set_state(AdminStates.awaiting_user_to_block)
@@ -785,10 +765,6 @@ async def handle_block_user_input(  # noqa: C901
     **data: Any,
 ) -> None:
     """Handle block user input"""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        return
-
     if message.text == "❌ Отмена":
         await clear_state_preserve_admin_token(state)
         await message.answer(
@@ -801,14 +777,16 @@ async def handle_block_user_input(  # noqa: C901
         await clear_state_preserve_admin_token(state)
         return
 
-    from loguru import logger
-    from app.services.blacklist_service import BlacklistService
-    from app.repositories.system_setting_repository import SystemSettingRepository
     from aiogram import Bot
+    from app.repositories.system_setting_repository import (
+        SystemSettingRepository,
+    )
+    from loguru import logger
+
     from app.config.settings import settings
     from app.repositories.blacklist_repository import BlacklistRepository
+    from app.services.blacklist_service import BlacklistService
 
-    user_service = UserService(session)
     blacklist_service = BlacklistService(session)
 
     identifier = message.text.strip() if message.text else ""
@@ -817,19 +795,8 @@ async def handle_block_user_input(  # noqa: C901
         await message.reply("❌ Отправьте username или ID")
         return
 
-    user = None
-    if identifier.startswith("@"):
-        username = identifier[1:]
-        user = await user_service.find_by_username(username)
-    elif identifier.isdigit():
-        telegram_id = int(identifier)
-        user = await user_service.get_by_telegram_id(telegram_id)
-    else:
-        try:
-            telegram_id = int(identifier)
-            user = await user_service.get_by_telegram_id(telegram_id)
-        except ValueError:
-            user = None
+    # Use UserLoader to search for user
+    user = await UserLoader.search_user(session, identifier)
 
     if not user:
         await message.reply("❌ Пользователь не найден")
@@ -869,7 +836,7 @@ async def handle_block_user_input(  # noqa: C901
                 chat_id=user.telegram_id,
                 text=notification_text_with_instruction,
             )
-            
+
             blacklist_repo = BlacklistRepository(session)
             blacklist_entry = await blacklist_repo.find_by_telegram_id(
                 user.telegram_id
@@ -887,7 +854,7 @@ async def handle_block_user_input(  # noqa: C901
 
         username = escape_md(user.username) if user.username else None
         display_name = f"@{username}" if username else f"ID {user.telegram_id}"
-        
+
         await message.reply(
             f"✅ Пользователь {display_name} заблокирован.\n"
             f"Уведомление отправлено пользователю.",
@@ -902,7 +869,7 @@ async def handle_block_user_input(  # noqa: C901
                 user_telegram_id=user.telegram_id,
                 reason="Блокировка администратором",
             )
-            
+
     except Exception as e:
         logger.error(f"Error blocking user: {e}")
         await message.reply(
@@ -922,10 +889,6 @@ async def handle_terminate_user_input(  # noqa: C901
     **data: Any,
 ) -> None:
     """Handle terminate user input (direct flow)"""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        return
-
     if message.text == "❌ Отмена":
         await clear_state_preserve_admin_token(state)
         await message.answer(
@@ -938,13 +901,15 @@ async def handle_terminate_user_input(  # noqa: C901
         await clear_state_preserve_admin_token(state)
         return
 
-    from loguru import logger
-    from app.services.blacklist_service import BlacklistService
-    from app.repositories.system_setting_repository import SystemSettingRepository
     from aiogram import Bot
-    from app.config.settings import settings
+    from app.repositories.system_setting_repository import (
+        SystemSettingRepository,
+    )
+    from loguru import logger
 
-    user_service = UserService(session)
+    from app.config.settings import settings
+    from app.services.blacklist_service import BlacklistService
+
     blacklist_service = BlacklistService(session)
 
     identifier = message.text.strip() if message.text else ""
@@ -953,19 +918,8 @@ async def handle_terminate_user_input(  # noqa: C901
         await message.reply("❌ Отправьте username или ID")
         return
 
-    user = None
-    if identifier.startswith("@"):
-        username = identifier[1:]
-        user = await user_service.find_by_username(username)
-    elif identifier.isdigit():
-        telegram_id = int(identifier)
-        user = await user_service.get_by_telegram_id(telegram_id)
-    else:
-        try:
-            telegram_id = int(identifier)
-            user = await user_service.get_by_telegram_id(telegram_id)
-        except ValueError:
-            user = None
+    # Use UserLoader to search for user
+    user = await UserLoader.search_user(session, identifier)
 
     if not user:
         await message.reply("❌ Пользователь не найден")
@@ -1006,7 +960,7 @@ async def handle_terminate_user_input(  # noqa: C901
 
         username = escape_md(user.username) if user.username else None
         display_name = f"@{username}" if username else f"ID {user.telegram_id}"
-        
+
         await message.reply(
             f"✅ Аккаунт {display_name} терминирован.\n"
             f"Уведомление отправлено пользователю.",
@@ -1030,10 +984,12 @@ async def handle_terminate_user_input(  # noqa: C901
 
     await clear_state_preserve_admin_token(state)
 
+
 @router.message(F.text == "⚠️ Терминировать аккаунт")
 async def handle_start_terminate_user_direct(
     message: Message,
     state: FSMContext,
+    session: AsyncSession,
     **data: Any,
 ) -> None:
     """Start terminate user flow (direct)"""
@@ -1046,10 +1002,9 @@ async def handle_start_terminate_user_direct(
     # So if state has selected_user_id, handle_profile_terminate will run.
     # If not, it will return early (if not user_id: return).
     # So we can put this handler AFTER handle_profile_terminate and it will catch cases where profile is not active.
-    
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     await state.set_state(AdminStates.awaiting_user_to_terminate)

@@ -13,6 +13,7 @@ from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
+from app.validators.common import validate_email, validate_phone
 from bot.keyboards.reply import (
     contact_input_keyboard,
     contact_update_menu_keyboard,
@@ -21,6 +22,49 @@ from bot.keyboards.reply import (
 from bot.states.profile_update import ProfileUpdateStates
 
 router = Router(name="contact_update")
+
+
+async def _get_user_or_error(
+    message: Message,
+    state: FSMContext,
+    **data: Any,
+) -> User | None:
+    """
+    Get user from handler data or show error.
+
+    Args:
+        message: Telegram message
+        state: FSM state
+        **data: Handler data
+
+    Returns:
+        User object or None if not found
+    """
+    user: User | None = data.get("user")
+    if not user:
+        await message.answer("❌ Ошибка: пользователь не найден")
+        await state.clear()
+        return None
+    return user
+
+
+async def _navigate_to_home(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Navigate to main menu (consolidated handler)."""
+    user: User | None = data.get("user")
+    if not user:
+        await state.clear()
+        return
+
+    await state.clear()
+
+    from bot.handlers.menu import show_main_menu
+
+    await show_main_menu(message, session, user, state, **data)
 
 
 @router.message(StateFilter('*'), F.text == "📝 Обновить контакты")
@@ -39,9 +83,8 @@ async def start_update_contacts(
         state: FSM state
         **data: Handler data
     """
-    user: User | None = data.get("user")
+    user = await _get_user_or_error(message, state, **data)
     if not user:
-        await message.answer("❌ Ошибка: пользователь не найден")
         return
 
     await state.clear()
@@ -77,14 +120,14 @@ async def back_from_choice(
 ) -> None:
     """Go back from contact choice to settings."""
     await state.clear()
-    
+
     # Check for language
     from bot.i18n.loader import get_user_language
     user: User | None = data.get("user")
     language = "ru"
     if user:
         language = await get_user_language(session, user.id)
-        
+
     await message.answer(
         "⚙️ *Настройки*\n\nВыберите раздел:",
         parse_mode="Markdown",
@@ -102,16 +145,7 @@ async def home_from_choice(
     **data: Any,
 ) -> None:
     """Go to main menu from choice."""
-    user: User | None = data.get("user")
-    if not user:
-        await state.clear()
-        return
-
-    await state.clear()
-
-    from bot.handlers.menu import show_main_menu
-
-    await show_main_menu(message, session, user, state, **data)
+    await _navigate_to_home(message, session, state, **data)
 
 
 @router.message(
@@ -124,10 +158,8 @@ async def start_phone_update(
     **data: Any,
 ) -> None:
     """Start phone update."""
-    user: User | None = data.get("user")
+    user = await _get_user_or_error(message, state, **data)
     if not user:
-        await message.answer("❌ Ошибка: пользователь не найден")
-        await state.clear()
         return
 
     current_phone = user.phone or "не указан"
@@ -158,10 +190,8 @@ async def start_email_update(
     **data: Any,
 ) -> None:
     """Start email update."""
-    user: User | None = data.get("user")
+    user = await _get_user_or_error(message, state, **data)
     if not user:
-        await message.answer("❌ Ошибка: пользователь не найден")
-        await state.clear()
         return
 
     current_email = user.email or "не указан"
@@ -192,10 +222,8 @@ async def start_both_update(
     **data: Any,
 ) -> None:
     """Start updating both contacts."""
-    user: User | None = data.get("user")
+    user = await _get_user_or_error(message, state, **data)
     if not user:
-        await message.answer("❌ Ошибка: пользователь не найден")
-        await state.clear()
         return
 
     current_phone = user.phone or "не указан"
@@ -275,17 +303,8 @@ async def home_from_phone(
     state: FSMContext,
     **data: Any,
 ) -> None:
-    """Go to main menu."""
-    user: User | None = data.get("user")
-    if not user:
-        await state.clear()
-        return
-
-    await state.clear()
-
-    from bot.handlers.menu import show_main_menu
-
-    await show_main_menu(message, session, user, state, **data)
+    """Go to main menu from phone input."""
+    await _navigate_to_home(message, session, state, **data)
 
 
 @router.message(ProfileUpdateStates.waiting_for_phone)
@@ -304,10 +323,8 @@ async def process_phone_update(
         state: FSM state
         **data: Handler data
     """
-    user: User | None = data.get("user")
+    user = await _get_user_or_error(message, state, **data)
     if not user:
-        await message.answer("❌ Ошибка: пользователь не найден")
-        await state.clear()
         return
 
     phone = message.text.strip() if message.text else None
@@ -316,19 +333,13 @@ async def process_phone_update(
         await message.answer("❌ Пожалуйста, введите номер телефона")
         return
 
-    # Basic phone validation
-    # Remove spaces and dashes
-    phone_clean = (
-        phone.replace(" ", "")
-        .replace("-", "")
-        .replace("(", "")
-        .replace(")", "")
-    )
+    # Validate phone using common validator
+    is_valid, phone_clean, error_message = validate_phone(phone)
 
-    if len(phone_clean) < 10:
+    if not is_valid:
         await message.answer(
-            "❌ Номер телефона слишком короткий. Минимум 10 цифр.\n\n"
-            "Попробуйте еще раз или нажмите '⏭ Пропустить'"
+            f"❌ {error_message}\n\n"
+            f"Попробуйте еще раз или нажмите '⏭ Пропустить'"
         )
         return
 
@@ -412,17 +423,8 @@ async def home_from_email(
     state: FSMContext,
     **data: Any,
 ) -> None:
-    """Go to main menu."""
-    user: User | None = data.get("user")
-    if not user:
-        await state.clear()
-        return
-
-    await state.clear()
-
-    from bot.handlers.menu import show_main_menu
-
-    await show_main_menu(message, session, user, state, **data)
+    """Go to main menu from email input."""
+    await _navigate_to_home(message, session, state, **data)
 
 
 @router.message(ProfileUpdateStates.waiting_for_email)
@@ -441,10 +443,8 @@ async def process_email_update(
         state: FSM state
         **data: Handler data
     """
-    user: User | None = data.get("user")
+    user = await _get_user_or_error(message, state, **data)
     if not user:
-        await message.answer("❌ Ошибка: пользователь не найден")
-        await state.clear()
         return
 
     email = message.text.strip() if message.text else None
@@ -453,12 +453,13 @@ async def process_email_update(
         await message.answer("❌ Пожалуйста, введите email адрес")
         return
 
-    # Basic email validation
-    if "@" not in email or "." not in email.split("@")[-1]:
+    # Validate email using common validator
+    is_valid, email_normalized, error_message = validate_email(email)
+
+    if not is_valid:
         await message.answer(
-            "❌ Неверный формат email. Должен содержать @ и домен.\n\n"
-            "Пример: `example@mail.com`\n\n"
-            "Попробуйте еще раз или нажмите '⏭ Пропустить'",
+            f"❌ {error_message}\n\n"
+            f"Попробуйте еще раз или нажмите '⏭ Пропустить'",
             parse_mode="Markdown",
         )
         return
@@ -467,7 +468,7 @@ async def process_email_update(
     from app.repositories.user_repository import UserRepository
 
     user_repo = UserRepository(session)
-    await user_repo.update(user.id, email=email.lower())
+    await user_repo.update(user.id, email=email_normalized)
     await session.commit()
 
     await state.clear()
@@ -498,4 +499,3 @@ async def process_email_update(
         parse_mode="Markdown",
         reply_markup=settings_keyboard(),
     )
-

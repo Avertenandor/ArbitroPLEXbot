@@ -15,7 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.deposit_level_version_repository import (
     DepositLevelVersionRepository,
 )
-from app.repositories.global_settings_repository import GlobalSettingsRepository
+from app.repositories.global_settings_repository import (
+    GlobalSettingsRepository,
+)
 from app.services.admin_log_service import AdminLogService
 from bot.keyboards.reply import admin_deposit_settings_keyboard
 
@@ -95,7 +97,7 @@ async def set_max_deposit_level(
         return
 
     level = int(match.group(1))
-    
+
     if level < 1 or level > 5:
         await message.answer(
             "❌ Уровень должен быть от 1 до 5",
@@ -105,10 +107,10 @@ async def set_max_deposit_level(
 
     # Get admin
     from app.repositories.admin_repository import AdminRepository
-    
+
     admin_repo = AdminRepository(session)
     admin = await admin_repo.get_by(telegram_id=message.from_user.id)
-    
+
     if not admin:
         await message.answer(
             "❌ Администратор не найден",
@@ -186,7 +188,7 @@ async def toggle_level_availability(
 
     # Toggle is_active
     new_status = action == "включить"
-    
+
     # Update version
     await version_repo.update(current_version.id, is_active=new_status)
     await session.commit()
@@ -229,7 +231,7 @@ async def show_level_status(
         return
 
     version_repo = DepositLevelVersionRepository(session)
-    
+
     status_lines = []
     for level_num in range(1, 6):
         current_version = await version_repo.get_current_version(level_num)
@@ -263,5 +265,5 @@ async def handle_back_to_admin_panel(
 ) -> None:
     """Return to admin panel from deposit settings menu"""
     from bot.handlers.admin.panel import handle_admin_panel_button
-    
+
     await handle_admin_panel_button(message, session, **data)

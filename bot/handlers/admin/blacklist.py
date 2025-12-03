@@ -12,9 +12,13 @@ from aiogram.types import Message
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.admin import Admin
 from app.services.blacklist_service import BlacklistService
-from bot.keyboards.reply import admin_blacklist_keyboard, admin_keyboard, cancel_keyboard
+from app.validators.common import validate_telegram_id, validate_wallet_address
+from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
+from bot.keyboards.reply import (
+    admin_blacklist_keyboard,
+    cancel_keyboard,
+)
 from bot.states.admin import BlacklistStates
 from bot.states.admin_states import AdminStates
 from bot.utils.admin_utils import clear_state_preserve_admin_token
@@ -29,9 +33,8 @@ async def show_blacklist(
     **data: Any,
 ) -> None:
     """Show blacklist management menu."""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     blacklist_service = BlacklistService(session)
@@ -54,10 +57,10 @@ async def show_blacklist(
                 BlacklistActionType.TERMINATED: "❌ Терминация",
                 BlacklistActionType.BLOCKED: "⚠️ Блокировка",
             }.get(entry.action_type, entry.action_type)
-            
+
             status_emoji = "🟢" if entry.is_active else "⚫"
             status_text = "Активна" if entry.is_active else "Неактивна"
-            
+
             created_date = entry.created_at.strftime("%d.%m.%Y %H:%M")
             reason_preview = entry.reason[:60] if entry.reason else 'N/A'
             if entry.reason and len(entry.reason) > 60:
@@ -71,7 +74,7 @@ async def show_blacklist(
                 f"📅 Создано: {created_date}\n"
                 f"─────────────────────────────\n\n"
             )
-        
+
         text += "\n**Действия:**\n"
         text += "• `Просмотр #ID` - детали записи\n"
         text += "• `Разблокировать #ID` - удалить из черного списка"
@@ -91,9 +94,8 @@ async def start_add_to_blacklist(
     **data: Any,
 ) -> None:
     """Start adding to blacklist."""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     await message.answer(
@@ -114,8 +116,8 @@ async def process_blacklist_identifier(
     **data: Any,
 ) -> None:
     """Process identifier for blacklist."""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     # Check if message is a cancel button
@@ -136,29 +138,30 @@ async def process_blacklist_identifier(
 
     identifier = message.text.strip()
 
-    # Determine if telegram ID or wallet
+    # Determine if telegram ID or wallet using validators
     telegram_id = None
     wallet_address = None
 
+    # Try wallet address first (if it looks like one)
     if identifier.startswith("0x") and len(identifier) == 42:
-        # Validate BSC address format
-        from app.utils.validation import validate_bsc_address
-        if validate_bsc_address(identifier, checksum=False):
-            wallet_address = identifier.lower()
+        is_valid, normalized_address, error = validate_wallet_address(identifier)
+        if is_valid:
+            wallet_address = normalized_address.lower()
         else:
             await message.answer(
-                "❌ Неверный формат BSC адреса! "
-                "Адрес должен начинаться с '0x' и содержать 42 символа.",
+                f"❌ Неверный формат BSC адреса! {error}",
                 reply_markup=cancel_keyboard(),
             )
             return
     else:
-        try:
-            telegram_id = int(identifier)
-        except ValueError:
+        # Try telegram ID
+        is_valid, parsed_id, error = validate_telegram_id(identifier)
+        if is_valid:
+            telegram_id = parsed_id
+        else:
             await message.answer(
-                "❌ Неверный формат! Введите "
-                "числовой Telegram ID или BSC адрес (0x...).",
+                f"❌ Неверный формат! {error}\n"
+                "Введите числовой Telegram ID или BSC адрес (0x...).",
                 reply_markup=cancel_keyboard(),
             )
             return
@@ -185,8 +188,8 @@ async def process_blacklist_reason(
     **data: Any,
 ) -> None:
     """Process blacklist reason."""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     # Check if message is a cancel button
@@ -224,9 +227,9 @@ async def process_blacklist_reason(
         from app.repositories.admin_repository import AdminRepository
 
         admin_repo = AdminRepository(session)
-        admin = await admin_repo.get_by(telegram_id=message.from_user.id)
-        if admin:
-            admin_id = admin.id
+        admin_obj = await admin_repo.get_by(telegram_id=message.from_user.id)
+        if admin_obj:
+            admin_id = admin_obj.id
     except Exception:
         pass
 
@@ -278,9 +281,8 @@ async def start_remove_from_blacklist(
     **data: Any,
 ) -> None:
     """Start removing from blacklist."""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     await message.answer(
@@ -301,8 +303,8 @@ async def process_blacklist_removal(
     **data: Any,
 ) -> None:
     """Process blacklist removal."""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     # Check if message is a cancel button
@@ -323,29 +325,31 @@ async def process_blacklist_removal(
 
     identifier = message.text.strip()
 
+    # Determine if telegram ID or wallet using validators
     telegram_id = None
     wallet_address = None
 
+    # Try wallet address first (if it looks like one)
     if identifier.startswith("0x") and len(identifier) == 42:
-        # Validate BSC address format
-        from app.utils.validation import validate_bsc_address
-        if validate_bsc_address(identifier, checksum=False):
-            wallet_address = identifier.lower()
+        is_valid, normalized_address, error = validate_wallet_address(identifier)
+        if is_valid:
+            wallet_address = normalized_address.lower()
         else:
             await message.answer(
-                "❌ Неверный формат BSC адреса! "
-                "Адрес должен начинаться с '0x' и содержать 42 символа.",
+                f"❌ Неверный формат BSC адреса! {error}",
                 reply_markup=admin_blacklist_keyboard(),
             )
             await clear_state_preserve_admin_token(state)
             return
     else:
-        try:
-            telegram_id = int(identifier)
-        except ValueError:
+        # Try telegram ID
+        is_valid, parsed_id, error = validate_telegram_id(identifier)
+        if is_valid:
+            telegram_id = parsed_id
+        else:
             await message.answer(
-                "❌ Неверный формат! Введите "
-                "числовой Telegram ID или BSC адрес (0x...).",
+                f"❌ Неверный формат! {error}\n"
+                "Введите числовой Telegram ID или BSC адрес (0x...).",
                 reply_markup=admin_blacklist_keyboard(),
             )
             await clear_state_preserve_admin_token(state)
@@ -383,52 +387,51 @@ async def handle_view_blacklist_entry(
     **data: Any,
 ) -> None:
     """View blacklist entry details."""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
-    
+
     import re
     match = re.match(r'^Просмотр #(\d+)$', message.text)
     if not match:
         await message.answer("❌ Неверный формат. Используйте: `Просмотр #ID`")
         return
-    
+
     entry_id = int(match.group(1))
-    
-    from app.repositories.blacklist_repository import BlacklistRepository
+
     from app.models.blacklist import BlacklistActionType
+    from app.repositories.blacklist_repository import BlacklistRepository
     from bot.keyboards.reply import admin_blacklist_keyboard
-    
+
     blacklist_repo = BlacklistRepository(session)
     entry = await blacklist_repo.get_by_id(entry_id)
-    
+
     if not entry:
         await message.answer(
             f"❌ Запись #{entry_id} не найдена.",
             reply_markup=admin_blacklist_keyboard(),
         )
         return
-    
+
     action_type_text = {
         BlacklistActionType.REGISTRATION_DENIED: "🚫 Отказ в регистрации",
         BlacklistActionType.TERMINATED: "❌ Терминация",
         BlacklistActionType.BLOCKED: "⚠️ Блокировка",
     }.get(entry.action_type, entry.action_type)
-    
+
     status_emoji = "🟢" if entry.is_active else "⚫"
     status_text = "Активна" if entry.is_active else "Неактивна"
-    
+
     added_by_text = "Система"
     if entry.added_by_admin_id:
         from app.repositories.admin_repository import AdminRepository
         admin_repo = AdminRepository(session)
-        admin = await admin_repo.get_by_id(entry.added_by_admin_id)
-        if admin:
-            added_by_text = f"@{admin.username or 'N/A'} (ID: {admin.id})"
+        admin_obj = await admin_repo.get_by_id(entry.added_by_admin_id)
+        if admin_obj:
+            added_by_text = f"@{admin_obj.username or 'N/A'} (ID: {admin_obj.id})"
         else:
             added_by_text = f"Admin ID: {entry.added_by_admin_id}"
-    
+
     text = (
         f"📋 **Запись черного списка #{entry.id}**\n\n"
         f"{status_emoji} Статус: {status_text}\n"
@@ -440,7 +443,7 @@ async def handle_view_blacklist_entry(
         f"📅 Создано: {entry.created_at.strftime('%d.%m.%Y %H:%M')}\n"
         f"🔄 Обновлено: {entry.updated_at.strftime('%d.%m.%Y %H:%M')}\n"
     )
-    
+
     # Show appeal deadline if BLOCKED
     if entry.action_type == BlacklistActionType.BLOCKED.value:
         if entry.appeal_deadline:
@@ -448,7 +451,7 @@ async def handle_view_blacklist_entry(
             text += f"⏰ Срок апелляции: {deadline_str}\n"
         else:
             text += "⏰ Срок апелляции: не установлен\n"
-    
+
     await message.answer(
         text,
         parse_mode="Markdown",
@@ -464,40 +467,41 @@ async def handle_unban_user(
     **data: Any,
 ) -> None:
     """Unban user from blacklist."""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
-    
+
     import re
     match = re.match(r'^Разблокировать #(\d+)$', message.text)
     if not match:
         await message.answer("❌ Неверный формат. Используйте: `Разблокировать #ID`")
         return
-    
+
     entry_id = int(match.group(1))
-    
+
     from app.repositories.blacklist_repository import BlacklistRepository
-    from app.services.blacklist_service import BlacklistService
-    from bot.keyboards.reply import admin_blacklist_keyboard, confirmation_keyboard
+    from bot.keyboards.reply import (
+        admin_blacklist_keyboard,
+        confirmation_keyboard,
+    )
     from bot.states.admin_states import AdminStates
-    
+
     blacklist_repo = BlacklistRepository(session)
     entry = await blacklist_repo.get_by_id(entry_id)
-    
+
     if not entry:
         await message.answer(
             f"❌ Запись #{entry_id} не найдена.",
             reply_markup=admin_blacklist_keyboard(),
         )
         return
-    
+
     # Get user info for confirmation
     user_label = f"Telegram ID: {entry.telegram_id}" if entry.telegram_id else "Wallet: " + (entry.wallet_address or "N/A")
-    
+
     await state.update_data(blacklist_entry_id=entry_id)
     await state.set_state(AdminStates.awaiting_user_to_unban)
-    
+
     await message.answer(
         f"❓ **Подтвердите разблокировку**\n\n"
         f"Пользователь: {user_label}\n"
@@ -518,12 +522,11 @@ async def handle_unban_confirm(
     **data: Any,
 ) -> None:
     """Confirm unban."""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         await clear_state_preserve_admin_token(state)
         return
-    
+
     if message.text != "✅ Да":
         from bot.keyboards.reply import admin_blacklist_keyboard
         await message.answer(
@@ -532,10 +535,10 @@ async def handle_unban_confirm(
         )
         await clear_state_preserve_admin_token(state)
         return
-    
+
     state_data = await state.get_data()
     entry_id = state_data.get("blacklist_entry_id")
-    
+
     if not entry_id:
         from bot.keyboards.reply import admin_blacklist_keyboard
         await message.answer(
@@ -544,14 +547,14 @@ async def handle_unban_confirm(
         )
         await clear_state_preserve_admin_token(state)
         return
-    
+
     from app.repositories.blacklist_repository import BlacklistRepository
     from app.services.blacklist_service import BlacklistService
     from bot.keyboards.reply import admin_blacklist_keyboard
-    
+
     blacklist_repo = BlacklistRepository(session)
     entry = await blacklist_repo.get_by_id(entry_id)
-    
+
     if not entry:
         await message.answer(
             f"❌ Запись #{entry_id} не найдена.",
@@ -559,16 +562,16 @@ async def handle_unban_confirm(
         )
         await clear_state_preserve_admin_token(state)
         return
-    
+
     # Remove from blacklist
     blacklist_service = BlacklistService(session)
     success = await blacklist_service.remove_from_blacklist(
         telegram_id=entry.telegram_id,
         wallet_address=entry.wallet_address,
     )
-    
+
     await session.commit()
-    
+
     if success:
         # Notify user if possible
         if entry.telegram_id:
@@ -582,7 +585,7 @@ async def handle_unban_confirm(
                     )
                 except Exception as e:
                     logger.warning(f"Failed to notify user about unban: {e}")
-        
+
         await message.answer(
             f"✅ **Пользователь разблокирован!**\n\n"
             f"Запись #{entry_id} удалена из черного списка.",
@@ -594,7 +597,7 @@ async def handle_unban_confirm(
             "❌ Ошибка при удалении из черного списка.",
             reply_markup=admin_blacklist_keyboard(),
         )
-    
+
     await clear_state_preserve_admin_token(state)
 
 
@@ -605,16 +608,18 @@ async def handle_edit_notification_texts(
     **data: Any,
 ) -> None:
     """Show notification texts editor menu."""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
-    
-    from app.repositories.system_setting_repository import SystemSettingRepository
+
+    from app.repositories.system_setting_repository import (
+        SystemSettingRepository,
+    )
+
     from bot.keyboards.reply import admin_blacklist_keyboard
-    
+
     setting_repo = SystemSettingRepository(session)
-    
+
     # Get current texts or use defaults
     block_text = await setting_repo.get_value(
         "blacklist_block_notification_text",
@@ -624,7 +629,7 @@ async def handle_edit_notification_texts(
         "blacklist_terminate_notification_text",
         default="❌ Ваш аккаунт терминирован в нашем сообществе без возможности восстановления."
     )
-    
+
     text = (
         f"📝 **Редактирование текстов уведомлений**\n\n"
         f"**Текущий текст блокировки:**\n{block_text}\n\n"
@@ -633,7 +638,7 @@ async def handle_edit_notification_texts(
         f"• `Изменить текст блокировки`\n"
         f"• `Изменить текст терминации`"
     )
-    
+
     await message.answer(
         text,
         parse_mode="Markdown",
@@ -649,23 +654,25 @@ async def handle_start_edit_block_text(
     **data: Any,
 ) -> None:
     """Start editing block notification text."""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
-    
-    from app.repositories.system_setting_repository import SystemSettingRepository
+
+    from app.repositories.system_setting_repository import (
+        SystemSettingRepository,
+    )
+
     from bot.keyboards.reply import cancel_keyboard
     from bot.states.admin_states import AdminStates
-    
+
     setting_repo = SystemSettingRepository(session)
     current_text = await setting_repo.get_value(
         "blacklist_block_notification_text",
         default="⚠️ Ваш аккаунт временно заблокирован в нашем сообществе. Вы можете подать апелляцию в течение 3 рабочих дней."
     )
-    
+
     await state.set_state(AdminStates.awaiting_block_notification_text)
-    
+
     await message.answer(
         f"📝 **Редактирование текста блокировки**\n\n"
         f"Текущий текст:\n{current_text}\n\n"
@@ -683,12 +690,11 @@ async def handle_save_block_text(
     **data: Any,
 ) -> None:
     """Save block notification text."""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         await clear_state_preserve_admin_token(state)
         return
-    
+
     if message.text == "❌ Отмена":
         await clear_state_preserve_admin_token(state)
         from bot.keyboards.reply import admin_blacklist_keyboard
@@ -697,19 +703,22 @@ async def handle_save_block_text(
             reply_markup=admin_blacklist_keyboard(),
         )
         return
-    
+
     new_text = message.text.strip()
     if len(new_text) < 10:
         await message.answer("❌ Текст слишком короткий. Минимум 10 символов.")
         return
-    
-    from app.repositories.system_setting_repository import SystemSettingRepository
+
+    from app.repositories.system_setting_repository import (
+        SystemSettingRepository,
+    )
+
     from bot.keyboards.reply import admin_blacklist_keyboard
-    
+
     setting_repo = SystemSettingRepository(session)
     await setting_repo.set_value("blacklist_block_notification_text", new_text)
     await session.commit()
-    
+
     await message.answer(
         f"✅ **Текст блокировки обновлён!**\n\n"
         f"Новый текст:\n{new_text}",
@@ -727,23 +736,25 @@ async def handle_start_edit_terminate_text(
     **data: Any,
 ) -> None:
     """Start editing terminate notification text."""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
-    
-    from app.repositories.system_setting_repository import SystemSettingRepository
+
+    from app.repositories.system_setting_repository import (
+        SystemSettingRepository,
+    )
+
     from bot.keyboards.reply import cancel_keyboard
     from bot.states.admin_states import AdminStates
-    
+
     setting_repo = SystemSettingRepository(session)
     current_text = await setting_repo.get_value(
         "blacklist_terminate_notification_text",
         default="❌ Ваш аккаунт терминирован в нашем сообществе без возможности восстановления."
     )
-    
+
     await state.set_state(AdminStates.awaiting_terminate_notification_text)
-    
+
     await message.answer(
         f"📝 **Редактирование текста терминации**\n\n"
         f"Текущий текст:\n{current_text}\n\n"
@@ -761,12 +772,11 @@ async def handle_save_terminate_text(
     **data: Any,
 ) -> None:
     """Save terminate notification text."""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         await clear_state_preserve_admin_token(state)
         return
-    
+
     if message.text == "❌ Отмена":
         await clear_state_preserve_admin_token(state)
         from bot.keyboards.reply import admin_blacklist_keyboard
@@ -775,19 +785,22 @@ async def handle_save_terminate_text(
             reply_markup=admin_blacklist_keyboard(),
         )
         return
-    
+
     new_text = message.text.strip()
     if len(new_text) < 10:
         await message.answer("❌ Текст слишком короткий. Минимум 10 символов.")
         return
-    
-    from app.repositories.system_setting_repository import SystemSettingRepository
+
+    from app.repositories.system_setting_repository import (
+        SystemSettingRepository,
+    )
+
     from bot.keyboards.reply import admin_blacklist_keyboard
-    
+
     setting_repo = SystemSettingRepository(session)
     await setting_repo.set_value("blacklist_terminate_notification_text", new_text)
     await session.commit()
-    
+
     await message.answer(
         f"✅ **Текст терминации обновлён!**\n\n"
         f"Новый текст:\n{new_text}",
@@ -805,5 +818,5 @@ async def handle_back_to_admin_panel(
 ) -> None:
     """Return to admin panel from blacklist menu"""
     from bot.handlers.admin.panel import handle_admin_panel_button
-    
+
     await handle_admin_panel_button(message, session, **data)

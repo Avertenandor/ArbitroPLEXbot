@@ -4,6 +4,35 @@ Services.
 Business logic layer.
 """
 
+# Base Service Infrastructure
+from app.services.base_service import (
+    BaseService,
+    ServiceResult,
+    log_operation,
+    transaction,
+)
+
+# Blockchain Infrastructure
+from app.services.blockchain.contract_manager import ContractManager
+from app.services.blockchain.failover_executor import FailoverExecutor
+
+# Referral Services
+from app.services.referral import (
+    ProcessResult,
+    ReferralRewardProcessor,
+    RewardType,
+)
+
+# Reward Services
+from app.services.reward import RewardCalculator
+
+# Withdrawal Services
+from app.services.withdrawal import (
+    ValidationResult,
+    WithdrawalBalanceManager,
+    WithdrawalValidator,
+)
+
 # Core Services
 # Support & Admin Services
 from app.services.admin_service import AdminService
@@ -40,6 +69,24 @@ from app.services.wallet_admin_service import WalletAdminService
 from app.services.withdrawal_service import WithdrawalService
 
 __all__ = [
+    # Base Infrastructure
+    "BaseService",
+    "ServiceResult",
+    "transaction",
+    "log_operation",
+    # Blockchain Infrastructure
+    "ContractManager",
+    "FailoverExecutor",
+    # Referral Package
+    "ReferralRewardProcessor",
+    "ProcessResult",
+    "RewardType",
+    # Reward Package
+    "RewardCalculator",
+    # Withdrawal Package
+    "WithdrawalBalanceManager",
+    "WithdrawalValidator",
+    "ValidationResult",
     # Core
     "DepositService",
     "NotificationService",

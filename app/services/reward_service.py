@@ -25,19 +25,22 @@ from app.repositories.reward_session_repository import (
 )
 from app.repositories.transaction_repository import TransactionRepository
 from app.repositories.user_repository import UserRepository
+from app.services.base_service import BaseService
+from app.services.reward.reward_calculator import RewardCalculator
 
 
-class RewardService:
+class RewardService(BaseService):
     """Reward service for managing reward sessions and calculations."""
 
     def __init__(self, session: AsyncSession) -> None:
         """Initialize reward service."""
-        self.session = session
+        super().__init__(session)
         self.session_repo = RewardSessionRepository(session)
         self.reward_repo = DepositRewardRepository(session)
         self.deposit_repo = DepositRepository(session)
         self.user_repo = UserRepository(session)
         self.transaction_repo = TransactionRepository(session)
+        self.calculator = RewardCalculator(session)
 
     async def create_session(
         self,
@@ -321,9 +324,9 @@ class RewardService:
                 )
                 continue
 
-            # R17-1: Get reward rate - use RewardSession if available, otherwise use deposit_version
-            reward_rate = session_obj.get_reward_rate_for_level(
-                deposit.level
+            # R17-1: Get reward rate using RewardCalculator
+            reward_rate = await self.calculator.get_rate_for_level(
+                deposit.level, session_id=session_id
             )
 
             # If RewardSession rate is 0 or deposit has version, use version's roi_percent
@@ -345,27 +348,16 @@ class RewardService:
                     )
                     continue
 
-            # Calculate reward
-            reward_amount = (deposit.amount * reward_rate) / 100
+            # Calculate reward using RewardCalculator
+            reward_amount = self.calculator.calculate_reward_amount(
+                deposit.amount, reward_rate, days=1
+            )
 
-            # R12-1: For all levels, cap to remaining ROI space
+            # R12-1: For all levels, cap to remaining ROI space using RewardCalculator
             if deposit.roi_cap_amount:
-                roi_remaining = (
-                    deposit.roi_cap_amount -
-                    (deposit.roi_paid_amount or Decimal("0"))
+                reward_amount = self.calculator.cap_reward_to_remaining_roi(
+                    reward_amount, deposit
                 )
-
-                if reward_amount > roi_remaining:
-                    logger.warning(
-                        "Reward capped to remaining ROI",
-                        extra={
-                            "deposit_id": deposit.id,
-                            "level": deposit.level,
-                            "original_reward": str(reward_amount),
-                            "capped_reward": str(roi_remaining),
-                        },
-                    )
-                    reward_amount = roi_remaining
 
                 if reward_amount <= 0:
                     continue
@@ -383,8 +375,9 @@ class RewardService:
             )
 
             # R12-1: Update deposit roi_paid_amount and check for completion
-            from app.repositories.deposit_repository import DepositRepository
             from datetime import UTC, datetime
+
+            from app.repositories.deposit_repository import DepositRepository
 
             deposit_repo = DepositRepository(self.session)
             new_roi_paid = (deposit.roi_paid_amount or Decimal("0")) + reward_amount
@@ -397,13 +390,15 @@ class RewardService:
 
             # Notify user about ROI accrual
             try:
-                from app.services.notification_service import NotificationService
-                
+                from app.services.notification_service import (
+                    NotificationService,
+                )
+
                 if user and user.telegram_id:
                     notification_service = NotificationService(self.session)
                     roi_cap = float(deposit.roi_cap_amount) if deposit.roi_cap_amount else 500.0
                     roi_progress = (float(new_roi_paid) / (float(deposit.amount) * 5)) * 500 if deposit.amount else 0
-                    
+
                     await notification_service.notify_roi_accrual(
                         telegram_id=user.telegram_id,
                         amount=float(reward_amount),
@@ -413,8 +408,8 @@ class RewardService:
             except Exception as e:
                 logger.warning(f"Failed to send ROI notification: {e}")
 
-            # R12-1: Check if ROI cap reached for all levels
-            if deposit.roi_cap_amount and new_roi_paid >= deposit.roi_cap_amount:
+            # R12-1: Check if ROI cap reached for all levels using RewardCalculator
+            if self.calculator.is_roi_cap_reached(deposit, total_earned=new_roi_paid):
                 # Mark deposit as ROI completed with timestamp
                 from datetime import UTC, datetime
                 await deposit_repo.update(
@@ -538,11 +533,10 @@ class RewardService:
         This method processes individual deposits based on their
         next_accrual_at timestamp and corridor settings.
         """
-        from datetime import UTC
-        from datetime import timedelta
+        from datetime import UTC, timedelta
 
-        from app.services.roi_corridor_service import RoiCorridorService
         from app.services.referral_service import ReferralService
+        from app.services.roi_corridor_service import RoiCorridorService
 
         corridor_service = RoiCorridorService(self.session)
         referral_service = ReferralService(self.session)
@@ -577,23 +571,15 @@ class RewardService:
                 else:  # equal
                     rate = config["roi_fixed"]
 
-                # Calculate reward
-                reward_amount = (deposit.amount * rate) / 100
-
-                # Check ROI cap
-                roi_remaining = deposit.roi_cap_amount - (
-                    deposit.roi_paid_amount or Decimal("0")
+                # Calculate reward using RewardCalculator
+                reward_amount = self.calculator.calculate_reward_amount(
+                    deposit.amount, rate, days=1
                 )
-                if reward_amount > roi_remaining:
-                    logger.warning(
-                        "Reward capped to remaining ROI",
-                        extra={
-                            "deposit_id": deposit.id,
-                            "original_reward": str(reward_amount),
-                            "capped_reward": str(roi_remaining),
-                        },
-                    )
-                    reward_amount = roi_remaining
+
+                # Check ROI cap using RewardCalculator
+                reward_amount = self.calculator.cap_reward_to_remaining_roi(
+                    reward_amount, deposit
+                )
 
                 if reward_amount <= 0:
                     logger.debug(
@@ -633,8 +619,8 @@ class RewardService:
                     deposit.user_id, reward_amount
                 )
 
-                # Check if ROI completed
-                if new_roi_paid >= deposit.roi_cap_amount:
+                # Check if ROI completed using RewardCalculator
+                if self.calculator.is_roi_cap_reached(deposit, total_earned=new_roi_paid):
                     await self.deposit_repo.update(
                         deposit.id,
                         is_roi_completed=True,

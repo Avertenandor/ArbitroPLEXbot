@@ -3,7 +3,7 @@ Admin Panel Handler
 Handles admin panel main menu and platform statistics
 """
 
-from datetime import UTC
+from datetime import UTC, datetime
 from typing import Any
 
 from aiogram import F, Router
@@ -19,10 +19,12 @@ from app.services.admin_service import AdminService
 from app.services.deposit_service import DepositService
 from app.services.referral_service import ReferralService
 from app.services.user_service import UserService
+from bot.handlers.admin.utils.admin_checks import (
+    get_admin_or_deny,
+)
 from bot.keyboards.reply import (
     admin_keyboard,
     get_admin_keyboard_from_data,
-    main_menu_reply_keyboard,
 )
 from bot.states.admin_states import AdminStates
 from bot.utils.formatters import format_usdt
@@ -52,7 +54,7 @@ async def get_admin_and_super_status(
         from app.services.admin_service import AdminService
         admin_service = AdminService(session)
         admin = await admin_service.get_admin_by_telegram_id(telegram_id)
-    
+
     is_super_admin = admin.is_super_admin if admin else False
     return admin, is_super_admin
 
@@ -73,9 +75,8 @@ async def handle_master_key_input(
         state: FSM context
         **data: Handler data
     """
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     telegram_id = message.from_user.id if message.from_user else None
@@ -131,13 +132,13 @@ async def handle_master_key_input(
             parse_mode="Markdown",
         )
         return
-        
+
     # Attempt to redirect based on button text if no state was restored
     if redirect_message_text:
         logger.info(f"Attempting to redirect admin {telegram_id} to '{redirect_message_text}'")
         # Clean up
         await state.update_data(auth_redirect_message=None)
-        
+
         # Route to specific handlers manually based on saved text
         # Note: Don't modify message.text - aiogram Message objects are frozen
         if redirect_message_text == "🆘 Техподдержка":
@@ -145,11 +146,15 @@ async def handle_master_key_input(
             await handle_admin_support_menu(message, state, **data)
             return
         elif redirect_message_text == "💰 Управление депозитами":
-            from bot.handlers.admin.deposit_management import show_deposit_management_menu
+            from bot.handlers.admin.deposit_management import (
+                show_deposit_management_menu,
+            )
             await show_deposit_management_menu(message, session, **data)
             return
         elif redirect_message_text == "⚙️ Настроить уровни депозитов":
-            from bot.handlers.admin.deposit_settings import show_deposit_settings
+            from bot.handlers.admin.deposit_settings import (
+                show_deposit_settings,
+            )
             await show_deposit_settings(message, session, **data)
             return
         elif redirect_message_text == "👥 Управление админами":
@@ -161,7 +166,9 @@ async def handle_master_key_input(
             await show_blacklist(message, session, **data)
             return
         elif redirect_message_text == "🔐 Управление кошельком":
-            from bot.handlers.admin.wallet_management import show_wallet_dashboard
+            from bot.handlers.admin.wallet_management import (
+                show_wallet_dashboard,
+            )
             await show_wallet_dashboard(message, session, state, **data)
             return
         elif redirect_message_text == "💸 Заявки на вывод":
@@ -178,7 +185,9 @@ async def handle_master_key_input(
              await handle_admin_stats(message, session, **data)
              return
         elif redirect_message_text == "🔑 Восстановление пароля":
-             from bot.handlers.admin.finpass_recovery import show_recovery_requests
+             from bot.handlers.admin.finpass_recovery import (
+                 show_recovery_requests,
+             )
              await show_recovery_requests(message, session, state, **data)
              return
         elif redirect_message_text and "Финансовая" in redirect_message_text:
@@ -188,7 +197,7 @@ async def handle_master_key_input(
         elif redirect_message_text == "👑 Админ-панель":
              # Just continue to show admin panel below
              pass
-    
+
     await state.set_state(None)  # Clear state
 
     logger.info(
@@ -231,9 +240,8 @@ async def cmd_admin_panel(
     Вход в админ-панель по команде /admin.
     Работает только для админов (is_admin=True из middleware).
     """
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта команда доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     user: User | None = data.get("user")
@@ -251,16 +259,12 @@ async def cmd_admin_panel(
 Выберите действие:
     """.strip()
 
-    # Get admin from data to check if super_admin
-    admin: Admin | None = data.get("admin")
-    is_super_admin = admin.is_super_admin if admin else False
-
     await message.answer(
         text,
         parse_mode="Markdown",
         reply_markup=admin_keyboard(
-        is_super_admin=is_super_admin,
-        is_extended_admin=admin.is_extended_admin if admin else False
+        is_super_admin=admin.is_super_admin,
+        is_extended_admin=admin.is_extended_admin
     ),
     )
 
@@ -277,12 +281,10 @@ async def handle_admin_panel_button(
     """
     telegram_id = message.from_user.id if message.from_user else None
     logger.info(f"[ADMIN] handle_admin_panel_button called for user {telegram_id}")
-    is_admin = data.get("is_admin", False)
-    logger.info(f"[ADMIN] is_admin from data: {is_admin}, data keys: {list(data.keys())}")
-    
-    if not is_admin:
-        logger.warning(f"[ADMIN] User {telegram_id} tried to access admin panel but is_admin={is_admin}")
-        await message.answer("❌ Эта функция доступна только администраторам")
+
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
+        logger.warning(f"[ADMIN] User {telegram_id} tried to access admin panel but was denied")
         return
 
     text = """
@@ -300,25 +302,12 @@ async def handle_admin_panel_button(
     if user:
         blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
 
-    # Get admin and role flags for keyboard
-    admin, _ = await get_admin_and_super_status(session, telegram_id, data)
-    # AdminAuthMiddleware уже положил is_extended_admin / is_super_admin в data
+    # AdminAuthMiddleware already populates is_extended_admin / is_super_admin in data
     await message.answer(
         text,
         parse_mode="Markdown",
         reply_markup=get_admin_keyboard_from_data(data),
     )
-    # Get admin and role flags for keyboard
-    admin, _ = await get_admin_and_super_status(session, telegram_id, data)
-
-    await message.answer(
-        text,
-        parse_mode="Markdown",
-        reply_markup=get_admin_keyboard_from_data(data),
-    )
-
-
-from bot.utils.admin_utils import clear_state_preserve_admin_token
 
 
 @router.message(F.text == "◀️ Главное меню")
@@ -329,14 +318,14 @@ async def handle_back_to_main_menu(
 ) -> None:
     """Return to main menu from admin panel"""
     from bot.handlers.menu import show_main_menu
-    
+
     state: FSMContext = data.get("state")
     user: User | None = data.get("user")
-    
+
     if state:
         # Force clear state AND session token to require master key on next entry
         await state.clear()
-    
+
     # Remove 'user' and 'state' from data to avoid duplicate arguments
     safe_data = {k: v for k, v in data.items() if k not in ('user', 'state')}
     await show_main_menu(message, session, user, state, **safe_data)
@@ -352,9 +341,8 @@ async def cmd_retention(
     Retention metrics (DAU/WAU/MAU) for admins.
     Usage: /retention
     """
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     from app.services.analytics_service import AnalyticsService
@@ -398,17 +386,18 @@ async def cmd_dashboard(
     Quick dashboard with 24h metrics for admins.
     Usage: /dashboard
     """
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     from datetime import UTC, datetime, timedelta
-    from sqlalchemy import select, func, and_
-    from app.models.user import User
+
+    from sqlalchemy import and_, func, select
+
     from app.models.deposit import Deposit
-    from app.models.transaction import Transaction
     from app.models.enums import TransactionStatus, TransactionType
+    from app.models.transaction import Transaction
+    from app.models.user import User
 
     cutoff_24h = datetime.now(UTC) - timedelta(hours=24)
     # Transaction model uses naive datetime (TIMESTAMP WITHOUT TIME ZONE)
@@ -499,9 +488,8 @@ async def handle_admin_stats(
     **data: Any,
 ) -> None:
     """Handle platform statistics"""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     from app.services.withdrawal_service import WithdrawalService
@@ -549,17 +537,17 @@ async def handle_admin_stats(
     else:
         for d in detailed_deposits[:10]:  # Show top 10 recent
             next_accrual = d["next_accrual_at"].strftime("%d.%m %H:%M") if d["next_accrual_at"] else "Н/Д"
-            
+
             # Escape username for Markdown
             username = str(d['username'])
             safe_username = username.replace("_", "\\_").replace("*", "\\*").replace("`", "\\`").replace("[", "\\[")
-            
+
             text += (
                 f"👤 @{safe_username} (ID: {d['user_id']})\n"
                 f"   💵 Деп: {format_usdt(d['amount'])} | Начислено: {format_usdt(d['roi_paid'])}\n"
                 f"   ⏳ След. нач: {next_accrual}\n\n"
             )
-        
+
         if len(detailed_deposits) > 10:
             text += f"... и еще {len(detailed_deposits) - 10} депозитов\n"
 
@@ -613,24 +601,18 @@ async def handle_admin_stats(
             )
             tx_short = wd["tx_hash"][:10] + "..." if wd["tx_hash"] else "N/A"
             text += f"• @{safe_wd_username}: {format_usdt(wd['amount'])} | `{tx_short}`\n"
-        
+
         if detailed_wd["total_pages"] > 1:
             text += f"\n_Стр. {detailed_wd['page']}/{detailed_wd['total_pages']}_ | Нажми 📋 для навигации"
 
     text = text.strip()
 
-    # Get admin and super_admin status
-    telegram_id = message.from_user.id if message.from_user else None
-    admin, is_super_admin = await get_admin_and_super_status(
-        session, telegram_id, data
-    )
-
     await message.answer(
         text,
         parse_mode="Markdown",
         reply_markup=admin_keyboard(
-        is_super_admin=is_super_admin,
-        is_extended_admin=admin.is_extended_admin if admin else False
+        is_super_admin=admin.is_super_admin,
+        is_extended_admin=admin.is_extended_admin
     ),
     )
 
@@ -645,14 +627,13 @@ async def handle_withdrawal_history(
     """Handle detailed withdrawal history with pagination."""
     from app.services.withdrawal_service import WithdrawalService
 
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     # Store page in FSM
     await state.update_data(wd_history_page=1)
-    
+
     withdrawal_service = WithdrawalService(session)
     await show_withdrawal_page(message, withdrawal_service, page=1)
 
@@ -663,7 +644,9 @@ async def show_withdrawal_page(
     page: int = 1,
 ) -> None:
     """Show withdrawal history page."""
-    from bot.keyboards.reply import admin_withdrawal_history_pagination_keyboard
+    from bot.keyboards.reply import (
+        admin_withdrawal_history_pagination_keyboard,
+    )
 
     detailed = await withdrawal_service.get_detailed_withdrawals(page=page, per_page=5)
 
@@ -683,7 +666,7 @@ async def show_withdrawal_page(
             tx_hash = wd["tx_hash"] or "N/A"
             tx_short = tx_hash[:16] + "..." if len(tx_hash) > 16 else tx_hash
             created = wd["created_at"].strftime("%d.%m %H:%M") if wd["created_at"] else "N/A"
-            
+
             text += (
                 f"👤 @{safe_wd_username}\n"
                 f"   💵 {format_usdt(wd['amount'])} USDT\n"
@@ -698,7 +681,7 @@ async def show_withdrawal_page(
         page=page,
         total_pages=detailed["total_pages"]
     )
-    
+
     await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
 
 
@@ -712,15 +695,15 @@ async def handle_wd_prev_page(
     """Handle previous page in withdrawal history."""
     from app.services.withdrawal_service import WithdrawalService
 
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     state_data = await state.get_data()
     current_page = state_data.get("wd_history_page", 1)
     new_page = max(1, current_page - 1)
     await state.update_data(wd_history_page=new_page)
-    
+
     withdrawal_service = WithdrawalService(session)
     await show_withdrawal_page(message, withdrawal_service, page=new_page)
 
@@ -735,15 +718,15 @@ async def handle_wd_next_page(
     """Handle next page in withdrawal history."""
     from app.services.withdrawal_service import WithdrawalService
 
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     state_data = await state.get_data()
     current_page = state_data.get("wd_history_page", 1)
     new_page = current_page + 1
     await state.update_data(wd_history_page=new_page)
-    
+
     withdrawal_service = WithdrawalService(session)
     await show_withdrawal_page(message, withdrawal_service, page=new_page)
 
@@ -756,22 +739,13 @@ async def handle_admin_wallet_menu(
     **data: Any,
 ) -> None:
     """Handle wallet management menu from admin panel."""
-    from app.config.settings import settings
-    
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, require_super=True, **data)
+    if not admin:
         return
-    
-    # Проверка что пользователь - super admin
-    admin_ids = settings.get_admin_ids()
-    if not admin_ids or message.from_user.id != admin_ids[0]:
-        await message.answer("❌ Доступ запрещён")
-        return
-    
+
     # Redirect to wallet dashboard
     from bot.handlers.admin.wallet_management import show_wallet_dashboard
-    
+
     await show_wallet_dashboard(message, session, state, **data)
 
 
@@ -783,7 +757,7 @@ async def handle_admin_blacklist_menu(
 ) -> None:
     """Redirect to blacklist management."""
     from bot.handlers.admin.blacklist import show_blacklist
-    
+
     await show_blacklist(message, session, **data)
 
 
@@ -794,17 +768,16 @@ async def handle_admin_users_menu(
     **data: Any,
 ) -> None:
     """Show admin users management menu"""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
-    
+
     from bot.keyboards.reply import admin_users_keyboard
-    
+
     text = """👥 **Управление пользователями**
 
 Выберите действие:"""
-    
+
     await message.answer(
         text,
         parse_mode="Markdown",
@@ -819,11 +792,10 @@ async def handle_admin_withdrawals(
     **data: Any,
 ) -> None:
     """Redirect to withdrawals submenu with full functionality."""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
-    
+
     # Redirect to the detailed withdrawals handler
     from bot.handlers.admin.withdrawals import handle_pending_withdrawals
     await handle_pending_withdrawals(message, session, **data)
@@ -840,7 +812,7 @@ async def handle_admin_deposit_settings(
 ) -> None:
     """Redirect to deposit settings management (legacy)."""
     from bot.handlers.admin.deposit_settings import show_deposit_settings
-    
+
     await show_deposit_settings(message, session, **data)
 
 
@@ -851,8 +823,10 @@ async def handle_admin_deposit_management(
     **data: Any,
 ) -> None:
     """Redirect to deposit management."""
-    from bot.handlers.admin.deposit_management import show_deposit_management_menu
-    
+    from bot.handlers.admin.deposit_management import (
+        show_deposit_management_menu,
+    )
+
     await show_deposit_management_menu(message, session, **data)
 
 
@@ -864,7 +838,7 @@ async def handle_admin_management(
 ) -> None:
     """Redirect to admin management."""
     from bot.handlers.admin.admins import show_admin_management
-    
+
     await show_admin_management(message, session, **data)
 
 
@@ -878,13 +852,13 @@ async def cmd_export_users(
     Export all users to CSV file for admins.
     Usage: /export
     """
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     from aiogram.enums import ChatAction
     from aiogram.types import BufferedInputFile
+
     from app.services.financial_report_service import FinancialReportService
 
     # Send typing indicator
@@ -896,20 +870,20 @@ async def cmd_export_users(
     try:
         report_service = FinancialReportService(session)
         csv_data = await report_service.export_all_users_csv()
-        
+
         # Create file
         file_bytes = csv_data.encode('utf-8-sig')  # BOM for Excel compatibility
         file = BufferedInputFile(
             file_bytes,
             filename=f"users_export_{datetime.now(UTC).strftime('%Y%m%d_%H%M')}.csv"
         )
-        
+
         await message.answer_document(
             file,
             caption="📊 *Экспорт пользователей*\n\nФайл содержит данные всех пользователей.",
             parse_mode="Markdown"
         )
-        
+
     except Exception as e:
         logger.error(f"Error exporting users: {e}")
         await message.answer("❌ Ошибка при экспорте пользователей.")
