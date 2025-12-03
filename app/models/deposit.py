@@ -18,6 +18,7 @@ from sqlalchemy import (
     Integer,
     String,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -110,6 +111,26 @@ class Deposit(Base):
     # Next accrual timestamp for individual reward calculation
     next_accrual_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True
+    )
+
+    # Consolidation fields
+    is_consolidated: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False,
+        comment="True if this deposit was created by consolidating multiple transactions"
+    )
+    consolidated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="When this deposit was consolidated"
+    )
+    consolidated_tx_hashes: Mapped[list | None] = mapped_column(
+        JSONB, nullable=True,
+        comment="Original tx hashes if consolidated from multiple transactions"
+    )
+
+    # Individual PLEX payment cycle
+    plex_cycle_start: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True,
+        comment="Start of individual 24h PLEX payment cycle for this deposit"
     )
 
     # Timestamps

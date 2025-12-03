@@ -167,6 +167,36 @@ class User(Base):
         comment="Number of deposit transactions found"
     )
 
+    # Work status tracking
+    work_status: Mapped[str] = mapped_column(
+        String(50),
+        default="active",
+        nullable=False,
+        index=True,
+        comment="Work status: active, suspended_no_plex, suspended_no_payment"
+    )
+    last_plex_check_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Last time PLEX balance was checked"
+    )
+    last_plex_balance: Mapped[Decimal | None] = mapped_column(
+        DECIMAL(18, 8),
+        nullable=True,
+        comment="Last checked PLEX balance on wallet"
+    )
+    plex_insufficient_since: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When PLEX balance first dropped below minimum"
+    )
+    deposits_consolidated: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        comment="True if pre-existing deposits were consolidated"
+    )
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False

@@ -142,12 +142,26 @@ class PlexPaymentRequirement(Base):
         nullable=True,
         comment="When warning was sent"
     )
-    
+
     warning_count: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
         default=0,
         comment="Number of warnings sent"
+    )
+
+    # Work activation tracking (pay first, work after)
+    is_work_active: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="True if PLEX payment received, deposit can work"
+    )
+
+    first_payment_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When first PLEX payment was received (starts work)"
     )
 
     # Timestamps
@@ -228,7 +242,7 @@ class PlexPaymentRequirement(Base):
     def mark_paid(self, tx_hash: str, amount: Decimal) -> None:
         """
         Mark payment as received and update deadlines.
-        
+
         Args:
             tx_hash: Transaction hash
             amount: Amount paid
@@ -239,8 +253,13 @@ class PlexPaymentRequirement(Base):
         self.total_paid_plex += amount
         self.days_paid += 1
         self.status = PlexPaymentStatus.PAID
-        
-        # Reset deadlines for next day
+
+        # Activate work on first payment (pay first, work after)
+        if not self.is_work_active:
+            self.is_work_active = True
+            self.first_payment_at = now
+
+        # Reset deadlines for next day (individual 24h cycle)
         self.next_payment_due = now + timedelta(hours=24)
         self.warning_due = now + timedelta(hours=25)
         self.block_due = now + timedelta(hours=49)
