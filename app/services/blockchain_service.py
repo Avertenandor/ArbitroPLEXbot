@@ -714,6 +714,9 @@ class BlockchainService:
                 }
             )
             
+            # Convert to list (get_logs returns tuple in web3.py 6.x)
+            logs = list(logs)
+            
             # Sort by block number desc to get latest
             logs.sort(key=lambda x: x.get('blockNumber', 0), reverse=True)
 
