@@ -1765,6 +1765,18 @@ def admin_wallet_history_keyboard() -> ReplyKeyboardMarkup:
 # АВТОРИЗАЦИЯ (PAY-TO-USE) - Reply клавиатуры
 # ============================================================================
 
+def auth_wallet_input_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Keyboard for wallet input during authorization.
+    
+    Returns:
+        ReplyKeyboardMarkup with cancel button
+    """
+    builder = ReplyKeyboardBuilder()
+    builder.row(KeyboardButton(text="❌ Отмена"))
+    return builder.as_markup(resize_keyboard=True)
+
+
 def auth_payment_keyboard() -> ReplyKeyboardMarkup:
     """
     Keyboard for payment confirmation during authorization.

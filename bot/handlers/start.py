@@ -23,6 +23,7 @@ from app.services.user_service import UserService
 from bot.i18n.loader import get_translator, get_user_language
 from bot.keyboards.reply import (
     main_menu_reply_keyboard,
+    auth_wallet_input_keyboard,
     auth_payment_keyboard,
     auth_continue_keyboard,
     auth_rescan_keyboard,
@@ -78,13 +79,9 @@ async def cmd_start(
                 ref_arg = message.text.split()[1].strip()
                 await state.update_data(pending_referrer_arg=ref_arg)
             
-            # Show Invoice
-            price = settings.auth_price_plex
-            wallet = settings.auth_system_wallet_address
-            token_addr = settings.auth_plex_token_address
-            
             from bot.constants.rules import LEVELS_TABLE, RULES_SHORT_TEXT
             
+            # Step 1: Ask for wallet first
             await message.answer(
                 f"🚀 **Добро пожаловать в ArbitroPLEXbot!**\n\n"
                 f"Мы строим **крипто-фиатную экосистему** на базе монеты "
@@ -96,17 +93,16 @@ async def cmd_start(
                 f"{RULES_SHORT_TEXT}\n\n"
                 f"━━━━━━━━━━━━━━━━━━━━━━\n"
                 f"🔒 **АВТОРИЗАЦИЯ**\n\n"
-                f"Для входа в систему оплатите:\n"
-                f"💰 **Стоимость:** {price} PLEX\n"
-                f"📍 **Токен PLEX:** `{token_addr}`\n\n"
-                f"💳 **Кошелек для оплаты:**\n"
-                f"`{wallet}`\n"
-                f"_(Нажмите для копирования)_\n\n"
-                f"После оплаты нажмите кнопку ниже.",
-                reply_markup=auth_payment_keyboard(),
+                f"Для входа в систему необходимо:\n"
+                f"1️⃣ Указать адрес вашего кошелька\n"
+                f"2️⃣ Оплатить 10 PLEX за доступ\n\n"
+                f"📝 **Введите адрес вашего BSC кошелька:**\n"
+                f"_(Формат: 0x...)_",
+                reply_markup=auth_wallet_input_keyboard(),
                 parse_mode="Markdown",
                 disable_web_page_preview=True
             )
+            await state.set_state(AuthStates.waiting_for_wallet)
             return
     # --------------------------------
 
@@ -1577,6 +1573,61 @@ async def handle_start_after_auth(
 # MESSAGE HANDLERS FOR REPLY KEYBOARDS (АВТОРИЗАЦИЯ)
 # ============================================================================
 
+@router.message(AuthStates.waiting_for_wallet)
+async def handle_wallet_input(
+    message: Message,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Handle wallet address input during authorization (Step 1)."""
+    # Handle cancel
+    if message.text == "❌ Отмена":
+        await state.clear()
+        await message.answer(
+            "Авторизация отменена.\n\n"
+            "Для повторного входа используйте /start",
+            reply_markup=ReplyKeyboardRemove()
+        )
+        return
+    
+    wallet = message.text.strip() if message.text else ""
+    
+    # Validate wallet format
+    if not wallet.startswith("0x") or len(wallet) != 42:
+        await message.answer(
+            "❌ **Неверный формат адреса!**\n\n"
+            "Адрес должен начинаться с `0x` и содержать 42 символа.\n\n"
+            "📝 Введите корректный адрес:",
+            parse_mode="Markdown",
+            reply_markup=auth_wallet_input_keyboard()
+        )
+        return
+    
+    # Save wallet to FSM
+    await state.update_data(auth_wallet=wallet)
+    
+    # Step 2: Show invoice
+    price = settings.auth_price_plex
+    system_wallet = settings.auth_system_wallet_address
+    token_addr = settings.auth_plex_token_address
+    
+    await message.answer(
+        f"✅ **Кошелёк принят!**\n"
+        f"`{wallet[:6]}...{wallet[-4:]}`\n\n"
+        f"━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"💳 **Оплата доступа**\n\n"
+        f"Отправьте **{price} PLEX** на кошелёк:\n"
+        f"`{system_wallet}`\n"
+        f"_(Нажмите для копирования)_\n\n"
+        f"📍 **Контракт PLEX:**\n"
+        f"`{token_addr}`\n\n"
+        f"После оплаты нажмите кнопку ниже.",
+        reply_markup=auth_payment_keyboard(),
+        parse_mode="Markdown"
+    )
+    await state.set_state(AuthStates.waiting_for_payment)
+
+
 @router.message(F.text == "✅ Я оплатил")
 async def handle_payment_confirmed_reply(
     message: Message,
@@ -1584,19 +1635,27 @@ async def handle_payment_confirmed_reply(
     **data: Any,
 ) -> None:
     """Handle payment confirmation via Reply keyboard."""
-    user: User | None = data.get("user")
+    # Get wallet from FSM (set in waiting_for_wallet step)
+    state_data = await state.get_data()
+    wallet = state_data.get("auth_wallet")
     
-    if user and user.wallet_address:
-        # User known, check directly
-        await _check_payment_logic(message, state, user.wallet_address, data)
-    else:
-        # User unknown, ask for wallet
-        await message.answer(
-            "📝 Введите адрес кошелька, с которого был совершен перевод:\n"
-            "Формат: `0x...`",
-            parse_mode="Markdown"
-        )
-        await state.set_state(AuthStates.waiting_for_payment_wallet)
+    if not wallet:
+        # Fallback: check if user has wallet in DB
+        user: User | None = data.get("user")
+        if user and user.wallet_address:
+            wallet = user.wallet_address
+        else:
+            # No wallet known - ask for it
+            await message.answer(
+                "📝 Введите адрес кошелька, с которого был совершен перевод:\n"
+                "Формат: `0x...`",
+                parse_mode="Markdown"
+            )
+            await state.set_state(AuthStates.waiting_for_payment_wallet)
+            return
+    
+    # Check payment with known wallet
+    await _check_payment_logic(message, state, wallet, data)
 
 
 @router.message(F.text == "🚀 Начать работу")
@@ -1678,17 +1737,25 @@ async def handle_retry_payment_reply(
     **data: Any,
 ) -> None:
     """Handle payment retry via Reply keyboard."""
-    user: User | None = data.get("user")
+    # Get wallet from FSM
+    state_data = await state.get_data()
+    wallet = state_data.get("auth_wallet")
     
-    if user and user.wallet_address:
-        await _check_payment_logic(message, state, user.wallet_address, data)
-    else:
-        await message.answer(
-            "📝 Введите адрес кошелька, с которого был совершен перевод:\n"
-            "Формат: `0x...`",
-            parse_mode="Markdown"
-        )
-        await state.set_state(AuthStates.waiting_for_payment_wallet)
+    if not wallet:
+        # Fallback: check if user has wallet in DB
+        user: User | None = data.get("user")
+        if user and user.wallet_address:
+            wallet = user.wallet_address
+        else:
+            await message.answer(
+                "📝 Введите адрес кошелька, с которого был совершен перевод:\n"
+                "Формат: `0x...`",
+                parse_mode="Markdown"
+            )
+            await state.set_state(AuthStates.waiting_for_payment_wallet)
+            return
+    
+    await _check_payment_logic(message, state, wallet, data)
 
 
 @router.message(F.text == "🔑 Показать пароль ещё раз")
