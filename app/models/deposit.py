@@ -24,6 +24,7 @@ from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.deposit_level_version import DepositLevelVersion
+    from app.models.plex_payment import PlexPaymentRequirement
     from app.models.user import User
 
 
@@ -133,6 +134,14 @@ class Deposit(Base):
     deposit_version: Mapped["DepositLevelVersion | None"] = relationship(
         "DepositLevelVersion",
         back_populates="deposits",
+    )
+    
+    # PLEX payment requirement for this deposit
+    plex_payment: Mapped["PlexPaymentRequirement | None"] = relationship(
+        "PlexPaymentRequirement",
+        back_populates="deposit",
+        uselist=False,
+        cascade="all, delete-orphan",
     )
 
     def __repr__(self) -> str:

@@ -24,6 +24,7 @@ from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.deposit import Deposit
+    from app.models.plex_payment import PlexPaymentRequirement
     from app.models.transaction import Transaction
     from app.models.user_fsm_state import UserFsmState
     from app.models.user_notification_settings import UserNotificationSettings
@@ -192,6 +193,13 @@ class User(Base):
     # R11-2: FSM states relationship (fallback when Redis is unavailable)
     fsm_states: Mapped[list["UserFsmState"]] = relationship(
         "UserFsmState",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+    # PLEX payment requirements for deposits
+    plex_payments: Mapped[list["PlexPaymentRequirement"]] = relationship(
+        "PlexPaymentRequirement",
         back_populates="user",
         cascade="all, delete-orphan",
     )

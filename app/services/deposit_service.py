@@ -225,6 +225,27 @@ class DepositService:
             )
 
             if deposit:
+                # Create PLEX payment requirement for this deposit
+                try:
+                    from app.services.plex_payment_service import PlexPaymentService
+                    
+                    plex_service = PlexPaymentService(self.session)
+                    await plex_service.create_payment_requirement(
+                        user_id=deposit.user_id,
+                        deposit_id=deposit.id,
+                        deposit_amount=deposit.amount,
+                        deposit_created_at=now,
+                    )
+                    logger.info(
+                        f"Created PLEX payment requirement for deposit {deposit.id}"
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Failed to create PLEX payment requirement for deposit "
+                        f"{deposit.id}: {e}"
+                    )
+                    # Don't fail deposit confirmation, PLEX req can be created later
+                
                 await self.session.commit()
                 logger.info(
                     "Deposit confirmed", extra={"deposit_id": deposit_id}

@@ -36,6 +36,7 @@ from app.models.financial_password_recovery import (
 
 # КРИТИЧНЫЕ модели из PART5
 from app.models.payment_retry import PaymentRetry, PaymentType
+from app.models.plex_payment import PlexPaymentRequirement, PlexPaymentStatus
 from app.models.referral import Referral
 from app.models.referral_earning import ReferralEarning
 
@@ -96,6 +97,8 @@ __all__ = [
     "ReferralEarning",
     # PART5 Critical Models
     "PaymentRetry",
+    "PlexPaymentRequirement",
+    "PlexPaymentStatus",
     "FailedNotification",
     "NotificationQueueFallback",  # R11-3: PostgreSQL fallback for notifications
     # Support Models

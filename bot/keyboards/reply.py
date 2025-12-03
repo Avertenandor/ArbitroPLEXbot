@@ -109,6 +109,7 @@ def main_menu_reply_keyboard(
         )
         builder.row(
             KeyboardButton(text="🐰 Купить кролика"),
+            KeyboardButton(text="📋 Правила"),
         )
         builder.row(
             KeyboardButton(text="🌐 Инструменты нашей экосистемы"),

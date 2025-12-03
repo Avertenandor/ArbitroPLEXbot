@@ -482,6 +482,47 @@ async def show_rabbit_partner(
     )
 
 
+@router.message(StateFilter('*'), F.text == "📋 Правила")
+async def show_rules(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Show platform rules."""
+    from bot.constants.rules import RULES_FULL_TEXT
+    
+    user: User | None = data.get("user")
+    is_admin = data.get("is_admin", False)
+    
+    await state.clear()
+    
+    await message.answer(
+        RULES_FULL_TEXT,
+        parse_mode="Markdown",
+        disable_web_page_preview=True
+    )
+    
+    # Get blacklist info for back button
+    blacklist_entry = None
+    try:
+        blacklist_repo = BlacklistRepository(session)
+        if message.from_user:
+            blacklist_entry = await blacklist_repo.find_by_telegram_id(
+                message.from_user.id
+            )
+    except Exception as e:
+        logger.warning(f"Failed to get blacklist entry: {e}")
+    
+    # Send back button with reply keyboard
+    await message.answer(
+        "⬅️ Для возврата в главное меню:",
+        reply_markup=main_menu_reply_keyboard(
+            user=user, blacklist_entry=blacklist_entry, is_admin=is_admin
+        ),
+    )
+
+
 @router.message(StateFilter('*'), F.text == "🌐 Инструменты нашей экосистемы")
 async def show_ecosystem_tools(
     message: Message,
