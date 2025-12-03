@@ -10,16 +10,17 @@ from typing import Any
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
-from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.global_settings_repository import GlobalSettingsRepository
-from bot.states.admin_withdrawal_settings import AdminWithdrawalSettingsStates
-from bot.keyboards.reply import (
-    cancel_keyboard,
-    admin_withdrawals_keyboard,
-    admin_withdrawal_settings_keyboard,
+from app.repositories.global_settings_repository import (
+    GlobalSettingsRepository,
 )
+from bot.keyboards.reply import (
+    admin_withdrawal_settings_keyboard,
+    admin_withdrawals_keyboard,
+    cancel_keyboard,
+)
+from bot.states.admin_withdrawal_settings import AdminWithdrawalSettingsStates
 from bot.utils.admin_utils import clear_state_preserve_admin_token
 
 router = Router()

@@ -7,10 +7,11 @@ from typing import Any
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
-from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.global_settings_repository import GlobalSettingsRepository
+from app.repositories.global_settings_repository import (
+    GlobalSettingsRepository,
+)
 from app.services.blockchain_service import get_blockchain_service
 from bot.keyboards.inline import admin_blockchain_keyboard
 
@@ -107,4 +108,3 @@ async def handle_blockchain_callback(
         pass
 
     await callback.answer()
-

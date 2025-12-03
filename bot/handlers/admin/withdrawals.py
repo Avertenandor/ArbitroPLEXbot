@@ -10,46 +10,41 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from loguru import logger
-from sqlalchemy import select, desc
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin import Admin
-from app.models.transaction import Transaction
 from app.models.enums import TransactionStatus, TransactionType
+from app.models.transaction import Transaction
 from app.services.admin_log_service import AdminLogService
 from app.services.blockchain_service import get_blockchain_service
 from app.services.notification_service import NotificationService
 from app.services.user_service import UserService
 from app.services.withdrawal_service import WithdrawalService
+from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
 from bot.keyboards.reply import (
-    admin_withdrawals_keyboard,
-    admin_keyboard,
-    withdrawal_list_keyboard,
-    withdrawal_confirm_keyboard,
     admin_withdrawal_detail_keyboard,
+    admin_withdrawals_keyboard,
+    withdrawal_confirm_keyboard,
+    withdrawal_list_keyboard,
 )
 from bot.states.admin_states import AdminStates
-from bot.utils.formatters import format_usdt
 from bot.utils.admin_utils import clear_state_preserve_admin_token
+from bot.utils.formatters import format_usdt
+from bot.utils.pagination import paginate_list
 
 WITHDRAWALS_PER_PAGE = 8
 
 router = Router(name="admin_withdrawals")
 
 
-@router.message(F.text == "⏳ Ожидающие выводы")
-async def handle_pending_withdrawals(
+async def _show_withdrawal_list(
     message: Message,
     session: AsyncSession,
     state: FSMContext,
-    **data: Any,
+    page: int = 1,
 ) -> None:
-    """Show list of pending withdrawals as buttons for selection."""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
-        return
-
+    """Helper to show paginated withdrawal list."""
     withdrawal_service = WithdrawalService(session)
     pending = await withdrawal_service.get_pending_withdrawals()
 
@@ -61,14 +56,10 @@ async def handle_pending_withdrawals(
         )
         return
 
-    # Pagination
-    page = 1
-    total = len(pending)
-    total_pages = (total + WITHDRAWALS_PER_PAGE - 1) // WITHDRAWALS_PER_PAGE
-    
-    start_idx = (page - 1) * WITHDRAWALS_PER_PAGE
-    end_idx = start_idx + WITHDRAWALS_PER_PAGE
-    page_withdrawals = pending[start_idx:end_idx]
+    # Use pagination helper
+    page_withdrawals, total, total_pages = paginate_list(
+        pending, page, WITHDRAWALS_PER_PAGE
+    )
 
     await state.set_state(AdminStates.selecting_withdrawal)
     await state.update_data(page=page)
@@ -87,6 +78,21 @@ async def handle_pending_withdrawals(
             page_withdrawals, page, total_pages
         ),
     )
+
+
+@router.message(F.text == "⏳ Ожидающие выводы")
+async def handle_pending_withdrawals(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Show list of pending withdrawals as buttons for selection."""
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
+        return
+
+    await _show_withdrawal_list(message, session, state, page=1)
 
 
 @router.message(F.text == "◀️ Назад к выводам")
@@ -112,40 +118,8 @@ async def handle_prev_page(
     """Go to previous page of withdrawals."""
     fsm_data = await state.get_data()
     page = fsm_data.get("page", 1) - 1
-    
-    # We need to refresh the list to handle pagination properly
-    withdrawal_service = WithdrawalService(session)
-    pending = await withdrawal_service.get_pending_withdrawals()
-    
-    if not pending:
-        await message.answer("📭 Заявок больше нет.")
-        await handle_pending_withdrawals(message, session, state, **data)
-        return
 
-    total = len(pending)
-    total_pages = (total + WITHDRAWALS_PER_PAGE - 1) // WITHDRAWALS_PER_PAGE
-    page = max(1, min(page, total_pages))
-    
-    start_idx = (page - 1) * WITHDRAWALS_PER_PAGE
-    end_idx = start_idx + WITHDRAWALS_PER_PAGE
-    page_withdrawals = pending[start_idx:end_idx]
-    
-    await state.update_data(page=page)
-    
-    text = (
-        f"⏳ **Ожидающие заявки на вывод**\n\n"
-        f"📋 Всего заявок: {total}\n"
-        f"📄 Страница: {page}/{total_pages}\n\n"
-        "Нажмите на заявку для просмотра деталей:"
-    )
-    
-    await message.answer(
-        text,
-        parse_mode="Markdown",
-        reply_markup=withdrawal_list_keyboard(
-            page_withdrawals, page, total_pages
-        ),
-    )
+    await _show_withdrawal_list(message, session, state, page=page)
 
 
 @router.message(F.text == "След. ➡️", AdminStates.selecting_withdrawal)
@@ -158,40 +132,8 @@ async def handle_next_page(
     """Go to next page of withdrawals."""
     fsm_data = await state.get_data()
     page = fsm_data.get("page", 1) + 1
-    
-    # Reuse logic (duplicate code reduction would be better but keeping it simple for now)
-    withdrawal_service = WithdrawalService(session)
-    pending = await withdrawal_service.get_pending_withdrawals()
-    
-    if not pending:
-        await message.answer("📭 Заявок больше нет.")
-        await handle_pending_withdrawals(message, session, state, **data)
-        return
 
-    total = len(pending)
-    total_pages = (total + WITHDRAWALS_PER_PAGE - 1) // WITHDRAWALS_PER_PAGE
-    page = max(1, min(page, total_pages))
-    
-    start_idx = (page - 1) * WITHDRAWALS_PER_PAGE
-    end_idx = start_idx + WITHDRAWALS_PER_PAGE
-    page_withdrawals = pending[start_idx:end_idx]
-    
-    await state.update_data(page=page)
-    
-    text = (
-        f"⏳ **Ожидающие заявки на вывод**\n\n"
-        f"📋 Всего заявок: {total}\n"
-        f"📄 Страница: {page}/{total_pages}\n\n"
-        "Нажмите на заявку для просмотра деталей:"
-    )
-    
-    await message.answer(
-        text,
-        parse_mode="Markdown",
-        reply_markup=withdrawal_list_keyboard(
-            page_withdrawals, page, total_pages
-        ),
-    )
+    await _show_withdrawal_list(message, session, state, page=page)
 
 
 @router.message(
@@ -251,7 +193,7 @@ async def handle_withdrawal_selection(
     user_service = UserService(session)
     user = await user_service.find_by_id(withdrawal.user_id)
     username = f"@{user.username}" if user and user.username else f"ID: {withdrawal.user_id}"
-    
+
     user_balance = await user_service.get_user_balance(withdrawal.user_id)
     history_text = ""
     if user_balance:
@@ -322,7 +264,7 @@ async def _show_confirmation(
     """Show confirmation dialog."""
     fsm_data = await state.get_data()
     withdrawal_id = fsm_data.get("withdrawal_id")
-    
+
     if not withdrawal_id:
         await message.answer("❌ Ошибка: ID заявки не найден.")
         await handle_pending_withdrawals(message, session, state)
@@ -330,9 +272,9 @@ async def _show_confirmation(
 
     action_text = "ОДОБРИТЬ" if action == "approve" else "ОТКЛОНИТЬ"
     action_emoji = "✅" if action == "approve" else "❌"
-    
+
     await state.set_state(AdminStates.confirming_withdrawal_action)
-    
+
     await message.answer(
         f"{action_emoji} **Подтверждение: {action_text}**\n\n"
         f"📝 Заявка: #{withdrawal_id}\n\n"
@@ -554,9 +496,8 @@ async def handle_approved_withdrawals(
     **data: Any,
 ) -> None:
     """Show approved withdrawals"""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     withdrawal_service = WithdrawalService(session)
@@ -610,9 +551,8 @@ async def handle_rejected_withdrawals(
     **data: Any,
 ) -> None:
     """Show rejected withdrawals"""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     withdrawal_service = WithdrawalService(session)
@@ -665,5 +605,5 @@ async def handle_back_to_admin_panel(
 ) -> None:
     """Return to admin panel from withdrawals menu"""
     from bot.handlers.admin.panel import handle_admin_panel_button
-    
+
     await handle_admin_panel_button(message, session, **data)

@@ -8,18 +8,19 @@ import asyncio
 from decimal import Decimal
 from typing import Any
 
-from aiogram import F, Router, Bot
+from aiogram import Bot, F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, ReplyKeyboardRemove
 from loguru import logger
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.enums import TransactionStatus  # For auto-payout
+from app.models.transaction import Transaction  # For auto-payout
 from app.models.user import User
-from app.models.transaction import Transaction # For auto-payout
-from app.models.enums import TransactionStatus # For auto-payout
 from app.services.user_service import UserService
 from app.services.withdrawal_service import WithdrawalService
+from app.validators.common import validate_amount
 from bot.keyboards.reply import (
     finpass_input_keyboard,
     main_menu_reply_keyboard,
@@ -35,31 +36,31 @@ async def is_level1_only_user(session: AsyncSession, user_id: int) -> bool:
     """
     Check if user has only level 1 deposits (10$ deposits).
     Level 1 users don't need phone/email verification.
-    
+
     Returns:
         True if user has only level 1 deposits or no deposits
     """
     from app.repositories.deposit_repository import DepositRepository
-    
+
     deposit_repo = DepositRepository(session)
     active_deposits = await deposit_repo.get_active_deposits(user_id)
-    
+
     if not active_deposits:
         return True  # No deposits = level 1 eligible
-    
+
     # Check if all deposits are level 1
     return all(d.level == 1 for d in active_deposits)
 
 
 async def check_withdrawal_eligibility(
-    session: AsyncSession, 
+    session: AsyncSession,
     user: User
 ) -> tuple[bool, str | None]:
     """
     Check if user can withdraw:
     - ALL users need financial password (is_verified)
     - Level 2+ users also need phone OR email
-    
+
     Returns:
         (can_withdraw, error_message)
     """
@@ -69,10 +70,10 @@ async def check_withdrawal_eligibility(
             "❌ Для вывода необходим финансовый пароль!\n\n"
             "Установите финпароль через кнопку '🔐 Получить финпароль' в главном меню."
         )
-    
+
     # Check if level 2+ user needs additional verification
     is_level1 = await is_level1_only_user(session, user.id)
-    
+
     if not is_level1:
         # Level 2+ needs phone OR email
         if not user.phone and not user.email:
@@ -80,15 +81,15 @@ async def check_withdrawal_eligibility(
                 "❌ Для вывода с депозитами уровня 2+ требуется верификация!\n\n"
                 "Укажите телефон или email через меню '👤 Мой профиль' → '✏️ Редактировать'."
             )
-    
+
     return True, None
 
 
 async def process_auto_payout(
-    tx_id: int, 
-    amount: Decimal, 
-    to_address: str, 
-    bot: Bot, 
+    tx_id: int,
+    amount: Decimal,
+    to_address: str,
+    bot: Bot,
     telegram_id: int
 ):
     """
@@ -96,22 +97,22 @@ async def process_auto_payout(
     """
     from app.config.database import async_session_maker
     from app.services.blockchain_service import get_blockchain_service
-    
+
     blockchain_service = get_blockchain_service()
     if not blockchain_service:
         logger.error(f"Blockchain service not initialized for auto-payout tx {tx_id}")
         return
 
     logger.info(f"Starting auto-payout for tx {tx_id}, amount {amount} to {to_address}")
-    
+
     # Send payment
     result = await blockchain_service.send_payment(to_address, float(amount))
-    
+
     async with async_session_maker() as session:
         stmt = select(Transaction).where(Transaction.id == tx_id)
         res = await session.execute(stmt)
         tx = res.scalar_one_or_none()
-        
+
         if not tx:
             logger.error(f"Transaction {tx_id} not found during auto-payout update")
             return
@@ -120,7 +121,7 @@ async def process_auto_payout(
             logger.info(f"Auto-payout successful for tx {tx_id}: {result['tx_hash']}")
             tx.tx_hash = result["tx_hash"]
             tx.status = TransactionStatus.CONFIRMED.value
-            
+
             # Notify user about success
             try:
                 await bot.send_message(
@@ -137,12 +138,12 @@ async def process_auto_payout(
                 )
             except Exception as e:
                 logger.error(f"Failed to send auto-payout notification to {telegram_id}: {e}")
-                
+
         else:
             logger.error(f"Auto-payout failed for tx {tx_id}: {result.get('error')}")
             # Revert to PENDING for manual admin review
             tx.status = TransactionStatus.PENDING.value
-            
+
         await session.commit()
 
 
@@ -157,7 +158,7 @@ async def show_withdrawal_menu(
 
     session = data.get("session")
     min_amount = "0.20"  # Default fallback
-    
+
     if session:
         try:
             withdrawal_service = WithdrawalService(session)
@@ -203,7 +204,7 @@ async def withdraw_all(
     if not can_withdraw:
         await message.answer(error_msg, reply_markup=withdrawal_keyboard(), parse_mode="Markdown")
         return
-        
+
     user_service = UserService(session)
     balance = await user_service.get_user_balance(user.id)
     amount = Decimal(str(balance["available_balance"]))
@@ -211,7 +212,7 @@ async def withdraw_all(
     # Check minimum
     withdrawal_service = WithdrawalService(session)
     min_amount = await withdrawal_service.get_min_withdrawal_amount()
-    
+
     if amount < min_amount:
         await message.answer(
             f"❌ Недостаточно средств для вывода!\n\n"
@@ -256,12 +257,12 @@ async def confirm_withdrawal(
         return
 
     answer = (message.text or "").strip().lower()
-    
+
     if answer in ("да", "yes", "д", "y"):
         # Confirmed - ask for password
         state_data = await state.get_data()
         amount = state_data.get("amount")
-        
+
         text = (
             f"💸 *Вывод средств*\n\n"
             f"Сумма к выводу: *{amount} USDT*\n\n"
@@ -270,14 +271,14 @@ async def confirm_withdrawal(
 
         await message.answer(text, reply_markup=finpass_input_keyboard(), parse_mode="Markdown")
         await state.set_state(WithdrawalStates.waiting_for_financial_password)
-    
+
     elif answer in ("нет", "no", "н", "n", "отмена", "cancel"):
         await state.clear()
         await message.answer(
             "❌ Вывод отменён.",
             reply_markup=withdrawal_keyboard(),
         )
-    
+
     else:
         await message.answer(
             "⚠️ Напишите *да* для подтверждения или *нет* для отмены.",
@@ -330,13 +331,13 @@ async def process_withdrawal_amount(
         await message.answer("❌ Ошибка: пользователь не найден")
         await state.clear()
         return
-    
+
     session = data.get("session")
     if not session:
         await message.answer("❌ Системная ошибка")
         await state.clear()
         return
-    
+
     # Check withdrawal eligibility (finpass for all, phone/email for level 2+)
     can_withdraw, error_msg = await check_withdrawal_eligibility(session, user)
     if not can_withdraw:
@@ -348,15 +349,18 @@ async def process_withdrawal_amount(
         await state.clear()
         return
 
-    try:
-        amount = Decimal((message.text or "").strip())
-    except (ValueError, ArithmeticError):
+    # Validate amount using common validator
+    is_valid, amount, error_msg = validate_amount(
+        (message.text or "").strip(),
+        min_amount=Decimal("0")
+    )
+
+    if not is_valid:
         await message.answer(
-            "❌ Неверный формат суммы!\n\n"
-            "Введите число, например: 100.50"
+            f"❌ Неверный формат суммы!\n\n{error_msg}"
         )
         return
-        
+
     withdrawal_service = WithdrawalService(session)
     min_amount = await withdrawal_service.get_min_withdrawal_amount()
 
@@ -369,7 +373,7 @@ async def process_withdrawal_amount(
         return
 
     session_factory = data.get("session_factory")
-    
+
     if not session_factory:
         user_service = UserService(session)
         balance = await user_service.get_user_balance(user.id)
@@ -412,7 +416,7 @@ async def process_financial_password(
         await message.answer("❌ Ошибка: пользователь не найден")
         await state.clear()
         return
-    
+
     # Handle cancel button
     if (message.text or "").strip() == "❌ Отменить вывод":
         await state.clear()
@@ -421,11 +425,11 @@ async def process_financial_password(
             reply_markup=withdrawal_keyboard(),
         )
         return
-    
+
     if is_menu_button(message.text or ""):
         await state.clear()
         return
-    
+
     # Check rate limit
     telegram_id = message.from_user.id if message.from_user else None
     if telegram_id:
@@ -440,7 +444,7 @@ async def process_financial_password(
             )
             await state.clear()
             return
-    
+
     password = (message.text or "").strip()
 
     try:
@@ -449,25 +453,25 @@ async def process_financial_password(
         pass
 
     session_factory = data.get("session_factory")
-    
+
     # Verify password and create withdrawal
     if not session_factory:
         await message.answer("❌ Системная ошибка (no session factory)")
         return
-        
+
     try:
         transaction = None
         error = None
         is_auto = False
         no_finpass = False
-        
+
         async with session_factory() as session:
             user_service = UserService(session)
             # Re-check user (detached)
             current_user = await user_service.get_by_id(user.id)
             if not current_user:
                 raise ValueError("User not found")
-            
+
             # Check password
             if not current_user.financial_password:
                 no_finpass = True
@@ -482,16 +486,16 @@ async def process_financial_password(
                     # Proceed
                     state_data = await state.get_data()
                     amount = Decimal(str(state_data.get("amount")))
-                    
+
                     balance = await user_service.get_user_balance(current_user.id)
-                    
+
                     withdrawal_service = WithdrawalService(session)
                     transaction, error, is_auto = await withdrawal_service.request_withdrawal(
                         user_id=current_user.id,
                         amount=amount,
                         available_balance=Decimal(str(balance["available_balance"])),
                     )
-        
+
         # Outside session - send messages
         if no_finpass:
             await message.answer(
@@ -518,8 +522,8 @@ async def process_financial_password(
                 # Trigger background task
                 asyncio.create_task(
                     process_auto_payout(
-                        transaction.id, 
-                        transaction.amount, 
+                        transaction.id,
+                        transaction.amount,
                         transaction.to_address,
                         message.bot,
                         user.telegram_id
@@ -547,7 +551,7 @@ async def process_financial_password(
             "❌ Произошла ошибка при обработке заявки",
             reply_markup=withdrawal_keyboard(),
         )
-    
+
     await state.clear()
 
 
@@ -561,7 +565,7 @@ async def show_history(
     user: User | None = data.get("user")
     if not user:
         return
-    
+
     # Filter out 'user' to avoid duplicate argument error
     filtered_data = {k: v for k, v in data.items() if k != "user"}
     await _show_withdrawal_history(message, state, user, page=1, **filtered_data)
@@ -576,7 +580,7 @@ async def _show_withdrawal_history(
 ) -> None:
     """Show withdrawal history with pagination."""
     session_factory = data.get("session_factory")
-    
+
     if not session_factory:
         session = data.get("session")
         if not session:
@@ -597,7 +601,7 @@ async def _show_withdrawal_history(
     withdrawals = result["withdrawals"]
     total = result["total"]
     total_pages = result["pages"]
-    
+
     await state.update_data(withdrawal_page=page)
 
     if not withdrawals:
@@ -605,7 +609,7 @@ async def _show_withdrawal_history(
         return
 
     text = f"📜 *История выводов* (Страница {page}/{total_pages})\n\n"
-    
+
     for tx in withdrawals:
         status_icon = {
             "PENDING": "⏳",
@@ -614,7 +618,7 @@ async def _show_withdrawal_history(
             "FAILED": "❌",
             "REJECTED": "🚫"
         }.get(tx.status, "❓")
-        
+
         date = tx.created_at.strftime("%d.%m.%Y %H:%M")
         text += f"{status_icon} *{tx.amount} USDT* | {date}\n"
         text += f"ID: `{tx.id}`\n"
@@ -641,56 +645,51 @@ async def handle_smart_withdrawal_amount(
     if not state_data.get("in_withdrawal_menu"):
         # Not in withdrawal context, let other handlers process
         return
-    
+
     user: User | None = data.get("user")
     if not user:
         return
-    
+
     session = data.get("session")
     if not session:
         await message.answer("❌ Системная ошибка")
         return
-    
+
     # Check withdrawal eligibility (finpass for all, phone/email for level 2+)
     can_withdraw, error_msg = await check_withdrawal_eligibility(session, user)
     if not can_withdraw:
         await message.answer(error_msg, reply_markup=withdrawal_keyboard(), parse_mode="Markdown")
         return
-    
-    # Parse amount
-    try:
-        amount = Decimal((message.text or "").strip().replace(",", "."))
-    except (ValueError, ArithmeticError):
+
+    # Validate amount using common validator
+    is_valid, amount, error_msg = validate_amount(
+        (message.text or "").strip(),
+        min_amount=Decimal("0.01")  # Must be greater than 0
+    )
+
+    if not is_valid:
         await message.answer(
-            "❌ Неверный формат суммы!\n\n"
-            "Введите число, например: 100.50",
+            f"❌ Неверный формат суммы!\n\n{error_msg}",
             reply_markup=withdrawal_keyboard(),
         )
         return
-    
-    if amount <= 0:
-        await message.answer(
-            "❌ Сумма должна быть больше нуля!",
-            reply_markup=withdrawal_keyboard(),
-        )
-        return
-    
+
     # Check minimum withdrawal amount
     withdrawal_service = WithdrawalService(session)
     min_amount = await withdrawal_service.get_min_withdrawal_amount()
-    
+
     if amount < min_amount:
         await message.answer(
             f"❌ Минимальная сумма вывода: {min_amount} USDT",
             reply_markup=withdrawal_keyboard(),
         )
         return
-    
+
     # Check balance
     user_service = UserService(session)
     balance = await user_service.get_user_balance(user.id)
     available = Decimal(str(balance["available_balance"]))
-    
+
     if amount > available:
         await message.answer(
             f"❌ Недостаточно средств!\n\n"
@@ -699,14 +698,14 @@ async def handle_smart_withdrawal_amount(
             reply_markup=withdrawal_keyboard(),
         )
         return
-    
+
     # Clear withdrawal menu context and proceed to password confirmation
     await state.update_data(
         in_withdrawal_menu=False,
         amount=str(amount),
     )
     await state.set_state(WithdrawalStates.waiting_for_financial_password)
-    
+
     await message.answer(
         f"💸 *Вывод средств*\n\n"
         f"Сумма: *{amount:.2f} USDT*\n\n"

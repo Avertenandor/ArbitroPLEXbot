@@ -25,17 +25,20 @@ from app.repositories.deposit_level_version_repository import (
     DepositLevelVersionRepository,
 )
 from app.repositories.deposit_repository import DepositRepository
-from app.repositories.global_settings_repository import GlobalSettingsRepository
-from app.services.deposit_service import DepositService
+from app.repositories.global_settings_repository import (
+    GlobalSettingsRepository,
+)
+from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
 from bot.keyboards.reply import (
-    admin_deposit_management_keyboard,
-    admin_deposit_levels_keyboard,
     admin_deposit_level_actions_keyboard,
-    admin_keyboard,
+    admin_deposit_levels_keyboard,
+    admin_deposit_management_keyboard,
     cancel_keyboard,
 )
 from bot.states.admin import AdminDepositManagementStates
+from bot.utils.admin_utils import clear_state_preserve_admin_token
 from bot.utils.formatters import format_usdt
+from bot.utils.user_loader import UserLoader
 
 router = Router(name="admin_deposit_management")
 
@@ -48,23 +51,22 @@ async def show_deposit_management_menu(
 ) -> None:
     """
     Show deposit management main menu.
-    
+
     Args:
         message: Message object
         session: Database session
         data: Handler data
     """
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
-    
+
     text = """
 💰 **Управление депозитами**
 
 Выберите действие:
     """.strip()
-    
+
     await message.answer(
         text,
         parse_mode="Markdown",
@@ -80,19 +82,18 @@ async def show_deposit_statistics(
 ) -> None:
     """
     Show comprehensive deposit statistics.
-    
+
     Args:
         message: Message object
         session: Database session
         data: Handler data
     """
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
-    
+
     deposit_repo = DepositRepository(session)
-    
+
     # Get total statistics
     stmt = select(
         func.count(Deposit.id).label("total"),
@@ -106,10 +107,10 @@ async def show_deposit_statistics(
             Deposit.status == TransactionStatus.PENDING.value
         ).label("pending"),
     )
-    
+
     result = await session.execute(stmt)
     stats = result.one()
-    
+
     # Get statistics by level
     level_stats = []
     for level_num in range(1, 6):
@@ -120,18 +121,18 @@ async def show_deposit_statistics(
             Deposit.level == level_num,
             Deposit.status == TransactionStatus.CONFIRMED.value,
         )
-        
+
         result_level = await session.execute(stmt_level)
         level_data = result_level.one()
-        
+
         count = level_data.count or 0
         total_amount = level_data.total_amount or Decimal("0")
-        
+
         level_stats.append((level_num, count, total_amount))
-    
+
     # Calculate grand total
     grand_total = sum(amount for _, _, amount in level_stats)
-    
+
     # Format message
     text = f"""
 📊 **Статистика депозитов**
@@ -144,13 +145,13 @@ Pending: {stats.pending}
 
 **По уровням:**
 """
-    
+
     for level_num, count, total_amount in level_stats:
         emoji = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"][level_num - 1]
         text += f"{emoji} Уровень {level_num}: {count} депозитов ({format_usdt(total_amount)})\n"
-    
+
     text += f"\n💰 **Общая сумма:** {format_usdt(grand_total)}"
-    
+
     await message.answer(
         text,
         parse_mode="Markdown",
@@ -162,32 +163,30 @@ Pending: {stats.pending}
 async def start_search_user_deposits(
     message: Message,
     state: FSMContext,
+    session: AsyncSession,
     **data: Any,
 ) -> None:
     """
     Start user deposit search flow.
-    
+
     Args:
         message: Message object
         state: FSM context
+        session: Database session
         data: Handler data
     """
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
-    
+
     await state.set_state(AdminDepositManagementStates.searching_user_deposits)
-    
+
     await message.answer(
         "🔍 **Поиск депозитов пользователя**\n\n"
         "Введите Telegram ID пользователя:",
         parse_mode="Markdown",
         reply_markup=cancel_keyboard(),
     )
-
-
-from bot.utils.admin_utils import clear_state_preserve_admin_token
 
 
 @router.message(AdminDepositManagementStates.searching_user_deposits)
@@ -199,17 +198,17 @@ async def process_user_id_for_deposits(
 ) -> None:
     """
     Process user ID and show their deposits.
-    
+
     Args:
         message: Message object
         session: Database session
         state: FSM context
         data: Handler data
     """
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
-    
+
     # Check for cancel
     if message.text == "❌ Отмена":
         await clear_state_preserve_admin_token(state)
@@ -218,14 +217,14 @@ async def process_user_id_for_deposits(
             reply_markup=admin_deposit_management_keyboard(),
         )
         return
-    
+
     # Check if menu button
     from bot.utils.menu_buttons import is_menu_button
-    
+
     if message.text and is_menu_button(message.text):
         await clear_state_preserve_admin_token(state)
         return
-    
+
     # Parse Telegram ID
     try:
         telegram_id = int(message.text.strip())
@@ -235,13 +234,10 @@ async def process_user_id_for_deposits(
             reply_markup=cancel_keyboard(),
         )
         return
-    
-    # Find user
-    from app.repositories.user_repository import UserRepository
-    
-    user_repo = UserRepository(session)
-    user = await user_repo.get_by(telegram_id=telegram_id)
-    
+
+    # Find user using UserLoader
+    user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
+
     if not user:
         await message.answer(
             f"❌ Пользователь с ID `{telegram_id}` не найден.",
@@ -250,11 +246,11 @@ async def process_user_id_for_deposits(
         )
         await clear_state_preserve_admin_token(state)
         return
-    
+
     # Get user's deposits
     deposit_repo = DepositRepository(session)
     deposits = await deposit_repo.find_by(user_id=user.id)
-    
+
     if not deposits:
         await message.answer(
             f"ℹ️ У пользователя `{telegram_id}` нет депозитов.",
@@ -263,18 +259,18 @@ async def process_user_id_for_deposits(
         )
         await clear_state_preserve_admin_token(state)
         return
-    
+
     # Format deposits
     text = f"📋 **Депозиты пользователя {telegram_id}**\n"
     text += f"Username: @{user.username or 'N/A'}\n\n"
-    
+
     for deposit in deposits:
         status_emoji = {
             TransactionStatus.PENDING.value: "⏳",
             TransactionStatus.CONFIRMED.value: "✅",
             TransactionStatus.FAILED.value: "❌",
         }.get(deposit.status, "❓")
-        
+
         roi_progress = ""
         if deposit.status == TransactionStatus.CONFIRMED.value:
             if deposit.is_roi_completed:
@@ -286,7 +282,7 @@ async def process_user_id_for_deposits(
                     else 0
                 )
                 roi_progress = f" (ROI: {percent:.1f}%)"
-        
+
         text += (
             f"{status_emoji} **Уровень {deposit.level}** - {format_usdt(deposit.amount)}\n"
             f"   ID: `{deposit.id}`\n"
@@ -294,7 +290,7 @@ async def process_user_id_for_deposits(
             f"   Заработано: {format_usdt(deposit.roi_paid_amount)} USDT\n"
             f"   Дата: {deposit.created_at.strftime('%Y-%m-%d %H:%M')}\n\n"
         )
-    
+
     await message.answer(
         text,
         parse_mode="Markdown",
@@ -311,42 +307,41 @@ async def show_levels_management(
 ) -> None:
     """
     Show level management menu with current status.
-    
+
     Args:
         message: Message object
         session: Database session
         data: Handler data
     """
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
-    
+
     global_settings_repo = GlobalSettingsRepository(session)
     settings = await global_settings_repo.get_settings()
     version_repo = DepositLevelVersionRepository(session)
-    
+
     max_level = settings.max_open_deposit_level
-    
-    text = f"⚙️ **Управление уровнями депозитов**\n\n"
+
+    text = "⚙️ **Управление уровнями депозитов**\n\n"
     text += f"Максимальный открытый уровень: **{max_level}**\n\n"
     text += "**Статус уровней:**\n\n"
-    
+
     for level_num in range(1, 6):
         current_version = await version_repo.get_current_version(level_num)
-        
+
         if current_version:
             status = "✅ Активен" if current_version.is_active else "❌ Отключен"
             amount = format_usdt(current_version.amount)
         else:
             status = "⚠️ Не настроен"
             amount = "N/A"
-        
+
         emoji = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"][level_num - 1]
         text += f"{emoji} **Уровень {level_num}** ({amount}): {status}\n"
-    
+
     text += "\n💡 Выберите уровень для управления:"
-    
+
     await message.answer(
         text,
         parse_mode="Markdown",
@@ -363,7 +358,7 @@ async def show_level_actions_for_level(
 ) -> None:
     """
     Show actions for specific level (helper).
-    
+
     Args:
         message: Message object
         session: Database session
@@ -374,22 +369,22 @@ async def show_level_actions_for_level(
     # Get level status
     version_repo = DepositLevelVersionRepository(session)
     current_version = await version_repo.get_current_version(level)
-    
+
     if not current_version:
         await message.answer(
             f"⚠️ Уровень {level} не настроен в системе.",
             reply_markup=admin_deposit_levels_keyboard(),
         )
         return
-    
+
     is_active = current_version.is_active
-    
+
     # Save level to state
     await state.update_data(managing_level=level)
     await state.set_state(AdminDepositManagementStates.managing_level)
-    
+
     status_text = "✅ Активен" if is_active else "❌ Отключен"
-    
+
     text = f"""
 ⚙️ **Управление уровнем {level}**
 
@@ -400,7 +395,7 @@ ROI Cap: {current_version.roi_cap_percent}%
 
 Выберите действие:
     """.strip()
-    
+
     await message.answer(
         text,
         parse_mode="Markdown",
@@ -417,17 +412,17 @@ async def show_level_actions(
 ) -> None:
     """
     Show actions for specific level.
-    
+
     Args:
         message: Message object
         session: Database session
         state: FSM context
         data: Handler data
     """
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
-    
+
     # Extract level number
     try:
         level = int(message.text.split()[1])
@@ -439,7 +434,7 @@ async def show_level_actions(
             reply_markup=admin_deposit_levels_keyboard(),
         )
         return
-    
+
     await show_level_actions_for_level(message, session, state, level, **data)
 
 
@@ -452,15 +447,15 @@ async def start_max_level_change(
 ) -> None:
     """
     Start max level change flow.
-    
+
     Args:
         message: Message object
         session: Database session
         state: FSM context
         data: Handler data
     """
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     global_settings_repo = GlobalSettingsRepository(session)
@@ -468,7 +463,7 @@ async def start_max_level_change(
     current_max = settings.max_open_deposit_level
 
     await state.set_state(AdminDepositManagementStates.setting_max_level)
-    
+
     await message.answer(
         f"🔢 **Изменение максимального уровня**\n\n"
         f"Текущий макс. уровень: **{current_max}**\n\n"
@@ -488,7 +483,7 @@ async def process_max_level_change(
 ) -> None:
     """
     Process max level input.
-    
+
     Args:
         message: Message object
         session: Database session
@@ -511,24 +506,21 @@ async def process_max_level_change(
         )
         return
 
-    # Get admin info for logging
-    admin_id = data.get("admin_id")
-    from app.repositories.admin_repository import AdminRepository
-    admin_repo = AdminRepository(session)
-    admin = await admin_repo.get_by_id(admin_id) if admin_id else None
+    # Get admin info for logging (admin is already in data from middleware)
+    admin = data.get("admin")
     admin_info = f"admin {admin.telegram_id}" if admin else "unknown admin"
 
     global_settings_repo = GlobalSettingsRepository(session)
     await global_settings_repo.update_settings(max_open_deposit_level=new_max)
     await session.commit()
-    
+
     logger.info(f"Max open deposit level changed to {new_max} by {admin_info}")
 
     await message.answer(
         f"✅ Максимальный уровень успешно изменён на **{new_max}**.",
         parse_mode="Markdown",
     )
-    
+
     await clear_state_preserve_admin_token(state)
     await show_levels_management(message, session, **data)
 
@@ -542,23 +534,23 @@ async def process_level_action(
 ) -> None:
     """
     Process level management action.
-    
+
     Args:
         message: Message object
         session: Database session
         state: FSM context
         data: Handler data
     """
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
-    
+
     # Check for back button
     if message.text in ["◀️ Назад", "◀️ Назад к уровням"]:
         await clear_state_preserve_admin_token(state)
         await show_levels_management(message, session, **data)
         return
-    
+
     # Check for ROI corridor management button
     if message.text == "💰 Настроить коридор доходности":
         # Redirect to ROI corridor handler
@@ -569,7 +561,7 @@ async def process_level_action(
             await clear_state_preserve_admin_token(state)
             await show_level_roi_config(message, session, state, level, from_level_management=True, **data)
         return
-    
+
     # Get level from state
     state_data = await state.get_data()
     level = state_data.get("managing_level")
@@ -645,8 +637,8 @@ async def confirm_level_status_change(
         state: FSM context
         data: Handler data
     """
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     # Handle cancellation
@@ -710,7 +702,7 @@ async def confirm_level_status_change(
         from app.repositories.admin_repository import AdminRepository
         from bot.utils.notification import send_telegram_message
 
-        admin_id = data.get("admin_id")
+        admin_id = admin.id if admin else None
         admin_repo = AdminRepository(session)
         all_admins = await admin_repo.get_extended_admins()
 
@@ -722,15 +714,15 @@ async def confirm_level_status_change(
         if admin_id:
             notification_text += f"**Изменил:** Admin ID {admin_id}"
 
-        for admin in all_admins:
-            if admin_id and admin.id == admin_id:
+        for other_admin in all_admins:
+            if admin_id and other_admin.id == admin_id:
                 continue
             try:
-                await send_telegram_message(admin.telegram_id, notification_text)
+                await send_telegram_message(other_admin.telegram_id, notification_text)
             except Exception as e:
                 logger.error(
                     "Failed to notify admin about level status change",
-                    extra={"admin_id": admin.id, "error": str(e)},
+                    extra={"admin_id": other_admin.id, "error": str(e)},
                 )
     except Exception as e:
         logger.error(
@@ -749,37 +741,36 @@ async def show_pending_deposits(
 ) -> None:
     """
     Show all pending deposits.
-    
+
     Args:
         message: Message object
         session: Database session
         data: Handler data
     """
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
-    
+
     deposit_repo = DepositRepository(session)
-    
+
     # Get pending deposits
     pending_deposits = await deposit_repo.find_by(
         status=TransactionStatus.PENDING.value
     )
-    
+
     if not pending_deposits:
         await message.answer(
             "ℹ️ Нет pending депозитов.",
             reply_markup=admin_deposit_management_keyboard(),
         )
         return
-    
+
     text = "📋 **Pending депозиты**\n\n"
-    
+
     for deposit in pending_deposits[:10]:  # Limit to 10
         # Get user info
         user = deposit.user
-        
+
         text += (
             f"🆔 Deposit ID: `{deposit.id}`\n"
             f"👤 User: {user.telegram_id} (@{user.username or 'N/A'})\n"
@@ -787,15 +778,15 @@ async def show_pending_deposits(
             f"💰 Сумма: {format_usdt(deposit.amount)}\n"
             f"📅 Дата: {deposit.created_at.strftime('%Y-%m-%d %H:%M')}\n"
         )
-        
+
         if deposit.tx_hash:
             text += f"🔗 TX: `{deposit.tx_hash[:16]}...`\n"
-        
+
         text += "\n"
-    
+
     if len(pending_deposits) > 10:
         text += f"\n... и ещё {len(pending_deposits) - 10} депозитов"
-    
+
     await message.answer(
         text,
         parse_mode="Markdown",
@@ -811,21 +802,20 @@ async def show_roi_statistics(
 ) -> None:
     """
     Show ROI statistics for all levels.
-    
+
     Args:
         message: Message object
         session: Database session
         data: Handler data
     """
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
-    
+
     deposit_repo = DepositRepository(session)
-    
+
     text = "📈 **ROI Статистика**\n\n"
-    
+
     for level_num in range(1, 6):
         # Get active deposits for this level
         stmt = select(Deposit).where(
@@ -833,39 +823,39 @@ async def show_roi_statistics(
             Deposit.status == TransactionStatus.CONFIRMED.value,
             Deposit.is_roi_completed == False,  # noqa: E712
         )
-        
+
         result = await session.execute(stmt)
         active_deposits = result.scalars().all()
-        
+
         if not active_deposits:
             continue
-        
+
         # Calculate statistics
         total_deposits = len(active_deposits)
         total_paid = sum(d.roi_paid_amount for d in active_deposits)
         total_cap = sum(d.roi_cap_amount for d in active_deposits)
         avg_progress = (total_paid / total_cap * 100) if total_cap > 0 else 0
-        
+
         # Find deposits close to completion (>80%)
         close_to_completion = [
             d for d in active_deposits
             if (d.roi_paid_amount / d.roi_cap_amount * 100) > 80
         ]
-        
+
         emoji = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"][level_num - 1]
         text += f"{emoji} **Уровень {level_num}:**\n"
         text += f"   Активных: {total_deposits}\n"
         text += f"   Выплачено: {format_usdt(total_paid)}\n"
         text += f"   Средний прогресс: {avg_progress:.1f}%\n"
-        
+
         if close_to_completion:
             text += f"   🔥 Близки к завершению: {len(close_to_completion)}\n"
-        
+
         text += "\n"
-    
+
     if text == "📈 **ROI Статистика**\n\n":
         text += "ℹ️ Нет активных депозитов с незавершённым ROI."
-    
+
     await message.answer(
         text,
         parse_mode="Markdown",
@@ -883,7 +873,7 @@ async def back_to_admin_panel(
 ) -> None:
     """
     Return to admin panel.
-    
+
     Args:
         message: Message object
         session: Database session
@@ -892,5 +882,5 @@ async def back_to_admin_panel(
     """
     await clear_state_preserve_admin_token(state)
     from bot.handlers.admin.panel import handle_admin_panel_button
-    
+
     await handle_admin_panel_button(message, session, **data)

@@ -15,21 +15,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.repositories.blacklist_repository import BlacklistRepository
-from app.services.user_service import UserService
 from app.services.report_service import ReportService
+from app.services.user_service import UserService
 from bot.i18n.loader import get_translator, get_user_language
 from bot.keyboards.reply import (
     deposit_keyboard,
     main_menu_reply_keyboard,
+    profile_keyboard,
     referral_keyboard,
     settings_keyboard,
-    withdrawal_keyboard,
     wallet_menu_keyboard,
-    profile_keyboard,
+    withdrawal_keyboard,
 )
-from bot.states.profile_update import ProfileUpdateStates
 from bot.states.registration import RegistrationStates
 from bot.utils.text_utils import escape_markdown
+from bot.utils.user_loader import UserLoader
 
 router = Router()
 
@@ -52,7 +52,7 @@ async def show_main_menu(
         **data: Handler data (includes is_admin from AuthMiddleware)
     """
     logger.info(f"[MENU] show_main_menu called for user {user.telegram_id} (@{user.username})")
-    
+
     # Clear any active FSM state
     await state.clear()
 
@@ -77,15 +77,15 @@ async def show_main_menu(
     # R13-3: Get user language for i18n
     user_language = await get_user_language(session, user.id)
     _ = get_translator(user_language)
-    
+
     # Escape username for Markdown
     safe_username = escape_markdown(user.username) if user.username else _('common.user')
-    
+
     # Get balance for quick view
     user_service = UserService(session)
     balance = await user_service.get_user_balance(user.id)
     available = balance.get('available_balance', 0) if balance else 0
-    
+
     text = (
         f"{_('menu.main')}\n\n"
         f"{_('common.welcome_user', username=safe_username)}\n"
@@ -102,7 +102,7 @@ async def show_main_menu(
         user=user, blacklist_entry=blacklist_entry, is_admin=is_admin
     )
     logger.info(f"[MENU] Sending main menu to user {user.telegram_id}")
-    
+
     await message.answer(
         text,
         reply_markup=keyboard,
@@ -127,11 +127,11 @@ async def handle_main_menu(
     """Handle main menu button."""
     telegram_id = message.from_user.id if message.from_user else None
     logger.info(f"[MENU] handle_main_menu called for user {telegram_id}, text: {message.text}")
-    
+
     user: User | None = data.get("user")
     is_admin = data.get("is_admin")
     logger.info(f"[MENU] User from data: {user.id if user else None}, is_admin={is_admin}, data keys: {list(data.keys())}")
-    
+
     if not user:
         # Если по какой-то причине DI не предоставил user, просто очистим
         # состояние и покажем базовое меню без учёта статусов.
@@ -148,16 +148,14 @@ async def handle_main_menu(
         )
         return
     logger.info(f"[MENU] Calling show_main_menu for user {user.telegram_id}")
-    
+
     # Create safe data copy and remove arguments that are passed positionally
     safe_data = data.copy()
     safe_data.pop('user', None)
     safe_data.pop('state', None)
     safe_data.pop('session', None)  # session is also passed positionally
-    
+
     await show_main_menu(message, session, user, state, **safe_data)
-
-
 
 
 @router.message(StateFilter('*'), F.text == "📊 Баланс")
@@ -172,19 +170,14 @@ async def show_balance(
     logger.info(f"[MENU] show_balance called for user {telegram_id}")
     user: User | None = data.get("user")
     logger.info(f"[MENU] User from data: {user.id if user else None}, data keys: {list(data.keys())}")
+    if not user and telegram_id:
+        user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
     if not user:
-        # Try to get user from database
-        from app.repositories.user_repository import UserRepository
-        user_repo = UserRepository(session)
-        if message.from_user:
-            users = await user_repo.find_by(telegram_id=message.from_user.id)
-            user = users[0] if users else None
-        if not user:
-            await message.answer(
-                "⚠️ Ошибка: не удалось загрузить данные пользователя. "
-                "Попробуйте отправить /start"
-            )
-            return
+        await message.answer(
+            "⚠️ Ошибка: не удалось загрузить данные пользователя. "
+            "Попробуйте отправить /start"
+        )
+        return
     await state.clear()
 
     user_service = UserService(session)
@@ -220,31 +213,28 @@ async def show_deposit_menu(
     logger.info(f"[MENU] show_deposit_menu called for user {telegram_id}")
     user: User | None = data.get("user")
     logger.info(f"[MENU] User from data: {user.id if user else None}, data keys: {list(data.keys())}")
+    if not user and telegram_id:
+        user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
     if not user:
-        # Try to get user from database
-        from app.repositories.user_repository import UserRepository
-        user_repo = UserRepository(session)
-        if message.from_user:
-            users = await user_repo.find_by(telegram_id=message.from_user.id)
-            user = users[0] if users else None
-        if not user:
-            await message.answer(
-                "⚠️ Ошибка: не удалось загрузить данные пользователя. "
-                "Попробуйте отправить /start"
-            )
-            return
-    
+        await message.answer(
+            "⚠️ Ошибка: не удалось загрузить данные пользователя. "
+            "Попробуйте отправить /start"
+        )
+        return
+
     await state.clear()
 
     # Get level statuses using DepositValidationService
-    from app.services.deposit_validation_service import DepositValidationService
-    
+    from app.services.deposit_validation_service import (
+        DepositValidationService,
+    )
+
     validation_service = DepositValidationService(session)
     levels_status = await validation_service.get_available_levels(user.id)
 
     # Build text with statuses
     from app.config.settings import settings
-    
+
     text = "💰 *Выберите уровень депозита:*\n\n"
     for level in [1, 2, 3, 4, 5]:
         if level in levels_status:
@@ -252,7 +242,7 @@ async def show_deposit_menu(
             amount = level_info["amount"]
             status = level_info["status"]
             status_text = level_info.get("status_text", "")
-            
+
             if status == "active":
                 text += f"✅ Level {level}: `{amount} USDT` - Активен\n"
             elif status == "available":
@@ -300,20 +290,15 @@ async def show_withdrawal_menu(
     logger.info(f"[MENU] show_withdrawal_menu called for user {telegram_id}")
     user: User | None = data.get("user")
     logger.info(f"[MENU] User from data: {user.id if user else None}, data keys: {list(data.keys())}")
+    if not user and telegram_id:
+        user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
     if not user:
-        # Try to get user from database
-        from app.repositories.user_repository import UserRepository
-        user_repo = UserRepository(session)
-        if message.from_user:
-            users = await user_repo.find_by(telegram_id=message.from_user.id)
-            user = users[0] if users else None
-        if not user:
-            await message.answer(
-                "⚠️ Ошибка: не удалось загрузить данные пользователя. "
-                "Попробуйте отправить /start"
-            )
-            return
-    
+        await message.answer(
+            "⚠️ Ошибка: не удалось загрузить данные пользователя. "
+            "Попробуйте отправить /start"
+        )
+        return
+
     await state.clear()
     # Set context flag for smart number input handling in withdrawal menu
     await state.update_data(in_withdrawal_menu=True)
@@ -354,21 +339,17 @@ async def show_referral_menu(
     **data: Any,
 ) -> None:
     """Show referral menu."""
+    telegram_id = message.from_user.id if message.from_user else None
     user: User | None = data.get("user")
+    if not user and telegram_id:
+        user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
     if not user:
-        # Try to get user from database
-        from app.repositories.user_repository import UserRepository
-        user_repo = UserRepository(session)
-        if message.from_user:
-            users = await user_repo.find_by(telegram_id=message.from_user.id)
-            user = users[0] if users else None
-        if not user:
-            await message.answer(
-                "⚠️ Ошибка: не удалось загрузить данные пользователя. "
-                "Попробуйте отправить /start"
-            )
-            return
-    
+        await message.answer(
+            "⚠️ Ошибка: не удалось загрузить данные пользователя. "
+            "Попробуйте отправить /start"
+        )
+        return
+
     await state.clear()
 
     from app.config.settings import settings
@@ -402,21 +383,17 @@ async def show_settings_menu(
     **data: Any,
 ) -> None:
     """Show settings menu."""
+    telegram_id = message.from_user.id if message.from_user else None
     user: User | None = data.get("user")
+    if not user and telegram_id:
+        user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
     if not user:
-        # Try to get user from database
-        from app.repositories.user_repository import UserRepository
-        user_repo = UserRepository(session)
-        if message.from_user:
-            users = await user_repo.find_by(telegram_id=message.from_user.id)
-            user = users[0] if users else None
-        if not user:
-            await message.answer(
-                "⚠️ Ошибка: не удалось загрузить данные пользователя. "
-                "Попробуйте отправить /start"
-            )
-            return
-    
+        await message.answer(
+            "⚠️ Ошибка: не удалось загрузить данные пользователя. "
+            "Попробуйте отправить /start"
+        )
+        return
+
     await state.clear()
 
     text = "⚙️ *Настройки*\n\nВыберите раздел:"
@@ -434,13 +411,13 @@ async def show_rabbit_partner(
     **data: Any,
 ) -> None:
     """Show partner rabbit farm info."""
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
     user: User | None = data.get("user")
     is_admin = data.get("is_admin", False)
-    
+
     await state.clear()
-    
+
     text = (
         "🐰 **Токенизированная ферма кроликов**\n\n"
         "Для работы в ArbitroPLEXbot каждый пользователь должен быть "
@@ -452,16 +429,16 @@ async def show_rabbit_partner(
         "• Реферальная программа 3×5%\n\n"
         "⚠️ **Это обязательное условие для работы в нашей экосистеме!**"
     )
-    
+
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
             text="🐰 Перейти к покупке кролика",
             url="https://t.me/dexrabbit_bot?start=ref_9"
         )],
     ])
-    
+
     await message.answer(text, reply_markup=kb, parse_mode="Markdown")
-    
+
     # Get blacklist info for back button
     blacklist_entry = None
     try:
@@ -472,7 +449,7 @@ async def show_rabbit_partner(
             )
     except Exception as e:
         logger.warning(f"Failed to get blacklist entry: {e}")
-    
+
     # Send back button
     await message.answer(
         "⬅️ Для возврата в меню нажмите кнопку ниже:",
@@ -491,18 +468,18 @@ async def show_rules(
 ) -> None:
     """Show platform rules."""
     from bot.constants.rules import RULES_FULL_TEXT
-    
+
     user: User | None = data.get("user")
     is_admin = data.get("is_admin", False)
-    
+
     await state.clear()
-    
+
     await message.answer(
         RULES_FULL_TEXT,
         parse_mode="Markdown",
         disable_web_page_preview=True
     )
-    
+
     # Get blacklist info for back button
     blacklist_entry = None
     try:
@@ -513,7 +490,7 @@ async def show_rules(
             )
     except Exception as e:
         logger.warning(f"Failed to get blacklist entry: {e}")
-    
+
     # Send back button with reply keyboard
     await message.answer(
         "⬅️ Для возврата в главное меню:",
@@ -531,20 +508,20 @@ async def show_ecosystem_tools(
     **data: Any,
 ) -> None:
     """Show ecosystem tools menu."""
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
     user: User | None = data.get("user")
     is_admin = data.get("is_admin", False)
-    
+
     await state.clear()
-    
+
     text = (
         "🌐 **Инструменты нашей экосистемы**\n\n"
         "Все проекты и сервисы нашей крипто-фиатной экосистемы "
         "на базе монеты **PLEX**:\n\n"
         "Нажмите на интересующий вас проект для перехода:"
     )
-    
+
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
             text="🤖 ArbitroPLEXbot — Торговый бот",
@@ -571,9 +548,9 @@ async def show_ecosystem_tools(
             url="https://data-plex.net/"
         )],
     ])
-    
+
     await message.answer(text, reply_markup=kb, parse_mode="Markdown")
-    
+
     # Get blacklist info for back button
     blacklist_entry = None
     try:
@@ -584,7 +561,7 @@ async def show_ecosystem_tools(
             )
     except Exception as e:
         logger.warning(f"Failed to get blacklist entry: {e}")
-    
+
     # Send back button with reply keyboard
     await message.answer(
         "⬅️ Для возврата в главное меню:",
@@ -603,40 +580,40 @@ async def handle_update_deposit(
 ) -> None:
     """Handle deposit scan request from user."""
     from app.services.deposit_scan_service import DepositScanService
-    
+
     user: User | None = data.get("user")
     is_admin = data.get("is_admin", False)
-    
+
     if not user:
         await message.answer(
             "❌ Пользователь не найден. Пожалуйста, введите /start для регистрации."
         )
         return
-    
+
     await state.clear()
     await message.answer("⏳ Сканируем ваши депозиты на блокчейне...")
-    
+
     try:
         deposit_service = DepositScanService(session)
         scan_result = await deposit_service.scan_and_validate(user.id)
-        
+
         if not scan_result.get("success"):
             await message.answer(
                 f"⚠️ Ошибка сканирования: {scan_result.get('error', 'Неизвестная ошибка')}\n\n"
                 "Попробуйте позже."
             )
             return
-        
+
         total_deposit = scan_result.get("total_amount", 0)
         tx_count = scan_result.get("tx_count", 0)
         is_active = scan_result.get("is_valid", False)
         required_plex = scan_result.get("required_plex", 0)
-        
+
         await session.commit()
-        
+
         status_emoji = "✅" if is_active else "❌"
         status_text = "Активен" if is_active else "Неактивен (< 30 USDT)"
-        
+
         text = (
             f"💳 **Статус вашего депозита**\n\n"
             f"{status_emoji} **Статус:** {status_text}\n"
@@ -644,7 +621,7 @@ async def handle_update_deposit(
             f"📊 **Транзакций:** {tx_count}\n"
             f"💎 **Требуется PLEX в сутки:** {int(required_plex):,} PLEX\n\n"
         )
-        
+
         if not is_active:
             from app.config.settings import settings
             text += (
@@ -656,17 +633,17 @@ async def handle_update_deposit(
             )
         else:
             text += (
-                f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"✅ Ваш депозит активен.\n"
-                f"Не забывайте ежедневно пополнять PLEX для работы депозита!"
+                "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                "✅ Ваш депозит активен.\n"
+                "Не забывайте ежедневно пополнять PLEX для работы депозита!"
             )
-        
+
         await message.answer(text, parse_mode="Markdown")
-        
+
     except Exception as e:
         logger.error(f"Deposit scan error: {e}")
         await message.answer("⚠️ Произошла ошибка. Попробуйте позже.")
-    
+
     # Get blacklist info for menu
     blacklist_entry = None
     try:
@@ -677,7 +654,7 @@ async def handle_update_deposit(
             )
     except Exception:
         pass
-    
+
     await message.answer(
         "⬅️ Главное меню:",
         reply_markup=main_menu_reply_keyboard(
@@ -700,21 +677,17 @@ async def show_my_profile(
     **data: Any,
 ) -> None:
     """Show detailed user profile."""
+    telegram_id = message.from_user.id if message.from_user else None
     user: User | None = data.get("user")
+    if not user and telegram_id:
+        user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
     if not user:
-        # Try to get user from database
-        from app.repositories.user_repository import UserRepository
-        user_repo = UserRepository(session)
-        if message.from_user:
-            users = await user_repo.find_by(telegram_id=message.from_user.id)
-            user = users[0] if users else None
-        if not user:
-            await message.answer(
-                "⚠️ Ошибка: не удалось загрузить данные пользователя. "
-                "Попробуйте отправить /start"
-            )
-            return
-    
+        await message.answer(
+            "⚠️ Ошибка: не удалось загрузить данные пользователя. "
+            "Попробуйте отправить /start"
+        )
+        return
+
     from app.services.deposit_service import DepositService
     from bot.utils.formatters import format_usdt
 
@@ -788,7 +761,7 @@ async def show_my_profile(
     available = format_usdt(balance.get('available_balance', 0))
     total_earned = format_usdt(balance.get('total_earned', 0))
     pending = format_usdt(balance.get('pending_earnings', 0))
-    
+
     # Escape username for Markdown
     safe_username = escape_markdown(user.username) if user.username else 'не указан'
 
@@ -801,11 +774,11 @@ async def show_my_profile(
         f"*Статус:*\n"
         f"{verify_emoji} Верификация: {verify_status}\n"
     )
-    
+
     # Add warning for unverified users
     if not user.is_verified:
         text += "⚠️ *Вывод недоступен* — нужен финпароль (кнопка '🔐 Получить финпароль')\n\n"
-    
+
     text += (
         f"{account_status}\n\n"
         f"*Баланс:*\n"
@@ -886,36 +859,33 @@ async def show_my_wallet(
     **data: Any,
 ) -> None:
     """Show user wallet."""
+    telegram_id = message.from_user.id if message.from_user else None
     user: User | None = data.get("user")
+    if not user and telegram_id:
+        user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
     if not user:
-        # Try to get user from database
-        from app.repositories.user_repository import UserRepository
-        user_repo = UserRepository(session)
-        if message.from_user:
-            users = await user_repo.find_by(telegram_id=message.from_user.id)
-            user = users[0] if users else None
-        if not user:
-            await message.answer(
-                "⚠️ Ошибка: не удалось загрузить данные пользователя. "
-                "Попробуйте отправить /start"
-            )
-            return
-    
+        await message.answer(
+            "⚠️ Ошибка: не удалось загрузить данные пользователя. "
+            "Попробуйте отправить /start"
+        )
+        return
+
     # Get wallet history
-    from sqlalchemy import select, desc
+    from sqlalchemy import desc, select
+
     from app.models.user_wallet_history import UserWalletHistory
-    
+
     stmt = select(UserWalletHistory).where(
         UserWalletHistory.user_id == user.id
     ).order_by(desc(UserWalletHistory.changed_at)).limit(5)
     result = await session.execute(stmt)
     history = result.scalars().all()
-    
+
     text = (
         f"💳 *Мой кошелек*\n\n"
         f"📍 Текущий адрес:\n`{user.wallet_address}`\n\n"
     )
-    
+
     if history:
         text += "📜 *История изменений:*\n"
         for h in history:
@@ -924,7 +894,7 @@ async def show_my_wallet(
             date_str = h.changed_at.strftime("%d.%m.%Y %H:%M")
             text += f"• {date_str}\n  `{old_short}` → `{new_short}`\n"
         text += "\n"
-    
+
     text += "⚠️ Сохраните приватный ключ в безопасном месте!"
 
     await message.answer(text, parse_mode="Markdown", reply_markup=wallet_menu_keyboard())
@@ -947,7 +917,7 @@ async def start_registration(
         **data: Handler data
     """
     user: User | None = data.get("user")
-    
+
     # If user already registered, show main menu
     if user:
         logger.info(
@@ -965,10 +935,10 @@ async def start_registration(
         )
         await state.clear()
         return
-    
+
     # Clear any active FSM state
     await state.clear()
-    
+
     # Show registration welcome message
     welcome_text = (
         "👋 **Добро пожаловать в ArbitroPLEXbot!**\n\n"
@@ -986,16 +956,16 @@ async def start_registration(
         "⚠️ **КРИТИЧНО:** Указывайте только **ЛИЧНЫЙ** кошелек (Trust Wallet, MetaMask, SafePal или любой холодный кошелек).\n"
         "🚫 **НЕ указывайте** адрес биржи (Binance, Bybit), иначе выплаты могут быть утеряны!"
     )
-    
+
     from aiogram.types import ReplyKeyboardRemove
-    
+
     await message.answer(
         welcome_text,
         parse_mode="Markdown",
         disable_web_page_preview=False,
         reply_markup=ReplyKeyboardRemove(),
     )
-    
+
     # Start registration FSM
     await state.set_state(RegistrationStates.waiting_for_wallet)
 
@@ -1018,16 +988,16 @@ async def show_my_deposits(
     if not user:
         await message.answer("❌ Ошибка: пользователь не найден")
         return
-    
+
     from app.services.deposit_service import DepositService
-    from bot.utils.formatters import format_usdt
     from bot.keyboards.reply import main_menu_reply_keyboard
-    
+    from bot.utils.formatters import format_usdt
+
     deposit_service = DepositService(session)
-    
+
     # Get active deposits
     active_deposits = await deposit_service.get_active_deposits(user.id)
-    
+
     if not active_deposits:
         is_admin = data.get("is_admin", False)
         blacklist_repo = BlacklistRepository(session)
@@ -1042,15 +1012,15 @@ async def show_my_deposits(
             ),
         )
         return
-    
+
     # Build deposits list
     text = "📦 *Мои депозиты*\n\n"
-    
+
     for deposit in active_deposits:
         # Calculate ROI progress
         roi_paid = float(getattr(deposit, "roi_paid_amount", 0) or 0)
         roi_cap = float(getattr(deposit, "roi_cap_amount", 0) or 0)
-        
+
         if roi_cap > 0:
             roi_percent = (roi_paid / roi_cap) * 100
             roi_status = f"{roi_percent:.1f}%"
@@ -1061,15 +1031,15 @@ async def show_my_deposits(
         else:
             roi_status = "0%"
             progress_bar = "░" * 10
-        
+
         # Check if completed
         is_completed = getattr(deposit, "is_roi_completed", False)
         status_emoji = "✅" if is_completed else "🟢"
         status_text = "Закрыт (ROI 500%)" if is_completed else "Активен"
-        
+
         created_date = deposit.created_at.strftime("%d.%m.%Y %H:%M")
         remaining = roi_cap - roi_paid
-        
+
         text += (
             f"{status_emoji} *Уровень {deposit.level}*\n"
             f"💰 Сумма: {format_usdt(deposit.amount)} USDT\n"
@@ -1080,11 +1050,11 @@ async def show_my_deposits(
             f"📋 Статус: {status_text}\n"
             f"─────────────────────────────\n\n"
         )
-    
+
     is_admin = data.get("is_admin", False)
     blacklist_repo = BlacklistRepository(session)
     blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
-    
+
     await message.answer(
         text,
         parse_mode="Markdown",
@@ -1114,20 +1084,20 @@ async def show_notification_settings(
     if not user:
         await message.answer("❌ Ошибка: пользователь не найден")
         return
-    
+
     from app.services.user_notification_service import UserNotificationService
     from bot.keyboards.reply import notification_settings_reply_keyboard
-    
+
     notification_service = UserNotificationService(session)
     settings = await notification_service.get_settings(user.id)
     await session.commit()
-    
+
     # Build status text
     deposit_status = "✅ Включены" if settings.deposit_notifications else "❌ Выключены"
     withdrawal_status = "✅ Включены" if settings.withdrawal_notifications else "❌ Выключены"
     roi_status = "✅ Включены" if getattr(settings, 'roi_notifications', True) else "❌ Выключены"
     marketing_status = "✅ Включены" if settings.marketing_notifications else "❌ Выключены"
-    
+
     text = (
         f"🔔 *Настройки уведомлений*\n\n"
         f"Управляйте уведомлениями, которые вы хотите получать:\n\n"
@@ -1137,7 +1107,70 @@ async def show_notification_settings(
         f"📢 Маркетинговые уведомления: {marketing_status}\n\n"
         f"Используйте кнопки ниже для изменения настроек."
     )
-    
+
+    await message.answer(
+        text,
+        parse_mode="Markdown",
+        reply_markup=notification_settings_reply_keyboard(
+            deposit_enabled=settings.deposit_notifications,
+            withdrawal_enabled=settings.withdrawal_notifications,
+            roi_enabled=getattr(settings, 'roi_notifications', True),
+            marketing_enabled=settings.marketing_notifications,
+        ),
+    )
+
+
+async def _toggle_notification_setting(
+    message: Message,
+    session: AsyncSession,
+    user: User,
+    field_name: str,
+) -> None:
+    """
+    Generic notification toggle handler.
+
+    Args:
+        message: Telegram message
+        session: Database session
+        user: User object
+        field_name: Name of the notification field to toggle
+                   (e.g., 'deposit_notifications', 'withdrawal_notifications')
+    """
+    from app.services.user_notification_service import UserNotificationService
+    from bot.keyboards.reply import notification_settings_reply_keyboard
+
+    notification_service = UserNotificationService(session)
+    settings = await notification_service.get_settings(user.id)
+
+    # Get current value and toggle it
+    current_value = getattr(settings, field_name, True)
+    new_value = not current_value
+
+    # Update the specific field
+    await notification_service.update_settings(
+        user.id, **{field_name: new_value}
+    )
+    await session.commit()
+
+    # Refresh settings
+    settings = await notification_service.get_settings(user.id)
+
+    # Build status text
+    deposit_status = "✅ Включены" if settings.deposit_notifications else "❌ Выключены"
+    withdrawal_status = "✅ Включены" if settings.withdrawal_notifications else "❌ Выключены"
+    roi_status = "✅ Включены" if getattr(settings, 'roi_notifications', True) else "❌ Выключены"
+    marketing_status = "✅ Включены" if settings.marketing_notifications else "❌ Выключены"
+
+    text = (
+        f"🔔 *Настройки уведомлений*\n\n"
+        f"Управляйте уведомлениями, которые вы хотите получать:\n\n"
+        f"💰 Уведомления о депозитах: {deposit_status}\n"
+        f"💸 Уведомления о выводах: {withdrawal_status}\n"
+        f"📊 Уведомления о ROI: {roi_status}\n"
+        f"📢 Маркетинговые уведомления: {marketing_status}\n\n"
+        f"Используйте кнопки ниже для изменения настроек."
+    )
+
     await message.answer(
         text,
         parse_mode="Markdown",
@@ -1164,49 +1197,7 @@ async def toggle_deposit_notification(
     if not user:
         await message.answer("❌ Ошибка: пользователь не найден")
         return
-    
-    from app.services.user_notification_service import UserNotificationService
-    from bot.keyboards.reply import notification_settings_reply_keyboard
-    
-    notification_service = UserNotificationService(session)
-    settings = await notification_service.get_settings(user.id)
-    
-    # Toggle deposit notifications
-    new_value = not settings.deposit_notifications
-    await notification_service.update_settings(
-        user.id, deposit_notifications=new_value
-    )
-    await session.commit()
-    
-    # Refresh settings
-    settings = await notification_service.get_settings(user.id)
-    
-    # Update message
-    deposit_status = "✅ Включены" if settings.deposit_notifications else "❌ Выключены"
-    withdrawal_status = "✅ Включены" if settings.withdrawal_notifications else "❌ Выключены"
-    roi_status = "✅ Включены" if getattr(settings, 'roi_notifications', True) else "❌ Выключены"
-    marketing_status = "✅ Включены" if settings.marketing_notifications else "❌ Выключены"
-    
-    text = (
-        f"🔔 *Настройки уведомлений*\n\n"
-        f"Управляйте уведомлениями, которые вы хотите получать:\n\n"
-        f"💰 Уведомления о депозитах: {deposit_status}\n"
-        f"💸 Уведомления о выводах: {withdrawal_status}\n"
-        f"📊 Уведомления о ROI: {roi_status}\n"
-        f"📢 Маркетинговые уведомления: {marketing_status}\n\n"
-        f"Используйте кнопки ниже для изменения настроек."
-    )
-    
-    await message.answer(
-        text,
-        parse_mode="Markdown",
-        reply_markup=notification_settings_reply_keyboard(
-            deposit_enabled=settings.deposit_notifications,
-            withdrawal_enabled=settings.withdrawal_notifications,
-            roi_enabled=getattr(settings, 'roi_notifications', True),
-            marketing_enabled=settings.marketing_notifications,
-        ),
-    )
+    await _toggle_notification_setting(message, session, user, "deposit_notifications")
 
 
 @router.message(F.text.in_({
@@ -1223,49 +1214,7 @@ async def toggle_withdrawal_notification(
     if not user:
         await message.answer("❌ Ошибка: пользователь не найден")
         return
-    
-    from app.services.user_notification_service import UserNotificationService
-    from bot.keyboards.reply import notification_settings_reply_keyboard
-    
-    notification_service = UserNotificationService(session)
-    settings = await notification_service.get_settings(user.id)
-    
-    # Toggle withdrawal notifications
-    new_value = not settings.withdrawal_notifications
-    await notification_service.update_settings(
-        user.id, withdrawal_notifications=new_value
-    )
-    await session.commit()
-    
-    # Refresh settings
-    settings = await notification_service.get_settings(user.id)
-    
-    # Update message
-    deposit_status = "✅ Включены" if settings.deposit_notifications else "❌ Выключены"
-    withdrawal_status = "✅ Включены" if settings.withdrawal_notifications else "❌ Выключены"
-    roi_status = "✅ Включены" if getattr(settings, 'roi_notifications', True) else "❌ Выключены"
-    marketing_status = "✅ Включены" if settings.marketing_notifications else "❌ Выключены"
-    
-    text = (
-        f"🔔 *Настройки уведомлений*\n\n"
-        f"Управляйте уведомлениями, которые вы хотите получать:\n\n"
-        f"💰 Уведомления о депозитах: {deposit_status}\n"
-        f"💸 Уведомления о выводах: {withdrawal_status}\n"
-        f"📊 Уведомления о ROI: {roi_status}\n"
-        f"📢 Маркетинговые уведомления: {marketing_status}\n\n"
-        f"Используйте кнопки ниже для изменения настроек."
-    )
-    
-    await message.answer(
-        text,
-        parse_mode="Markdown",
-        reply_markup=notification_settings_reply_keyboard(
-            deposit_enabled=settings.deposit_notifications,
-            withdrawal_enabled=settings.withdrawal_notifications,
-            roi_enabled=getattr(settings, 'roi_notifications', True),
-            marketing_enabled=settings.marketing_notifications,
-        ),
-    )
+    await _toggle_notification_setting(message, session, user, "withdrawal_notifications")
 
 
 @router.message(F.text.in_({
@@ -1282,50 +1231,7 @@ async def toggle_roi_notification(
     if not user:
         await message.answer("❌ Ошибка: пользователь не найден")
         return
-    
-    from app.services.user_notification_service import UserNotificationService
-    from bot.keyboards.reply import notification_settings_reply_keyboard
-    
-    notification_service = UserNotificationService(session)
-    settings = await notification_service.get_settings(user.id)
-    
-    # Toggle ROI notifications
-    current_value = getattr(settings, 'roi_notifications', True)
-    new_value = not current_value
-    await notification_service.update_settings(
-        user.id, roi_notifications=new_value
-    )
-    await session.commit()
-    
-    # Refresh settings
-    settings = await notification_service.get_settings(user.id)
-    
-    # Update message
-    deposit_status = "✅ Включены" if settings.deposit_notifications else "❌ Выключены"
-    withdrawal_status = "✅ Включены" if settings.withdrawal_notifications else "❌ Выключены"
-    roi_status = "✅ Включены" if getattr(settings, 'roi_notifications', True) else "❌ Выключены"
-    marketing_status = "✅ Включены" if settings.marketing_notifications else "❌ Выключены"
-    
-    text = (
-        f"🔔 *Настройки уведомлений*\n\n"
-        f"Управляйте уведомлениями, которые вы хотите получать:\n\n"
-        f"💰 Уведомления о депозитах: {deposit_status}\n"
-        f"💸 Уведомления о выводах: {withdrawal_status}\n"
-        f"📊 Уведомления о ROI: {roi_status}\n"
-        f"📢 Маркетинговые уведомления: {marketing_status}\n\n"
-        f"Используйте кнопки ниже для изменения настроек."
-    )
-    
-    await message.answer(
-        text,
-        parse_mode="Markdown",
-        reply_markup=notification_settings_reply_keyboard(
-            deposit_enabled=settings.deposit_notifications,
-            withdrawal_enabled=settings.withdrawal_notifications,
-            roi_enabled=getattr(settings, 'roi_notifications', True),
-            marketing_enabled=settings.marketing_notifications,
-        ),
-    )
+    await _toggle_notification_setting(message, session, user, "roi_notifications")
 
 
 @router.message(F.text.in_({
@@ -1342,49 +1248,7 @@ async def toggle_marketing_notification(
     if not user:
         await message.answer("❌ Ошибка: пользователь не найден")
         return
-    
-    from app.services.user_notification_service import UserNotificationService
-    from bot.keyboards.reply import notification_settings_reply_keyboard
-    
-    notification_service = UserNotificationService(session)
-    settings = await notification_service.get_settings(user.id)
-    
-    # Toggle marketing notifications
-    new_value = not settings.marketing_notifications
-    await notification_service.update_settings(
-        user.id, marketing_notifications=new_value
-    )
-    await session.commit()
-    
-    # Refresh settings
-    settings = await notification_service.get_settings(user.id)
-    
-    # Update message
-    deposit_status = "✅ Включены" if settings.deposit_notifications else "❌ Выключены"
-    withdrawal_status = "✅ Включены" if settings.withdrawal_notifications else "❌ Выключены"
-    roi_status = "✅ Включены" if getattr(settings, 'roi_notifications', True) else "❌ Выключены"
-    marketing_status = "✅ Включены" if settings.marketing_notifications else "❌ Выключены"
-    
-    text = (
-        f"🔔 *Настройки уведомлений*\n\n"
-        f"Управляйте уведомлениями, которые вы хотите получать:\n\n"
-        f"💰 Уведомления о депозитах: {deposit_status}\n"
-        f"💸 Уведомления о выводах: {withdrawal_status}\n"
-        f"📊 Уведомления о ROI: {roi_status}\n"
-        f"📢 Маркетинговые уведомления: {marketing_status}\n\n"
-        f"Используйте кнопки ниже для изменения настроек."
-    )
-    
-    await message.answer(
-        text,
-        parse_mode="Markdown",
-        reply_markup=notification_settings_reply_keyboard(
-            deposit_enabled=settings.deposit_notifications,
-            withdrawal_enabled=settings.withdrawal_notifications,
-            roi_enabled=getattr(settings, 'roi_notifications', True),
-            marketing_enabled=settings.marketing_notifications,
-        ),
-    )
+    await _toggle_notification_setting(message, session, user, "marketing_notifications")
 
 
 @router.message(StateFilter('*'), F.text == "🌐 Изменить язык")
@@ -1407,26 +1271,26 @@ async def show_language_settings(
     if not user:
         await message.answer("❌ Ошибка: пользователь не найден")
         return
-    
+
     await state.clear()
-    
+
     # Get current language
     current_language = await get_user_language(session, user.id)
-    
+
     text = (
         f"🌐 *Настройка языка*\n\n"
         f"Текущий язык: **{current_language.upper()}**\n\n"
         f"Выберите язык интерфейса:"
     )
-    
-    from aiogram.utils.keyboard import ReplyKeyboardBuilder
+
     from aiogram.types import KeyboardButton
-    
+    from aiogram.utils.keyboard import ReplyKeyboardBuilder
+
     builder = ReplyKeyboardBuilder()
     builder.row(KeyboardButton(text="🇷🇺 Русский"))
     builder.row(KeyboardButton(text="🇬🇧 English"))
     builder.row(KeyboardButton(text="◀️ Назад"))
-    
+
     await message.answer(
         text,
         parse_mode="Markdown",
@@ -1452,22 +1316,22 @@ async def process_language_selection(
     if not user:
         await message.answer("❌ Ошибка: пользователь не найден")
         return
-    
+
     # Determine selected language
     language = "ru" if message.text == "🇷🇺 Русский" else "en"
-    
+
     # Update user language
     from app.repositories.user_repository import UserRepository
     user_repo = UserRepository(session)
     await user_repo.update(user.id, language=language)
     await session.commit()
-    
+
     # Show confirmation
     if language == "ru":
         text = "✅ Язык интерфейса изменен на **Русский**"
     else:
         text = "✅ Interface language changed to **English**"
-    
+
     await message.answer(
         text,
         parse_mode="Markdown",
@@ -1491,13 +1355,13 @@ async def back_to_settings_from_language(
         state: FSM state
         **data: Handler data
     """
-    # If we are in a specific state that handles "◀️ Назад" differently, 
+    # If we are in a specific state that handles "◀️ Назад" differently,
     # this handler might not be reached if registered after.
     # But here we use it as a catch-all for this button in menu router.
-    
+
     # Clear state just in case
     await state.clear()
-    
+
     # Redirect to settings menu
     await show_settings_menu(message, session, state, **data)
 

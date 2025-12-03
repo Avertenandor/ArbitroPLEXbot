@@ -17,6 +17,10 @@ from app.repositories.referral_earning_repository import (
 )
 from app.repositories.referral_repository import ReferralRepository
 from app.repositories.user_repository import UserRepository
+from app.services.base_service import BaseService
+from app.services.referral.referral_reward_processor import (
+    ReferralRewardProcessor,
+)
 
 # Referral system configuration (from PART2 docs)
 # 3-level referral program: 5% from deposits AND earnings at each level
@@ -28,15 +32,16 @@ REFERRAL_RATES = {
 }
 
 
-class ReferralService:
+class ReferralService(BaseService):
     """Referral service for managing referral chains and rewards."""
 
     def __init__(self, session: AsyncSession) -> None:
         """Initialize referral service."""
-        self.session = session
+        super().__init__(session)
         self.referral_repo = ReferralRepository(session)
         self.earning_repo = ReferralEarningRepository(session)
         self.user_repo = UserRepository(session)
+        self.reward_processor = ReferralRewardProcessor(session)
 
     async def get_referral_chain(
         self, user_id: int, depth: int = REFERRAL_DEPTH
@@ -232,72 +237,13 @@ class ReferralService:
         Returns:
             Tuple of (success, total_rewards, error_message)
         """
-        # Get all referral relationships for this user
-        relationships = await self.referral_repo.get_referrals_for_user(
-            user_id
+        result = await self.reward_processor.process_rewards(
+            user_id=user_id,
+            amount=deposit_amount,
+            reward_type="deposit",
         )
 
-        if not relationships:
-            logger.debug(
-                "No referrers found for user", extra={"user_id": user_id}
-            )
-            return True, Decimal("0"), None
-
-        total_rewards = Decimal("0")
-
-        # Create earning records for each referrer
-        for relationship in relationships:
-            level = relationship.level
-            rate = REFERRAL_RATES.get(level, Decimal("0"))
-
-            if rate == Decimal("0"):
-                continue
-
-            reward_amount = deposit_amount * rate
-
-            # Fetch referrer to update balance
-            referrer = await self.user_repo.get_by_id(relationship.referrer_id)
-            if not referrer:
-                logger.warning(
-                    f"Referrer {relationship.referrer_id} not found for reward",
-                    extra={"referral_id": relationship.id}
-                )
-                continue
-
-            # Update referrer balance
-            referrer.balance += reward_amount
-            referrer.total_earned += reward_amount
-            self.session.add(referrer)
-
-            # Create earning record
-            await self.earning_repo.create(
-                referral_id=relationship.id,
-                amount=reward_amount,
-                paid=True,  # Paid to internal balance
-                tx_hash='internal_balance',
-            )
-
-            # Update total earned in relationship
-            relationship.total_earned += reward_amount
-            await self.session.flush()
-
-            total_rewards += reward_amount
-
-            logger.info(
-                "Referral reward created",
-                extra={
-                    "referrer_id": relationship.referrer_id,
-                    "referral_user_id": user_id,
-                    "level": level,
-                    "rate": str(rate),
-                    "amount": str(reward_amount),
-                    "source": "deposit",
-                },
-            )
-
-        await self.session.commit()
-
-        return True, total_rewards, None
+        return result.success, result.total_rewards, result.error_message
 
     async def process_roi_referral_rewards(
         self, user_id: int, roi_amount: Decimal
@@ -312,69 +258,13 @@ class ReferralService:
         Returns:
             Tuple of (success, total_rewards, error_message)
         """
-        # Get all referral relationships for this user
-        relationships = await self.referral_repo.get_referrals_for_user(
-            user_id
+        result = await self.reward_processor.process_rewards(
+            user_id=user_id,
+            amount=roi_amount,
+            reward_type="roi",
         )
 
-        if not relationships:
-            return True, Decimal("0"), None
-
-        total_rewards = Decimal("0")
-
-        # Create earning records for each referrer
-        for relationship in relationships:
-            level = relationship.level
-            rate = REFERRAL_RATES.get(level, Decimal("0"))
-
-            if rate == Decimal("0"):
-                continue
-
-            # Reward is % of ROI amount
-            reward_amount = roi_amount * rate
-
-            if reward_amount <= 0:
-                continue
-
-            # Fetch referrer to update balance
-            referrer = await self.user_repo.get_by_id(relationship.referrer_id)
-            if not referrer:
-                continue
-
-            # Update referrer balance
-            referrer.balance += reward_amount
-            referrer.total_earned += reward_amount
-            self.session.add(referrer)
-
-            # Create earning record
-            await self.earning_repo.create(
-                referral_id=relationship.id,
-                amount=reward_amount,
-                paid=True,  # Paid to internal balance
-                tx_hash='internal_balance_roi',
-            )
-
-            # Update total earned in relationship
-            relationship.total_earned += reward_amount
-            self.session.add(relationship)
-
-            total_rewards += reward_amount
-
-            logger.info(
-                "Referral ROI reward created",
-                extra={
-                    "referrer_id": relationship.referrer_id,
-                    "referral_user_id": user_id,
-                    "level": level,
-                    "rate": str(rate),
-                    "amount": str(reward_amount),
-                    "source": "roi",
-                },
-            )
-
-        await self.session.commit()
-
-        return True, total_rewards, None
+        return result.success, result.total_rewards, result.error_message
 
     async def get_referrals_by_level(
         self, user_id: int, level: int, page: int = 1, limit: int = 10

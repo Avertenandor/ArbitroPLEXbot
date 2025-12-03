@@ -11,7 +11,6 @@ from aiogram import F, Router
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.admin import Admin
 from app.services.wallet_admin_service import WalletAdminService
 from bot.keyboards.reply import admin_keyboard, get_admin_keyboard_from_data
 
@@ -134,10 +133,10 @@ async def approve_wallet_change(
 
     # Get admin
     from app.repositories.admin_repository import AdminRepository
-    
+
     admin_repo = AdminRepository(session)
     admin = await admin_repo.get_by(telegram_id=message.from_user.id)
-    
+
     if not admin:
         await message.answer(
             "❌ Администратор не найден",
@@ -199,10 +198,10 @@ async def reject_wallet_change(
 
     # Get admin
     from app.repositories.admin_repository import AdminRepository
-    
+
     admin_repo = AdminRepository(session)
     admin = await admin_repo.get_by(telegram_id=message.from_user.id)
-    
+
     if not admin:
         await message.answer(
             "❌ Администратор не найден",

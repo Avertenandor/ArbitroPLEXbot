@@ -4,29 +4,25 @@ Handles broadcasting messages with multimedia support and link buttons (PART5 CR
 Supports: text, photo, voice, audio + inline link buttons
 """
 
-import asyncio
 from datetime import datetime
 from typing import Any
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
-from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin import Admin
 from app.services.admin_log_service import AdminLogService
-from app.services.user_service import UserService
 from bot.keyboards.reply import (
     admin_broadcast_button_choice_keyboard,
     admin_broadcast_cancel_keyboard,
     admin_broadcast_keyboard,
-    admin_keyboard,
     get_admin_keyboard_from_data,
 )
 from bot.states.admin_states import AdminStates
-from bot.utils.menu_buttons import is_menu_button
 from bot.utils.admin_utils import clear_state_preserve_admin_token
+from bot.utils.menu_buttons import is_menu_button
 
 router = Router(name="admin_broadcast")
 
@@ -234,7 +230,7 @@ async def handle_button_link(
 
     # Save button data
     await state.update_data(button={"text": button_text, "url": url})
-    
+
     # Execute broadcast with button
     await execute_broadcast(message, state, session, **data)
 
@@ -259,7 +255,7 @@ async def execute_broadcast(
         return
 
     from app.services.broadcast_service import BroadcastService
-    
+
     # Start broadcast in background
     service = BroadcastService(session, message.bot)
     broadcast_id = await service.start_broadcast(
@@ -287,10 +283,10 @@ async def execute_broadcast(
         message_preview = broadcast_data.get("text") or broadcast_data.get("caption") or f"{broadcast_data['type']} message"
         if button_data:
             message_preview += f" [Button: {button_data['text']}]"
-            
+
         await log_service.log_broadcast_sent(
             admin=admin,
-            total_users=0, # Unknown at start
+            total_users=0,  # Unknown at start
             message_preview=f"Started: {message_preview}",
         )
 

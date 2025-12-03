@@ -19,7 +19,6 @@ from app.services.user_service import UserService
 from bot.keyboards.reply import (
     admin_finpass_request_actions_keyboard,
     admin_finpass_request_list_keyboard,
-    admin_keyboard,
     get_admin_keyboard_from_data,
 )
 from bot.states.admin import AdminFinpassRecoveryStates
@@ -67,7 +66,7 @@ async def show_recovery_requests(
     per_page = 10
     import math
     total_pages = math.ceil(len(requests) / per_page)
-    
+
     # Get requests for current page
     start_idx = (page - 1) * per_page
     end_idx = start_idx + per_page
@@ -192,7 +191,7 @@ async def approve_request_action(
     """Approve the current request."""
     state_data = await state.get_data()
     request_id = state_data.get("current_request_id")
-    
+
     if not request_id:
         await message.answer("❌ Ошибка: ID запроса потерян.")
         await show_recovery_requests(message, session, state, **data)
@@ -202,7 +201,7 @@ async def approve_request_action(
     from app.repositories.admin_repository import AdminRepository
     admin_repo = AdminRepository(session)
     admin = await admin_repo.get_by(telegram_id=message.from_user.id)
-    
+
     if not admin:
         await message.answer("❌ Администратор не найден")
         return
@@ -303,7 +302,7 @@ async def reject_request_action(
     """Reject the current request."""
     state_data = await state.get_data()
     request_id = state_data.get("current_request_id")
-    
+
     if not request_id:
         await message.answer("❌ Ошибка: ID запроса потерян.")
         await show_recovery_requests(message, session, state, **data)
@@ -313,7 +312,7 @@ async def reject_request_action(
     from app.repositories.admin_repository import AdminRepository
     admin_repo = AdminRepository(session)
     admin = await admin_repo.get_by(telegram_id=message.from_user.id)
-    
+
     if not admin:
         await message.answer("❌ Администратор не найден")
         return
@@ -327,7 +326,7 @@ async def reject_request_action(
             admin_id=admin.id,
             admin_notes="Rejected via Admin Panel (Reply)",
         )
-        
+
         user = await user_service.get_user_by_id(request.user_id)
         await session.commit()
 
@@ -380,19 +379,19 @@ async def handle_pagination(
         current_page -= 1
     elif message.text == "Следующая ➡" and current_page < total_pages:
         current_page += 1
-    
+
     # Refresh list with new page
     # We need to refactor show_recovery_requests to accept page, or just copy logic here.
     # Let's do a clean refactor by extracting the list logic.
-    
+
     recovery_service = FinpassRecoveryService(session)
     requests = await recovery_service.get_all_pending()
-    
+
     # Re-calculate total pages in case it changed
     per_page = 10
     import math
     total_pages = math.ceil(len(requests) / per_page)
-    
+
     if current_page > total_pages:
         current_page = total_pages
     if current_page < 1:

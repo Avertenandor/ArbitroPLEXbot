@@ -10,10 +10,11 @@ from typing import Any
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
-from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.global_settings_repository import GlobalSettingsRepository
+from app.repositories.global_settings_repository import (
+    GlobalSettingsRepository,
+)
 from bot.keyboards.reply import get_admin_keyboard_from_data
 
 router = Router()
@@ -70,5 +71,3 @@ async def show_emergency_menu(
         parse_mode="Markdown",
         reply_markup=get_admin_keyboard_from_data(data),
     )
-
-

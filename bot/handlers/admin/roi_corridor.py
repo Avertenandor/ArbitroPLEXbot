@@ -21,7 +21,10 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.roi_corridor_service import RoiCorridorService
+from app.validators.common import validate_amount
 from bot.handlers.admin.panel import handle_admin_panel_button
+from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
+from bot.keyboards.buttons import AdminButtons, NavigationButtons
 from bot.keyboards.reply import (
     admin_roi_applies_to_keyboard,
     admin_roi_confirmation_keyboard,
@@ -36,6 +39,30 @@ from bot.utils.admin_utils import clear_state_preserve_admin_token
 router = Router(name="admin_roi_corridor")
 
 
+async def _check_cancel_or_back(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    **data: Any,
+) -> bool:
+    """
+    Check for navigation buttons (cancel/back to admin).
+
+    Returns True if should stop processing (navigation occurred).
+    """
+    if message.text == AdminButtons.ADMIN_PANEL:
+        await clear_state_preserve_admin_token(state)
+        await handle_admin_panel_button(message, session, **data)
+        return True
+
+    if message.text == NavigationButtons.CANCEL_ARROW:
+        await clear_state_preserve_admin_token(state)
+        await show_roi_corridor_menu(message, session, **data)
+        return True
+
+    return False
+
+
 async def show_level_roi_config(
     message: Message,
     session: AsyncSession,
@@ -46,10 +73,10 @@ async def show_level_roi_config(
 ) -> None:
     """
     Show ROI configuration for specific level and start setup.
-    
+
     This function is called from deposit_management when admin clicks
     "💰 Настроить коридор доходности" button.
-    
+
     Args:
         message: Message object
         session: Database session
@@ -59,29 +86,28 @@ async def show_level_roi_config(
         data: Handler data
     """
     logger.info(f"[ROI_CORRIDOR] show_level_roi_config called for level {level}")
-    
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        logger.warning(f"[ROI_CORRIDOR] Non-admin user tried to access ROI config")
-        await message.answer("❌ Эта функция доступна только администраторам")
+
+    # Verify admin access
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
-    
+
     # Get current ROI settings for this level
     logger.info(f"[ROI_CORRIDOR] Getting settings for level {level}")
     roi_service = RoiCorridorService(session)
     settings = await roi_service.get_corridor_config(level)
     accrual_period = await roi_service.get_accrual_period_hours()
-    
+
     logger.info(f"[ROI_CORRIDOR] Settings: {settings}, period: {accrual_period}")
-    
+
     mode = settings["mode"]
     mode_text = "Custom (случайный из коридора)" if mode == "custom" else "Поровну (фиксированный)"
-    
+
     if mode == "custom":
         corridor_text = f"{settings['roi_min']}% - {settings['roi_max']}%"
     else:
         corridor_text = f"{settings['roi_fixed']}% (фиксированный)"
-    
+
     text = f"""
 💰 **Настройка коридора доходности для Уровня {level}**
 
@@ -92,20 +118,20 @@ async def show_level_roi_config(
 
 **Что вы хотите сделать?**
     """.strip()
-    
+
     # Save level to state and start configuration
     await state.update_data(level=level, from_level_management=from_level_management)
     await state.set_state(AdminRoiCorridorStates.selecting_mode)
-    
+
     logger.info(f"[ROI_CORRIDOR] Sending mode selection keyboard for level {level}")
-    
+
     await message.answer(
         text,
         parse_mode="Markdown",
         reply_markup=admin_roi_mode_select_keyboard(),
     )
-    
-    logger.info(f"[ROI_CORRIDOR] Mode selection message sent successfully")
+
+    logger.info("[ROI_CORRIDOR] Mode selection message sent successfully")
 
 
 @router.message(F.text == "💰 Коридоры доходности")
@@ -122,9 +148,9 @@ async def show_roi_corridor_menu(
         session: Database session
         data: Handler data
     """
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    # Verify admin access
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     text = (
@@ -166,9 +192,6 @@ async def start_amount_setup(
     )
 
 
-from bot.utils.admin_utils import clear_state_preserve_admin_token
-
-
 @router.message(AdminRoiCorridorStates.selecting_level_amount)
 async def process_level_amount_selection(
     message: Message,
@@ -185,14 +208,8 @@ async def process_level_amount_selection(
         session: Database session
         data: Handler data
     """
-    if message.text == "👑 Админ-панель":
-        await clear_state_preserve_admin_token(state)
-        await handle_admin_panel_button(message, session, **data)
-        return
-
-    if message.text == "◀️ Отмена":
-        await clear_state_preserve_admin_token(state)
-        await show_roi_corridor_menu(message, session, **data)
+    # Check for navigation
+    if await _check_cancel_or_back(message, state, session, **data):
         return
 
     # Extract level number
@@ -213,7 +230,7 @@ async def process_level_amount_selection(
     )
     version_repo = DepositLevelVersionRepository(session)
     current_version = await version_repo.get_current_version(level)
-    
+
     if current_version:
         current_amount = f"{current_version.amount} USDT"
     else:
@@ -221,7 +238,7 @@ async def process_level_amount_selection(
 
     await state.update_data(level=level, current_amount=current_amount)
     await state.set_state(AdminRoiCorridorStates.setting_level_amount)
-    
+
     await message.answer(
         f"**Уровень {level} выбран.**\n"
         f"Текущая сумма: **{current_amount}**\n\n"
@@ -247,18 +264,22 @@ async def process_amount_input(
         session: Database session
         data: Handler data
     """
-    if message.text == "❌ Отмена":
+    if message.text == NavigationButtons.CANCEL:
         await clear_state_preserve_admin_token(state)
         await show_roi_corridor_menu(message, session, **data)
         return
 
-    try:
-        amount = Decimal(message.text.strip())
-        if amount <= 0:
-            raise ValueError("Must be positive")
-    except Exception:
+    # Validate amount using common validator
+    is_valid, amount, error_msg = validate_amount(
+        message.text.strip(),
+        min_amount=Decimal("0.01")
+    )
+
+    if not is_valid:
         await message.answer(
-            "❌ Неверный формат. Введите положительное число (например: `100`):",
+            f"❌ {error_msg}\n\n"
+            "Введите положительное число (например: `100`):",
+            parse_mode="Markdown",
         )
         return
 
@@ -338,9 +359,9 @@ async def process_amount_confirmation(
             "Изменения вступят в силу для новых депозитов.",
             parse_mode="Markdown",
         )
-        
+
         # Notify other admins? Maybe later.
-        
+
     else:
         await message.answer(f"❌ Ошибка: {error}")
 
@@ -383,14 +404,8 @@ async def process_level_selection(
         session: Database session
         data: Handler data
     """
-    if message.text == "👑 Админ-панель":
-        await clear_state_preserve_admin_token(state)
-        await handle_admin_panel_button(message, session, **data)
-        return
-
-    if message.text == "◀️ Отмена":
-        await clear_state_preserve_admin_token(state)
-        await show_roi_corridor_menu(message, session, **data)
+    # Check for navigation
+    if await _check_cancel_or_back(message, state, session, **data):
         return
 
     # Extract level number
@@ -431,26 +446,19 @@ async def process_mode_selection(
         data: Handler data
     """
     logger.info(f"[ROI_CORRIDOR] process_mode_selection called, text: {message.text}")
-    
-    if message.text == "👑 Админ-панель":
-        await clear_state_preserve_admin_token(state)
-        await handle_admin_panel_button(message, session, **data)
-        return
 
-    if message.text == "◀️ Отмена":
-        logger.info(f"[ROI_CORRIDOR] User cancelled mode selection")
-        await clear_state_preserve_admin_token(state)
-        await show_roi_corridor_menu(message, session, **data)
+    # Check for navigation
+    if await _check_cancel_or_back(message, state, session, **data):
         return
 
     if "Custom" in message.text:
         mode = "custom"
         mode_text = "Custom (случайный из коридора)"
-        logger.info(f"[ROI_CORRIDOR] Selected Custom mode")
+        logger.info("[ROI_CORRIDOR] Selected Custom mode")
     elif "Поровну" in message.text:
         mode = "equal"
         mode_text = "Поровну (фиксированный для всех)"
-        logger.info(f"[ROI_CORRIDOR] Selected Equal mode")
+        logger.info("[ROI_CORRIDOR] Selected Equal mode")
     else:
         logger.warning(f"[ROI_CORRIDOR] Invalid mode selection: {message.text}")
         await message.answer(
@@ -498,14 +506,8 @@ async def process_applies_to(
         session: Database session
         data: Handler data
     """
-    if message.text == "👑 Админ-панель":
-        await clear_state_preserve_admin_token(state)
-        await handle_admin_panel_button(message, session, **data)
-        return
-
-    if message.text == "◀️ Отмена":
-        await clear_state_preserve_admin_token(state)
-        await show_roi_corridor_menu(message, session, **data)
+    # Check for navigation
+    if await _check_cancel_or_back(message, state, session, **data):
         return
 
     if "текущей" in message.text:
@@ -573,13 +575,16 @@ async def process_min_input(
         message: Message object
         state: FSM context
     """
-    try:
-        roi_min = Decimal(message.text.strip())
-        if roi_min < 0:
-            raise ValueError("Negative value")
-    except Exception:
+    # Validate amount (percentage)
+    is_valid, roi_min, error_msg = validate_amount(
+        message.text.strip(),
+        min_amount=Decimal("0")
+    )
+
+    if not is_valid:
         await message.answer(
-            "❌ Неверный формат. Введите число (например: `0.8`):",
+            f"❌ {error_msg}\n\n"
+            "Введите число (например: `0.8`):",
             parse_mode="Markdown",
         )
         return
@@ -612,13 +617,16 @@ async def process_max_input(
         session: Database session
         data: Handler data
     """
-    try:
-        roi_max = Decimal(message.text.strip())
-        if roi_max < 0:
-            raise ValueError("Negative value")
-    except Exception:
+    # Validate amount (percentage)
+    is_valid, roi_max, error_msg = validate_amount(
+        message.text.strip(),
+        min_amount=Decimal("0")
+    )
+
+    if not is_valid:
         await message.answer(
-            "❌ Неверный формат. Введите число (например: `10`):",
+            f"❌ {error_msg}\n\n"
+            "Введите число (например: `10`):",
             parse_mode="Markdown",
         )
         return
@@ -636,7 +644,7 @@ async def process_max_input(
 
     # Convert Decimal to float for JSON serialization in FSM state
     await state.update_data(roi_max=float(roi_max))
-    
+
     # After entering corridor, ask when to apply
     await state.set_state(AdminRoiCorridorStates.selecting_applies_to)
     await message.answer(
@@ -667,20 +675,23 @@ async def process_fixed_input(
         session: Database session
         data: Handler data
     """
-    try:
-        roi_fixed = Decimal(message.text.strip())
-        if roi_fixed < 0:
-            raise ValueError("Negative value")
-    except Exception:
+    # Validate amount (percentage)
+    is_valid, roi_fixed, error_msg = validate_amount(
+        message.text.strip(),
+        min_amount=Decimal("0")
+    )
+
+    if not is_valid:
         await message.answer(
-            "❌ Неверный формат. Введите число (например: `5.5`):",
+            f"❌ {error_msg}\n\n"
+            "Введите число (например: `5.5`):",
             parse_mode="Markdown",
         )
         return
 
     # Convert Decimal to float for JSON serialization in FSM state
     await state.update_data(roi_fixed=float(roi_fixed))
-    
+
     # After entering fixed rate, ask when to apply
     await state.set_state(AdminRoiCorridorStates.selecting_applies_to)
     await message.answer(
@@ -866,27 +877,14 @@ async def process_confirmation(
                 "admin_id": admin_id,
             },
         )
-        
+
         # Check if we should redirect back to level management
         if state_data.get("from_level_management"):
             # Import here to avoid circular dependency
-            from bot.handlers.admin.deposit_management import show_level_actions
-            
-            # We need to set the managing_level in state for show_level_actions
-            # But wait, show_level_actions expects a Message with "Уровень X"
-            # Or we can call it directly if we mock the message?
-            # Better: simulate what show_level_actions does or call a helper.
-            
-            # Actually, show_level_actions reads level from message text.
-            # Let's create a helper or set state and show menu.
-            
-            # We can just call show_level_actions, but we need to ensure state is clean
-            # and has managing_level if needed? No, show_level_actions sets managing_level based on message.
-            # But we don't have a message with "Уровень X".
-            
-            # Let's manually set state and show the actions menu.            
-            from bot.handlers.admin.deposit_management import show_level_actions_for_level
-            
+            from bot.handlers.admin.deposit_management import (
+                show_level_actions_for_level,
+            )
+
             await clear_state_preserve_admin_token(state)
             await show_level_actions_for_level(message, session, state, level, **data)
             return
@@ -912,9 +910,9 @@ async def show_current_settings(
         session: Database session
         data: Handler data
     """
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    # Verify admin access
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     corridor_service = RoiCorridorService(session)
@@ -981,14 +979,8 @@ async def show_level_history(
         session: Database session
         data: Handler data
     """
-    if message.text == "👑 Админ-панель":
-        await clear_state_preserve_admin_token(state)
-        await handle_admin_panel_button(message, session, **data)
-        return
-
-    if message.text == "◀️ Отмена":
-        await clear_state_preserve_admin_token(state)
-        await show_roi_corridor_menu(message, session, **data)
+    # Check for navigation
+    if await _check_cancel_or_back(message, state, session, **data):
         return
 
     # Extract level number
@@ -1327,4 +1319,3 @@ async def _notify_other_admins_period(
             f"Failed to notify admins: {e}",
             extra={"error": str(e)},
         )
-
