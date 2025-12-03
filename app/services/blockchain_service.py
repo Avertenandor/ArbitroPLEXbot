@@ -1,4 +1,4 @@
-"""
+﻿"""
 Blockchain service.
 
 Full Web3.py implementation for BSC blockchain operations
@@ -68,7 +68,8 @@ USDT_ABI = [
 ]
 
 # USDT decimals (BEP-20 USDT uses 18 decimals)
-USDT_DECIMALS = 18
+USDT_# PLEX uses 9 decimals
+        decimals = 9
 
 # Gas settings for BSC
 # 0.1 Gwei = 100_000_000 Wei (1 Gwei = 10^9 Wei)
@@ -191,9 +192,9 @@ class BlockchainService:
                 w3_qn.middleware_onion.inject(geth_poa_middleware, layer=0)
                 if w3_qn.is_connected():
                     self.providers["quicknode"] = w3_qn
-                    logger.info("✅ QuickNode provider connected (timeout=30s)")
+                    logger.info("вњ… QuickNode provider connected (timeout=30s)")
                 else:
-                    logger.warning("❌ QuickNode provider failed to connect")
+                    logger.warning("вќЊ QuickNode provider failed to connect")
             except Exception as e:
                 logger.error(f"Failed to init QuickNode: {e}")
 
@@ -208,14 +209,14 @@ class BlockchainService:
                 w3_nr.middleware_onion.inject(geth_poa_middleware, layer=0)
                 if w3_nr.is_connected():
                     self.providers["nodereal"] = w3_nr
-                    logger.info("✅ NodeReal provider connected (timeout=30s)")
+                    logger.info("вњ… NodeReal provider connected (timeout=30s)")
                 else:
-                    logger.warning("❌ NodeReal provider failed to connect")
+                    logger.warning("вќЊ NodeReal provider failed to connect")
             except Exception as e:
                 logger.error(f"Failed to init NodeReal: {e}")
 
         if not self.providers:
-            logger.error("🔥 NO BLOCKCHAIN PROVIDERS AVAILABLE! Service will fail.")
+            logger.error("рџ”Ґ NO BLOCKCHAIN PROVIDERS AVAILABLE! Service will fail.")
 
     def _init_wallet(self) -> None:
         """Initialize wallet account."""
@@ -696,7 +697,8 @@ class BlockchainService:
         except ValueError as e:
             return {"success": False, "error": f"Invalid address format: {e}"}
 
-        decimals = 18
+        # PLEX uses 9 decimals
+        decimals = 9
         target_wei = int(target_amount * (10 ** decimals))
         
         logger.info(
