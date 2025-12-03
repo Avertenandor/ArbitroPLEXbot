@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.blacklist import BlacklistActionType
 from app.models.user import User
 from app.repositories.blacklist_repository import BlacklistRepository
+from app.utils.datetime_utils import utc_now
 from bot.keyboards.reply import main_menu_reply_keyboard
 from bot.states.appeal import AppealStates
 
@@ -67,7 +68,7 @@ async def start_appeal(
     # Check appeal deadline
     if (
         blacklist_entry.appeal_deadline
-        and datetime.utcnow() > blacklist_entry.appeal_deadline
+        and utc_now() > blacklist_entry.appeal_deadline
     ):
         await message.answer(
             "❌ Срок подачи апелляции истек (3 рабочих дня).",

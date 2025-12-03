@@ -74,9 +74,11 @@ async def _send_anomaly_alerts(
     anomalies: list[dict[str, Any]], metrics: dict[str, Any]
 ) -> None:
     """Send anomaly alerts to admins (R14-1)."""
+    # Initialize bot for notifications
+    bot = Bot(token=settings.telegram_bot_token)
+
     try:
         async with async_session_maker() as session:
-            bot = Bot(token=settings.telegram_bot_token)
             notification_service = NotificationService(session)
 
             admin_ids = settings.get_admin_ids()
@@ -123,10 +125,11 @@ async def _send_anomaly_alerts(
                         bot, admin_id, message, critical=(severity == "critical")
                     )
 
-            await bot.session.close()
-
     except Exception as e:
         logger.error(f"Error sending anomaly alerts: {e}")
+    finally:
+        # Always close bot session to prevent memory leak
+        await bot.session.close()
 
 
 async def _take_protective_actions(

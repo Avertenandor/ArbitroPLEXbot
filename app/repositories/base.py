@@ -6,7 +6,7 @@ Generic CRUD operations for all repositories.
 
 from typing import Any, Generic, TypeVar
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.base import Base
@@ -162,13 +162,10 @@ class BaseRepository(Generic[ModelType]):
         Returns:
             True if deleted, False if not found
         """
-        entity = await self.get_by_id(id)
-        if not entity:
-            return False
-
-        await self.session.delete(entity)
+        stmt = delete(self.model).where(self.model.id == id)
+        result = await self.session.execute(stmt)
         await self.session.flush()
-        return True
+        return result.rowcount > 0
 
     async def count(self, **filters: Any) -> int:
         """

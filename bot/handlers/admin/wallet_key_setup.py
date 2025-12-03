@@ -19,6 +19,7 @@ from mnemonic import Mnemonic
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import settings
+from app.utils.encryption import get_encryption_service
 from bot.utils.admin_utils import clear_state_preserve_admin_token
 
 router = Router()
@@ -259,6 +260,10 @@ async def process_output_key(message: Message, state: FSMContext):
         )
         return
 
+    # SECURITY: Clear sensitive data from FSM state before storing new key
+    # This ensures seed phrase is not kept in memory after key derivation
+    await state.update_data(temp_seed_phrase=None)
+
     # Save to state (Private Key flow)
     await state.update_data(new_private_key=private_key, new_output_address=wallet_address)
 
@@ -318,6 +323,10 @@ async def process_derivation_index(message: Message, state: FSMContext):
         private_key = account.key.hex()[2:]  # remove 0x
         wallet_address = account.address
 
+        # SECURITY: Clear seed phrase from FSM state immediately after key derivation
+        # This minimizes exposure time of the seed phrase in memory
+        await state.update_data(temp_seed_phrase=None)
+
         # Save to state
         await state.update_data(new_private_key=private_key, new_output_address=wallet_address)
 
@@ -357,9 +366,13 @@ async def confirm_output_wallet(message: Message, state: FSMContext):
         return
 
     try:
-        # Update .env
+        # Update .env (private_key will be encrypted automatically in update_env_variable)
         update_env_variable("wallet_private_key", private_key)
         update_env_variable("wallet_address", address)
+
+        # SECURITY: Clear all sensitive data from FSM state after saving
+        # This ensures no private keys or seed phrases remain in memory/FSM storage
+        await state.update_data(temp_seed_phrase=None, new_private_key=None, new_output_address=None)
 
         # Force restart via exit
         await message.answer(
@@ -371,17 +384,38 @@ async def confirm_output_wallet(message: Message, state: FSMContext):
         os._exit(0)
 
     except Exception as e:
+        # SECURITY: Clear sensitive data even on error
+        await state.update_data(temp_seed_phrase=None, new_private_key=None)
         await message.answer(f"❌ Ошибка при сохранении: {e}")
         await handle_wallet_menu(message, state)
 
 
 def update_env_variable(key: str, value: str) -> None:
-    """Update environment variable in .env file."""
+    """
+    Update environment variable in .env file.
+
+    SECURITY: Automatically encrypts private keys before saving.
+    """
+    from loguru import logger
+
     env_file = "/app/.env"
 
     if not os.path.exists(env_file):
         # Try local path if container path fails (for dev)
         env_file = ".env"
+
+    # CRITICAL: Encrypt private keys before saving to .env
+    if key == "wallet_private_key":
+        encryption_service = get_encryption_service()
+        if encryption_service and encryption_service.enabled:
+            encrypted_value = encryption_service.encrypt(value)
+            if encrypted_value:
+                value = encrypted_value
+                logger.info(f"Private key encrypted before saving to .env")
+            else:
+                logger.error("Failed to encrypt private key - saving without encryption!")
+        else:
+            logger.warning("EncryptionService not available - saving private key without encryption!")
 
     try:
         with open(env_file) as f:

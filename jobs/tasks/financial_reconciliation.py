@@ -12,10 +12,16 @@ import dramatiq
 from aiogram import Bot
 from loguru import logger
 
+try:
+    import redis.asyncio as redis
+except ImportError:
+    redis = None  # type: ignore
+
 from app.config.database import async_session_maker
 from app.config.settings import settings
 from app.services.notification_service import NotificationService
 from app.services.reconciliation_service import ReconciliationService
+from app.utils.distributed_lock import DistributedLock
 
 
 @dramatiq.actor(max_retries=3, time_limit=600_000)  # 10 min timeout
@@ -56,43 +62,70 @@ def perform_financial_reconciliation() -> None:
 
 async def _perform_reconciliation_async() -> dict:
     """Async implementation of financial reconciliation."""
-    async with async_session_maker() as session:
-        reconciliation_service = ReconciliationService(session)
+    # Create Redis client for distributed lock
+    redis_client = None
+    if redis:
+        try:
+            redis_client = redis.Redis(
+                host=settings.redis_host,
+                port=settings.redis_port,
+                password=settings.redis_password,
+                db=settings.redis_db,
+                decode_responses=True,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to create Redis client for lock: {e}")
 
-        # Perform reconciliation
-        result = await reconciliation_service.perform_reconciliation()
+    # Use distributed lock to prevent concurrent reconciliation
+    lock = DistributedLock(redis_client=redis_client)
 
-        # If critical discrepancy, notify admins
-        if result.get("critical"):
+    async with lock.lock("financial_reconciliation", timeout=600):
+        try:
+            # Initialize bot for potential admin notifications
+            bot = Bot(token=settings.telegram_bot_token)
+
             try:
-                # Initialize bot for notifications
-                bot = Bot(token=settings.telegram_bot_token)
-                notification_service = NotificationService(session)
+                async with async_session_maker() as session:
+                    reconciliation_service = ReconciliationService(session)
 
-                # Get admin telegram IDs (would need admin service)
-                # For now, just log it
-                logger.critical(
-                    "CRITICAL RECONCILIATION DISCREPANCY DETECTED",
-                    extra={
-                        "snapshot_id": result.get("snapshot_id"),
-                        "expected": result.get("expected_balance"),
-                        "actual": result.get("actual_balance"),
-                        "discrepancy": result.get("discrepancy"),
-                        "discrepancy_percent": result.get(
-                            "discrepancy_percent"
-                        ),
-                    },
-                )
+                    # Perform reconciliation
+                    result = await reconciliation_service.perform_reconciliation()
 
-                # TODO: Send notification to all super_admins
-                # This would require AdminService integration
+                    # If critical discrepancy, notify admins
+                    if result.get("critical"):
+                        try:
+                            notification_service = NotificationService(session)
 
+                            # Get admin telegram IDs (would need admin service)
+                            # For now, just log it
+                            logger.critical(
+                                "CRITICAL RECONCILIATION DISCREPANCY DETECTED",
+                                extra={
+                                    "snapshot_id": result.get("snapshot_id"),
+                                    "expected": result.get("expected_balance"),
+                                    "actual": result.get("actual_balance"),
+                                    "discrepancy": result.get("discrepancy"),
+                                    "discrepancy_percent": result.get(
+                                        "discrepancy_percent"
+                                    ),
+                                },
+                            )
+
+                            # TODO: Send notification to all super_admins
+                            # This would require AdminService integration
+
+                        except Exception as e:
+                            logger.error(f"Error sending admin notification: {e}")
+
+                    return result
+
+            finally:
+                # Always close bot session to prevent memory leak
                 await bot.session.close()
-
-            except Exception as e:
-                logger.error(f"Error sending admin notification: {e}")
-
-        return result
+        finally:
+            # Close Redis client
+            if redis_client:
+                await redis_client.close()
 
 
 

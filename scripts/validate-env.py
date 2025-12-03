@@ -13,7 +13,13 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from loguru import logger
+
 from app.config.settings import Settings
+
+# Configure logger for script
+logger.remove()
+logger.add(sys.stderr, level="INFO")
 
 
 def validate_telegram_token(token: str) -> tuple[bool, str]:
@@ -95,14 +101,14 @@ def validate_env() -> tuple[bool, list[str]]:  # noqa: C901
     # WALLET_PRIVATE_KEY is optional - warn but don't error
     wallet_key = getattr(settings, "wallet_private_key", None)
     if not wallet_key or wallet_key.strip() == "":
-        print(
-            "⚠️  WARNING: WALLET_PRIVATE_KEY is not set. "
+        logger.warning(
+            "WALLET_PRIVATE_KEY is not set. "
             "Bot will start but blockchain operations will be unavailable. "
             "Set key via /wallet_menu in bot interface."
         )
     elif "your_" in wallet_key.lower() or "placeholder" in wallet_key.lower():
-        print(
-            "⚠️  WARNING: WALLET_PRIVATE_KEY contains placeholder value. "
+        logger.warning(
+            "WALLET_PRIVATE_KEY contains placeholder value. "
             "Set real key via /wallet_menu in bot interface."
         )
 
@@ -132,7 +138,7 @@ def validate_env() -> tuple[bool, list[str]]:  # noqa: C901
         if not is_valid:
             # Only warn for DATABASE_URL - settings.py will handle validation
             # Don't block startup for password validation (settings.py already warns)
-            print(f"⚠️  WARNING: DATABASE_URL: {msg}")
+            logger.warning(f"DATABASE_URL: {msg}")
             # Don't add to errors - let settings.py handle it
 
     # Validate RPC URL
@@ -145,9 +151,8 @@ def validate_env() -> tuple[bool, list[str]]:  # noqa: C901
     # Validate admin IDs (warning only, not blocking)
     admin_ids = settings.get_admin_ids()
     if not admin_ids:
-        print(
-            "⚠️  WARNING: ADMIN_TELEGRAM_IDS is not set or empty. Admin"
-                "features may not work."
+        logger.warning(
+            "ADMIN_TELEGRAM_IDS is not set or empty. Admin features may not work."
         )
 
     # Validate Redis settings
@@ -170,25 +175,21 @@ def validate_env() -> tuple[bool, list[str]]:  # noqa: C901
 def main():
     """Main function."""
 
-    print("🔍 Validating environment variables...")
-    print("")
+    logger.info("Validating environment variables...")
 
     is_valid, errors = validate_env()
 
     if is_valid:
-        print("✅ All environment variables are valid!")
-        print("")
-        print("Environment is ready for deployment.")
+        logger.success("All environment variables are valid!")
+        logger.info("Environment is ready for deployment.")
         return 0
     else:
-        print("❌ Environment validation failed!")
-        print("")
-        print("Errors found:")
+        logger.error("Environment validation failed!")
+        logger.error("Errors found:")
         for error in errors:
-            print(f"  - {error}")
-        print("")
-        print("Please fix the errors and try again.")
-        print("You can use scripts/setup-env.sh to help configure .env file.")
+            logger.error(f"  - {error}")
+        logger.info("Please fix the errors and try again.")
+        logger.info("You can use scripts/setup-env.sh to help configure .env file.")
         return 1
 
 

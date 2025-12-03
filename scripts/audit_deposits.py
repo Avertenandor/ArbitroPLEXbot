@@ -18,6 +18,11 @@ from app.config.settings import settings
 from app.models.user import User
 from app.models.deposit import Deposit
 from app.models.deposit_reward import DepositReward
+from app.utils.datetime_utils import utc_now
+
+# Configure logger for script
+logger.remove()
+logger.add(sys.stderr, level="INFO")
 
 # Define Enum locally if not available in model
 class DepositStatus(str, Enum):
@@ -68,36 +73,32 @@ async def audit_deposits():
                 
                 total_rewards = sum(r.reward_amount for r in rewards) # Note: reward_amount, not amount
                 last_reward = rewards[-1] if rewards else None
-                
-                print(f"\n--- Deposit ID: {deposit.id} ---")
-                print(f"User: {user.id} (ID: {user.telegram_id}, Username: @{user.username or 'NoUsername'})")
-                print(f"Amount: {deposit.amount} USDT")
-                print(f"Level: {deposit.level}")
-                print(f"Created At: {deposit.created_at}")
-                print(f"Next Accrual At: {deposit.next_accrual_at}")
-                print(f"ROI Paid (DB): {deposit.roi_paid_amount}")
-                print(f"ROI Paid (Calc): {total_rewards}")
-                print(f"ROI Cap: {deposit.roi_cap_amount}")
-                print(f"Is Completed: {deposit.is_roi_completed}")
-                
+
+                logger.info(f"\n--- Deposit ID: {deposit.id} ---")
+                logger.info(f"User: {user.id} (ID: {user.telegram_id}, Username: @{user.username or 'NoUsername'})")
+                logger.info(f"Amount: {deposit.amount} USDT")
+                logger.info(f"Level: {deposit.level}")
+                logger.info(f"Created At: {deposit.created_at}")
+                logger.info(f"Next Accrual At: {deposit.next_accrual_at}")
+                logger.info(f"ROI Paid (DB): {deposit.roi_paid_amount}")
+                logger.info(f"ROI Paid (Calc): {total_rewards}")
+                logger.info(f"ROI Cap: {deposit.roi_cap_amount}")
+                logger.info(f"Is Completed: {deposit.is_roi_completed}")
+
                 if last_reward:
-                    print(f"Last Reward: {last_reward.reward_amount} at {last_reward.calculated_at}")
+                    logger.info(f"Last Reward: {last_reward.reward_amount} at {last_reward.calculated_at}")
                 else:
-                    print("No rewards yet.")
+                    logger.info("No rewards yet.")
 
                 # Check for issues
                 if deposit.next_accrual_at:
-                    # Handle timezone awareness
-                    if deposit.next_accrual_at.tzinfo:
-                        now = datetime.now(deposit.next_accrual_at.tzinfo)
-                    else:
-                        now = datetime.utcnow() # Fallback if naive (shouldn't happen with new models)
-                        
+                    now = utc_now()
+
                     if deposit.next_accrual_at < now:
-                        print(f"⚠️ ALERT: Next accrual was due at {deposit.next_accrual_at} (Past due!)")
-                
+                        logger.warning(f"ALERT: Next accrual was due at {deposit.next_accrual_at} (Past due!)")
+
                 if deposit.roi_paid_amount >= deposit.roi_cap_amount and not deposit.is_roi_completed:
-                     print(f"⚠️ ALERT: ROI Cap reached but not marked completed!")
+                     logger.warning(f"ALERT: ROI Cap reached but not marked completed!")
 
     except Exception as e:
         logger.exception(f"Audit failed: {e}")

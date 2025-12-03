@@ -13,6 +13,14 @@ from datetime import datetime
 import asyncpg
 from loguru import logger
 
+# Add project root to path
+sys.path.insert(0, str(sys.path[0] + '/..'))
+from app.utils.datetime_utils import utc_now
+
+# Configure logger for script
+logger.remove()
+logger.add(sys.stderr, level="INFO")
+
 
 async def check_db_connections(
     host: str = "localhost",
@@ -79,12 +87,12 @@ async def check_db_connections(
         queries = await conn.fetch(long_queries, database)
         
         await conn.close()
-        
+
         return {
             "stats": stats,
             "total": total_info,
             "long_queries": queries,
-            "timestamp": datetime.now(),
+            "timestamp": utc_now(),
         }
         
     except Exception as e:
@@ -153,35 +161,35 @@ def analyze_and_report(data: dict) -> tuple[bool, list[str]]:
 
 def print_report(data: dict, is_healthy: bool, warnings: list[str]) -> None:
     """Print formatted report."""
-    print("\n" + "=" * 60)
-    print(f"📊 Database Connection Monitor - {data['timestamp']}")
-    print("=" * 60)
-    
+    logger.info("\n" + "=" * 60)
+    logger.info(f"Database Connection Monitor - {data['timestamp']}")
+    logger.info("=" * 60)
+
     total_info = data["total"]
-    print(f"\n📈 Total Connections: {total_info['total']}/{total_info['max_conn']}")
-    
-    print("\n📋 Connection State Breakdown:")
-    print("-" * 60)
+    logger.info(f"\nTotal Connections: {total_info['total']}/{total_info['max_conn']}")
+
+    logger.info("\nConnection State Breakdown:")
+    logger.info("-" * 60)
     for stat in data["stats"]:
         app_name = stat["application_name"] or "(no app)"
         state = stat["state"]
         count = stat["count"]
         max_idle = stat["max_idle"] or "N/A"
-        
-        print(f"  {app_name:15} | {state:20} | Count: {count:3} | Max Idle: {max_idle}")
-    
+
+        logger.info(f"  {app_name:15} | {state:20} | Count: {count:3} | Max Idle: {max_idle}")
+
     if warnings:
-        print("\n🚨 WARNINGS:")
-        print("-" * 60)
+        logger.warning("\nWARNINGS:")
+        logger.warning("-" * 60)
         for warning in warnings:
-            print(f"  {warning}")
-    
+            logger.warning(f"  {warning}")
+
     if is_healthy:
-        print("\n✅ Database connections are healthy!")
+        logger.success("\nDatabase connections are healthy!")
     else:
-        print("\n❌ Database connection issues detected!")
-    
-    print("=" * 60 + "\n")
+        logger.error("\nDatabase connection issues detected!")
+
+    logger.info("=" * 60 + "\n")
 
 
 async def main():

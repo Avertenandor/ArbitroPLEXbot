@@ -7,6 +7,7 @@ from pathlib import Path
 from loguru import logger
 
 from app.config.settings import settings
+from app.utils.datetime_utils import utc_now
 
 
 async def backup_database() -> None:
@@ -37,7 +38,7 @@ async def backup_database() -> None:
         backup_dir.mkdir(parents=True, exist_ok=True)
 
         # Generate backup filename
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = utc_now().strftime("%Y%m%d_%H%M%S")
         backup_file = backup_dir / f"backup_{timestamp}.sql"
 
         logger.info(f"Starting database backup to {backup_file}")
@@ -88,7 +89,7 @@ async def backup_database() -> None:
 async def _cleanup_old_backups(backup_dir: Path, retention_days: int) -> None:
     """Clean up old backup files."""
     try:
-        cutoff_date = datetime.utcnow() - timedelta(days=retention_days)
+        cutoff_date = utc_now() - timedelta(days=retention_days)
 
         for backup_file in backup_dir.glob("backup_*.sql"):
             file_time = datetime.fromtimestamp(backup_file.stat().st_mtime)

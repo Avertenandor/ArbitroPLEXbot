@@ -105,7 +105,7 @@ class ReferralService(BaseService):
         result = await self.session.execute(
             query, {"user_id": user_id, "depth": depth}
         )
-        rows = result.fetchall()
+        rows = result.all()
 
         # Map rows to User objects
         chain = []
@@ -495,7 +495,7 @@ class ReferralService(BaseService):
         """)
 
         result = await self.session.execute(stmt)
-        rows = result.fetchall()
+        rows = result.all()
 
         # Build by_referrals leaderboard
         by_referrals = []
@@ -564,7 +564,7 @@ class ReferralService(BaseService):
         """)
 
         result = await self.session.execute(stmt)
-        rows = result.fetchall()
+        rows = result.all()
 
         # Find user's position
         referral_rank = None

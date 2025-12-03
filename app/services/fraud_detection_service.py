@@ -4,6 +4,7 @@ Fraud Detection Service (R10-1).
 Detects suspicious patterns and calculates risk scores for users.
 """
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -20,6 +21,7 @@ from app.repositories.deposit_repository import DepositRepository
 from app.repositories.referral_repository import ReferralRepository
 from app.repositories.transaction_repository import TransactionRepository
 from app.repositories.user_repository import UserRepository
+from app.config.constants import TELEGRAM_MESSAGE_DELAY
 
 
 class FraudDetectionService:
@@ -444,6 +446,9 @@ class FraudDetectionService:
                             f"Fraud alert sent to admin {admin.id}",
                             extra={"user_id": user.id, "risk_score": risk_score},
                         )
+
+                        # Rate limiting: delay between admin notifications
+                        await asyncio.sleep(TELEGRAM_MESSAGE_DELAY)
                     except Exception as e:
                         logger.warning(
                             f"Failed to send fraud alert to admin {admin.id}: {e}"

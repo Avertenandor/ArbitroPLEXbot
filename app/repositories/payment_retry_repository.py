@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.payment_retry import PaymentRetry, PaymentType
 from app.repositories.base import BaseRepository
+from app.utils.datetime_utils import utc_now
 
 
 class PaymentRetryRepository(BaseRepository[PaymentRetry]):
@@ -33,7 +34,7 @@ class PaymentRetryRepository(BaseRepository[PaymentRetry]):
         Returns:
             List of pending retries
         """
-        now = datetime.now()
+        now = utc_now()
 
         stmt = (
             select(PaymentRetry)

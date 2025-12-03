@@ -123,6 +123,9 @@ class PaymentRetry(Base):
     )
 
     # Payment result
+    # CRITICAL: tx_hash is saved even for pending/timeout transactions
+    # to prevent duplicate payments on retry. Always check this before
+    # sending a new transaction!
     tx_hash: Mapped[str | None] = mapped_column(
         String(100), nullable=True
     )

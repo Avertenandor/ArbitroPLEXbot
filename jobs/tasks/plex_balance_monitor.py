@@ -20,6 +20,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from app.config.constants import TELEGRAM_MESSAGE_DELAY
 from app.config.settings import settings
 from app.models.user import User
 from app.services.blockchain_service import get_blockchain_service
@@ -95,6 +96,9 @@ async def _monitor_plex_balances_async() -> None:
                     await _check_user_plex_balance(
                         session, bot, blockchain, user, stats
                     )
+
+                    # Rate limiting: delay between users
+                    await asyncio.sleep(TELEGRAM_MESSAGE_DELAY)
                 except Exception as e:
                     logger.error(
                         f"Error checking PLEX balance for user {user.id}: {e}"
@@ -244,6 +248,7 @@ async def _send_notification(bot: Bot, telegram_id: int, message: str) -> bool:
             text=message,
             parse_mode="Markdown",
         )
+        # Note: delay is handled in the calling loop
         return True
     except Exception as e:
         logger.warning(f"Failed to send notification to {telegram_id}: {e}")

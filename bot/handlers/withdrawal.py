@@ -20,6 +20,7 @@ from app.models.transaction import Transaction  # For auto-payout
 from app.models.user import User
 from app.services.user_service import UserService
 from app.services.withdrawal_service import WithdrawalService
+from app.utils.security import mask_address
 from app.validators.common import validate_amount
 from bot.keyboards.reply import (
     finpass_input_keyboard,
@@ -85,6 +86,20 @@ async def check_withdrawal_eligibility(
     return True, None
 
 
+async def _safe_process_auto_payout(
+    tx_id: int,
+    amount: Decimal,
+    to_address: str,
+    bot: Bot,
+    telegram_id: int
+) -> None:
+    """Wrapper for safe auto-payout execution."""
+    try:
+        await process_auto_payout(tx_id, amount, to_address, bot, telegram_id)
+    except Exception as e:
+        logger.error(f"Auto-payout task failed for tx {tx_id}: {e}", exc_info=True)
+
+
 async def process_auto_payout(
     tx_id: int,
     amount: Decimal,
@@ -103,10 +118,10 @@ async def process_auto_payout(
         logger.error(f"Blockchain service not initialized for auto-payout tx {tx_id}")
         return
 
-    logger.info(f"Starting auto-payout for tx {tx_id}, amount {amount} to {to_address}")
+    logger.info(f"Starting auto-payout for tx {tx_id}, amount {amount} to {mask_address(to_address)}")
 
-    # Send payment
-    result = await blockchain_service.send_payment(to_address, float(amount))
+    # Send payment (keep Decimal for precision)
+    result = await blockchain_service.send_payment(to_address, amount)
 
     async with async_session_maker() as session:
         stmt = select(Transaction).where(Transaction.id == tx_id)
@@ -449,8 +464,8 @@ async def process_financial_password(
 
     try:
         await message.delete()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to delete password message: {e}")
 
     session_factory = data.get("session_factory")
 
@@ -519,9 +534,9 @@ async def process_financial_password(
                     parse_mode="Markdown",
                     reply_markup=main_menu_reply_keyboard(user=user)
                 )
-                # Trigger background task
+                # Trigger background task with error handling
                 asyncio.create_task(
-                    process_auto_payout(
+                    _safe_process_auto_payout(
                         transaction.id,
                         transaction.amount,
                         transaction.to_address,

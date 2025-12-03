@@ -277,9 +277,10 @@ class BlockchainService:
         min_amount = expected_amount - tolerance
         max_amount = expected_amount + tolerance
 
-        # Convert amounts to wei for comparison
-        min_amount_wei = int(min_amount * Decimal(10**USDT_DECIMALS))
-        max_amount_wei = int(max_amount * Decimal(10**USDT_DECIMALS))
+        # Convert amounts to wei for comparison using proper precision
+        from decimal import ROUND_DOWN
+        min_amount_wei = int((min_amount * Decimal(10**USDT_DECIMALS)).to_integral_value(ROUND_DOWN))
+        max_amount_wei = int((max_amount * Decimal(10**USDT_DECIMALS)).to_integral_value(ROUND_DOWN))
 
         try:
             # Get current block if 'latest'
@@ -355,6 +356,7 @@ class BlockchainService:
         to_address: str,
         amount_usdt: Decimal,
         max_retries: int = 5,
+        previous_tx_hash: str | None = None,
     ) -> dict[str, Any]:
         """
         Send USDT payment.
@@ -363,6 +365,7 @@ class BlockchainService:
             to_address: Recipient wallet address
             amount_usdt: Amount in USDT (Decimal)
             max_retries: Maximum retry attempts
+            previous_tx_hash: Previous transaction hash to check before retry
 
         Returns:
             Dict with success, tx_hash, error
@@ -375,6 +378,7 @@ class BlockchainService:
             to_address=to_address,
             amount_usdt=amount_usdt,
             max_retries=max_retries,
+            previous_tx_hash=previous_tx_hash,
         )
 
     async def estimate_gas_cost(

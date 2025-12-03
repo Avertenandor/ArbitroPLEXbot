@@ -4,6 +4,7 @@ Stuck Transaction Service (R7-6).
 Monitors and handles stuck withdrawal transactions.
 """
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
@@ -18,6 +19,7 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from app.repositories.transaction_repository import TransactionRepository
 from app.services.user_service import UserService
+from app.config.constants import BLOCKCHAIN_TIMEOUT
 
 
 class StuckTransactionService:
@@ -74,19 +76,39 @@ class StuckTransactionService:
             Dict with status, receipt, error
         """
         try:
-            # Try to get transaction receipt
+            # Try to get transaction receipt with timeout
             try:
-                receipt = await web3.eth.get_transaction_receipt(tx_hash)
+                receipt = await asyncio.wait_for(
+                    web3.eth.get_transaction_receipt(tx_hash),
+                    timeout=BLOCKCHAIN_TIMEOUT,
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"Timeout getting transaction receipt for {tx_hash}")
+                return {
+                    "status": "error",
+                    "error": "Timeout",
+                    "receipt": None,
+                }
             except TransactionNotFound:
-                # Transaction not mined yet - check if it's in mempool
+                # Transaction not mined yet - check if it's in mempool with timeout
                 try:
-                    tx = await web3.eth.get_transaction(tx_hash)
+                    tx = await asyncio.wait_for(
+                        web3.eth.get_transaction(tx_hash),
+                        timeout=BLOCKCHAIN_TIMEOUT,
+                    )
                     if tx:
                         return {
                             "status": "pending",
                             "in_mempool": True,
                             "receipt": None,
                         }
+                except asyncio.TimeoutError:
+                    logger.error(f"Timeout checking transaction in mempool {tx_hash}")
+                    return {
+                        "status": "error",
+                        "error": "Timeout",
+                        "receipt": None,
+                    }
                 except TransactionNotFound:
                     pass
 
@@ -208,16 +230,39 @@ class StuckTransactionService:
         elif status == "pending":
             # Transaction pending in mempool - try speed-up
             try:
-                # Get current transaction
-                tx = await web3.eth.get_transaction(withdrawal.tx_hash)
+                # Get current transaction with timeout
+                try:
+                    tx = await asyncio.wait_for(
+                        web3.eth.get_transaction(withdrawal.tx_hash),
+                        timeout=BLOCKCHAIN_TIMEOUT,
+                    )
+                except asyncio.TimeoutError:
+                    logger.error(f"Timeout getting transaction {withdrawal.tx_hash}")
+                    return {
+                        "action": "pending_timeout",
+                        "success": False,
+                        "error": "Timeout",
+                    }
+
                 if not tx:
                     return {
                         "action": "pending_no_tx",
                         "success": False,
                     }
 
-                # Get current gas price
-                current_gas_price = await web3.eth.gas_price
+                # Get current gas price with timeout
+                try:
+                    current_gas_price = await asyncio.wait_for(
+                        web3.eth.gas_price,
+                        timeout=BLOCKCHAIN_TIMEOUT,
+                    )
+                except asyncio.TimeoutError:
+                    logger.error("Timeout getting gas price")
+                    return {
+                        "action": "pending_gas_price_timeout",
+                        "success": False,
+                        "error": "Timeout",
+                    }
                 tx_gas_price = tx.get("gasPrice", 0)
 
                 # If our gas price is lower, try speed-up

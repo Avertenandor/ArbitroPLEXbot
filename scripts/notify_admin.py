@@ -34,6 +34,10 @@ from app.services.notification_service import (  # noqa: E402
     NotificationService,
 )
 
+# Configure logger for script
+logger.remove()
+logger.add(sys.stderr, level="INFO")
+
 
 async def notify_admins(message: str, critical: bool = False) -> bool:
     """
@@ -80,7 +84,7 @@ async def notify_admins(message: str, critical: bool = False) -> bool:
 def main():
     """Main entry point."""
     if len(sys.argv) < 2:
-        print(
+        logger.error(
             "Usage: python scripts/notify_admin.py 'Message text' [--critical]"
         )
         sys.exit(1)
@@ -95,10 +99,10 @@ def main():
     success = asyncio.run(notify_admins(message, critical=critical))
 
     if success:
-        print("✅ Admin notification sent successfully")
+        logger.success("Admin notification sent successfully")
         sys.exit(0)
     else:
-        print("❌ Failed to send admin notification")
+        logger.error("Failed to send admin notification")
         sys.exit(1)
 
 

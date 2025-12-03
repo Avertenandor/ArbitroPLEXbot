@@ -12,10 +12,6 @@ from app.services.base_service import (
     transaction,
 )
 
-# Blockchain Infrastructure
-from app.services.blockchain.contract_manager import ContractManager
-from app.services.blockchain.failover_executor import FailoverExecutor
-
 # Referral Services
 from app.services.referral import (
     ProcessResult,
@@ -74,9 +70,6 @@ __all__ = [
     "ServiceResult",
     "transaction",
     "log_operation",
-    # Blockchain Infrastructure
-    "ContractManager",
-    "FailoverExecutor",
     # Referral Package
     "ReferralRewardProcessor",
     "ProcessResult",

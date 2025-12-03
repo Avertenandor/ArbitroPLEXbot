@@ -107,7 +107,7 @@ class UserService:
         Args:
             telegram_id: Telegram user ID
             wallet_address: User's wallet address
-            financial_password: Bcrypt-hashed password
+            financial_password: Plain text password (will be hashed with bcrypt)
             username: Telegram username (optional)
             referrer_telegram_id: Referrer's Telegram ID
 
@@ -117,6 +117,8 @@ class UserService:
         Raises:
             ValueError: If user already exists or blacklisted
         """
+        import bcrypt
+
         # Check if blacklisted
         blacklist_entry = await self.blacklist_repo.get_by_telegram_id(
             telegram_id
@@ -152,12 +154,17 @@ class UserService:
             if not exists:
                 break
 
+        # Hash financial password
+        hashed_password = bcrypt.hashpw(
+            financial_password.encode(), bcrypt.gensalt()
+        ).decode()
+
         # Create user
         user = await self.user_repo.create(
             telegram_id=telegram_id,
             username=username,
             wallet_address=wallet_address,
-            financial_password=financial_password,
+            financial_password=hashed_password,
             referrer_id=referrer_id,
             referral_code=referral_code,
         )
@@ -297,7 +304,6 @@ class UserService:
         Returns:
             Tuple (success, error_message). Error is None if success.
         """
-        import bcrypt
         from datetime import UTC, datetime, timedelta
 
         user = await self.user_repo.get_by_id(user_id)
@@ -321,11 +327,8 @@ class UserService:
                 user.finpass_locked_until = None
                 await self.session.commit()
 
-        # Verify password
-        is_valid = bcrypt.checkpw(
-            password.encode(),
-            user.financial_password.encode(),
-        )
+        # Verify password using model method
+        is_valid = user.verify_financial_password(password)
 
         if is_valid:
             # Reset attempts on success

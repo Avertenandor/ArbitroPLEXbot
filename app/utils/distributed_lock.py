@@ -246,56 +246,6 @@ class DistributedLock:
         lock_key = f"lock:{key}"
         lock_value = f"{time.time()}:{id(self)}"  # Unique value
 
-        if blocking:
-            # Wait for lock with timeout
-            end_time = (
-                time.time() + blocking_timeout
-                if blocking_timeout
-                else None
-            )
-
-            while True:
-                acquired = await self.redis_client.set(
-                    lock_key,
-                    lock_value,
-                    nx=True,  # Only set if not exists
-                    ex=timeout,  # Expire after timeout
-                )
-
-                if acquired:
-                    logger.debug(f"Distributed lock acquired: {key}")
-                    return True
-
-                if end_time and time.time() >= end_time:
-                    logger.warning(
-                        f"Distributed lock timeout: {key} "
-                        f"(waited {blocking_timeout}s)"
-                    )
-                    return False
-
-                # Wait before retry
-                await asyncio.sleep(0.1)
-
-        else:
-            # Try once, don't wait
-            acquired = await self.redis_client.set(
-                lock_key,
-                lock_value,
-                nx=True,
-                ex=timeout,
-            )
-
-            if acquired:
-                logger.debug(f"Distributed lock acquired: {key}")
-                return True
-
-            logger.debug(f"Distributed lock not available: {key}")
-            return False
-
-        timeout = timeout or self.default_timeout
-        lock_key = f"lock:{key}"
-        lock_value = f"{time.time()}:{id(self)}"  # Unique value
-
         try:
             if blocking:
                 # Wait for lock with timeout

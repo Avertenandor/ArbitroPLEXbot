@@ -311,10 +311,13 @@ async def _show_confirmation(message: Message, state: FSMContext):
 @router.message(F.text == "✅ Подтвердить отправку", WalletManagementStates.confirm_transaction)
 async def execute_transaction(message: Message, state: FSMContext):
     """Execute the transaction."""
+    from decimal import Decimal
+
     data = await state.get_data()
     currency = data["send_currency"]
     address = data["send_address"]
-    amount = float(data["send_amount"])
+    # Keep Decimal precision for blockchain transaction
+    amount = Decimal(data["send_amount"])
 
     await message.answer("⏳ **Отправка транзакции...**\nОжидайте подтверждения сети.")
 

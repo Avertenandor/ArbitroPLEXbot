@@ -6,12 +6,10 @@ aiohttp==3.9.1
 sqlalchemy[asyncio]==2.0.25
 alembic==1.13.1
 asyncpg==0.29.0
-psycopg2-binary==2.9.9
 
 # Settings & Configuration
 pydantic==2.5.3
 pydantic-settings==2.1.0
-python-dotenv==1.0.0
 
 # Blockchain & Web3
 web3==6.15.0
@@ -35,6 +33,7 @@ loguru==0.7.2
 python-dateutil==2.8.2
 openpyxl==3.1.2
 qrcode[pil]==7.4.2
+Pillow>=10.0.0
 
 # Development & Testing
 pytest==7.4.4

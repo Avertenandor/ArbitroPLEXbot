@@ -19,6 +19,10 @@ ERROR_FREQUENCY_WARNING = 10  # errors per minute
 ERROR_FREQUENCY_CRITICAL = 50  # errors per minute
 USER_ERROR_THRESHOLD = 20  # errors per user per hour
 
+# Memory leak prevention
+MAX_ERROR_KEYS = 10000  # Maximum number of unique error keys to track
+MAX_USER_ERROR_KEYS = 5000  # Maximum number of users to track errors for
+
 
 class LogAggregationService:
     """
@@ -90,6 +94,57 @@ class LogAggregationService:
 
         # Check thresholds and alert
         await self._check_thresholds(error_fingerprint, user_id)
+
+        # Periodic cleanup to prevent memory leak
+        self._cleanup_old_entries()
+
+    def _cleanup_old_entries(self) -> None:
+        """
+        Clean up old entries to prevent unbounded memory growth.
+
+        Removes:
+        - Empty error keys (after timestamp cleanup)
+        - Oldest entries if total keys exceed MAX_ERROR_KEYS
+        """
+        # Remove empty error keys
+        empty_keys = [k for k, v in self._error_counts.items() if not v]
+        for key in empty_keys:
+            del self._error_counts[key]
+
+        # Remove empty user error keys
+        empty_user_keys = [k for k, v in self._user_error_counts.items() if not v]
+        for key in empty_user_keys:
+            del self._user_error_counts[key]
+
+        # Limit total error keys
+        if len(self._error_counts) > MAX_ERROR_KEYS:
+            # Sort by total count (sum of timestamps), keep most frequent
+            sorted_keys = sorted(
+                self._error_counts.items(),
+                key=lambda x: len(x[1]),
+                reverse=True
+            )
+            # Keep only top MAX_ERROR_KEYS
+            self._error_counts = dict(sorted_keys[:MAX_ERROR_KEYS])
+            logger.warning(
+                f"Error count dict size exceeded {MAX_ERROR_KEYS}, "
+                f"pruned to top {MAX_ERROR_KEYS} most frequent errors"
+            )
+
+        # Limit total user error keys
+        if len(self._user_error_counts) > MAX_USER_ERROR_KEYS:
+            # Sort by total count, keep most active users
+            sorted_user_keys = sorted(
+                self._user_error_counts.items(),
+                key=lambda x: len(x[1]),
+                reverse=True
+            )
+            # Keep only top MAX_USER_ERROR_KEYS
+            self._user_error_counts = dict(sorted_user_keys[:MAX_USER_ERROR_KEYS])
+            logger.warning(
+                f"User error count dict size exceeded {MAX_USER_ERROR_KEYS}, "
+                f"pruned to top {MAX_USER_ERROR_KEYS} most active users"
+            )
 
     async def _check_thresholds(
         self, error_fingerprint: str, user_id: int | None

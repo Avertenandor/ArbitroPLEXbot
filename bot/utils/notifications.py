@@ -4,8 +4,12 @@ Notification utilities.
 Helper functions for sending notifications.
 """
 
+import asyncio
+
 from aiogram import Bot
 from loguru import logger
+
+from app.config.constants import TELEGRAM_TIMEOUT
 
 
 async def notify_admins(
@@ -25,10 +29,15 @@ async def notify_admins(
     """
     for admin_id in admin_ids:
         try:
-            await bot.send_message(
-                admin_id,
-                message,
-                parse_mode=parse_mode,
+            await asyncio.wait_for(
+                bot.send_message(
+                    admin_id,
+                    message,
+                    parse_mode=parse_mode,
+                ),
+                timeout=TELEGRAM_TIMEOUT,
             )
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout notifying admin {admin_id}")
         except Exception as e:
             logger.error(f"Failed to notify admin {admin_id}: {e}")

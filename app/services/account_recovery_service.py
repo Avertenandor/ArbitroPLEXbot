@@ -158,29 +158,19 @@ class AccountRecoveryService:
             action_type=BlacklistActionType.REGISTRATION_DENIED.value,
         )
 
-        # Update user with new telegram_id
-        await self.user_repo.update(
-            user.id,
-            telegram_id=new_telegram_id,
-        )
-
         # Generate new financial password (security requirement)
         import secrets
         import string
-        import bcrypt
 
         new_finpass = "".join(
             secrets.choice(string.ascii_letters + string.digits)
             for _ in range(12)
         )
-        hashed_finpass = bcrypt.hashpw(
-            new_finpass.encode(), bcrypt.gensalt()
-        ).decode()
 
-        await self.user_repo.update(
-            user.id,
-            financial_password=hashed_finpass,
-        )
+        # Update user with new telegram_id and financial password
+        user.telegram_id = new_telegram_id
+        user.set_financial_password(new_finpass)
+        self.session.add(user)
 
         await self.session.commit()
 

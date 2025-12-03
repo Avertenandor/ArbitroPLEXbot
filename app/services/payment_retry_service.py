@@ -73,20 +73,32 @@ class PaymentRetryService:
             },
         )
 
-        # Check if retry already exists
+        # Check if retry already exists for the SAME earning_ids
         existing = await self.retry_repo.find_by(
             user_id=user_id,
             payment_type=payment_type.value,
             resolved=False,
         )
 
+        # Filter to find exact match by earning_ids
+        matching_retry = None
         if existing:
-            # Update existing record
-            retry = existing[0]
+            for retry_record in existing:
+                # Check if earning_ids match (same payment)
+                if set(retry_record.earning_ids) == set(earning_ids):
+                    matching_retry = retry_record
+                    break
+
+        if matching_retry:
+            # Update existing record for the same payment
+            retry = matching_retry
+            logger.info(
+                f"Found existing retry record {retry.id} "
+                f"for same earning_ids: {earning_ids}"
+            )
             await self.retry_repo.update(
                 retry.id,
                 amount=amount,
-                earning_ids=earning_ids,
                 last_error=error,
                 error_stack=error_stack,
             )
@@ -222,20 +234,47 @@ class PaymentRetryService:
                     f"User {user.telegram_id} has no wallet address"
                 )
 
-            # Send payment via blockchain
+            # Send payment via blockchain, passing previous tx_hash if exists
             logger.info(
                 f"Attempting payment: {retry.amount} USDT "
                 f"to {user.wallet_address}"
             )
 
+            # Pass previous tx_hash to avoid duplicate transactions
+            previous_tx_hash = retry.tx_hash if retry.tx_hash else None
+            if previous_tx_hash:
+                logger.info(
+                    f"Previous tx_hash found: {previous_tx_hash} - "
+                    f"will check before sending new transaction"
+                )
+
             payment_result = await blockchain_service.send_payment(
-                user.wallet_address, retry.amount
+                user.wallet_address,
+                retry.amount,
+                previous_tx_hash=previous_tx_hash,
             )
 
-            if not payment_result["success"]:
-                raise ValueError(
-                    payment_result.get("error", "Unknown payment error")
+            # Save tx_hash even if not successful (for pending status)
+            if payment_result.get("tx_hash") and payment_result["tx_hash"] != retry.tx_hash:
+                await self.retry_repo.update(
+                    retry.id, tx_hash=payment_result["tx_hash"]
                 )
+                await self.session.flush()
+
+            if not payment_result["success"]:
+                # Check if it's pending (not a real failure)
+                if payment_result.get("status") == "pending":
+                    logger.info(
+                        f"Transaction {payment_result['tx_hash']} pending - "
+                        f"will check again on next retry"
+                    )
+                    raise ValueError(
+                        payment_result.get("error", "Transaction pending")
+                    )
+                else:
+                    raise ValueError(
+                        payment_result.get("error", "Unknown payment error")
+                    )
 
             # Payment succeeded!
             tx_hash = payment_result["tx_hash"]

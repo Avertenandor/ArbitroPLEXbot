@@ -22,6 +22,7 @@ from app.models.enums import TransactionStatus
 from app.models.user import User
 from app.services.deposit_service import DepositService
 from app.services.notification_service import NotificationService
+from app.utils.security import mask_address, mask_tx_hash
 from bot.constants.rules import (
     MAX_DEPOSITS_PER_USER,
     MINIMUM_PLEX_BALANCE,
@@ -72,7 +73,7 @@ class IncomingDepositService:
         """
         logger.info(
             f"📥 Processing incoming transfer: {amount} USDT "
-            f"from {from_address} (TX: {tx_hash})"
+            f"from {mask_address(from_address)} (TX: {mask_tx_hash(tx_hash)})"
         )
 
         # 1. Idempotency Check
@@ -99,7 +100,7 @@ class IncomingDepositService:
 
         if not user:
             # User NOT found
-            logger.warning(f"⚠️ Unidentified deposit from {from_address}")
+            logger.warning(f"⚠️ Unidentified deposit from {mask_address(from_address)}")
             await self.notification_service.notify_admins(
                 f"⚠️ **НЕОПОЗНАННЫЙ ДЕПОЗИТ**\n\n"
                 f"Сумма: `{amount} USDT`\n"
@@ -110,7 +111,7 @@ class IncomingDepositService:
             )
             return
 
-        logger.info(f"✅ Identified user {user.id} for wallet {from_address}")
+        logger.info(f"✅ Identified user {user.id} for wallet {mask_address(from_address)}")
 
         # 4. Check deposit limit (max 5 deposits per user)
         active_deposits_count = await self._get_active_deposits_count(user.id)

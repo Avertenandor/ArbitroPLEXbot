@@ -230,13 +230,10 @@ async def approve_request_action(
         if not user:
             raise ValueError("User not found")
 
-        import bcrypt
-        hashed = bcrypt.hashpw(
-            new_password.encode(),
-            bcrypt.gensalt(rounds=12),
-        )
-        user.financial_password = hashed.decode()
+        # Set financial password using model method
+        user.set_financial_password(new_password)
         user.earnings_blocked = True
+        session.add(user)
 
         # Notify user
         notification_sent = False
