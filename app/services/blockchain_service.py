@@ -737,6 +737,94 @@ class BlockchainService:
             logger.error(f"Payment verification failed: {e}")
             return {"success": False, "error": str(e)}
 
+    async def get_user_usdt_deposits(
+        self,
+        user_wallet: str,
+        max_blocks: int = 100000,
+    ) -> dict:
+        """
+        Scan all USDT Transfer events from user wallet to system wallet.
+        
+        Used to detect user's total deposit amount from blockchain history.
+        
+        Args:
+            user_wallet: User's wallet address
+            max_blocks: Maximum number of blocks to scan back
+            
+        Returns:
+            Dict with:
+            - total_amount: Decimal - sum of all USDT transfers
+            - tx_count: int - number of transactions found
+            - transactions: list - list of transaction details
+            - success: bool
+            - error: str (if failed)
+        """
+        try:
+            sender = to_checksum_address(user_wallet)
+            receiver = to_checksum_address(self.system_wallet_address)
+            usdt_address = to_checksum_address(self.usdt_contract_address)
+            
+            def _scan_all(w3: Web3):
+                latest = w3.eth.block_number
+                from_block = max(0, latest - max_blocks)
+                
+                contract = w3.eth.contract(address=usdt_address, abi=USDT_ABI)
+                
+                # Get all Transfer events from user to system wallet
+                logs = contract.events.Transfer.get_logs(
+                    fromBlock=from_block,
+                    toBlock='latest',
+                    argument_filters={
+                        'from': sender,
+                        'to': receiver
+                    }
+                )
+                
+                transactions = []
+                total_wei = 0
+                
+                for log in logs:
+                    args = log.get('args', {})
+                    value = args.get('value', 0)
+                    total_wei += value
+                    
+                    transactions.append({
+                        'tx_hash': log['transactionHash'].hex(),
+                        'amount': Decimal(value) / Decimal(10 ** USDT_DECIMALS),
+                        'block': log['blockNumber'],
+                    })
+                
+                # Sort by block number (oldest first)
+                transactions.sort(key=lambda x: x['block'])
+                
+                return {
+                    'total_amount': Decimal(total_wei) / Decimal(10 ** USDT_DECIMALS),
+                    'tx_count': len(transactions),
+                    'transactions': transactions,
+                    'from_block': from_block,
+                    'to_block': latest,
+                }
+            
+            result = await self._run_async_failover(_scan_all)
+            result['success'] = True
+            
+            logger.info(
+                f"Deposit scan for {user_wallet[:10]}...: "
+                f"found {result['tx_count']} txs, total {result['total_amount']} USDT"
+            )
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Deposit scan failed for {user_wallet}: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'total_amount': Decimal("0"),
+                'tx_count': 0,
+                'transactions': [],
+            }
+
 # Singleton initialization
 _blockchain_service: BlockchainService | None = None
 

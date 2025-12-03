@@ -69,6 +69,7 @@ from jobs.tasks.notification_fallback_processor import (
 from jobs.tasks.warmup_redis_cache import warmup_redis_cache
 from jobs.tasks.incoming_transfer_monitor import monitor_incoming_transfers
 from jobs.tasks.plex_payment_monitor import monitor_plex_payments
+from jobs.tasks.deposit_scan_task import scan_all_user_deposits
 from app.tasks.reward_accrual_task import run_individual_reward_accrual
 from app.tasks.deposit_reminder_task import run_deposit_reminder_task
 from app.tasks.cleanup_task import run_cleanup_task
@@ -134,6 +135,15 @@ def create_scheduler() -> AsyncIOScheduler:
         trigger=IntervalTrigger(hours=1),
         id="plex_payment_monitor",
         name="PLEX Payment Monitor",
+        replace_existing=True,
+    )
+
+    # Deposit scan - every 1 hour
+    scheduler.add_job(
+        scan_all_user_deposits.send,
+        trigger=IntervalTrigger(hours=1),
+        id="deposit_scan",
+        name="User Deposit Scan",
         replace_existing=True,
     )
 

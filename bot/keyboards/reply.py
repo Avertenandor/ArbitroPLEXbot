@@ -87,6 +87,7 @@ def main_menu_reply_keyboard(
         )
         builder.row(
             KeyboardButton(text="📦 Мои депозиты"),
+            KeyboardButton(text="🔄 Обновить депозит"),
         )
         builder.row(
             KeyboardButton(text="👥 Рефералы"),
@@ -1491,6 +1492,7 @@ def admin_user_profile_keyboard(user_is_blocked: bool) -> ReplyKeyboardMarkup:
         KeyboardButton(text="👥 Рефералы"),
     )
     builder.row(
+        KeyboardButton(text="🔄 Сканировать депозит"),
         KeyboardButton(text="⚠️ Терминировать аккаунт"),
     )
     builder.row(

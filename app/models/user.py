@@ -141,6 +141,32 @@ class User(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # Deposit tracking (auto-detection from blockchain)
+    total_deposited_usdt: Mapped[Decimal] = mapped_column(
+        DECIMAL(18, 8),
+        default=Decimal("0"),
+        nullable=False,
+        comment="Total USDT deposited to system wallet from user wallet"
+    )
+    is_active_depositor: Mapped[bool] = mapped_column(
+        Boolean,
+        default=False,
+        nullable=False,
+        index=True,
+        comment="True if total_deposited_usdt >= 30 USDT"
+    )
+    last_deposit_scan_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Last time deposits were scanned from blockchain"
+    )
+    deposit_tx_count: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+        comment="Number of deposit transactions found"
+    )
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
@@ -215,6 +241,30 @@ class User(Base):
         if len(self.wallet_address) > 20:
             return f"{self.wallet_address[:10]}...{self.wallet_address[-8:]}"
         return self.wallet_address
+
+    @property
+    def required_daily_plex(self) -> Decimal:
+        """
+        Calculate required daily PLEX based on deposit amount.
+        
+        Formula: deposit_amount * 10 PLEX per dollar per day.
+        
+        Returns:
+            Required PLEX amount per day
+        """
+        return self.total_deposited_usdt * Decimal("10")
+
+    @property
+    def deposit_status_text(self) -> str:
+        """
+        Get human-readable deposit status.
+        
+        Returns:
+            Status text for display
+        """
+        if not self.is_active_depositor:
+            return "❌ Неактивен (< 30 USDT)"
+        return f"✅ Активен ({self.total_deposited_usdt:.2f} USDT)"
 
     def __repr__(self) -> str:
         """String representation."""

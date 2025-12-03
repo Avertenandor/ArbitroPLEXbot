@@ -376,7 +376,14 @@ async def show_user_profile(
         f"• Баланс: `{balance_data['total_balance']:.2f} USDT`\n"
         f"• Депозиты: `{balance_data['total_deposits']:.2f} USDT`\n"
         f"• Выводы: `{balance_data['total_withdrawals']:.2f} USDT`\n"
-        f"• Заработано: `{balance_data['total_earnings']:.2f} USDT`\n\n"
+        f"• Заработано: `{balance_data['total_earnings']:.2f} USDT`\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"💎 **Депозит (из блокчейна):**\n"
+        f"• Всего внесено: `{user.total_deposited_usdt:.2f} USDT`\n"
+        f"• Статус: {user.deposit_status_text}\n"
+        f"• PLEX в сутки: `{int(user.required_daily_plex):,}`\n"
+        f"• Транзакций: `{user.deposit_tx_count}`\n"
+        f"• Последнее сканирование: {user.last_deposit_scan_at.strftime('%d.%m.%Y %H:%M') if user.last_deposit_scan_at else 'Не сканировался'}\n\n"
         f"Выберите действие:"
     )
     
@@ -618,6 +625,72 @@ async def handle_profile_history(
             text += f"   🔗 `{tx.tx_hash}`\n"
         
     await message.answer(text, parse_mode="Markdown")
+
+
+@router.message(F.text == "🔄 Сканировать депозит")
+async def handle_admin_scan_deposit(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Admin: Force scan user deposits from blockchain."""
+    from app.services.deposit_scan_service import DepositScanService
+    
+    is_admin = data.get("is_admin", False)
+    if not is_admin:
+        return
+    
+    state_data = await state.get_data()
+    user_id = state_data.get("selected_user_id")
+    if not user_id:
+        await message.answer("❌ Пользователь не выбран")
+        return
+    
+    user_service = UserService(session)
+    user = await user_service.get_by_id(user_id)
+    if not user:
+        await message.answer("❌ Пользователь не найден")
+        return
+    
+    await message.answer("⏳ Сканируем депозиты пользователя...")
+    
+    try:
+        deposit_service = DepositScanService(session)
+        scan_result = await deposit_service.scan_user_deposits(user_id)
+        
+        if not scan_result.get("success"):
+            await message.answer(
+                f"⚠️ Ошибка сканирования: {scan_result.get('error', 'Неизвестная ошибка')}"
+            )
+            return
+        
+        await session.commit()
+        
+        total = scan_result.get("total_amount", 0)
+        tx_count = scan_result.get("tx_count", 0)
+        is_active = scan_result.get("is_active", False)
+        required_plex = scan_result.get("required_plex", 0)
+        
+        status_emoji = "✅" if is_active else "❌"
+        
+        await message.answer(
+            f"🔄 **Результаты сканирования:**\n\n"
+            f"👤 Пользователь: `{user.username or user.telegram_id}`\n"
+            f"💰 Всего депозитов: `{total:.2f} USDT`\n"
+            f"📊 Транзакций: `{tx_count}`\n"
+            f"{status_emoji} Статус: {'Активен' if is_active else 'Неактивен (< 30 USDT)'}\n"
+            f"💎 PLEX в сутки: `{int(required_plex):,}`",
+            parse_mode="Markdown"
+        )
+        
+        # Refresh user and show profile
+        user = await user_service.get_by_id(user_id)
+        await show_user_profile(message, user, state, session)
+        
+    except Exception as e:
+        logger.error(f"Admin deposit scan error: {e}")
+        await message.answer("⚠️ Произошла ошибка при сканировании.")
 
 
 @router.message(F.text == "👥 Рефералы")

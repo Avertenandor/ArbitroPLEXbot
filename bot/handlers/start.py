@@ -1382,6 +1382,8 @@ async def _check_payment_logic(
     data: dict[str, Any]
 ) -> None:
     """Core payment check logic."""
+    from app.services.deposit_scan_service import DepositScanService
+    
     # Helper to send message
     async def send(text: str, **kwargs: Any) -> None:
         if isinstance(event, Message):
@@ -1406,28 +1408,85 @@ async def _check_payment_logic(
         if result["success"]:
             # Payment found!
             redis_client = data.get("redis_client")
+            db_session = data.get("session")
             user_id = event.from_user.id
             
             # Set session
             session_key = f"{SESSION_KEY_PREFIX}{user_id}"
             await redis_client.setex(session_key, SESSION_TTL, "1")
             
-            # Send ecosystem info after successful payment
             await send(
                 f"✅ **Оплата подтверждена!**\n"
                 f"Транзакция: `{result['tx_hash'][:10]}...`\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
-                f"{ECOSYSTEM_INFO}",
+                "⏳ Сканируем ваши депозиты...",
                 parse_mode="Markdown",
-                disable_web_page_preview=True
             )
             
-            await state.clear()
-            
-            kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🚀 Начать работу", callback_data="start_after_auth")]
-            ])
-            await send("Нажмите кнопку для начала работы:", reply_markup=kb)
+            # Scan user deposits from blockchain
+            db_user = data.get("user")
+            if db_user and db_session:
+                deposit_service = DepositScanService(db_session)
+                scan_result = await deposit_service.scan_and_validate(db_user.id)
+                
+                if scan_result.get("success"):
+                    total_deposit = scan_result.get("total_amount", 0)
+                    is_valid = scan_result.get("is_valid", False)
+                    required_plex = scan_result.get("required_plex", 0)
+                    
+                    if is_valid:
+                        # Deposit is sufficient (>= 30 USDT)
+                        await send(
+                            f"💰 **Ваш депозит:** {total_deposit:.2f} USDT\n"
+                            f"📊 **Требуется PLEX в сутки:** {int(required_plex):,} PLEX\n\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                            f"{ECOSYSTEM_INFO}",
+                            parse_mode="Markdown",
+                            disable_web_page_preview=True
+                        )
+                        
+                        await state.clear()
+                        
+                        kb = InlineKeyboardMarkup(inline_keyboard=[
+                            [InlineKeyboardButton(text="🚀 Начать работу", callback_data="start_after_auth")]
+                        ])
+                        await send("Нажмите кнопку для начала работы:", reply_markup=kb)
+                    else:
+                        # Deposit insufficient (< 30 USDT)
+                        message = scan_result.get("validation_message")
+                        if message:
+                            await send(message, parse_mode="Markdown")
+                        
+                        kb = InlineKeyboardMarkup(inline_keyboard=[
+                            [InlineKeyboardButton(text="🔄 Обновить депозит", callback_data="rescan_deposits")],
+                            [InlineKeyboardButton(text="🚀 Продолжить (без депозита)", callback_data="start_after_auth")]
+                        ])
+                        await send(
+                            "После пополнения нажмите «Обновить депозит»:",
+                            reply_markup=kb
+                        )
+                else:
+                    # Scan failed, but let user continue
+                    logger.warning(f"Deposit scan failed: {scan_result.get('error')}")
+                    await send(
+                        "⚠️ Не удалось просканировать депозиты. "
+                        "Вы можете продолжить работу.",
+                        parse_mode="Markdown"
+                    )
+                    await state.clear()
+                    kb = InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="🚀 Начать работу", callback_data="start_after_auth")]
+                    ])
+                    await send("Нажмите кнопку:", reply_markup=kb)
+                
+                await db_session.commit()
+            else:
+                # No DB user context, just let them in
+                await send(f"{ECOSYSTEM_INFO}", parse_mode="Markdown", disable_web_page_preview=True)
+                await state.clear()
+                kb = InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="🚀 Начать работу", callback_data="start_after_auth")]
+                ])
+                await send("Нажмите кнопку для начала работы:", reply_markup=kb)
             
         else:
             kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -1446,6 +1505,68 @@ async def _check_payment_logic(
     except Exception as e:
         logger.error(f"Auth check failed: {e}")
         await send("⚠️ Ошибка проверки. Попробуйте позже.")
+
+
+@router.callback_query(F.data == "rescan_deposits")
+async def handle_rescan_deposits(
+    callback: CallbackQuery,
+    state: FSMContext,
+    session: AsyncSession,
+    user: Any,
+    **data: Any,
+) -> None:
+    """Handle manual deposit rescan request."""
+    from app.services.deposit_scan_service import DepositScanService
+    
+    await callback.answer("⏳ Сканируем депозиты...", show_alert=False)
+    
+    if not user:
+        await callback.message.answer("❌ Пользователь не найден. Введите /start")
+        return
+    
+    deposit_service = DepositScanService(session)
+    scan_result = await deposit_service.scan_and_validate(user.id)
+    
+    if not scan_result.get("success"):
+        await callback.message.answer(
+            f"⚠️ Ошибка сканирования: {scan_result.get('error', 'Неизвестная ошибка')}"
+        )
+        return
+    
+    total_deposit = scan_result.get("total_amount", 0)
+    is_valid = scan_result.get("is_valid", False)
+    required_plex = scan_result.get("required_plex", 0)
+    
+    if is_valid:
+        # Deposit now sufficient
+        await session.commit()
+        
+        await callback.message.answer(
+            f"✅ **Депозит подтверждён!**\n\n"
+            f"💰 **Ваш депозит:** {total_deposit:.2f} USDT\n"
+            f"📊 **Требуется PLEX в сутки:** {int(required_plex):,} PLEX\n\n"
+            f"Теперь вы можете начать работу!",
+            parse_mode="Markdown"
+        )
+        
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🚀 Начать работу", callback_data="start_after_auth")]
+        ])
+        await callback.message.answer("Нажмите кнопку:", reply_markup=kb)
+    else:
+        # Still insufficient
+        message = scan_result.get("validation_message")
+        if message:
+            await callback.message.answer(message, parse_mode="Markdown")
+        
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 Обновить депозит", callback_data="rescan_deposits")],
+            [InlineKeyboardButton(text="🚀 Продолжить (без депозита)", callback_data="start_after_auth")]
+        ])
+        await callback.message.answer(
+            "После пополнения нажмите «Обновить депозит»:",
+            reply_markup=kb
+        )
 
 
 @router.callback_query(F.data == "start_after_auth")
