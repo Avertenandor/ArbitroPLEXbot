@@ -107,6 +107,9 @@ def main_menu_reply_keyboard(
         builder.row(
             KeyboardButton(text="🔑 Восстановить финпароль"),
         )
+        builder.row(
+            KeyboardButton(text="🐰 Купить кролика"),
+        )
 
         # Add admin panel button for admins
         if is_admin:

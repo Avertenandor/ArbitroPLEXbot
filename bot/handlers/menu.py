@@ -426,6 +426,62 @@ async def show_settings_menu(
     )
 
 
+@router.message(StateFilter('*'), F.text == "🐰 Купить кролика")
+async def show_rabbit_partner(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Show partner rabbit farm info."""
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+    
+    user: User | None = data.get("user")
+    is_admin = data.get("is_admin", False)
+    
+    await state.clear()
+    
+    text = (
+        "🐰 **Токенизированная ферма кроликов**\n\n"
+        "Для работы в ArbitroPLEXbot каждый пользователь должен быть "
+        "владельцем **минимум одного кролика** на ферме наших партнеров.\n\n"
+        "**DEXRabbit** — это:\n"
+        "• Покупка и удалённое содержание кроликов на ферме\n"
+        "• Работа с USDT\n"
+        "• Маркетплейс перепродаж\n"
+        "• Реферальная программа 3×5%\n\n"
+        "⚠️ **Это обязательное условие для работы в нашей экосистеме!**"
+    )
+    
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text="🐰 Перейти к покупке кролика",
+            url="https://t.me/dexrabbit_bot?start=ref_9"
+        )],
+    ])
+    
+    await message.answer(text, reply_markup=kb, parse_mode="Markdown")
+    
+    # Get blacklist info for back button
+    blacklist_entry = None
+    try:
+        blacklist_repo = BlacklistRepository(session)
+        if message.from_user:
+            blacklist_entry = await blacklist_repo.find_by_telegram_id(
+                message.from_user.id
+            )
+    except Exception as e:
+        logger.warning(f"Failed to get blacklist entry: {e}")
+    
+    # Send back button
+    await message.answer(
+        "⬅️ Для возврата в меню нажмите кнопку ниже:",
+        reply_markup=main_menu_reply_keyboard(
+            user=user, blacklist_entry=blacklist_entry, is_admin=is_admin
+        ),
+    )
+
+
 # Handlers для submenu кнопок
 
 
