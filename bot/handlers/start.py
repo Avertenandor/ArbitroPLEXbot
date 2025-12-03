@@ -82,23 +82,14 @@ async def cmd_start(
             
             from bot.constants.rules import LEVELS_TABLE, RULES_SHORT_TEXT
             
+            # Get translator for unregistered user (default language)
+            _ = get_translator("ru")
+            
             # Step 1: Ask for wallet first
             await message.answer(
-                f"🚀 **Добро пожаловать в ArbitroPLEXbot!**\n\n"
-                f"Мы строим **крипто-фиатную экосистему** на базе монеты "
-                f"**PLEX** и высокодоходных торговых роботов.\n\n"
-                f"🔐 **Доступ к нашей системе** осуществляется через этого бота.\n\n"
-                f"📊 **Доход:** от **30% до 70%** в день!\n\n"
-                f"📋 **УРОВНИ ДОСТУПА:**\n"
-                f"```\n{LEVELS_TABLE}```\n"
-                f"{RULES_SHORT_TEXT}\n\n"
-                f"━━━━━━━━━━━━━━━━━━━━━━\n"
-                f"🔑 **АВТОРИЗАЦИЯ**\n\n"
-                f"Для входа в систему необходимо:\n"
-                f"1️⃣ Указать адрес вашего кошелька\n"
-                f"2️⃣ Оплатить 10 PLEX за доступ\n\n"
-                f"💼 **Введите адрес вашего BSC кошелька:**\n"
-                f"_(Формат: 0x...)_",
+                _('auth.welcome_unregistered',
+                  levels_table=f"```\n{LEVELS_TABLE}```",
+                  rules_short=RULES_SHORT_TEXT),
                 reply_markup=auth_wallet_input_keyboard(),
                 parse_mode="Markdown",
                 disable_web_page_preview=True
@@ -1411,10 +1402,11 @@ async def _check_payment_logic(
             session_key = f"{SESSION_KEY_PREFIX}{user_id}"
             await redis_client.setex(session_key, SESSION_TTL, "1")
             
+            # Get translator for user
+            _ = get_translator("ru")
+            tx_hash_short = f"{result['tx_hash'][:10]}..."
             await send(
-                f"вњ… **РћРїР»Р°С‚Р° РїРѕРґС‚РІРµСЂР¶РґРµРЅР°!**\n"
-                f"РўСЂР°РЅР·Р°РєС†РёСЏ: `{result['tx_hash'][:10]}...`\n\n"
-                "вЏі РЎРєР°РЅРёСЂСѓРµРј РІР°С€Рё РґРµРїРѕР·РёС‚С‹...",
+                _('payment.confirmed_scanning', tx_hash_short=tx_hash_short),
                 parse_mode="Markdown",
             )
             
@@ -1507,10 +1499,14 @@ async def handle_rescan_deposits(
     """Handle manual deposit rescan request."""
     from app.services.deposit_scan_service import DepositScanService
     
-    await callback.answer("вЏі РЎРєР°РЅРёСЂСѓРµРј РґРµРїРѕР·РёС‚С‹...", show_alert=False)
+    # Get translator for user
+    user_language = await get_user_language(session, user.id) if user else "ru"
+    _ = get_translator(user_language)
+    
+    await callback.answer(_('deposit.scanning'), show_alert=False)
     
     if not user:
-        await callback.message.answer("вќЊ РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ РЅРµ РЅР°Р№РґРµРЅ. Р’РІРµРґРёС‚Рµ /start")
+        await callback.message.answer(_('deposit.user_not_found'))
         return
     
     deposit_service = DepositScanService(session)
@@ -1588,9 +1584,10 @@ async def handle_wallet_input(
     normalized_text = (message.text or "").replace("\ufe0f", "")
     if normalized_text == "❌ Отмена":
         await state.clear()
+        # Get translator for unregistered user
+        _ = get_translator("ru")
         await message.answer(
-            "Авторизация отменена.\n\n"
-            "Чтобы войти позже, используйте команду /start.",
+            _('auth.auth_cancelled'),
             reply_markup=main_menu_reply_keyboard(),
         )
         return
@@ -1599,10 +1596,10 @@ async def handle_wallet_input(
 
     # Basic format validation
     if not wallet.startswith("0x") or len(wallet) != 42:
+        # Get translator for unregistered user
+        _ = get_translator("ru")
         await message.answer(
-            "❌ **Неверный формат адреса!**\n\n"
-            "Адрес должен начинаться с `0x` и содержать 42 символа.\n\n"
-            "📎 Введите корректный адрес:",
+            _('auth.invalid_address'),
             parse_mode="Markdown",
             reply_markup=auth_wallet_input_keyboard(),
         )
@@ -1613,12 +1610,12 @@ async def handle_wallet_input(
     verification = await verifier.verify_wallet(wallet)
 
     if verification.is_onchain_ok and not verification.has_required_plex:
+        # Get translator for unregistered user
+        _ = get_translator("ru")
         await message.answer(
-            "⚠️ На вашем кошельке недостаточно PLEX для минимального уровня доступа.\n\n"
-            f"Текущий баланс PLEX: `{verification.plex_balance or 0}`\n"
-            f"Требуемый минимум: `{rules.MINIMUM_PLEX_BALANCE}` PLEX.\n\n"
-            "Вы всё равно можете продолжить авторизацию, но доступ к части "
-            "функций может быть ограничен.",
+            _('auth.insufficient_plex',
+              plex_balance=verification.plex_balance or 0,
+              minimum_plex=rules.MINIMUM_PLEX_BALANCE),
             parse_mode="Markdown",
         )
 
@@ -1630,19 +1627,17 @@ async def handle_wallet_input(
     system_wallet = settings.auth_system_wallet_address
     token_addr = settings.auth_plex_token_address
     
+    # Get translator for unregistered user (default language)
+    _ = get_translator("ru")
+    
     # Send text message first
+    wallet_short = f"{wallet[:6]}...{wallet[-4:]}"
     await message.answer(
-        f"вњ… **РљРѕС€РµР»С‘Рє РїСЂРёРЅСЏС‚!**\n"
-        f"`{wallet[:6]}...{wallet[-4:]}`\n\n"
-        f"в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ\n"
-        f"рџ’і **РћРїР»Р°С‚Р° РґРѕСЃС‚СѓРїР°**\n\n"
-        f"РћС‚РїСЂР°РІСЊС‚Рµ **{price} PLEX** РЅР° РєРѕС€РµР»С‘Рє:\n"
-        f"`{system_wallet}`\n"
-        f"_(РќР°Р¶РјРёС‚Рµ РґР»СЏ РєРѕРїРёСЂРѕРІР°РЅРёСЏ)_\n\n"
-        f"рџ“Ќ **РљРѕРЅС‚СЂР°РєС‚ PLEX:**\n"
-        f"`{token_addr}`\n\n"
-        f"рџ“± **QR-РєРѕРґ РЅРёР¶Рµ** вЂ” РѕС‚СЃРєР°РЅРёСЂСѓР№С‚Рµ РІ РєРѕС€РµР»СЊРєРµ РґР»СЏ Р±С‹СЃС‚СЂРѕР№ РѕС‚РїСЂР°РІРєРё.\n\n"
-        f"РџРѕСЃР»Рµ РѕРїР»Р°С‚С‹ РЅР°Р¶РјРёС‚Рµ РєРЅРѕРїРєСѓ РЅРёР¶Рµ.",
+        _('auth.wallet_accepted',
+          wallet_short=wallet_short,
+          price=price,
+          system_wallet=system_wallet,
+          token_addr=token_addr),
         reply_markup=auth_payment_keyboard(),
         parse_mode="Markdown"
     )
@@ -1656,7 +1651,7 @@ async def handle_wallet_input(
         qr_file = BufferedInputFile(qr_bytes, filename="payment_qr.png")
         await message.answer_photo(
             photo=qr_file,
-            caption=f"рџ“± QR-РєРѕРґ РєРѕС€РµР»СЊРєР° РґР»СЏ РѕРїР»Р°С‚С‹\n`{system_wallet}`",
+            caption=_('auth.qr_caption', system_wallet=system_wallet),
             parse_mode="Markdown"
         )
     
@@ -1726,7 +1721,11 @@ async def handle_rescan_deposits_reply(
     """Handle deposit rescan via Reply keyboard."""
     from app.services.deposit_scan_service import DepositScanService
     
-    await message.answer("вЏі РЎРєР°РЅРёСЂСѓРµРј РґРµРїРѕР·РёС‚С‹...")
+    # Get translator for user
+    user_language = await get_user_language(session, user.id)
+    _ = get_translator(user_language)
+    
+    await message.answer(_('deposit.scanning'))
     
     scan_service = DepositScanService(session)
     scan_result = await scan_service.scan_and_update_user_deposits(user.id)
