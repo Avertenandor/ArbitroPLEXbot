@@ -181,7 +181,7 @@ async def show_withdrawal_menu(
     )
 
 
-@router.message(F.text == "💳 Вывести всё")
+@router.message(F.text == "💸 Вывести всю сумму")
 async def withdraw_all(
     message: Message,
     state: FSMContext,

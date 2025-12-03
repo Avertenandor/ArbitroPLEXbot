@@ -616,25 +616,27 @@ class BlockchainService:
     async def get_plex_balance(self, address: str) -> Decimal | None:
         """
         Get PLEX token balance for address.
-        
+
+        PLEX token uses 9 decimals (per business rules).
+
         Args:
             address: Wallet address to check
-            
+
         Returns:
             PLEX balance in tokens or None on error
         """
         try:
             address = to_checksum_address(address)
-            plex_address = to_checksum_address(self._settings.auth_plex_token_address)
-            
-            # PLEX uses standard ERC-20 ABI (same as USDT)
+            plex_address = to_checksum_address(self.settings.auth_plex_token_address)
+
+            # PLEX uses standard ERC-20 ABI (same as USDT_ABI)
             def _get_bal(w3: Web3):
                 contract = w3.eth.contract(address=plex_address, abi=USDT_ABI)
                 return contract.functions.balanceOf(address).call()
-            
-            wei = await self._run_async_failover(_get_bal)
-            # PLEX has 18 decimals (standard ERC-20)
-            return Decimal(wei) / Decimal(10 ** 18)
+
+            raw = await self._run_async_failover(_get_bal)
+            # PLEX has 9 decimals
+            return Decimal(raw) / Decimal(10**9)
         except Exception as e:
             logger.error(f"Get PLEX balance failed for {address}: {e}")
             return None

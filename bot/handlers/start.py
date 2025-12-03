@@ -15,26 +15,27 @@ from aiogram.types import (
     ReplyKeyboardRemove,
 )
 from loguru import logger
-from sqlalchemy.exc import OperationalError, InterfaceError, DatabaseError
+from sqlalchemy.exc import DatabaseError, InterfaceError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config.settings import settings
 from app.models.user import User
+from app.services.blockchain_service import get_blockchain_service
 from app.services.user_service import UserService
+from app.services.wallet_verification_service import WalletVerificationService
 from bot.i18n.loader import get_translator, get_user_language
 from bot.keyboards.reply import (
-    main_menu_reply_keyboard,
-    auth_wallet_input_keyboard,
-    auth_payment_keyboard,
     auth_continue_keyboard,
+    auth_payment_keyboard,
     auth_rescan_keyboard,
     auth_retry_keyboard,
+    auth_wallet_input_keyboard,
+    main_menu_reply_keyboard,
     show_password_keyboard,
 )
-from bot.states.registration import RegistrationStates
-from bot.states.auth import AuthStates
 from bot.middlewares.session_middleware import SESSION_KEY_PREFIX, SESSION_TTL
-from app.config.settings import settings
-from app.services.blockchain_service import get_blockchain_service
+from bot.states.auth import AuthStates
+from bot.states.registration import RegistrationStates
 
 router = Router()
 
@@ -294,13 +295,13 @@ async def cmd_start(
             exc_info=True,
         )
         await message.answer(
-            "❌ Системная ошибка. Попробуйте позже или обратитесь в поддержку."
+            "вљ пёЏ РЎРёСЃС‚РµРјРЅР°СЏ РѕС€РёР±РєР°. РџРѕРїСЂРѕР±СѓР№С‚Рµ РїРѕР·Р¶Рµ РёР»Рё РѕР±СЂР°С‚РёС‚РµСЃСЊ РІ РїРѕРґРґРµСЂР¶РєСѓ."
         )
         return
 
     # Not registered: РїРѕРєР°Р¶РµРј РїСЂРёРІРµС‚СЃС‚РІРёРµ Рё СЃСЂР°Р·Сѓ РіР»Р°РІРЅРѕРµ РјРµРЅСЋ
     welcome_text = (
-        "🚀 **Р”РѕР±СЂРѕ РїРѕР¶Р°Р»РѕРІР°С‚СЊ РІ ArbitroPLEXbot!**\n\n"
+        "🚀 **Добро пожаловать в ArbitroPLEXbot!**\n\n"
         "РњС‹ СЃС‚СЂРѕРёРј **РєСЂРёРїС‚Рѕ-С„РёР°С‚РЅСѓСЋ СЌРєРѕСЃРёСЃС‚РµРјСѓ** РЅР° Р±Р°Р·Рµ РјРѕРЅРµС‚С‹ "
         "**PLEX** Рё РІС‹СЃРѕРєРѕРґРѕС…РѕРґРЅС‹С… С‚РѕСЂРіРѕРІС‹С… СЂРѕР±РѕС‚РѕРІ.\n\n"
         "рџ“Љ **Р”РѕС…РѕРґ:** РѕС‚ **30% РґРѕ 70%** РІ РґРµРЅСЊ!\n\n"
@@ -961,7 +962,7 @@ async def process_password_confirmation(
         "рџЋ‰ Р РµРіРёСЃС‚СЂР°С†РёСЏ Р·Р°РІРµСЂС€РµРЅР°!\n\n"
         f"Р’Р°С€ ID: {user.id}\n"
         f"РљРѕС€РµР»РµРє: {user.masked_wallet}\n\n"
-        "Р”РѕР±СЂРѕ РїРѕР¶Р°Р»РѕРІР°С‚СЊ РІ ArbitroPLEXbot! 🚀\n\n"
+        "Р”РѕР±СЂРѕ РїРѕР¶Р°Р»РѕРІР°С‚СЊ РІ ArbitroPLEXbot! рџљЂ\n\n"
         "вљ пёЏ **Р’Р°Р¶РЅРѕ:** РЎРѕС…СЂР°РЅРёС‚Рµ РІР°С€ С„РёРЅР°РЅСЃРѕРІС‹Р№ РїР°СЂРѕР»СЊ РІ Р±РµР·РѕРїР°СЃРЅРѕРј РјРµСЃС‚Рµ!\n"
         "РћРЅ РїРѕРЅР°РґРѕР±РёС‚СЃСЏ РґР»СЏ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёСЏ С„РёРЅР°РЅСЃРѕРІС‹С… РѕРїРµСЂР°С†РёР№.",
         reply_markup=show_password_keyboard(),
@@ -1314,15 +1315,15 @@ async def handle_show_password_again(
 from bot.constants.rules import LEVELS_TABLE, RULES_SHORT_TEXT, RULES_FULL_TEXT
 
 ECOSYSTEM_INFO = (
-    "🚀 **Добро пожаловать в ArbitroPLEXbot!**\n\n"
-    "Мы строим **крипто-фиатную экосистему** на базе монеты "
-    "**PLEX** и высокодоходных торговых роботов.\n\n"
-    "📊 **Ваш потенциальный доход:** от **30% до 70%** в день!\n\n"
-    f"📋 **УРОВНИ ДОСТУПА:**\n"
+    "рџљЂ **Р”РѕР±СЂРѕ РїРѕР¶Р°Р»РѕРІР°С‚СЊ РІ ArbitroPLEXbot!**\n\n"
+    "РњС‹ СЃС‚СЂРѕРёРј **РєСЂРёРїС‚Рѕ-С„РёР°С‚РЅСѓСЋ СЌРєРѕСЃРёСЃС‚РµРјСѓ** РЅР° Р±Р°Р·Рµ РјРѕРЅРµС‚С‹ "
+    "**PLEX** Рё РІС‹СЃРѕРєРѕРґРѕС…РѕРґРЅС‹С… С‚РѕСЂРіРѕРІС‹С… СЂРѕР±РѕС‚РѕРІ.\n\n"
+    "рџ“Љ **Р’Р°С€ РїРѕС‚РµРЅС†РёР°Р»СЊРЅС‹Р№ РґРѕС…РѕРґ:** РѕС‚ **30% РґРѕ 70%** РІ РґРµРЅСЊ!\n\n"
+    f"рџ“‹ **РЈР РћР’РќР Р”РћРЎРўРЈРџРђ:**\n"
     f"```\n{LEVELS_TABLE}```\n"
     f"{RULES_SHORT_TEXT}\n\n"
-    "━━━━━━━━━━━━━━━━━━━━━━\n"
-    "**Все условия являются ОБЯЗАТЕЛЬНЫМИ для каждого пользователя!**"
+    "в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ\n"
+    "**Р’СЃРµ СѓСЃР»РѕРІРёСЏ СЏРІР»СЏСЋС‚СЃСЏ РћР‘РЇР—РђРўР•Р›Р¬РќР«РњР РґР»СЏ РєР°Р¶РґРѕРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ!**"
 )
 
 
@@ -1583,29 +1584,44 @@ async def handle_wallet_input(
     **data: Any,
 ) -> None:
     """Handle wallet address input during authorization (Step 1)."""
-    # Handle cancel
-    if message.text == "вќЊ РћС‚РјРµРЅР°":
+    # Handle cancel (normalize emoji variation selector)
+    normalized_text = (message.text or "").replace("\ufe0f", "")
+    if normalized_text == "❌ Отмена":
         await state.clear()
         await message.answer(
-            "РђРІС‚РѕСЂРёР·Р°С†РёСЏ РѕС‚РјРµРЅРµРЅР°.\n\n"
-            "Р”Р»СЏ РїРѕРІС‚РѕСЂРЅРѕРіРѕ РІС…РѕРґР° РёСЃРїРѕР»СЊР·СѓР№С‚Рµ /start",
-            reply_markup=ReplyKeyboardRemove()
+            "Авторизация отменена.\n\n"
+            "Чтобы войти позже, используйте команду /start.",
+            reply_markup=main_menu_reply_keyboard(),
         )
         return
     
     wallet = message.text.strip() if message.text else ""
-    
-    # Validate wallet format
+
+    # Basic format validation
     if not wallet.startswith("0x") or len(wallet) != 42:
         await message.answer(
-            "вќЊ **РќРµРІРµСЂРЅС‹Р№ С„РѕСЂРјР°С‚ Р°РґСЂРµСЃР°!**\n\n"
-            "РђРґСЂРµСЃ РґРѕР»Р¶РµРЅ РЅР°С‡РёРЅР°С‚СЊСЃСЏ СЃ `0x` Рё СЃРѕРґРµСЂР¶Р°С‚СЊ 42 СЃРёРјРІРѕР»Р°.\n\n"
-            "рџ“ќ Р’РІРµРґРёС‚Рµ РєРѕСЂСЂРµРєС‚РЅС‹Р№ Р°РґСЂРµСЃ:",
+            "❌ **Неверный формат адреса!**\n\n"
+            "Адрес должен начинаться с `0x` и содержать 42 символа.\n\n"
+            "📎 Введите корректный адрес:",
             parse_mode="Markdown",
-            reply_markup=auth_wallet_input_keyboard()
+            reply_markup=auth_wallet_input_keyboard(),
         )
         return
-    
+
+    # Optional on-chain verification (PLEX/USDT balances)
+    verifier = WalletVerificationService()
+    verification = await verifier.verify_wallet(wallet)
+
+    if verification.is_onchain_ok and not verification.has_required_plex:
+        await message.answer(
+            "⚠️ На вашем кошельке недостаточно PLEX для минимального уровня доступа.\n\n"
+            f"Текущий баланс PLEX: `{verification.plex_balance or 0}`\n"
+            f"Требуемый минимум: `{rules.MINIMUM_PLEX_BALANCE}` PLEX.\n\n"
+            "Вы всё равно можете продолжить авторизацию, но доступ к части "
+            "функций может быть ограничен.",
+            parse_mode="Markdown",
+        )
+
     # Save wallet to FSM
     await state.update_data(auth_wallet=wallet)
     

@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING
 from sqlalchemy import (
     DECIMAL,
     BigInteger,
-    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
