@@ -34,7 +34,7 @@ from bot.states.registration import RegistrationStates
 from bot.states.auth import AuthStates
 from bot.middlewares.session_middleware import SESSION_KEY_PREFIX, SESSION_TTL
 from app.config.settings import settings
-from app.services.blockchain.blockchain_service import get_blockchain_service
+from app.services.blockchain_service import get_blockchain_service
 
 router = Router()
 
