@@ -1699,7 +1699,7 @@ async def handle_start_work_reply(
     await cmd_start(message, session, state, **data)
 
 
-@router.message(F.text == "рџ”„ РћР±РЅРѕРІРёС‚СЊ РґРµРїРѕР·РёС‚")
+@router.message(F.text == "🔄 Обновить депозит")
 async def handle_rescan_deposits_reply(
     message: Message,
     state: FSMContext,
@@ -1758,7 +1758,7 @@ async def handle_continue_without_deposit_reply(
     await cmd_start(message, session, state, **data)
 
 
-@router.message(F.text == "рџ”„ РџСЂРѕРІРµСЂРёС‚СЊ СЃРЅРѕРІР°")
+@router.message(F.text == "🔄 Проверить снова")
 async def handle_retry_payment_reply(
     message: Message,
     state: FSMContext,
