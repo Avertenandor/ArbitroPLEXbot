@@ -74,8 +74,7 @@ class UserMessageLog(Base):
             "telegram_id",
             "created_at",
         ),
-        # Index for cleanup queries
-        Index("ix_user_message_logs_created_at", "created_at"),
+        # Note: index on created_at is already created via index=True above
     )
 
     def __repr__(self) -> str:
