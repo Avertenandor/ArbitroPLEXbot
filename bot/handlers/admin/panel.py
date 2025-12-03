@@ -643,8 +643,6 @@ async def handle_withdrawal_history(
     **data: Any,
 ) -> None:
     """Handle detailed withdrawal history with pagination."""
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-
     from app.services.withdrawal_service import WithdrawalService
 
     is_admin = data.get("is_admin", False)
@@ -652,6 +650,9 @@ async def handle_withdrawal_history(
         await message.answer("❌ Эта функция доступна только администраторам")
         return
 
+    # Store page in FSM
+    await state.update_data(wd_history_page=1)
+    
     withdrawal_service = WithdrawalService(session)
     await show_withdrawal_page(message, withdrawal_service, page=1)
 
@@ -660,10 +661,9 @@ async def show_withdrawal_page(
     message: Message,
     withdrawal_service,
     page: int = 1,
-    edit: bool = False,
 ) -> None:
     """Show withdrawal history page."""
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    from bot.keyboards.reply import admin_withdrawal_history_pagination_keyboard
 
     detailed = await withdrawal_service.get_detailed_withdrawals(page=page, per_page=5)
 
@@ -693,55 +693,59 @@ async def show_withdrawal_page(
 
         text += f"_Страница {detailed['page']} из {detailed['total_pages']}_"
 
-    # Build pagination keyboard
-    buttons = []
-    if detailed["has_prev"]:
-        buttons.append(
-            InlineKeyboardButton(
-                text="⬅️ Назад",
-                callback_data=f"wd_page:{page - 1}"
-            )
-        )
-    if detailed["has_next"]:
-        buttons.append(
-            InlineKeyboardButton(
-                text="Вперёд ➡️",
-                callback_data=f"wd_page:{page + 1}"
-            )
-        )
-
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[buttons] if buttons else [])
-
-    if edit and hasattr(message, "edit_text"):
-        await message.edit_text(text, parse_mode="Markdown", reply_markup=keyboard)
-    else:
-        await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
+    # Reply keyboard with pagination
+    keyboard = admin_withdrawal_history_pagination_keyboard(
+        page=page,
+        total_pages=detailed["total_pages"]
+    )
+    
+    await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
 
 
-@router.callback_query(F.data.startswith("wd_page:"))
-async def handle_withdrawal_page_callback(
-    callback: Any,
+@router.message(F.text == "⬅️ Пред. страница выводов")
+async def handle_wd_prev_page(
+    message: Message,
     session: AsyncSession,
+    state: FSMContext,
     **data: Any,
 ) -> None:
-    """Handle withdrawal pagination callback."""
+    """Handle previous page in withdrawal history."""
     from app.services.withdrawal_service import WithdrawalService
 
     is_admin = data.get("is_admin", False)
     if not is_admin:
-        await callback.answer("❌ Доступ запрещён", show_alert=True)
         return
 
-    page = int(callback.data.split(":")[1])
+    state_data = await state.get_data()
+    current_page = state_data.get("wd_history_page", 1)
+    new_page = max(1, current_page - 1)
+    await state.update_data(wd_history_page=new_page)
+    
     withdrawal_service = WithdrawalService(session)
+    await show_withdrawal_page(message, withdrawal_service, page=new_page)
 
-    await show_withdrawal_page(
-        callback.message,
-        withdrawal_service,
-        page=page,
-        edit=True
-    )
-    await callback.answer()
+
+@router.message(F.text == "Вперёд страница выводов ➡️")
+async def handle_wd_next_page(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Handle next page in withdrawal history."""
+    from app.services.withdrawal_service import WithdrawalService
+
+    is_admin = data.get("is_admin", False)
+    if not is_admin:
+        return
+
+    state_data = await state.get_data()
+    current_page = state_data.get("wd_history_page", 1)
+    new_page = current_page + 1
+    await state.update_data(wd_history_page=new_page)
+    
+    withdrawal_service = WithdrawalService(session)
+    await show_withdrawal_page(message, withdrawal_service, page=new_page)
 
 
 @router.message(F.text == "🔐 Управление кошельком")

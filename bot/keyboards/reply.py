@@ -1759,3 +1759,145 @@ def admin_wallet_history_keyboard() -> ReplyKeyboardMarkup:
         KeyboardButton(text="👑 Админ-панель")
     )
     return builder.as_markup(resize_keyboard=True)
+
+
+# ============================================================================
+# АВТОРИЗАЦИЯ (PAY-TO-USE) - Reply клавиатуры
+# ============================================================================
+
+def auth_payment_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Keyboard for payment confirmation during authorization.
+    
+    Returns:
+        ReplyKeyboardMarkup with payment confirmation button
+    """
+    builder = ReplyKeyboardBuilder()
+    builder.row(KeyboardButton(text="✅ Я оплатил"))
+    return builder.as_markup(resize_keyboard=True)
+
+
+def auth_continue_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Keyboard after successful payment - continue to main menu.
+    
+    Returns:
+        ReplyKeyboardMarkup with continue button
+    """
+    builder = ReplyKeyboardBuilder()
+    builder.row(KeyboardButton(text="🚀 Начать работу"))
+    return builder.as_markup(resize_keyboard=True)
+
+
+def auth_rescan_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Keyboard for deposit rescan option.
+    
+    Returns:
+        ReplyKeyboardMarkup with rescan and continue buttons
+    """
+    builder = ReplyKeyboardBuilder()
+    builder.row(KeyboardButton(text="🔄 Обновить депозит"))
+    builder.row(KeyboardButton(text="🚀 Продолжить (без депозита)"))
+    return builder.as_markup(resize_keyboard=True)
+
+
+def auth_retry_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Keyboard for payment retry.
+    
+    Returns:
+        ReplyKeyboardMarkup with retry button
+    """
+    builder = ReplyKeyboardBuilder()
+    builder.row(KeyboardButton(text="🔄 Проверить снова"))
+    return builder.as_markup(resize_keyboard=True)
+
+
+def show_password_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Keyboard to show password again after registration.
+    
+    Returns:
+        ReplyKeyboardMarkup with show password button
+    """
+    builder = ReplyKeyboardBuilder()
+    builder.row(KeyboardButton(text="🔑 Показать пароль ещё раз"))
+    builder.row(KeyboardButton(text="📊 Главное меню"))
+    return builder.as_markup(resize_keyboard=True)
+
+
+# ============================================================================
+# ADMIN - Настройки выводов (Reply клавиатуры)
+# ============================================================================
+
+def admin_withdrawal_settings_keyboard(
+    is_daily_limit_enabled: bool = True,
+    auto_withdrawal_enabled: bool = False,
+) -> ReplyKeyboardMarkup:
+    """
+    Admin withdrawal settings keyboard (Reply version).
+    
+    Args:
+        is_daily_limit_enabled: Whether daily limit is enabled
+        auto_withdrawal_enabled: Whether auto-withdrawal is enabled
+        
+    Returns:
+        ReplyKeyboardMarkup with withdrawal settings options
+    """
+    builder = ReplyKeyboardBuilder()
+    
+    builder.row(KeyboardButton(text="💵 Изм. Мин. Вывод"))
+    builder.row(KeyboardButton(text="🛡 Изм. Дневной Лимит"))
+    builder.row(KeyboardButton(text="💸 Изм. Комиссию (%)"))
+    
+    limit_text = "🔴 Выключить Лимит" if is_daily_limit_enabled else "🟢 Включить Лимит"
+    builder.row(KeyboardButton(text=limit_text))
+    
+    auto_text = "🔴 Выключить Авто-вывод" if auto_withdrawal_enabled else "🟢 Включить Авто-вывод"
+    builder.row(KeyboardButton(text=auto_text))
+    
+    builder.row(
+        KeyboardButton(text="◀️ Назад к выводам"),
+        KeyboardButton(text="👑 Админ-панель")
+    )
+    
+    return builder.as_markup(resize_keyboard=True)
+
+
+# ============================================================================
+# ADMIN - Пагинация истории выводов (Reply клавиатура)
+# ============================================================================
+
+def admin_withdrawal_history_pagination_keyboard(
+    page: int = 1,
+    total_pages: int = 1,
+) -> ReplyKeyboardMarkup:
+    """
+    Admin withdrawal history pagination keyboard (Reply version).
+    
+    Args:
+        page: Current page number
+        total_pages: Total number of pages
+        
+    Returns:
+        ReplyKeyboardMarkup with pagination buttons
+    """
+    builder = ReplyKeyboardBuilder()
+    
+    # Navigation buttons
+    nav_buttons = []
+    if page > 1:
+        nav_buttons.append(KeyboardButton(text="⬅️ Пред. страница выводов"))
+    if page < total_pages:
+        nav_buttons.append(KeyboardButton(text="Вперёд страница выводов ➡️"))
+    
+    if nav_buttons:
+        builder.row(*nav_buttons)
+    
+    builder.row(
+        KeyboardButton(text="◀️ Назад"),
+        KeyboardButton(text="👑 Админ-панель")
+    )
+    
+    return builder.as_markup(resize_keyboard=True)

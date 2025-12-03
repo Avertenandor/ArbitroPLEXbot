@@ -13,8 +13,6 @@ from aiogram.types import (
     CallbackQuery,
     Message,
     ReplyKeyboardRemove,
-    InlineKeyboardMarkup,
-    InlineKeyboardButton,
 )
 from loguru import logger
 from sqlalchemy.exc import OperationalError, InterfaceError, DatabaseError
@@ -23,7 +21,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.services.user_service import UserService
 from bot.i18n.loader import get_translator, get_user_language
-from bot.keyboards.reply import main_menu_reply_keyboard
+from bot.keyboards.reply import (
+    main_menu_reply_keyboard,
+    auth_payment_keyboard,
+    auth_continue_keyboard,
+    auth_rescan_keyboard,
+    auth_retry_keyboard,
+    show_password_keyboard,
+)
 from bot.states.registration import RegistrationStates
 from bot.states.auth import AuthStates
 from bot.middlewares.session_middleware import SESSION_KEY_PREFIX, SESSION_TTL
@@ -78,10 +83,6 @@ async def cmd_start(
             wallet = settings.auth_system_wallet_address
             token_addr = settings.auth_plex_token_address
             
-            kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="✅ Я оплатил", callback_data="check_payment")]
-            ])
-            
             from bot.constants.rules import LEVELS_TABLE, RULES_SHORT_TEXT
             
             await message.answer(
@@ -102,7 +103,7 @@ async def cmd_start(
                 f"`{wallet}`\n"
                 f"_(Нажмите для копирования)_\n\n"
                 f"После оплаты нажмите кнопку ниже.",
-                reply_markup=kb,
+                reply_markup=auth_payment_keyboard(),
                 parse_mode="Markdown",
                 disable_web_page_preview=True
             )
@@ -956,14 +957,9 @@ async def process_password_confirmation(
             user.telegram_id
         )
     
-    # R1-19: Добавляем кнопку для повторного показа пароля
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
-    
-    show_password_button = InlineKeyboardButton(
-        text="🔑 Показать пароль ещё раз",
-        callback_data=f"show_password_{user.id}"
-    )
-    password_keyboard = InlineKeyboardMarkup(inline_keyboard=[[show_password_button]])
+    # R1-19: Кнопка для повторного показа пароля (Reply keyboard)
+    # Сохраняем user.id в FSM для обработчика "Показать пароль ещё раз"
+    await state.update_data(show_password_user_id=user.id)
     
     await message.answer(
         "🎉 Регистрация завершена!\n\n"
@@ -972,7 +968,7 @@ async def process_password_confirmation(
         "Добро пожаловать в ArbitroPLEXbot! 🚀\n\n"
         "⚠️ **Важно:** Сохраните ваш финансовый пароль в безопасном месте!\n"
         "Он понадобится для подтверждения финансовых операций.",
-        reply_markup=password_keyboard,
+        reply_markup=show_password_keyboard(),
     )
     
     # R13-3: Get user language for i18n
@@ -1446,23 +1442,19 @@ async def _check_payment_logic(
                         
                         await state.clear()
                         
-                        kb = InlineKeyboardMarkup(inline_keyboard=[
-                            [InlineKeyboardButton(text="🚀 Начать работу", callback_data="start_after_auth")]
-                        ])
-                        await send("Нажмите кнопку для начала работы:", reply_markup=kb)
+                        await send(
+                            "Нажмите кнопку для начала работы:",
+                            reply_markup=auth_continue_keyboard()
+                        )
                     else:
                         # Deposit insufficient (< 30 USDT)
                         message = scan_result.get("validation_message")
                         if message:
                             await send(message, parse_mode="Markdown")
                         
-                        kb = InlineKeyboardMarkup(inline_keyboard=[
-                            [InlineKeyboardButton(text="🔄 Обновить депозит", callback_data="rescan_deposits")],
-                            [InlineKeyboardButton(text="🚀 Продолжить (без депозита)", callback_data="start_after_auth")]
-                        ])
                         await send(
                             "После пополнения нажмите «Обновить депозит»:",
-                            reply_markup=kb
+                            reply_markup=auth_rescan_keyboard()
                         )
                 else:
                     # Scan failed, but let user continue
@@ -1473,32 +1465,29 @@ async def _check_payment_logic(
                         parse_mode="Markdown"
                     )
                     await state.clear()
-                    kb = InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text="🚀 Начать работу", callback_data="start_after_auth")]
-                    ])
-                    await send("Нажмите кнопку:", reply_markup=kb)
+                    await send(
+                        "Нажмите кнопку:",
+                        reply_markup=auth_continue_keyboard()
+                    )
                 
                 await db_session.commit()
             else:
                 # No DB user context, just let them in
                 await send(f"{ECOSYSTEM_INFO}", parse_mode="Markdown", disable_web_page_preview=True)
                 await state.clear()
-                kb = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🚀 Начать работу", callback_data="start_after_auth")]
-                ])
-                await send("Нажмите кнопку для начала работы:", reply_markup=kb)
+                await send(
+                    "Нажмите кнопку для начала работы:",
+                    reply_markup=auth_continue_keyboard()
+                )
             
         else:
-            kb = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🔄 Проверить снова", callback_data="check_payment")]
-            ])
             await send(
                 "❌ **Оплата не найдена**\n\n"
                 "Мы проверили последние транзакции, но не нашли поступления.\n"
                 "• Убедитесь, что отправили 10 PLEX\n"
                 "• Подождите 1-2 минуты, если транзакция еще в пути\n\n"
                 "Попробуйте еще раз:",
-                reply_markup=kb,
+                reply_markup=auth_retry_keyboard(),
                 parse_mode="Markdown"
             )
             
@@ -1549,23 +1538,19 @@ async def handle_rescan_deposits(
             parse_mode="Markdown"
         )
         
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🚀 Начать работу", callback_data="start_after_auth")]
-        ])
-        await callback.message.answer("Нажмите кнопку:", reply_markup=kb)
+        await callback.message.answer(
+            "Нажмите кнопку:",
+            reply_markup=auth_continue_keyboard()
+        )
     else:
         # Still insufficient
         message = scan_result.get("validation_message")
         if message:
             await callback.message.answer(message, parse_mode="Markdown")
         
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔄 Обновить депозит", callback_data="rescan_deposits")],
-            [InlineKeyboardButton(text="🚀 Продолжить (без депозита)", callback_data="start_after_auth")]
-        ])
         await callback.message.answer(
             "После пополнения нажмите «Обновить депозит»:",
-            reply_markup=kb
+            reply_markup=auth_rescan_keyboard()
         )
 
 
@@ -1576,7 +1561,7 @@ async def handle_start_after_auth(
     session: AsyncSession,
     **data: Any,
 ) -> None:
-    """Handle start after successful auth."""
+    """Handle start after successful auth (callback version - backward compat)."""
     await callback.answer()
     
     # Mimic /start command
@@ -1586,3 +1571,176 @@ async def handle_start_after_auth(
     
     # Call cmd_start
     await cmd_start(msg, session, state, **data)
+
+
+# ============================================================================
+# MESSAGE HANDLERS FOR REPLY KEYBOARDS (АВТОРИЗАЦИЯ)
+# ============================================================================
+
+@router.message(F.text == "✅ Я оплатил")
+async def handle_payment_confirmed_reply(
+    message: Message,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Handle payment confirmation via Reply keyboard."""
+    user: User | None = data.get("user")
+    
+    if user and user.wallet_address:
+        # User known, check directly
+        await _check_payment_logic(message, state, user.wallet_address, data)
+    else:
+        # User unknown, ask for wallet
+        await message.answer(
+            "📝 Введите адрес кошелька, с которого был совершен перевод:\n"
+            "Формат: `0x...`",
+            parse_mode="Markdown"
+        )
+        await state.set_state(AuthStates.waiting_for_payment_wallet)
+
+
+@router.message(F.text == "🚀 Начать работу")
+async def handle_start_work_reply(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Handle start work via Reply keyboard."""
+    # Mimic /start command
+    message.text = "/start"
+    await cmd_start(message, session, state, **data)
+
+
+@router.message(F.text == "🔄 Обновить депозит")
+async def handle_rescan_deposits_reply(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    user: Any,
+    **data: Any,
+) -> None:
+    """Handle deposit rescan via Reply keyboard."""
+    from app.services.deposit_scan_service import DepositScanService
+    
+    await message.answer("⏳ Сканируем депозиты...")
+    
+    scan_service = DepositScanService(session)
+    scan_result = await scan_service.scan_and_update_user_deposits(user.id)
+    
+    is_valid = scan_result.get("is_valid", False)
+    total_deposit = scan_result.get("total_deposit", 0)
+    required_plex = scan_result.get("required_plex", 0)
+    
+    if is_valid:
+        await session.commit()
+        
+        await message.answer(
+            f"✅ **Депозит подтверждён!**\n\n"
+            f"💰 **Ваш депозит:** {total_deposit:.2f} USDT\n"
+            f"📊 **Требуется PLEX в сутки:** {int(required_plex):,} PLEX\n\n"
+            f"Теперь вы можете начать работу!",
+            parse_mode="Markdown"
+        )
+        
+        await message.answer(
+            "Нажмите кнопку:",
+            reply_markup=auth_continue_keyboard()
+        )
+    else:
+        msg = scan_result.get("validation_message")
+        if msg:
+            await message.answer(msg, parse_mode="Markdown")
+        
+        await message.answer(
+            "После пополнения нажмите «Обновить депозит»:",
+            reply_markup=auth_rescan_keyboard()
+        )
+
+
+@router.message(F.text == "🚀 Продолжить (без депозита)")
+async def handle_continue_without_deposit_reply(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Handle continue without deposit via Reply keyboard."""
+    # Mimic /start command
+    message.text = "/start"
+    await cmd_start(message, session, state, **data)
+
+
+@router.message(F.text == "🔄 Проверить снова")
+async def handle_retry_payment_reply(
+    message: Message,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Handle payment retry via Reply keyboard."""
+    user: User | None = data.get("user")
+    
+    if user and user.wallet_address:
+        await _check_payment_logic(message, state, user.wallet_address, data)
+    else:
+        await message.answer(
+            "📝 Введите адрес кошелька, с которого был совершен перевод:\n"
+            "Формат: `0x...`",
+            parse_mode="Markdown"
+        )
+        await state.set_state(AuthStates.waiting_for_payment_wallet)
+
+
+@router.message(F.text == "🔑 Показать пароль ещё раз")
+async def handle_show_password_reply(
+    message: Message,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Handle show password via Reply keyboard."""
+    user: User | None = data.get("user")
+    if not user:
+        await message.answer("❌ Ошибка: пользователь не найден")
+        return
+    
+    # Get password from Redis
+    redis_client = data.get("redis_client")
+    if not redis_client:
+        await message.answer(
+            "⚠️ Пароль больше недоступен (прошло более 1 часа с момента регистрации).\n\n"
+            "Используйте функцию восстановления пароля в настройках."
+        )
+        return
+    
+    try:
+        password_key = f"password:plain:{user.id}"
+        plain_password = await redis_client.get(password_key)
+        
+        if not plain_password:
+            await message.answer(
+                "⚠️ Пароль больше недоступен (прошло более 1 часа с момента регистрации).\n\n"
+                "Используйте функцию восстановления пароля в настройках."
+            )
+            return
+        
+        # Decode if bytes
+        if isinstance(plain_password, bytes):
+            plain_password = plain_password.decode("utf-8")
+        
+        # Show password
+        await message.answer(
+            f"🔑 **Ваш финансовый пароль:**\n\n"
+            f"`{plain_password}`\n\n"
+            f"⚠️ Сохраните его сейчас! Он больше не будет показан.",
+            parse_mode="Markdown"
+        )
+        
+        logger.info(
+            f"User {user.id} requested to show password again via Reply keyboard"
+        )
+    except Exception as e:
+        logger.error(
+            f"Error retrieving plain password from Redis for user {user.id}: {e}",
+            exc_info=True
+        )
+        await message.answer("❌ Ошибка при получении пароля. Обратитесь в поддержку.")
