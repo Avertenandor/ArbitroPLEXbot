@@ -53,24 +53,32 @@ async def _show_dashboard(message: Message, state: FSMContext) -> None:
     hot_address = bs.wallet_address
     hot_bnb_bal = await bs.get_native_balance(hot_address)
     hot_usdt_bal = await bs.get_usdt_balance(hot_address)
+    hot_plex_bal = await bs.get_plex_balance(hot_address)
     
     # System Wallet (Input/Cold) - if configured different from Hot
     cold_address = bs.system_wallet_address
     cold_bnb_bal = Decimal("0")
     cold_usdt_bal = Decimal("0")
+    cold_plex_bal = Decimal("0")
     
     has_cold = cold_address and cold_address.lower() != hot_address.lower()
     
     if has_cold:
         cold_bnb_bal = await bs.get_native_balance(cold_address) or Decimal("0")
         cold_usdt_bal = await bs.get_usdt_balance(cold_address) or Decimal("0")
+        cold_plex_bal = await bs.get_plex_balance(cold_address) or Decimal("0")
 
     # Formatting
-    def fmt_bnb(val):
+    def fmt_bnb(val: Decimal | None) -> str:
         return f"{val:.5f}" if val is not None else "Err"
 
-    def fmt_usdt(val):
+    def fmt_usdt(val: Decimal | None) -> str:
         return f"{val:.4f}" if val is not None else "Err"
+
+    def fmt_plex(val: Decimal | None) -> str:
+        if val is None:
+            return "Err"
+        return f"{int(val):,}".replace(",", " ")
 
     text = (
         "🔐 **Админ-кошелек (Dashboard)**\n\n"
@@ -78,6 +86,7 @@ async def _show_dashboard(message: Message, state: FSMContext) -> None:
         f"Адрес: `{hot_address}`\n"
         f"🔶 BNB: **{fmt_bnb(hot_bnb_bal)}**\n"
         f"💵 USDT: **{fmt_usdt(hot_usdt_bal)}**\n"
+        f"💎 PLEX: **{fmt_plex(hot_plex_bal)}**\n"
     )
     
     if has_cold:
@@ -86,6 +95,7 @@ async def _show_dashboard(message: Message, state: FSMContext) -> None:
             f"Адрес: `{cold_address}`\n"
             f"🔶 BNB: **{fmt_bnb(cold_bnb_bal)}**\n"
             f"💵 USDT: **{fmt_usdt(cold_usdt_bal)}**\n"
+            f"💎 PLEX: **{fmt_plex(cold_plex_bal)}**\n"
             "_(Только просмотр, ключи не хранятся)_\n"
         )
         
