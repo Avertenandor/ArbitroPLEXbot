@@ -46,13 +46,17 @@ class SessionMiddleware(BaseMiddleware):
         # Get Telegram user
         tg_user = data.get("event_from_user")
         if not tg_user:
+            logger.debug("SessionMiddleware: no tg_user, passing through")
             return await handler(event, data)
 
         user_id = tg_user.id
+        logger.debug(f"SessionMiddleware: user_id={user_id}")
 
         # Allow specific commands/callbacks always
         if isinstance(event, Message) and event.text:
+            logger.debug(f"SessionMiddleware: message text={event.text!r}")
             if event.text.startswith("/start"):
+                logger.info(f"SessionMiddleware: /start detected, passing through for user {user_id}")
                 return await handler(event, data)
 
         if isinstance(event, CallbackQuery) and event.data:
