@@ -1,4 +1,4 @@
-﻿"""
+"""
 Deposit Processor.
 
 Processes and confirms deposit transactions.

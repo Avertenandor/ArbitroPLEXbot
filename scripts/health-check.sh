@@ -43,7 +43,7 @@ else
         ERRORS=$((ERRORS + 1))
     else
         # Check each container
-        CONTAINERS=("sigmatrade-bot" "sigmatrade-postgres" "sigmatrade-redis" "sigmatrade-worker" "sigmatrade-scheduler")
+        CONTAINERS=("arbitragebot-bot" "arbitragebot-postgres" "arbitragebot-redis" "arbitragebot-worker" "arbitragebot-scheduler")
         for container in "${CONTAINERS[@]}"; do
             if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
                 STATUS=$(docker inspect --format='{{.State.Status}}' "$container")
@@ -69,11 +69,11 @@ echo ""
 info "2. Checking PostgreSQL..."
 echo "   ──────────────────────────"
 
-if docker exec sigmatrade-postgres pg_isready -U sigmatrade &>/dev/null; then
+if docker exec arbitragebot-postgres pg_isready -U arbitragebot &>/dev/null; then
     log "PostgreSQL is healthy"
     
     # Check database connection
-    if docker exec sigmatrade-postgres psql -U sigmatrade -d sigmatrade -c "SELECT 1" &>/dev/null; then
+    if docker exec arbitragebot-postgres psql -U arbitragebot -d arbitragebot -c "SELECT 1" &>/dev/null; then
         log "Database connection successful"
     else
         error "Cannot connect to database"
@@ -92,13 +92,13 @@ echo ""
 info "3. Checking Redis..."
 echo "   ──────────────────────────"
 
-if docker exec sigmatrade-redis redis-cli ping &>/dev/null; then
-    REDIS_RESPONSE=$(docker exec sigmatrade-redis redis-cli ping)
+if docker exec arbitragebot-redis redis-cli ping &>/dev/null; then
+    REDIS_RESPONSE=$(docker exec arbitragebot-redis redis-cli ping)
     if [ "$REDIS_RESPONSE" = "PONG" ]; then
         log "Redis is healthy"
         
         # Check Redis info
-        REDIS_CLIENTS=$(docker exec sigmatrade-redis redis-cli INFO clients | grep "connected_clients" | awk -F':' '{print $2}' | tr -d '\r')
+        REDIS_CLIENTS=$(docker exec arbitragebot-redis redis-cli INFO clients | grep "connected_clients" | awk -F':' '{print $2}' | tr -d '\r')
         info "   Connected clients: $REDIS_CLIENTS"
     else
         error "Redis unexpected response: $REDIS_RESPONSE"
@@ -117,20 +117,20 @@ echo ""
 info "4. Checking bot logs for errors..."
 echo "   ──────────────────────────"
 
-if docker logs sigmatrade-bot --tail 100 &>/dev/null; then
+if docker logs arbitragebot-bot --tail 100 &>/dev/null; then
     # Count errors in last 100 lines
-    ERROR_COUNT=$(docker logs sigmatrade-bot --tail 100 2>&1 | grep -ic "error\|exception\|traceback\|failed" || true)
+    ERROR_COUNT=$(docker logs arbitragebot-bot --tail 100 2>&1 | grep -ic "error\|exception\|traceback\|failed" || true)
     
     if [ "$ERROR_COUNT" -eq 0 ]; then
         log "No errors in recent logs"
     elif [ "$ERROR_COUNT" -lt 5 ]; then
         warn "Found $ERROR_COUNT errors in last 100 lines"
         WARNINGS=$((WARNINGS + 1))
-        echo "   Run 'docker logs sigmatrade-bot --tail 100' to see details"
+        echo "   Run 'docker logs arbitragebot-bot --tail 100' to see details"
     else
         error "Found $ERROR_COUNT errors in last 100 lines"
         ERRORS=$((ERRORS + 1))
-        echo "   Run 'docker logs sigmatrade-bot --tail 100' to see details"
+        echo "   Run 'docker logs arbitragebot-bot --tail 100' to see details"
     fi
 else
     warn "Cannot read bot logs"
@@ -145,8 +145,8 @@ echo ""
 info "5. Checking worker logs for errors..."
 echo "   ──────────────────────────"
 
-if docker logs sigmatrade-worker --tail 100 &>/dev/null; then
-    WORKER_ERROR_COUNT=$(docker logs sigmatrade-worker --tail 100 2>&1 | grep -ic "error\|exception\|traceback\|failed" || true)
+if docker logs arbitragebot-worker --tail 100 &>/dev/null; then
+    WORKER_ERROR_COUNT=$(docker logs arbitragebot-worker --tail 100 2>&1 | grep -ic "error\|exception\|traceback\|failed" || true)
     
     if [ "$WORKER_ERROR_COUNT" -eq 0 ]; then
         log "No errors in worker logs"
@@ -217,9 +217,9 @@ echo ""
 info "8. Checking Docker resource usage..."
 echo "   ──────────────────────────"
 
-if docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" | grep sigmatrade &>/dev/null; then
+if docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" | grep arbitragebot &>/dev/null; then
     echo ""
-    docker stats --no-stream --format "   {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" | grep sigmatrade
+    docker stats --no-stream --format "   {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" | grep arbitragebot
     echo ""
     log "Docker containers resource usage displayed above"
 else
@@ -236,7 +236,7 @@ info "9. Checking network connectivity..."
 echo "   ──────────────────────────"
 
 # Check if bot can reach Telegram API
-if docker exec sigmatrade-bot timeout 5 python -c "import requests; requests.get('https://api.telegram.org', timeout=3)" &>/dev/null; then
+if docker exec arbitragebot-bot timeout 5 python -c "import requests; requests.get('https://api.telegram.org', timeout=3)" &>/dev/null; then
     log "Telegram API reachable"
 else
     error "Cannot reach Telegram API"
@@ -244,7 +244,7 @@ else
 fi
 
 # Check if bot can reach BSC RPC
-if docker exec sigmatrade-bot timeout 5 python -c "import requests; requests.post('https://bsc-dataseed.binance.org/', json={'jsonrpc':'2.0','method':'eth_blockNumber','params':[],'id':1}, timeout=3)" &>/dev/null; then
+if docker exec arbitragebot-bot timeout 5 python -c "import requests; requests.post('https://bsc-dataseed.binance.org/', json={'jsonrpc':'2.0','method':'eth_blockNumber','params':[],'id':1}, timeout=3)" &>/dev/null; then
     log "BSC RPC endpoint reachable"
 else
     warn "Cannot reach BSC RPC (check RPC_URL setting)"

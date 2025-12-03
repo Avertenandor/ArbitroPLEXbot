@@ -17,7 +17,7 @@ DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-5432}"
 DB_USERNAME="${DB_USERNAME:-botuser}"
 DB_PASSWORD="${DB_PASSWORD:-}"
-DB_DATABASE="${DB_DATABASE:-sigmatrade}"
+DB_DATABASE="${DB_DATABASE:-arbitragebot}"
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
 BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-90}"
 GCS_BACKUP_BUCKET="${GCS_BACKUP_BUCKET:-}"
@@ -112,7 +112,7 @@ if [ ! -d .git ]; then
     warn "Initializing git repository..."
     git init
     git config user.name "ArbitroPLEXbot Backup Bot"
-    git config user.email "backup@sigmatrade.org"
+    git config user.email "backup@arbitragebot.org"
 fi
 
 # Add backup file

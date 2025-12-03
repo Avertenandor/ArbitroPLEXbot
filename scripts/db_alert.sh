@@ -1,7 +1,7 @@
 #!/bin/bash
 # Database monitoring with Telegram alerts
 
-MONITOR_SCRIPT="/usr/bin/docker exec sigmatrade-bot python3 /app/scripts/monitor_db.py postgres"
+MONITOR_SCRIPT="/usr/bin/docker exec arbitragebot-bot python3 /app/scripts/monitor_db.py postgres"
 LOG_FILE="/var/log/db_monitor.log"
 ALERT_LOG="/var/log/db_alerts.log"
 

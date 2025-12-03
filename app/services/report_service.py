@@ -157,7 +157,7 @@ class ReportService:
         title_font = Font(bold=True, size=14, color="366092")
         label_font = Font(bold=True)
         
-        ws.append(["ОТЧЕТ ПОЛЬЗОВАТЕЛЯ SIGMATRADE"])
+        ws.append(["ОТЧЕТ ПОЛЬЗОВАТЕЛЯ arbitragebot"])
         ws["A1"].font = title_font
         ws.merge_cells("A1:B1")
         

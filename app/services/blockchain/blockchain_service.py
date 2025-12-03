@@ -1,4 +1,4 @@
-﻿"""
+"""
 Blockchain Service - Main Interface.
 
 Orchestrates all blockchain operations using component services.

@@ -29,7 +29,7 @@ async def backup_database() -> None:
     db_port = parsed.port or 5432
     db_user = parsed.username or "postgres"
     db_password = parsed.password or ""
-    db_name = parsed.path.lstrip("/") if parsed.path else "sigmatrade"
+    db_name = parsed.path.lstrip("/") if parsed.path else "arbitragebot"
 
     try:
         # Create backup directory

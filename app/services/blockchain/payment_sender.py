@@ -1,4 +1,4 @@
-﻿"""
+"""
 Payment Sender.
 
 Handles USDT payment sending with gas estimation and error handling.

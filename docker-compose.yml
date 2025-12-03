@@ -4,12 +4,12 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
-    container_name: sigmatrade_postgres
+    container_name: arbitragebot_postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${DB_USERNAME:-botuser}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
-      POSTGRES_DB: ${DB_DATABASE:-sigmatrade}
+      POSTGRES_DB: ${DB_DATABASE:-arbitragebot}
       PGDATA: /var/lib/postgresql/data/pgdata
     ports:
       - "${DB_PORT:-5432}:5432"
@@ -17,17 +17,17 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/init-db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-botuser} -d ${DB_DATABASE:-sigmatrade}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-botuser} -d ${DB_DATABASE:-arbitragebot}"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - sigmatrade_network
+      - arbitragebot_network
 
   # Redis Cache & Queue
   redis:
     image: redis:7-alpine
-    container_name: sigmatrade_redis
+    container_name: arbitragebot_redis
     restart: unless-stopped
     command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
     ports:
@@ -40,7 +40,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - sigmatrade_network
+      - arbitragebot_network
 
   # Main Application
   app:
@@ -49,7 +49,7 @@ services:
       dockerfile: Dockerfile
       args:
         NODE_ENV: ${NODE_ENV:-production}
-    container_name: sigmatrade_app
+    container_name: arbitragebot_app
     restart: unless-stopped
     env_file:
       - .env
@@ -74,7 +74,7 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - sigmatrade_network
+      - arbitragebot_network
     logging:
       driver: "json-file"
       options:
@@ -84,7 +84,7 @@ services:
   # Nginx Reverse Proxy (for production)
   nginx:
     image: nginx:alpine
-    container_name: sigmatrade_nginx
+    container_name: arbitragebot_nginx
     restart: unless-stopped
     ports:
       - "80:80"
@@ -95,7 +95,7 @@ services:
     depends_on:
       - app
     networks:
-      - sigmatrade_network
+      - arbitragebot_network
     profiles:
       - production
 
@@ -106,5 +106,5 @@ volumes:
     driver: local
 
 networks:
-  sigmatrade_network:
+  arbitragebot_network:
     driver: bridge

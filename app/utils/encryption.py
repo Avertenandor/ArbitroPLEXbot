@@ -1,4 +1,4 @@
-﻿"""Encryption utilities for PII data."""
+"""Encryption utilities for PII data."""
 
 import base64
 

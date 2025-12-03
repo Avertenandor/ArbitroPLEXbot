@@ -1,4 +1,4 @@
-﻿"""Enhanced validation utilities."""
+"""Enhanced validation utilities."""
 
 import re
 from decimal import Decimal

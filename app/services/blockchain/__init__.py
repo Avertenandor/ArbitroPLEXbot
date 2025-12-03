@@ -1,4 +1,4 @@
-﻿"""Blockchain services module."""
+"""Blockchain services module."""
 
 from .blockchain_service import (
     BlockchainService,

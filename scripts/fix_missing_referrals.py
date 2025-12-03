@@ -4,7 +4,7 @@ Fix Missing Referral Relationships.
 This script creates missing records in 'referrals' table for users
 who have referrer_id in 'users' table but no corresponding referral record.
 
-Run: docker exec -it sigmatrade-bot python scripts/fix_missing_referrals.py
+Run: docker exec -it arbitragebot-bot python scripts/fix_missing_referrals.py
 """
 
 import asyncio

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Event Monitor for USDT Transfer events.
 
 Monitors blockchain for incoming USDT transfers to system wallet.

@@ -24,13 +24,13 @@
 #
 # Examples:
 #   # Full restore with safety backup
-#   ./scripts/restore-from-backup.sh backups/daily/sigmatrade_20250110_120000.sql.gz
+#   ./scripts/restore-from-backup.sh backups/daily/arbitragebot_20250110_120000.sql.gz
 #
 #   # Dry run to test backup validity
-#   ./scripts/restore-from-backup.sh backups/daily/sigmatrade_20250110_120000.sql.gz --dry-run
+#   ./scripts/restore-from-backup.sh backups/daily/arbitragebot_20250110_120000.sql.gz --dry-run
 #
 #   # Schema-only restore (for testing)
-#   ./scripts/restore-from-backup.sh backups/daily/sigmatrade_20250110_120000.sql.gz --mode schema-only
+#   ./scripts/restore-from-backup.sh backups/daily/arbitragebot_20250110_120000.sql.gz --mode schema-only
 #
 # Environment Variables Required:
 #   DB_HOST, DB_PORT, DB_USERNAME, DB_PASSWORD, DB_DATABASE
@@ -264,7 +264,7 @@ fi
 if [ "$SAFETY_BACKUP" = true ] && [ "$DB_EXISTS" = "1" ]; then
   log_info "Creating safety backup before restore..."
 
-  SAFETY_BACKUP_FILE="${BACKUP_DIR}/safety/sigmatrade_pre_restore_${TIMESTAMP}.sql.gz"
+  SAFETY_BACKUP_FILE="${BACKUP_DIR}/safety/arbitragebot_pre_restore_${TIMESTAMP}.sql.gz"
   mkdir -p "${BACKUP_DIR}/safety"
 
   log_info "Safety backup: ${SAFETY_BACKUP_FILE}"
@@ -395,7 +395,7 @@ done
 # Clean up old safety backups (keep last 7 days)
 log_info "Cleaning up old safety backups..."
 if [ -d "${BACKUP_DIR}/safety" ]; then
-  DELETED_COUNT=$(find "${BACKUP_DIR}/safety" -name "sigmatrade_pre_restore_*.sql.gz" -type f -mtime +7 -delete -print 2>/dev/null | wc -l)
+  DELETED_COUNT=$(find "${BACKUP_DIR}/safety" -name "arbitragebot_pre_restore_*.sql.gz" -type f -mtime +7 -delete -print 2>/dev/null | wc -l)
   log_info "Deleted ${DELETED_COUNT} old safety backup(s)"
 fi
 

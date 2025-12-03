@@ -17,9 +17,9 @@ from loguru import logger
 async def check_db_connections(
     host: str = "localhost",
     port: int = 5432,
-    user: str = "sigmatrade",
+    user: str = "arbitragebot",
     password: str = "SecurePass2024",
-    database: str = "sigmatrade",
+    database: str = "arbitragebot",
 ) -> dict[str, any]:
     """
     Check database connection state.

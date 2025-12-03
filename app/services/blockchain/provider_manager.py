@@ -1,4 +1,4 @@
-﻿"""
+"""
 Provider Manager for Web3.
 
 Manages HTTP and WebSocket providers with fallback logic and health monitoring.
