@@ -1651,17 +1651,25 @@ async def handle_payment_confirmed_reply(
     **data: Any,
 ) -> None:
     """Handle payment confirmation via Reply keyboard."""
+    logger.info(f"=== PAYMENT CHECK START === user {message.from_user.id}")
+    
     # Get wallet from FSM (set in waiting_for_wallet step)
     state_data = await state.get_data()
+    current_state = await state.get_state()
+    logger.info(f"FSM state: {current_state}, data keys: {list(state_data.keys())}")
+    
     wallet = state_data.get("auth_wallet")
+    logger.info(f"Wallet from FSM: {wallet}")
     
     if not wallet:
         # Fallback: check if user has wallet in DB
         user: User | None = data.get("user")
         if user and user.wallet_address:
             wallet = user.wallet_address
+            logger.info(f"Wallet from DB user: {wallet}")
         else:
             # No wallet known - ask for it
+            logger.warning("No wallet found - asking user")
             await message.answer(
                 "📝 Введите адрес кошелька, с которого был совершен перевод:\n"
                 "Формат: `0x...`",
@@ -1671,6 +1679,7 @@ async def handle_payment_confirmed_reply(
             return
     
     # Check payment with known wallet
+    logger.info(f"Checking payment for wallet: {wallet}")
     await _check_payment_logic(message, state, wallet, data)
 
 
