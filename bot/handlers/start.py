@@ -1658,7 +1658,7 @@ async def handle_wallet_input(
     await state.set_state(AuthStates.waiting_for_payment)
 
 
-@router.message(F.text == "вњ… РЇ РѕРїР»Р°С‚РёР»")
+@router.message(F.text == "✅ Я оплатил")
 async def handle_payment_confirmed_reply(
     message: Message,
     state: FSMContext,
