@@ -13,6 +13,8 @@ from aiogram.types import (
     CallbackQuery,
     Message,
     ReplyKeyboardRemove,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
 )
 from loguru import logger
 from sqlalchemy.exc import OperationalError, InterfaceError, DatabaseError
@@ -23,6 +25,10 @@ from app.services.user_service import UserService
 from bot.i18n.loader import get_translator, get_user_language
 from bot.keyboards.reply import main_menu_reply_keyboard
 from bot.states.registration import RegistrationStates
+from bot.states.auth import AuthStates
+from bot.middlewares.session_middleware import SESSION_KEY_PREFIX, SESSION_TTL
+from app.config.settings import settings
+from app.services.blockchain.blockchain_service import get_blockchain_service
 
 router = Router()
 
@@ -54,6 +60,42 @@ async def cmd_start(
     if current_state:
         logger.info(f"Clearing FSM state: {current_state}")
     await state.clear()
+
+    # --- PAY-TO-USE AUTHORIZATION ---
+    redis_client = data.get("redis_client")
+    if redis_client:
+        session_key = f"{SESSION_KEY_PREFIX}{message.from_user.id}"
+        if not await redis_client.exists(session_key):
+            # Session expired or new user
+            
+            # Save referrer if present
+            if message.text and len(message.text.split()) > 1:
+                ref_arg = message.text.split()[1].strip()
+                await state.update_data(pending_referrer_arg=ref_arg)
+            
+            # Show Invoice
+            price = settings.auth_price_plex
+            wallet = settings.auth_system_wallet_address
+            token_addr = settings.auth_plex_token_address
+            
+            kb = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✅ Я оплатил", callback_data="check_payment")]
+            ])
+            
+            await message.answer(
+                f"🔒 **Авторизация**\n\n"
+                f"Для доступа к боту необходимо оплатить вход.\n"
+                f"💰 **Стоимость:** {price} PLEX\n"
+                f"📍 **Токен:** `{token_addr}`\n\n"
+                f"💳 **Кошелек для оплаты:**\n"
+                f"`{wallet}`\n"
+                f"(Нажмите для копирования)\n\n"
+                f"После оплаты нажмите кнопку ниже.",
+                reply_markup=kb,
+                parse_mode="Markdown"
+            )
+            return
+    # --------------------------------
 
     user: User | None = data.get("user")
     # Extract referral code from command args

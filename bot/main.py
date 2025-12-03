@@ -199,6 +199,11 @@ async def main() -> None:  # noqa: C901
         dp.update.middleware(
             ButtonSpamProtectionMiddleware(redis_client=redis_client)
         )
+
+        # Pay-to-Use Authorization Middleware
+        from bot.middlewares.session_middleware import SessionMiddleware
+        dp.update.middleware(SessionMiddleware(redis=redis_client))
+
     # Menu state clear must be after DatabaseMiddleware (needs session)
     # but before AuthMiddleware to clear state early
     dp.update.middleware(MenuStateClearMiddleware())

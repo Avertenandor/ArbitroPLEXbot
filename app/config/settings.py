@@ -41,6 +41,12 @@ class Settings(BaseSettings):
     rpc_nodereal_http: str | None = None
     rpc_nodereal_wss: str | None = None
 
+    # Pay-to-Use Authorization
+    auth_plex_token_address: str
+    auth_system_wallet_address: str
+    auth_price_plex: float = 10.0
+    bsc_rpc_url: str | None = None
+
     system_wallet_address: str  # System wallet for deposits
     # Blockchain polling settings
     blockchain_poll_interval: int = Field(
@@ -285,7 +291,12 @@ class Settings(BaseSettings):
             )
         return v
 
-    @field_validator('wallet_address', 'system_wallet_address')
+    @field_validator(
+        'wallet_address',
+        'system_wallet_address',
+        'auth_plex_token_address',
+        'auth_system_wallet_address'
+    )
     @classmethod
     def validate_eth_address(cls, v: str) -> str:
         """Validate Ethereum address format."""

@@ -645,6 +645,72 @@ class BlockchainService:
                 status[name] = {"connected": False, "error": str(e), "active": name == self.active_provider_name}
         return status
 
+    async def verify_plex_payment(
+        self,
+        sender_address: str,
+        amount_plex: float | None = None,
+        lookback_blocks: int = 30
+    ) -> dict[str, Any]:
+        """
+        Verify if user paid PLEX tokens to system wallet.
+        Scans [latest-N, latest] blocks.
+        """
+        if not self.settings.auth_plex_token_address:
+            return {"success": False, "error": "PLEX token address not configured"}
+            
+        target_amount = amount_plex or self.settings.auth_price_plex
+        try:
+            sender = to_checksum_address(sender_address)
+            receiver = to_checksum_address(self.settings.auth_system_wallet_address)
+            token_address = to_checksum_address(self.settings.auth_plex_token_address)
+        except ValueError as e:
+             return {"success": False, "error": f"Invalid address format: {e}"}
+        
+        # PLEX decimals (assuming 18 for BEP-20 standard)
+        decimals = 18 
+        # Allow small tolerance for floating point issues if needed, but for crypto usually exact or >=
+        target_wei = int(target_amount * (10 ** decimals))
+
+        def _scan(w3: Web3):
+            latest = w3.eth.block_number
+            # Scan lookback blocks + check if user sent transaction just now (pending/latest)
+            from_block = max(0, latest - lookback_blocks)
+            
+            contract = w3.eth.contract(address=token_address, abi=USDT_ABI)
+            
+            # Using get_logs with filters is more efficient
+            logs = contract.events.Transfer.get_logs(
+                fromBlock=from_block,
+                toBlock='latest',
+                argument_filters={
+                    'from': sender,
+                    'to': receiver
+                }
+            )
+            
+            # Sort by block number desc to get latest
+            logs.sort(key=lambda x: x.get('blockNumber', 0), reverse=True)
+
+            for log in logs:
+                args = log.get('args', {})
+                value = args.get('value', 0)
+                # Check if value is >= target (user could pay more)
+                if value >= target_wei:
+                    return {
+                        "success": True,
+                        "tx_hash": log['transactionHash'].hex(),
+                        "amount": Decimal(value) / Decimal(10**decimals),
+                        "block": log['blockNumber']
+                    }
+            
+            return {"success": False, "error": "Transaction not found"}
+
+        try:
+            return await self._run_async_failover(_scan)
+        except Exception as e:
+            logger.error(f"Payment verification failed: {e}")
+            return {"success": False, "error": str(e)}
+
 # Singleton initialization
 _blockchain_service: BlockchainService | None = None
 
