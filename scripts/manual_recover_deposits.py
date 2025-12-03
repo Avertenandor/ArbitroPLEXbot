@@ -23,6 +23,7 @@ from app.services.deposit_service import DepositService
 from app.models.user import User
 from app.models.deposit import Deposit
 from app.models.enums import TransactionStatus
+from app.utils.security import mask_address
 
 # Configure logger
 logger.remove()
@@ -79,7 +80,7 @@ async def recover_deposits():
                 # Verify recipient is system wallet
                 # Note: to_address from details is the USDT recipient
                 if tx_details['to_address'].lower() != settings.system_wallet_address.lower():
-                    logger.error(f"❌ Recipient mismatch! Expected {settings.system_wallet_address}, got {tx_details['to_address']}")
+                    logger.error(f"❌ Recipient mismatch! Expected {mask_address(settings.system_wallet_address)}, got {mask_address(tx_details['to_address'])}")
                     continue
 
                 from_address = tx_details['from_address']
@@ -95,7 +96,7 @@ async def recover_deposits():
                 user = result.scalars().first()
 
                 if not user:
-                    logger.error(f"❌ No user found with wallet: {from_address}")
+                    logger.error(f"❌ No user found with wallet: {mask_address(from_address)}")
                     continue
 
                 logger.info(f"✅ Found User: {user.id} ({user.username or user.telegram_id})")

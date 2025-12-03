@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin import Admin
 from app.services.admin_log_service import AdminLogService
+from app.utils.datetime_utils import utc_now
 from bot.keyboards.reply import (
     admin_broadcast_button_choice_keyboard,
     admin_broadcast_cancel_keyboard,
@@ -49,7 +50,7 @@ async def handle_start_broadcast(
         return
 
     # Check rate limit
-    now = datetime.now()
+    now = utc_now()
     last_broadcast = broadcast_rate_limits.get(admin_id)
 
     if last_broadcast:
@@ -266,7 +267,7 @@ async def execute_broadcast(
     )
 
     # Record broadcast timestamp for rate limiting
-    broadcast_rate_limits[admin_id] = datetime.now()
+    broadcast_rate_limits[admin_id] = utc_now()
 
     await message.reply(
         f"✅ **Рассылка запущена в фоне!**\n\n"

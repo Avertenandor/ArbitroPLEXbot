@@ -12,6 +12,7 @@ from loguru import logger
 from web3 import AsyncWeb3
 
 from .constants import USDT_ABI, USDT_DECIMALS
+from app.config.constants import BLOCKCHAIN_LONG_TIMEOUT
 
 
 class EventMonitor:
@@ -111,26 +112,54 @@ class EventMonitor:
             if current_block <= self._last_processed_block:
                 return  # No new blocks
 
-            # Get Transfer events filter
+            # Get Transfer events filter with timeout
             # Filter transfers TO the watch address
-            event_filter = (
-                await self.usdt_contract.events.Transfer.create_filter(
-                    from_block=self._last_processed_block + 1,
-                    to_block=current_block,
-                    argument_filters={"to": watch_address},
+            event_filter = None
+            try:
+                event_filter = await asyncio.wait_for(
+                    self.usdt_contract.events.Transfer.create_filter(
+                        from_block=self._last_processed_block + 1,
+                        to_block=current_block,
+                        argument_filters={"to": watch_address},
+                    ),
+                    timeout=BLOCKCHAIN_LONG_TIMEOUT,
                 )
-            )
+            except asyncio.TimeoutError:
+                logger.error(
+                    f"Timeout creating event filter for blocks "
+                    f"{self._last_processed_block + 1} to {current_block}"
+                )
+                return
 
-            # Get all events
-            events = await event_filter.get_all_entries()
+            # Get all events with timeout
+            try:
+                events = await asyncio.wait_for(
+                    event_filter.get_all_entries(),
+                    timeout=BLOCKCHAIN_LONG_TIMEOUT,
+                )
 
-            # Process each event
-            for event in events:
-                await self._process_event(event)
+                # Process each event
+                for event in events:
+                    await self._process_event(event)
 
-            # Update last processed block
-            self._last_processed_block = current_block
+                # Update last processed block
+                self._last_processed_block = current_block
 
+            except asyncio.TimeoutError:
+                logger.error(
+                    f"Timeout getting events for blocks "
+                    f"{self._last_processed_block + 1} to {current_block}"
+                )
+            finally:
+                # Always uninstall filter to prevent memory leak
+                if event_filter is not None:
+                    try:
+                        await self.web3.eth.uninstall_filter(event_filter.filter_id)
+                    except Exception as e:
+                        logger.warning(f"Failed to uninstall event filter: {e}")
+
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout polling events")
         except Exception as e:
             logger.error(f"Error polling events: {e}")
 

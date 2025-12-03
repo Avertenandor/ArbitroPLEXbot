@@ -68,7 +68,8 @@ def calculator_keyboard(levels: dict) -> any:
     
     for level_num in sorted(levels.keys()):
         info = levels[level_num]
-        amount = int(Dec(info["amount"]))
+        # Keep as Decimal, convert only for display
+        amount = Dec(info["amount"]).to_integral_value()
         
         if info["is_active"]:
             button_text = f"📊 Level {level_num} ({amount} USDT)"

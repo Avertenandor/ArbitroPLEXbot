@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from app.database import async_session_maker
+from app.utils.datetime_utils import utc_now
 from loguru import logger
 
 
@@ -36,7 +37,7 @@ async def _cleanup_log_files() -> None:
         if not log_dir.exists():
             return
 
-        cutoff_date = datetime.utcnow() - timedelta(days=7)
+        cutoff_date = utc_now() - timedelta(days=7)
 
         for log_file in log_dir.glob("*.log*"):
             if log_file.is_file():
@@ -59,7 +60,7 @@ async def _cleanup_database() -> None:
 
             deposit_repo = DepositRepository(session)
 
-            cutoff_time = datetime.utcnow() - timedelta(hours=24)
+            cutoff_time = utc_now() - timedelta(hours=24)
 
             # Find old pending deposits
             deposits = await deposit_repo.get_pending_deposits()

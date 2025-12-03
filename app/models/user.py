@@ -4,6 +4,7 @@ User model.
 Represents a registered Telegram user in the system.
 """
 
+import bcrypt
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
@@ -288,13 +289,40 @@ class User(Base):
     def deposit_status_text(self) -> str:
         """
         Get human-readable deposit status.
-        
+
         Returns:
             Status text for display
         """
         if not self.is_active_depositor:
             return "❌ Неактивен (< 30 USDT)"
         return f"✅ Активен ({self.total_deposited_usdt:.2f} USDT)"
+
+    def set_financial_password(self, password: str) -> None:
+        """
+        Set financial password with bcrypt hashing.
+
+        Args:
+            password: Plain text password to hash and store
+        """
+        self.financial_password = bcrypt.hashpw(
+            password.encode(), bcrypt.gensalt()
+        ).decode()
+
+    def verify_financial_password(self, password: str) -> bool:
+        """
+        Verify financial password against stored hash.
+
+        Args:
+            password: Plain text password to verify
+
+        Returns:
+            True if password matches, False otherwise
+        """
+        if not self.financial_password:
+            return False
+        return bcrypt.checkpw(
+            password.encode(), self.financial_password.encode()
+        )
 
     def __repr__(self) -> str:
         """String representation."""

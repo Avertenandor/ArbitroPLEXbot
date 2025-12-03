@@ -49,6 +49,7 @@ from app.services.blockchain_service import (
     init_blockchain_service,  # noqa: E402
 )
 from app.utils.admin_init import ensure_default_super_admin  # noqa: E402
+from app.utils.encryption import init_encryption_service  # noqa: E402
 from bot.middlewares.admin_auth_middleware import (
     AdminAuthMiddleware,  # noqa: E402
 )
@@ -86,6 +87,15 @@ async def main() -> None:  # noqa: C901
     )
 
     logger.info("Starting ArbitroPLEXbot Bot...")
+
+    # Initialize EncryptionService for secure key storage
+    # CRITICAL: Must be initialized before BlockchainService loads encrypted private keys
+    try:
+        init_encryption_service(encryption_key=settings.encryption_key)
+        logger.info("EncryptionService initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize EncryptionService: {e}")
+        logger.warning("Keys will be stored/loaded without encryption")
 
     # Validate environment variables (basic check)
     try:

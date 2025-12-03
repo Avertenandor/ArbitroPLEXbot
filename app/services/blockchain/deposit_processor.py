@@ -4,6 +4,7 @@ Deposit Processor.
 Processes and confirms deposit transactions.
 """
 
+import asyncio
 from decimal import Decimal
 from typing import Any
 
@@ -12,6 +13,7 @@ from web3 import AsyncWeb3
 from web3.exceptions import TransactionNotFound
 
 from .constants import DEFAULT_CONFIRMATION_BLOCKS, USDT_ABI, USDT_DECIMALS
+from app.config.constants import BLOCKCHAIN_TIMEOUT
 
 
 class DepositProcessor:
@@ -76,8 +78,19 @@ class DepositProcessor:
             Dict with status, confirmations, amount, etc.
         """
         try:
-            # Get transaction
-            tx = await self.web3.eth.get_transaction(tx_hash)
+            # Get transaction with timeout
+            try:
+                tx = await asyncio.wait_for(
+                    self.web3.eth.get_transaction(tx_hash),
+                    timeout=BLOCKCHAIN_TIMEOUT,
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"Timeout getting transaction {tx_hash}")
+                return {
+                    "valid": False,
+                    "error": "Transaction lookup timeout",
+                    "confirmations": 0,
+                }
 
             if not tx:
                 return {
@@ -86,8 +99,19 @@ class DepositProcessor:
                     "confirmations": 0,
                 }
 
-            # Get transaction receipt
-            receipt = await self.web3.eth.get_transaction_receipt(tx_hash)
+            # Get transaction receipt with timeout
+            try:
+                receipt = await asyncio.wait_for(
+                    self.web3.eth.get_transaction_receipt(tx_hash),
+                    timeout=BLOCKCHAIN_TIMEOUT,
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"Timeout getting transaction receipt {tx_hash}")
+                return {
+                    "valid": False,
+                    "error": "Transaction receipt timeout",
+                    "confirmations": 0,
+                }
 
             if not receipt:
                 return {
@@ -104,8 +128,20 @@ class DepositProcessor:
                     "confirmations": 0,
                 }
 
-            # Calculate confirmations
-            current_block = await self.web3.eth.block_number
+            # Calculate confirmations with timeout
+            try:
+                current_block = await asyncio.wait_for(
+                    self.web3.eth.block_number,
+                    timeout=BLOCKCHAIN_TIMEOUT,
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"Timeout getting block number for {tx_hash}")
+                return {
+                    "valid": False,
+                    "error": "Block number timeout",
+                    "confirmations": 0,
+                }
+
             tx_block = receipt["blockNumber"]
             confirmations = current_block - tx_block + 1
 
@@ -252,16 +288,36 @@ class DepositProcessor:
             Number of confirmations
         """
         try:
-            receipt = await self.web3.eth.get_transaction_receipt(tx_hash)
+            # Get transaction receipt with timeout
+            try:
+                receipt = await asyncio.wait_for(
+                    self.web3.eth.get_transaction_receipt(tx_hash),
+                    timeout=BLOCKCHAIN_TIMEOUT,
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"Timeout getting transaction receipt for confirmations {tx_hash}")
+                return 0
 
             if not receipt:
                 return 0
 
-            current_block = await self.web3.eth.block_number
+            # Get current block with timeout
+            try:
+                current_block = await asyncio.wait_for(
+                    self.web3.eth.block_number,
+                    timeout=BLOCKCHAIN_TIMEOUT,
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"Timeout getting block number for confirmations {tx_hash}")
+                return 0
+
             tx_block = receipt["blockNumber"]
 
             return current_block - tx_block + 1
 
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout getting confirmations for {tx_hash}")
+            return 0
         except Exception as e:
             logger.error(f"Error getting confirmations for {tx_hash}: {e}")
             return 0

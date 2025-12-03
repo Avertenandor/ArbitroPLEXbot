@@ -396,14 +396,18 @@ class RewardService(BaseService):
 
                 if user and user.telegram_id:
                     notification_service = NotificationService(self.session)
-                    roi_cap = float(deposit.roi_cap_amount) if deposit.roi_cap_amount else 500.0
-                    roi_progress = (float(new_roi_paid) / (float(deposit.amount) * 5)) * 500 if deposit.amount else 0
+                    # Calculate ROI progress as percentage (0-100)
+                    # ROI cap = 500% = deposit.amount * 5
+                    roi_cap_amount = deposit.roi_cap_amount or (deposit.amount * 5)
+                    roi_progress = (new_roi_paid / roi_cap_amount * 100) if roi_cap_amount > 0 else Decimal("0")
 
+                    # Note: Convert to float only at display layer for Telegram API
+                    # Financial calculations above remain in Decimal
                     await notification_service.notify_roi_accrual(
                         telegram_id=user.telegram_id,
                         amount=float(reward_amount),
                         deposit_level=deposit.level,
-                        roi_progress_percent=min(roi_progress, 500.0),
+                        roi_progress_percent=min(float(roi_progress), 100.0),
                     )
             except Exception as e:
                 logger.warning(f"Failed to send ROI notification: {e}")
@@ -541,13 +545,14 @@ class RewardService(BaseService):
         corridor_service = RoiCorridorService(self.session)
         referral_service = ReferralService(self.session)
 
-        # Get deposits due for accrual
+        # Get deposits due for accrual with pessimistic lock
+        # This prevents race conditions with concurrent reward calculations
         now = datetime.now(UTC)
         stmt = select(Deposit).where(
             Deposit.status == "confirmed",
             Deposit.is_roi_completed == False,  # noqa: E712
             Deposit.next_accrual_at <= now,
-        )
+        ).with_for_update()  # Lock deposits to prevent concurrent modifications
         result = await self.session.execute(stmt)
         deposits = list(result.scalars().all())
 

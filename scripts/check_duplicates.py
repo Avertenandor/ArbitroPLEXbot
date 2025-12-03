@@ -7,7 +7,14 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from loguru import logger
+
 from app.config.settings import settings
+
+# Configure logger for script
+logger.remove()
+logger.add(sys.stderr, level="INFO")
 
 async def check():
     engine = create_async_engine(settings.database_url, echo=False)
@@ -15,13 +22,13 @@ async def check():
         result = await conn.execute(text(
             "SELECT wallet_address, COUNT(*) FROM users GROUP BY wallet_address HAVING COUNT(*) > 1"
         ))
-        duplicates = result.fetchall()
+        duplicates = result.all()
         if duplicates:
-            print(f"❌ Found {len(duplicates)} duplicate wallets:")
+            logger.error(f"Found {len(duplicates)} duplicate wallets:")
             for row in duplicates:
-                print(f"  - {row[0]}: {row[1]} users")
+                logger.error(f"  - {row[0]}: {row[1]} users")
         else:
-            print("✅ No duplicate wallets found.")
+            logger.success("No duplicate wallets found.")
     await engine.dispose()
 
 if __name__ == "__main__":

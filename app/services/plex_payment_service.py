@@ -66,12 +66,12 @@ class PlexPaymentService:
         plex_balance = await blockchain.get_plex_balance(user.wallet_address)
         
         if plex_balance is None:
-            logger.warning(f"Failed to get PLEX balance for user {user_id}")
+            logger.error(f"Failed to get PLEX balance for user {user_id} - denying access")
             return {
                 "level": 0,
                 "plex_balance": Decimal("0"),
-                "can_access": True,  # Allow access on balance check failure
-                "error": "Could not verify PLEX balance",
+                "can_access": False,  # Безопасный дефолт - запретить доступ при ошибке
+                "error": "Could not verify PLEX balance. Please try again later.",
             }
 
         level = get_user_level(plex_balance)
@@ -80,9 +80,10 @@ class PlexPaymentService:
         # Get user's active deposits count
         active_deposits = await self._deposit_repo.get_active_deposits(user_id)
         current_deposits = len(active_deposits) if active_deposits else 0
-        
-        # Check if user has too many deposits for their PLEX level
-        can_access = current_deposits <= max_deposits or level > 0
+
+        # Check if user can create new deposit based on their PLEX level
+        # Use strict < to allow room for new deposit
+        can_access = current_deposits < max_deposits
         
         return {
             "level": level,
@@ -188,12 +189,17 @@ class PlexPaymentService:
             Dict with verification result
         """
         blockchain = get_blockchain_service()
-        
+
+        # Get required amount for user's deposits
+        required = await self._plex_repo.get_total_daily_plex_required(user_id)
+
         # Check for PLEX transfers to system wallet
+        # lookback_blocks=200 covers ~10 minutes on BSC (3 sec/block)
+        # Note: verify_plex_payment accepts float for amount_plex (non-financial display value)
         result = await blockchain.verify_plex_payment(
-            sender_wallet=sender_wallet,
-            blocks_forward=20,
-            blocks_backward=10,
+            sender_address=sender_wallet,
+            amount_plex=float(required),  # OK to use float here - verification only, not financial calculation
+            lookback_blocks=200,
         )
         
         if not result.get("success"):
@@ -201,9 +207,8 @@ class PlexPaymentService:
                 "success": False,
                 "error": "Payment not found",
             }
-        
-        # Get required amount for user's deposits
-        required = await self._plex_repo.get_total_daily_plex_required(user_id)
+
+        # Check if received amount is sufficient
         received = Decimal(str(result.get("amount", 0)))
         
         if received < required:
@@ -269,9 +274,10 @@ class PlexPaymentService:
         plex_balance = await blockchain.get_plex_balance(user.wallet_address)
         
         if plex_balance is None:
+            logger.error(f"Failed to verify PLEX balance for user {user_id} - reporting insufficient")
             return {
-                "sufficient": True,  # Allow on check failure
-                "error": "Could not verify balance",
+                "sufficient": False,  # Безопасный дефолт - запретить при ошибке
+                "error": "Could not verify balance. Please try again later.",
             }
 
         # Get user's level and allowed deposits
@@ -292,7 +298,7 @@ class PlexPaymentService:
                     break
             
             required_plex = LEVELS.get(required_level, {}).get("plex", 0)
-            shortage = required_plex - int(plex_balance)
+            shortage = Decimal(required_plex) - plex_balance
             
             return {
                 "sufficient": False,

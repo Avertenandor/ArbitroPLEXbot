@@ -275,7 +275,9 @@ def parse_page_callback(callback_data: str, prefix: str) -> int | None:
         parts = callback_data.split(':')
         if len(parts) >= 3 and parts[0] == prefix and parts[1] == 'page':
             return int(parts[2])
-    except (ValueError, IndexError):
-        pass
+    except (ValueError, IndexError) as e:
+        # Expected error for malformed callback data
+        from loguru import logger
+        logger.debug(f"Failed to parse page callback '{callback_data}': {e}")
 
     return None

@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin_session import AdminSession
 from app.repositories.base import BaseRepository
+from app.utils.datetime_utils import utc_now
 
 
 class AdminSessionRepository(BaseRepository[AdminSession]):
@@ -91,7 +92,7 @@ class AdminSessionRepository(BaseRepository[AdminSession]):
         Returns:
             Number of cleaned up sessions
         """
-        now = datetime.now()
+        now = utc_now()
 
         stmt = (
             select(AdminSession)

@@ -389,8 +389,9 @@ async def handle_confirm_withdrawal_action(
 
             # Send blockchain transaction
             blockchain_service = get_blockchain_service()
+            # Keep Decimal precision for blockchain payment
             payment_result = await blockchain_service.send_payment(
-                withdrawal.to_address, float(withdrawal.amount)
+                withdrawal.to_address, withdrawal.amount
             )
 
             if not payment_result["success"]:

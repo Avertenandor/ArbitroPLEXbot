@@ -10,8 +10,15 @@ import asyncio
 import dramatiq
 from loguru import logger
 
+try:
+    import redis.asyncio as redis
+except ImportError:
+    redis = None  # type: ignore
+
 from app.config.database import async_session_maker
+from app.config.settings import settings
 from app.repositories.admin_session_repository import AdminSessionRepository
+from app.utils.distributed_lock import DistributedLock
 
 
 @dramatiq.actor(max_retries=3, time_limit=60_000)  # 1 min timeout
@@ -51,43 +58,66 @@ async def _cleanup_sessions_async() -> dict:
     Returns:
         Dict with cleaned_up count
     """
-    async with async_session_maker() as session:
-        session_repo = AdminSessionRepository(session)
-
-        # Cleanup expired sessions
-        expired_count = await session_repo.cleanup_expired_sessions()
-
-        # Cleanup inactive sessions (no activity > 15 minutes)
-        from datetime import UTC, datetime, timedelta
-        from sqlalchemy import select
-
-        from app.models.admin_session import AdminSession
-
-        now = datetime.now(UTC)
-        inactivity_threshold = now - timedelta(minutes=15)
-
-        stmt = (
-            select(AdminSession)
-            .where(AdminSession.is_active)
-            .where(AdminSession.last_activity < inactivity_threshold)
-        )
-        result = await session.execute(stmt)
-        inactive_sessions = list(result.scalars().all())
-
-        inactive_count = 0
-        for sess in inactive_sessions:
-            sess.is_active = False
-            inactive_count += 1
-
-        await session.commit()
-
-        total_cleaned = expired_count + inactive_count
-
-        if total_cleaned > 0:
-            logger.info(
-                f"Cleaned up {expired_count} expired and "
-                f"{inactive_count} inactive admin sessions"
+    # Create Redis client for distributed lock
+    redis_client = None
+    if redis:
+        try:
+            redis_client = redis.Redis(
+                host=settings.redis_host,
+                port=settings.redis_port,
+                password=settings.redis_password,
+                db=settings.redis_db,
+                decode_responses=True,
             )
+        except Exception as e:
+            logger.warning(f"Failed to create Redis client for lock: {e}")
 
-        return {"cleaned_up": total_cleaned}
+    # Use distributed lock to prevent concurrent cleanup
+    lock = DistributedLock(redis_client=redis_client)
+
+    async with lock.lock("admin_session_cleanup", timeout=30):
+        try:
+            async with async_session_maker() as session:
+                session_repo = AdminSessionRepository(session)
+
+                # Cleanup expired sessions
+                expired_count = await session_repo.cleanup_expired_sessions()
+
+                # Cleanup inactive sessions (no activity > 15 minutes)
+                from datetime import UTC, datetime, timedelta
+                from sqlalchemy import select
+
+                from app.models.admin_session import AdminSession
+
+                now = datetime.now(UTC)
+                inactivity_threshold = now - timedelta(minutes=15)
+
+                stmt = (
+                    select(AdminSession)
+                    .where(AdminSession.is_active)
+                    .where(AdminSession.last_activity < inactivity_threshold)
+                )
+                result = await session.execute(stmt)
+                inactive_sessions = list(result.scalars().all())
+
+                inactive_count = 0
+                for sess in inactive_sessions:
+                    sess.is_active = False
+                    inactive_count += 1
+
+                await session.commit()
+
+                total_cleaned = expired_count + inactive_count
+
+                if total_cleaned > 0:
+                    logger.info(
+                        f"Cleaned up {expired_count} expired and "
+                        f"{inactive_count} inactive admin sessions"
+                    )
+
+                return {"cleaned_up": total_cleaned}
+        finally:
+            # Close Redis client
+            if redis_client:
+                await redis_client.close()
 

@@ -6,11 +6,12 @@ Data access layer for UserAction model.
 
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user_action import UserAction
 from app.repositories.base import BaseRepository
+from app.utils.datetime_utils import utc_now
 
 
 class UserActionRepository(BaseRepository[UserAction]):
@@ -65,17 +66,9 @@ class UserActionRepository(BaseRepository[UserAction]):
         Returns:
             Number of deleted actions
         """
-        cutoff_date = datetime.now() - timedelta(days=days)
+        cutoff_date = utc_now() - timedelta(days=days)
 
-        stmt = (
-            select(UserAction)
-            .where(UserAction.created_at < cutoff_date)
-        )
+        stmt = delete(UserAction).where(UserAction.created_at < cutoff_date)
         result = await self.session.execute(stmt)
-        actions = list(result.scalars().all())
-
-        for action in actions:
-            await self.session.delete(action)
-
         await self.session.flush()
-        return len(actions)
+        return result.rowcount

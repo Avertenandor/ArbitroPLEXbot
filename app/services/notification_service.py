@@ -4,6 +4,7 @@ Notification service (+ PART5 multimedia support).
 Sends notifications to users via Telegram.
 """
 
+import asyncio
 from typing import Any
 
 from aiogram import Bot
@@ -16,6 +17,7 @@ from app.repositories.failed_notification_repository import (
     FailedNotificationRepository,
 )
 from app.repositories.support_ticket_repository import SupportTicketRepository
+from app.config.constants import TELEGRAM_TIMEOUT
 
 
 class NotificationService:
@@ -109,8 +111,11 @@ class NotificationService:
                 )
 
         try:
-            await bot.send_message(
-                chat_id=user_telegram_id, text=message
+            await asyncio.wait_for(
+                bot.send_message(
+                    chat_id=user_telegram_id, text=message
+                ),
+                timeout=TELEGRAM_TIMEOUT,
             )
             
             # R8-2: If message sent successfully, check if user was previously blocked
@@ -216,12 +221,25 @@ class NotificationService:
             True if sent successfully
         """
         try:
-            await bot.send_photo(
-                chat_id=user_telegram_id,
-                photo=file_id,
-                caption=caption,
+            await asyncio.wait_for(
+                bot.send_photo(
+                    chat_id=user_telegram_id,
+                    photo=file_id,
+                    caption=caption,
+                ),
+                timeout=TELEGRAM_TIMEOUT,
             )
             return True
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout sending photo to {user_telegram_id}")
+            await self._save_failed_notification(
+                user_telegram_id,
+                "photo",
+                caption or "",
+                "Timeout",
+                metadata={"file_id": file_id},
+            )
+            return False
         except Exception as e:
             await self._save_failed_notification(
                 user_telegram_id,
@@ -350,10 +368,13 @@ class NotificationService:
         # Send to all admins
         for admin in all_admins:
             try:
-                await bot.send_message(
-                    chat_id=admin.telegram_id,
-                    text=message,
-                    parse_mode="Markdown",
+                await asyncio.wait_for(
+                    bot.send_message(
+                        chat_id=admin.telegram_id,
+                        text=message,
+                        parse_mode="Markdown",
+                    ),
+                    timeout=TELEGRAM_TIMEOUT,
                 )
                 logger.info(
                     "Admin notified about new ticket",
@@ -361,6 +382,15 @@ class NotificationService:
                         "admin_id": admin.id,
                         "ticket_id": ticket_id,
                     },
+                )
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout notifying admin {admin.telegram_id} about ticket {ticket_id}")
+                await self._save_failed_notification(
+                    admin.telegram_id,
+                    "admin_notification",
+                    message,
+                    "Timeout",
+                    critical=True,
                 )
             except Exception as e:
                 logger.error(
@@ -407,10 +437,13 @@ class NotificationService:
         # Send to all admins
         for admin in all_admins:
             try:
-                await bot.send_message(
-                    chat_id=admin.telegram_id,
-                    text=message,
-                    parse_mode="Markdown",
+                await asyncio.wait_for(
+                    bot.send_message(
+                        chat_id=admin.telegram_id,
+                        text=message,
+                        parse_mode="Markdown",
+                    ),
+                    timeout=TELEGRAM_TIMEOUT,
                 )
                 success_count += 1
                 logger.info(
@@ -420,6 +453,15 @@ class NotificationService:
                         "telegram_id": admin.telegram_id,
                         "critical": critical,
                     },
+                )
+            except asyncio.TimeoutError:
+                logger.warning(f"Timeout notifying admin {admin.telegram_id}")
+                await self._save_failed_notification(
+                    admin.telegram_id,
+                    "admin_notification",
+                    message,
+                    "Timeout",
+                    critical=critical,
                 )
             except Exception as e:
                 logger.error(
@@ -481,13 +523,19 @@ class NotificationService:
         )
 
         try:
-            await bot.send_message(
-                chat_id=telegram_id,
-                text=message,
-                parse_mode="Markdown",
-                disable_web_page_preview=True
+            await asyncio.wait_for(
+                bot.send_message(
+                    chat_id=telegram_id,
+                    text=message,
+                    parse_mode="Markdown",
+                    disable_web_page_preview=True
+                ),
+                timeout=TELEGRAM_TIMEOUT,
             )
             return True
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout notifying user {telegram_id} about withdrawal")
+            return False
         except Exception as e:
             logger.error(
                 f"Failed to notify user about withdrawal: {e}",
@@ -538,12 +586,18 @@ class NotificationService:
         )
 
         try:
-            await bot.send_message(
-                chat_id=telegram_id,
-                text=message,
-                parse_mode="Markdown",
+            await asyncio.wait_for(
+                bot.send_message(
+                    chat_id=telegram_id,
+                    text=message,
+                    parse_mode="Markdown",
+                ),
+                timeout=TELEGRAM_TIMEOUT,
             )
             return True
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout notifying user {telegram_id} about withdrawal rejection")
+            return False
         except Exception as e:
             logger.error(
                 f"Failed to notify user about withdrawal rejection: {e}",
@@ -568,7 +622,7 @@ class NotificationService:
             telegram_id: User telegram ID
             amount: ROI amount accrued
             deposit_level: Deposit level
-            roi_progress_percent: Current ROI progress (0-500%)
+            roi_progress_percent: Current ROI progress (0-100%)
 
         Returns:
             True if notification sent successfully
@@ -593,8 +647,8 @@ class NotificationService:
                 logger.error(f"Failed to create fallback bot instance: {e}")
                 return False
 
-        # Progress bar
-        filled = int(roi_progress_percent / 50)  # 10 blocks for 500%
+        # Progress bar (10 blocks for 100% progress)
+        filled = int(roi_progress_percent / 10)  # 10 blocks for 100%
         empty = 10 - filled
         progress_bar = "█" * filled + "░" * empty
 
@@ -606,12 +660,18 @@ class NotificationService:
         )
 
         try:
-            await bot.send_message(
-                chat_id=telegram_id,
-                text=message,
-                parse_mode="Markdown",
+            await asyncio.wait_for(
+                bot.send_message(
+                    chat_id=telegram_id,
+                    text=message,
+                    parse_mode="Markdown",
+                ),
+                timeout=TELEGRAM_TIMEOUT,
             )
             return True
+        except asyncio.TimeoutError:
+            logger.warning(f"Timeout notifying user {telegram_id} about ROI accrual")
+            return False
         except Exception as e:
             logger.error(
                 f"Failed to notify user about ROI accrual: {e}",

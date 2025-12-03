@@ -23,6 +23,7 @@ from app.models.user import User
 from app.services.blockchain_service import get_blockchain_service
 from app.services.user_service import UserService
 from app.services.wallet_verification_service import WalletVerificationService
+from app.utils.security import mask_address
 from bot.i18n.loader import get_translator, get_user_language
 from bot.keyboards.reply import (
     auth_continue_keyboard,
@@ -775,12 +776,6 @@ async def process_password_confirmation(
     wallet_address = state_data.get("wallet_address")
     referrer_telegram_id = state_data.get("referrer_telegram_id")
 
-    # Hash financial password with bcrypt
-    import bcrypt
-    hashed_password = bcrypt.hashpw(
-        password.encode("utf-8"), bcrypt.gensalt(rounds=12)
-    ).decode("utf-8")
-
     # Normalize wallet address to checksum format
     from app.utils.validation import normalize_bsc_address
     try:
@@ -810,7 +805,7 @@ async def process_password_confirmation(
                 telegram_id=message.from_user.id,
                 username=message.from_user.username,
                 wallet_address=wallet_address,
-                financial_password=hashed_password,
+                financial_password=password,
                 referrer_telegram_id=referrer_telegram_id,
             )
         except ValueError as e:
@@ -848,7 +843,7 @@ async def process_password_confirmation(
                         telegram_id=message.from_user.id,
                         username=message.from_user.username,
                         wallet_address=wallet_address,
-                        financial_password=hashed_password,
+                        financial_password=password,
                         referrer_telegram_id=referrer_telegram_id,
                     )
             # Transaction closed here
@@ -1383,7 +1378,7 @@ async def _check_payment_logic(
     try:
         bs = get_blockchain_service()
         # Scan blocks: 2000 blocks lookback (~1.5 hours) to catch slightly older transactions
-        logger.info(f"Verifying PLEX payment for {wallet_address} with lookback=2000")
+        logger.info(f"Verifying PLEX payment for {mask_address(wallet_address)} with lookback=2000")
         result = await bs.verify_plex_payment(
             sender_address=wallet_address,
             amount_plex=settings.auth_price_plex,
@@ -1673,14 +1668,14 @@ async def handle_payment_confirmed_reply(
     logger.info(f"FSM state: {current_state}, data keys: {list(state_data.keys())}")
     
     wallet = state_data.get("auth_wallet")
-    logger.info(f"Wallet from FSM: {wallet}")
+    logger.info(f"Wallet from FSM: {mask_address(wallet)}")
     
     if not wallet:
         # Fallback: check if user has wallet in DB
         user: User | None = data.get("user")
         if user and user.wallet_address:
             wallet = user.wallet_address
-            logger.info(f"Wallet from DB user: {wallet}")
+            logger.info(f"Wallet from DB user: {mask_address(wallet)}")
         else:
             # No wallet known - ask for it
             logger.warning("No wallet found - asking user")
@@ -1693,7 +1688,7 @@ async def handle_payment_confirmed_reply(
             return
     
     # Check payment with known wallet
-    logger.info(f"Checking payment for wallet: {wallet}")
+    logger.info(f"Checking payment for wallet: {mask_address(wallet)}")
     await _check_payment_logic(message, state, wallet, data)
 
 

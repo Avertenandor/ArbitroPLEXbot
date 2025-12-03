@@ -24,6 +24,7 @@ from bot.utils.formatters import format_transaction_hash, format_usdt, escape_md
 from app.services.report_service import ReportService
 from aiogram.types import BufferedInputFile
 from datetime import datetime
+from app.utils.datetime_utils import utc_now
 from loguru import logger
 
 router = Router(name="transaction")
@@ -391,9 +392,9 @@ async def handle_export_report(
         report_service = ReportService(session)
         # Generate report
         report_bytes = await report_service.generate_user_report(user.id)
-        
+
         # Send file
-        filename = f"ArbitroPLEXbot_Report_{user.telegram_id}_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        filename = f"ArbitroPLEXbot_Report_{user.telegram_id}_{utc_now().strftime('%Y%m%d_%H%M')}.xlsx"
         input_file = BufferedInputFile(report_bytes, filename=filename)
         
         await message.answer_document(

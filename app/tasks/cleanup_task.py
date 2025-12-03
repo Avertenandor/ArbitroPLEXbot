@@ -33,6 +33,7 @@ async def run_cleanup_task() -> None:
             # session.begin() handles commit on exit.
             
             logger.info(f"Cleanup completed. Deleted {deleted_count} old admin logs.")
-            
+
         except Exception as e:
-            logger.error(f"Cleanup task failed: {e}")
+            logger.error(f"Cleanup task failed: {e}", exc_info=True)
+            raise  # Re-raise so scheduler knows the task failed

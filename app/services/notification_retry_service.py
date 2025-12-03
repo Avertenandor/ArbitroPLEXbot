@@ -5,6 +5,7 @@ Handles retrying failed notification deliveries with exponential backoff.
 Ensures users don't miss critical notifications.
 """
 
+import asyncio
 from datetime import UTC, datetime
 
 from aiogram import Bot
@@ -13,6 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.failed_notification_repository import (
     FailedNotificationRepository,
+)
+from app.config.constants import (
+    TELEGRAM_TIMEOUT,
+    TELEGRAM_MESSAGE_DELAY,
+    TELEGRAM_BATCH_DELAY,
+    TELEGRAM_BATCH_SIZE,
 )
 
 # Retry configuration: 1min, 5min, 15min, 1h, 2h
@@ -65,7 +72,7 @@ class NotificationRetryService:
         failed = 0
         gave_up = 0
 
-        for notification in pending:
+        for i, notification in enumerate(pending):
             try:
                 # Check if enough time has passed since last attempt
                 if notification.last_attempt_at:
@@ -92,12 +99,15 @@ class NotificationRetryService:
                         )
                         continue
 
-                # Attempt to send notification
+                # Attempt to send notification with timeout
                 try:
-                    await self.bot.send_message(
-                        chat_id=notification.user_telegram_id,
-                        text=notification.message,
-                        parse_mode="Markdown",
+                    await asyncio.wait_for(
+                        self.bot.send_message(
+                            chat_id=notification.user_telegram_id,
+                            text=notification.message,
+                            parse_mode="Markdown",
+                        ),
+                        timeout=TELEGRAM_TIMEOUT,
                     )
 
                     # Success - mark as resolved
@@ -118,6 +128,64 @@ class NotificationRetryService:
                             "attempt_count": notification.attempt_count,
                         },
                     )
+
+                    # Rate limiting: delay after each message
+                    await asyncio.sleep(TELEGRAM_MESSAGE_DELAY)
+
+                    # Additional delay after each batch
+                    if (i + 1) % TELEGRAM_BATCH_SIZE == 0:
+                        logger.debug(
+                            f"Batch {(i + 1) // TELEGRAM_BATCH_SIZE} completed, "
+                            f"pausing for {TELEGRAM_BATCH_DELAY}s"
+                        )
+                        await asyncio.sleep(TELEGRAM_BATCH_DELAY)
+
+                except asyncio.TimeoutError:
+                    # Timeout - increment counter
+                    error_msg = f"Timeout sending message (>{TELEGRAM_TIMEOUT}s)"
+
+                    await self.failed_repo.update(
+                        notification.id,
+                        attempt_count=notification.attempt_count + 1,
+                        last_error=error_msg,
+                        last_attempt_at=datetime.now(UTC),
+                    )
+
+                    failed += 1
+
+                    logger.warning(
+                        "Notification retry timeout",
+                        extra={
+                            "id": notification.id,
+                            "telegram_id": notification.user_telegram_id,
+                            "type": notification.notification_type,
+                            "attempt_count": notification.attempt_count + 1,
+                            "timeout_seconds": TELEGRAM_TIMEOUT,
+                        },
+                    )
+
+                    # If max retries reached, give up
+                    if notification.attempt_count + 1 >= MAX_RETRIES:
+                        gave_up += 1
+
+                        logger.error(
+                            "Notification gave up after max retries (timeout)",
+                            extra={
+                                "id": notification.id,
+                                "telegram_id": notification.user_telegram_id,
+                                "type": notification.notification_type,
+                                "attempt_count": (
+                                    notification.attempt_count + 1
+                                ),
+                            },
+                        )
+
+                    # Rate limiting: delay even after failures
+                    await asyncio.sleep(TELEGRAM_MESSAGE_DELAY)
+
+                    # Additional delay after each batch
+                    if (i + 1) % TELEGRAM_BATCH_SIZE == 0:
+                        await asyncio.sleep(TELEGRAM_BATCH_DELAY)
 
                 except Exception as send_error:
                     # Failed - increment counter
@@ -158,6 +226,13 @@ class NotificationRetryService:
                                 ),
                             },
                         )
+
+                    # Rate limiting: delay even after failures
+                    await asyncio.sleep(TELEGRAM_MESSAGE_DELAY)
+
+                    # Additional delay after each batch
+                    if (i + 1) % TELEGRAM_BATCH_SIZE == 0:
+                        await asyncio.sleep(TELEGRAM_BATCH_DELAY)
 
             except Exception as e:
                 logger.error(

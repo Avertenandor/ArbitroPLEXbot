@@ -23,7 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from loguru import logger
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -116,11 +116,15 @@ async def consolidate_user_deposits(
     session.add(plex_payment)
 
     # Archive old deposits by setting status to 'consolidated'
+    deposit_ids = [d.id for d in deposits]
     for deposit in deposits:
         deposit.status = "consolidated"
-        # Delete old PLEX payment requirements
-        if deposit.plex_payment:
-            await session.delete(deposit.plex_payment)
+
+    # Delete old PLEX payment requirements for these deposits
+    stmt = delete(PlexPaymentRequirement).where(
+        PlexPaymentRequirement.deposit_id.in_(deposit_ids)
+    )
+    await session.execute(stmt)
 
     # Update user
     user.deposits_consolidated = True

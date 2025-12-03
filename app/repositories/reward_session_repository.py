@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.reward_session import RewardSession
 from app.repositories.base import BaseRepository
+from app.utils.datetime_utils import utc_now
 
 
 class RewardSessionRepository(BaseRepository[RewardSession]):
@@ -29,7 +30,7 @@ class RewardSessionRepository(BaseRepository[RewardSession]):
         Returns:
             Active session or None
         """
-        now = datetime.now()
+        now = utc_now()
 
         stmt = (
             select(RewardSession)
@@ -49,7 +50,7 @@ class RewardSessionRepository(BaseRepository[RewardSession]):
         Returns:
             List of active sessions
         """
-        now = datetime.now()
+        now = utc_now()
 
         stmt = (
             select(RewardSession)

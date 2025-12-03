@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Sequence
 
 from loguru import logger
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -286,22 +286,23 @@ class PlexPaymentRepository:
     async def delete_by_deposit_id(self, deposit_id: int) -> bool:
         """
         Delete payment requirement for a deposit.
-        
+
         Args:
             deposit_id: Deposit ID
-            
+
         Returns:
             True if deleted, False if not found
         """
-        payment = await self.get_by_deposit_id(deposit_id)
-        if not payment:
-            return False
-        
-        await self._session.delete(payment)
+        stmt = delete(PlexPaymentRequirement).where(
+            PlexPaymentRequirement.deposit_id == deposit_id
+        )
+        result = await self._session.execute(stmt)
         await self._session.flush()
-        
-        logger.info(f"Deleted PLEX payment requirement for deposit_id={deposit_id}")
-        return True
+
+        if result.rowcount > 0:
+            logger.info(f"Deleted PLEX payment requirement for deposit_id={deposit_id}")
+            return True
+        return False
 
     async def reset_to_active(self, payment_id: int) -> PlexPaymentRequirement | None:
         """

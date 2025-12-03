@@ -22,6 +22,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from app.config.constants import TELEGRAM_MESSAGE_DELAY
 from app.config.settings import settings
 from app.models.plex_payment import PlexPaymentRequirement, PlexPaymentStatus
 from app.repositories.deposit_repository import DepositRepository
@@ -163,6 +164,9 @@ async def _process_pending_activation_reminders(
                         parse_mode="Markdown",
                     )
                 reminders_sent += 1
+
+                # Rate limiting: delay between messages
+                await asyncio.sleep(TELEGRAM_MESSAGE_DELAY)
             except Exception as e:
                 logger.warning(
                     f"Failed to send activation reminder to user {user.telegram_id}: {e}"
@@ -233,6 +237,9 @@ async def _process_warnings(
                         text=message,
                         parse_mode="Markdown",
                     )
+
+                # Rate limiting: delay between messages
+                await asyncio.sleep(TELEGRAM_MESSAGE_DELAY)
             except Exception as e:
                 logger.warning(
                     f"Failed to send PLEX warning to user {user.telegram_id}: {e}"
@@ -305,11 +312,14 @@ async def _process_blocks(
                     text=message,
                     parse_mode="Markdown",
                 )
+
+                # Rate limiting: delay between messages
+                await asyncio.sleep(TELEGRAM_MESSAGE_DELAY)
             except Exception as e:
                 logger.warning(
                     f"Failed to send block notification to user {user.telegram_id}: {e}"
                 )
-            
+
             deposits_blocked += 1
             
             logger.error(

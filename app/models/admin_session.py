@@ -19,6 +19,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
+from app.utils.datetime_utils import utc_now
 
 if TYPE_CHECKING:
     from app.models.admin import Admin
@@ -107,7 +108,7 @@ class AdminSession(Base):
         if self.expires_at is None:
             return False
 
-        return datetime.now(self.expires_at.tzinfo) > self.expires_at
+        return utc_now() > self.expires_at
 
     @property
     def remaining_time_minutes(self) -> float:
@@ -123,9 +124,7 @@ class AdminSession(Base):
         if self.expires_at is None:
             return 60.0  # Default 1 hour
 
-        remaining = self.expires_at - datetime.now(
-            self.expires_at.tzinfo
-        )
+        remaining = self.expires_at - utc_now()
         return max(remaining.total_seconds() / 60, 0.0)
 
     @property
@@ -142,7 +141,7 @@ class AdminSession(Base):
         if self.last_activity is None:
             return True
 
-        now = datetime.now(self.last_activity.tzinfo)
+        now = utc_now()
         inactivity_threshold = timedelta(minutes=15)
         time_since_activity = now - self.last_activity
 
@@ -156,7 +155,7 @@ class AdminSession(Base):
 
         Updates last_activity and extends expires_at by 1 hour.
         """
-        self.last_activity = datetime.now(datetime.now().astimezone().tzinfo)
+        self.last_activity = utc_now()
         self.expires_at = self.last_activity + timedelta(hours=1)
 
     def __repr__(self) -> str:

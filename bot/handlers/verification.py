@@ -118,21 +118,19 @@ async def start_verification(
     # Hash and save password
     user_service = UserService(session)
 
-    # Import bcrypt hashing
-    import bcrypt
-
     try:
-        password_hash = bcrypt.hashpw(
-            financial_password.encode("utf-8"), bcrypt.gensalt(rounds=12)
-        ).decode("utf-8")
-
         # R2-10: Update user with error handling
         try:
+            # Set financial password using model method
+            user.set_financial_password(financial_password)
+            # Update verification status
             await user_service.update_profile(
                 user.id,
-                financial_password=password_hash,
                 is_verified=True,
             )
+            # Add user to session to persist password change
+            session.add(user)
+            await session.commit()
         except ValueError as e:
             # R2-10: Handle validation errors (e.g., invalid data)
             logger.error(

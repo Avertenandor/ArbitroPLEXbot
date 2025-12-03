@@ -10,8 +10,15 @@ import asyncio
 import dramatiq
 from loguru import logger
 
+try:
+    import redis.asyncio as redis
+except ImportError:
+    redis = None  # type: ignore
+
+from app.config.settings import settings
 from app.services.blockchain_service import get_blockchain_service
 from app.services.payment_retry_service import PaymentRetryService
+from app.utils.distributed_lock import DistributedLock
 
 
 @dramatiq.actor(max_retries=3, time_limit=300_000)  # 5 min timeout
@@ -35,31 +42,53 @@ def process_payment_retries() -> None:
 
 async def _process_payment_retries_async() -> None:
     """Async implementation of payment retry processing."""
-    # Create a dedicated engine and sessionmaker for this run to avoid cross-loop reuse
-    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-    from sqlalchemy.pool import NullPool
-    from app.config.settings import settings
-    
-    engine = create_async_engine(
-        settings.database_url,
-        pool_pre_ping=True,
-        poolclass=NullPool,
-    )
-    SessionLocal = async_sessionmaker(
-        engine,
-        expire_on_commit=False,
-    )
-    
-    try:
-        async with SessionLocal() as session:
-            # Get blockchain service
-            blockchain_service = get_blockchain_service()
+    # Create Redis client for distributed lock
+    redis_client = None
+    if redis:
+        try:
+            redis_client = redis.Redis(
+                host=settings.redis_host,
+                port=settings.redis_port,
+                password=settings.redis_password,
+                db=settings.redis_db,
+                decode_responses=True,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to create Redis client for lock: {e}")
 
-            # Process retries
-            retry_service = PaymentRetryService(session)
-            await retry_service.process_pending_retries(
-                blockchain_service
+    # Use distributed lock to prevent concurrent retry processing
+    lock = DistributedLock(redis_client=redis_client)
+
+    async with lock.lock("payment_retry_processing", timeout=300):
+        try:
+            # Create a dedicated engine and sessionmaker for this run to avoid cross-loop reuse
+            from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+            from sqlalchemy.pool import NullPool
+
+            engine = create_async_engine(
+                settings.database_url,
+                pool_pre_ping=True,
+                poolclass=NullPool,
+            )
+            SessionLocal = async_sessionmaker(
+                engine,
+                expire_on_commit=False,
             )
 
-    finally:
-        await engine.dispose()
+            try:
+                async with SessionLocal() as session:
+                    # Get blockchain service
+                    blockchain_service = get_blockchain_service()
+
+                    # Process retries
+                    retry_service = PaymentRetryService(session)
+                    await retry_service.process_pending_retries(
+                        blockchain_service
+                    )
+
+            finally:
+                await engine.dispose()
+        finally:
+            # Close Redis client
+            if redis_client:
+                await redis_client.close()
