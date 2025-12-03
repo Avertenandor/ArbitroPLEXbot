@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import Any, Awaitable, Callable
 
 from aiogram import BaseMiddleware
-from aiogram.types import CallbackQuery, Message, TelegramObject
+from aiogram.types import CallbackQuery, Message, TelegramObject, Update
 from aiogram.fsm.context import FSMContext
 from loguru import logger
 from redis.asyncio import Redis
@@ -30,11 +30,35 @@ class SessionMiddleware(BaseMiddleware):
     - Check Pay-to-Use session validity
     - Periodically verify PLEX balance (every hour)
     - Send warnings for insufficient PLEX
+    
+    Note: This middleware is registered on dp.update, so it receives
+    Update objects, not Message/CallbackQuery directly.
     """
 
     def __init__(self, redis: Redis) -> None:
         """Initialize middleware with Redis client."""
         self.redis = redis
+
+    def _extract_event(self, event: TelegramObject) -> Message | CallbackQuery | None:
+        """
+        Extract Message or CallbackQuery from Update object.
+        
+        If event is already Message/CallbackQuery, return as-is.
+        If event is Update, extract the inner message or callback.
+        """
+        if isinstance(event, Message):
+            return event
+        if isinstance(event, CallbackQuery):
+            return event
+        if isinstance(event, Update):
+            if event.message:
+                return event.message
+            if event.callback_query:
+                return event.callback_query
+            # Handle edited messages too
+            if event.edited_message:
+                return event.edited_message
+        return None
 
     async def __call__(
         self,
@@ -43,6 +67,14 @@ class SessionMiddleware(BaseMiddleware):
         data: dict[str, Any],
     ) -> Any:
         """Process update through middleware."""
+        # Extract actual event (Message or CallbackQuery) from Update
+        actual_event = self._extract_event(event)
+        
+        logger.debug(
+            f"SessionMiddleware: event type={type(event).__name__}, "
+            f"actual_event type={type(actual_event).__name__ if actual_event else 'None'}"
+        )
+        
         # Get Telegram user
         tg_user = data.get("event_from_user")
         if not tg_user:
@@ -53,14 +85,22 @@ class SessionMiddleware(BaseMiddleware):
         logger.debug(f"SessionMiddleware: user_id={user_id}")
 
         # Allow specific commands/callbacks always
-        if isinstance(event, Message) and event.text:
-            logger.debug(f"SessionMiddleware: message text={event.text!r}")
-            if event.text.startswith("/start"):
-                logger.info(f"SessionMiddleware: /start detected, passing through for user {user_id}")
+        if isinstance(actual_event, Message) and actual_event.text:
+            logger.debug(f"SessionMiddleware: message text={actual_event.text!r}")
+            if actual_event.text.startswith("/start"):
+                logger.info(
+                    f"SessionMiddleware: /start detected, "
+                    f"passing through for user {user_id}"
+                )
                 return await handler(event, data)
 
-        if isinstance(event, CallbackQuery) and event.data:
-            if event.data in ("check_payment", "start_after_auth"):
+        if isinstance(actual_event, CallbackQuery) and actual_event.data:
+            logger.debug(f"SessionMiddleware: callback data={actual_event.data!r}")
+            if actual_event.data in ("check_payment", "start_after_auth"):
+                logger.info(
+                    f"SessionMiddleware: auth callback detected, "
+                    f"passing through for user {user_id}"
+                )
                 return await handler(event, data)
 
         # Check session
@@ -68,8 +108,9 @@ class SessionMiddleware(BaseMiddleware):
         has_session = await self.redis.exists(session_key)
 
         if not has_session:
-            # Session expired
-            await self._handle_session_expired(event, data)
+            # Session expired or new user
+            logger.debug(f"SessionMiddleware: no session for user {user_id}")
+            await self._handle_session_expired(actual_event, data)
             return None
 
         # Update session TTL (sliding window)
@@ -79,18 +120,19 @@ class SessionMiddleware(BaseMiddleware):
         db_user = data.get("user")
         if db_user:
             await self._check_plex_balance_if_needed(
-                event, data, db_user, user_id
+                actual_event, data, db_user, user_id
             )
 
         return await handler(event, data)
 
     async def _handle_session_expired(
         self,
-        event: TelegramObject,
+        actual_event: Message | CallbackQuery | None,
         data: dict[str, Any],
     ) -> None:
         """Handle expired session."""
-        if not isinstance(event, (Message, CallbackQuery)):
+        if not actual_event:
+            logger.debug("SessionMiddleware: cannot send session expired - no actual event")
             return
 
         # Reset FSM
@@ -105,18 +147,18 @@ class SessionMiddleware(BaseMiddleware):
         )
 
         try:
-            if isinstance(event, Message):
-                await event.answer(msg_text, parse_mode="Markdown")
-            elif isinstance(event, CallbackQuery):
-                if event.message:
-                    await event.message.answer(msg_text, parse_mode="Markdown")
-                await event.answer()
+            if isinstance(actual_event, Message):
+                await actual_event.answer(msg_text, parse_mode="Markdown")
+            elif isinstance(actual_event, CallbackQuery):
+                if actual_event.message:
+                    await actual_event.message.answer(msg_text, parse_mode="Markdown")
+                await actual_event.answer()
         except Exception as e:
             logger.warning(f"Failed to send session expiration message: {e}")
 
     async def _check_plex_balance_if_needed(
         self,
-        event: TelegramObject,
+        actual_event: Message | CallbackQuery | None,
         data: dict[str, Any],
         db_user: Any,
         user_id: int,
@@ -126,6 +168,9 @@ class SessionMiddleware(BaseMiddleware):
         
         Only checks once per hour to avoid excessive blockchain calls.
         """
+        if not actual_event:
+            return
+            
         # Check if we need to verify PLEX balance
         plex_check_key = f"{PLEX_CHECK_KEY_PREFIX}{user_id}"
         last_check = await self.redis.get(plex_check_key)
@@ -154,13 +199,13 @@ class SessionMiddleware(BaseMiddleware):
             if warning:
                 # Send warning
                 try:
-                    if isinstance(event, Message):
-                        await event.answer(
+                    if isinstance(actual_event, Message):
+                        await actual_event.answer(
                             warning,
                             parse_mode="Markdown",
                         )
-                    elif isinstance(event, CallbackQuery) and event.message:
-                        await event.message.answer(
+                    elif isinstance(actual_event, CallbackQuery) and actual_event.message:
+                        await actual_event.message.answer(
                             warning,
                             parse_mode="Markdown",
                         )
@@ -173,4 +218,3 @@ class SessionMiddleware(BaseMiddleware):
                 
         except Exception as e:
             logger.error(f"PLEX balance check failed for user {user_id}: {e}")
-
