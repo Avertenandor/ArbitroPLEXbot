@@ -28,6 +28,9 @@ keys.json
 # ==================
 # ДОКУМЕНТАЦИЯ БОТА
 # ==================
+# Вся документация только локально!
+*.md
+!README.md
 SERVER_INFO.md
 SERVER_ACCESS.md
 DEPLOY_INFO.md
@@ -39,6 +42,7 @@ KEYS.md
 docs/private/
 docs/secrets/
 docs/deploy/
+CURSOR_GUIDE.md
 
 # ==================
 # КОНФИГУРАЦИИ
