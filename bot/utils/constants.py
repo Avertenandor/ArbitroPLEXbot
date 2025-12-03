@@ -4,9 +4,10 @@ Common constants used across bot handlers
 """
 
 # Referral commission rates by level
+# 3-level referral program: 5% from deposits AND earnings at each level
 REFERRAL_RATES = {
-    1: 0.03,  # 3% for level 1 (direct referrals)
-    2: 0.02,  # 2% for level 2
+    1: 0.05,  # 5% for level 1 (direct referrals)
+    2: 0.05,  # 5% for level 2
     3: 0.05,  # 5% for level 3
 }
 
