@@ -6,7 +6,7 @@ and managing paginated lists.
 """
 
 import math
-from typing import Any, TypeVar
+from typing import Any, Callable, TypeVar
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -158,7 +158,7 @@ class PaginationBuilder:
         page: int,
         per_page: int,
         callback_prefix: str,
-        item_formatter: callable[[T, int], tuple[str, str]] | None = None,
+        item_formatter: Callable[[T, int], tuple[str, str]] | None = None,
         items_per_row: int = 1,
         show_page_info: bool = False,
         extra_buttons: list[list[InlineKeyboardButton]] | None = None,
