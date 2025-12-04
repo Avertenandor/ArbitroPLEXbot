@@ -15,7 +15,7 @@ from loguru import logger
 
 from app.models.user import User
 from app.services.deposit_service import DepositService
-from bot.keyboards.reply import deposit_keyboard, main_menu_reply_keyboard
+from bot.keyboards.reply import cancel_keyboard, deposit_keyboard, main_menu_reply_keyboard
 from bot.states.deposit import DepositStates
 from bot.utils.menu_buttons import is_menu_button
 
@@ -194,7 +194,7 @@ async def select_deposit_level(
         "После отправки введите hash транзакции:"
     )
 
-    await message.answer(text, parse_mode="Markdown")
+    await message.answer(text, parse_mode="Markdown", reply_markup=cancel_keyboard())
     await state.set_state(DepositStates.waiting_for_tx_hash)
 
 
@@ -224,9 +224,11 @@ async def process_tx_hash(
         await state.clear()
         return
     
-    # Check if message is a menu button - if so, clear state and ignore
-    if is_menu_button(message.text or ""):
+    # Check if message is a menu button or cancel - if so, clear state and ignore
+    if is_menu_button(message.text or "") or message.text == "❌ Отмена":
         await state.clear()
+        if message.text == "❌ Отмена":
+            await message.answer("Создание депозита отменено.", reply_markup=main_menu_reply_keyboard(user=user))
         return  # Let menu handlers process this
 
     tx_hash = (message.text or "").strip()
@@ -237,7 +239,8 @@ async def process_tx_hash(
             "❌ Неверный формат hash!\n\n"
             "Transaction hash должен начинаться с '0x' "
             "и содержать 66 символов.\n"
-            "Попробуйте еще раз:"
+            "Попробуйте еще раз:",
+            reply_markup=cancel_keyboard()
         )
         return
 

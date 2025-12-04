@@ -68,26 +68,14 @@ async def _monitor_deposits_async() -> None:
 
     async with lock.lock("deposit_monitoring", timeout=300):
         try:
-            # Create local engine
-            local_engine = create_async_engine(
-                settings.database_url,
-                echo=False,
-                poolclass=NullPool,
-            )
-
-            local_session_maker = async_sessionmaker(
-                local_engine,
-                class_=AsyncSession,
-                expire_on_commit=False,
-                autocommit=False,
-                autoflush=False,
-            )
+            # Use global engine and session maker
+            from app.config.database import async_engine, async_session_maker
 
             # Initialize bot for notifications (used for both recovery and regular processing)
             bot = Bot(token=settings.telegram_bot_token)
 
             try:
-                async with local_session_maker() as session:
+                async with async_session_maker() as session:
                     deposit_repo = DepositRepository(session)
                     deposit_service = DepositService(session)
                     blockchain_service = get_blockchain_service()
@@ -391,7 +379,6 @@ async def _monitor_deposits_async() -> None:
             finally:
                 # Always close bot session to prevent memory leak
                 await bot.session.close()
-                await local_engine.dispose()
         finally:
             # Close Redis client
             if redis_client:

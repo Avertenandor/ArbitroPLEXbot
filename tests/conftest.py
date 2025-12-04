@@ -119,3 +119,62 @@ def mock_redis_client():
     client.expire = AsyncMock()
     client.exists = AsyncMock(return_value=0)
     return client
+
+
+# FIXED: Add connection leak detection for integration tests
+@pytest.fixture(scope="session")
+async def test_engine():
+    """
+    Real async engine for integration tests.
+    WARNING: Only use for integration tests with real DB.
+    """
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from app.config.settings import settings
+
+    engine = create_async_engine(
+        settings.database_url,
+        echo=False,
+        pool_size=5,
+        max_overflow=10,
+        pool_pre_ping=True,
+    )
+
+    yield engine
+
+    await engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+async def check_no_leaked_connections(request):
+    """
+    FIXED: Check for connection leaks after each test.
+
+    This fixture runs automatically after each test and verifies
+    that all database connections are properly closed.
+
+    For unit tests with mocks, this is a no-op.
+    For integration tests with real DB engine, it checks the connection pool.
+    """
+    # Only check for integration tests that use real engine
+    if "test_engine" not in request.fixturenames:
+        yield
+        return
+
+    test_engine = request.getfixturevalue("test_engine")
+
+    # Get connection count before test
+    pool = test_engine.pool
+    before_checked_out = pool.checkedout()
+
+    yield
+
+    # Get connection count after test
+    after_checked_out = pool.checkedout()
+
+    # Check for leaks
+    if after_checked_out > before_checked_out:
+        leaked = after_checked_out - before_checked_out
+        pytest.fail(
+            f"Connection leak detected: {leaked} connection(s) not returned to pool. "
+            f"Before: {before_checked_out}, After: {after_checked_out}"
+        )

@@ -8,9 +8,11 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from loguru import logger
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.blacklist import Blacklist, BlacklistActionType
+from app.models.user import User
 from app.repositories.blacklist_repository import BlacklistRepository
 
 
@@ -332,7 +334,11 @@ class BlacklistService:
         appeal_repo = AppealRepository(self.session)
         ticket_repo = SupportTicketRepository(self.session)
 
-        user = await user_repo.get_by_id(user_id)
+        # R9-2: Lock user first to prevent race conditions
+        stmt = select(User).where(User.id == user_id).with_for_update()
+        result = await self.session.execute(stmt)
+        user = result.scalar_one_or_none()
+
         if not user:
             return {
                 "success": False,
@@ -370,13 +376,20 @@ class BlacklistService:
             status=TransactionStatus.PENDING.value,
         )
         rejected_count = 0
+        total_returned = 0
         for withdrawal in pending_withdrawals:
             withdrawal.status = TransactionStatus.FAILED.value
-            # Return balance
-            user.balance = user.balance + withdrawal.amount
+            total_returned += withdrawal.amount
             rejected_count += 1
 
-        if rejected_count > 0:
+        # R9-2: Atomic balance update to prevent race conditions
+        if total_returned > 0:
+            stmt = (
+                update(User)
+                .where(User.id == user_id)
+                .values(balance=User.balance + total_returned)
+            )
+            await self.session.execute(stmt)
             actions_taken.append(f"Rejected {rejected_count} pending withdrawals")
 
         # 4. Update blacklist entry to TERMINATED

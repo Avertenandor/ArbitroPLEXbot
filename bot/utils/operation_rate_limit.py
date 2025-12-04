@@ -78,6 +78,8 @@ class OperationRateLimiter:
         - 20 requests per day
         - 10 requests per hour
 
+        Uses atomic Redis operations to prevent race conditions.
+
         Args:
             telegram_id: Telegram user ID
 
@@ -88,37 +90,41 @@ class OperationRateLimiter:
             return True, None  # No Redis, allow
 
         try:
-            # Check daily limit (20 per day)
             daily_key = f"op_limit:withdraw:day:{telegram_id}"
-            daily_count_str = await self.redis_client.get(daily_key)
-            daily_count = int(daily_count_str) if daily_count_str else 0
+            hourly_key = f"op_limit:withdraw:hour:{telegram_id}"
 
-            if daily_count >= 20:
+            # Атомарная операция через pipeline: инкремент + установка TTL
+            pipe = self.redis_client.pipeline()
+            pipe.incr(daily_key)
+            pipe.expire(daily_key, 86400)  # 24 hours
+            pipe.incr(hourly_key)
+            pipe.expire(hourly_key, 3600)  # 1 hour
+            results = await pipe.execute()
+
+            daily_count = results[0]
+            hourly_count = results[2]
+
+            # Проверка дневного лимита (20 per day)
+            if daily_count > 20:
+                # Откатить инкремент, если превышен лимит
+                await self.redis_client.decr(daily_key)
+                await self.redis_client.decr(hourly_key)
                 return (
                     False,
                     "Превышен дневной лимит заявок на вывод (20/день). "
                     "Попробуйте завтра.",
                 )
 
-            # Check hourly limit (10 per hour)
-            hourly_key = f"op_limit:withdraw:hour:{telegram_id}"
-            hourly_count_str = await self.redis_client.get(hourly_key)
-            hourly_count = int(hourly_count_str) if hourly_count_str else 0
-
-            if hourly_count >= 10:
+            # Проверка часового лимита (10 per hour)
+            if hourly_count > 10:
+                # Откатить инкремент, если превышен лимит
+                await self.redis_client.decr(daily_key)
+                await self.redis_client.decr(hourly_key)
                 return (
                     False,
                     "Превышен часовой лимит заявок на вывод (10/час). "
                     "Попробуйте позже.",
                 )
-
-            # Increment counters
-            await self.redis_client.setex(
-                daily_key, 86400, str(daily_count + 1)
-            )  # 24 hours
-            await self.redis_client.setex(
-                hourly_key, 3600, str(hourly_count + 1)
-            )  # 1 hour
 
             return True, None
 
@@ -138,6 +144,8 @@ class OperationRateLimiter:
         """
         Check operation rate limit.
 
+        Uses Lua script for atomic operations to prevent race conditions.
+
         Args:
             operation: Operation type (reg, verify, etc.)
             telegram_id: Telegram user ID
@@ -154,12 +162,25 @@ class OperationRateLimiter:
         try:
             key = f"op_limit:{operation}:{telegram_id}"
 
-            # Get current count
-            count_str = await self.redis_client.get(key)
-            count = int(count_str) if count_str else 0
+            # Lua скрипт для атомарного инкремента с установкой TTL
+            # Возвращает текущее значение счетчика после инкремента
+            lua_script = """
+            local current = redis.call('INCR', KEYS[1])
+            if current == 1 then
+                redis.call('EXPIRE', KEYS[1], ARGV[1])
+            end
+            return current
+            """
 
-            # Check limit
-            if count >= max_attempts:
+            # Выполнить атомарную операцию
+            current_count = await self.redis_client.eval(
+                lua_script, 1, key, window_seconds
+            )
+
+            # Проверить лимит
+            if current_count > max_attempts:
+                # Откатить инкремент, если превышен лимит
+                await self.redis_client.decr(key)
                 minutes = window_seconds // 60
                 return (
                     False,
@@ -167,11 +188,6 @@ class OperationRateLimiter:
                     f"Лимит: {max_attempts} попыток за {minutes} минут. "
                     f"Попробуйте позже.",
                 )
-
-            # Increment counter
-            await self.redis_client.setex(
-                key, window_seconds, str(count + 1)
-            )
 
             return True, None
 

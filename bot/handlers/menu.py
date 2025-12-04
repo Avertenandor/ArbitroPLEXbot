@@ -173,18 +173,21 @@ async def show_balance(
     if not user and telegram_id:
         user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
     if not user:
-        await message.answer(
-            "⚠️ Ошибка: не удалось загрузить данные пользователя. "
-            "Попробуйте отправить /start"
-        )
+        # R13-3: Get default language for error message
+        from bot.i18n.loader import get_text
+        await message.answer(get_text('errors.user_load_error'))
         return
     await state.clear()
 
     user_service = UserService(session)
     balance = await user_service.get_user_balance(user.id)
 
+    # R13-3: Get user language for i18n
+    user_language = await get_user_language(session, user.id)
+    _ = get_translator(user_language)
+
     if not balance:
-        await message.answer("❌ Ошибка получения баланса")
+        await message.answer(_('errors.balance_error'))
         return
 
     text = (

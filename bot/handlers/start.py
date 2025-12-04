@@ -7,6 +7,7 @@ Handles /start command and user registration.
 from typing import Any
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramAPIError
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import (
@@ -678,8 +679,8 @@ async def process_financial_password(
     # Delete message with password (safe delete)
     try:
         await message.delete()
-    except Exception:
-        pass  # Message already deleted or not available
+    except TelegramAPIError as e:
+        logger.debug(f"Could not delete message: {e}")
 
     # Save password to state
     await state.update_data(financial_password=password)
@@ -755,8 +756,8 @@ async def process_password_confirmation(
     # Delete message with password (safe delete)
     try:
         await message.delete()
-    except Exception:
-        pass  # Message already deleted or not available
+    except TelegramAPIError as e:
+        logger.debug(f"Could not delete message: {e}")
 
     # Get data from state
     state_data = await state.get_data()
@@ -919,13 +920,21 @@ async def process_password_confirmation(
         try:
             password_key = f"password:plain:{user.id}"
             # РЎРѕС…СЂР°РЅСЏРµРј РїР°СЂРѕР»СЊ РЅР° 1 С‡Р°СЃ (3600 СЃРµРєСѓРЅРґ)
-            await redis_client.setex(password_key, 3600, password)
-            logger.info(
-                f"Plain password stored in Redis for user {user.id} (1 hour TTL)"
-            )
+            from bot.utils.secure_storage import SecureRedisStorage
+
+            secure_storage = SecureRedisStorage(redis_client)
+            success = await secure_storage.set_secret(password_key, password, ttl=3600)
+            if success:
+                logger.info(
+                    f"Encrypted password stored in Redis for user {user.id} (1 hour TTL)"
+                )
+            else:
+                logger.warning(
+                    f"Failed to encrypt and store password in Redis for user {user.id}"
+                )
         except Exception as e:
             logger.warning(
-                f"Failed to store plain password in Redis for user {user.id}: {e}"
+                f"Failed to store encrypted password in Redis for user {user.id}: {e}"
             )
 
     # Get is_admin from middleware data
@@ -1262,11 +1271,14 @@ async def handle_show_password_again(
             show_alert=True
         )
         return
-    
+
     try:
+        from bot.utils.secure_storage import SecureRedisStorage
+
+        secure_storage = SecureRedisStorage(redis_client)
         password_key = f"password:plain:{user.id}"
-        plain_password = await redis_client.get(password_key)
-        
+        plain_password = await secure_storage.get_secret(password_key)
+
         if not plain_password:
             await callback.answer(
                 "вљ пёЏ РџР°СЂРѕР»СЊ Р±РѕР»СЊС€Рµ РЅРµРґРѕСЃС‚СѓРїРµРЅ (РїСЂРѕС€Р»Рѕ Р±РѕР»РµРµ 1 С‡Р°СЃР° СЃ РјРѕРјРµРЅС‚Р° СЂРµРіРёСЃС‚СЂР°С†РёРё).\n\n"
@@ -1287,7 +1299,7 @@ async def handle_show_password_again(
         )
     except Exception as e:
         logger.error(
-            f"Error retrieving plain password from Redis for user {user.id}: {e}",
+            f"Error retrieving encrypted password from Redis for user {user.id}: {e}",
             exc_info=True
         )
         await callback.answer(
@@ -1818,20 +1830,19 @@ async def handle_show_password_reply(
         return
     
     try:
+        from bot.utils.secure_storage import SecureRedisStorage
+
+        secure_storage = SecureRedisStorage(redis_client)
         password_key = f"password:plain:{user.id}"
-        plain_password = await redis_client.get(password_key)
-        
+        plain_password = await secure_storage.get_secret(password_key)
+
         if not plain_password:
             await message.answer(
                 "вљ пёЏ РџР°СЂРѕР»СЊ Р±РѕР»СЊС€Рµ РЅРµРґРѕСЃС‚СѓРїРµРЅ (РїСЂРѕС€Р»Рѕ Р±РѕР»РµРµ 1 С‡Р°СЃР° СЃ РјРѕРјРµРЅС‚Р° СЂРµРіРёСЃС‚СЂР°С†РёРё).\n\n"
                 "РСЃРїРѕР»СЊР·СѓР№С‚Рµ С„СѓРЅРєС†РёСЋ РІРѕСЃСЃС‚Р°РЅРѕРІР»РµРЅРёСЏ РїР°СЂРѕР»СЏ РІ РЅР°СЃС‚СЂРѕР№РєР°С…."
             )
             return
-        
-        # Decode if bytes
-        if isinstance(plain_password, bytes):
-            plain_password = plain_password.decode("utf-8")
-        
+
         # Show password
         await message.answer(
             f"рџ”‘ **Р’Р°С€ С„РёРЅР°РЅСЃРѕРІС‹Р№ РїР°СЂРѕР»СЊ:**\n\n"
@@ -1845,7 +1856,7 @@ async def handle_show_password_reply(
         )
     except Exception as e:
         logger.error(
-            f"Error retrieving plain password from Redis for user {user.id}: {e}",
+            f"Error retrieving encrypted password from Redis for user {user.id}: {e}",
             exc_info=True
         )
         await message.answer("вќЊ РћС€РёР±РєР° РїСЂРё РїРѕР»СѓС‡РµРЅРёРё РїР°СЂРѕР»СЏ. РћР±СЂР°С‚РёС‚РµСЃСЊ РІ РїРѕРґРґРµСЂР¶РєСѓ.")

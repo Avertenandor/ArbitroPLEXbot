@@ -343,31 +343,43 @@ class DepositService:
         """
         Get platform-wide deposit statistics.
 
+        Uses SQL aggregation to avoid OOM on large datasets.
+
         Returns:
             Dict with total deposits, amounts, and breakdown by level
         """
-        # Get all confirmed deposits
-        all_deposits = await self.deposit_repo.find_by(
-            status=TransactionStatus.CONFIRMED.value
-        )
+        from sqlalchemy import func, select
 
-        # Calculate totals
-        total_deposits = len(all_deposits)
-        total_amount = sum(d.amount for d in all_deposits)
+        # Aggregate stats through SQL
+        stats_stmt = select(
+            func.count(Deposit.id).label('total'),
+            func.sum(Deposit.amount).label('total_amount'),
+            func.count(func.distinct(Deposit.user_id)).label('unique_users')
+        ).where(Deposit.status == TransactionStatus.CONFIRMED.value)
 
-        # Get unique users with deposits
-        unique_users = len(set(d.user_id for d in all_deposits))
+        result = await self.session.execute(stats_stmt)
+        stats = result.one()
 
-        # Count by level
-        deposits_by_level = {}
-        for level in [1, 2, 3, 4, 5]:
-            level_deposits = [d for d in all_deposits if d.level == level]
-            deposits_by_level[level] = len(level_deposits)
+        # Count by level using SQL group by
+        level_stats_stmt = select(
+            Deposit.level,
+            func.count(Deposit.id).label('count')
+        ).where(
+            Deposit.status == TransactionStatus.CONFIRMED.value
+        ).group_by(Deposit.level)
+
+        level_result = await self.session.execute(level_stats_stmt)
+        level_rows = level_result.all()
+
+        # Build deposits_by_level dict
+        deposits_by_level = {level: 0 for level in [1, 2, 3, 4, 5]}
+        for row in level_rows:
+            deposits_by_level[row.level] = row.count
 
         return {
-            "total_deposits": total_deposits,
-            "total_amount": total_amount,
-            "total_users": unique_users,
+            "total_deposits": stats.total or 0,
+            "total_amount": stats.total_amount or Decimal("0"),
+            "total_users": stats.unique_users or 0,
             "deposits_by_level": deposits_by_level,
         }
 

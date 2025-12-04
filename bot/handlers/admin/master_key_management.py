@@ -1,7 +1,7 @@
 """
 Master key management handler.
 
-Allows super admin (telegram_id: 1040687384) to get and regenerate master key.
+Allows super admin to get and regenerate master key.
 Similar to @BotFather token management.
 
 FULL FUNCTIONALITY (with REPLY keyboards):
@@ -13,6 +13,7 @@ FULL FUNCTIONALITY (with REPLY keyboards):
 - Role-based access control
 """
 
+import os
 from typing import Any
 
 from aiogram import F, Router
@@ -21,6 +22,7 @@ from aiogram.types import Message
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config.settings import settings
 from app.services.admin_log_service import AdminLogService
 from app.services.admin_service import AdminService
 from bot.keyboards.reply import (
@@ -30,8 +32,15 @@ from bot.keyboards.reply import (
 from bot.states.admin import AdminMasterKeyStates
 from bot.utils.admin_utils import clear_state_preserve_admin_token
 
-# SUPER_ADMIN_TELEGRAM_ID - only this user can manage master keys
-SUPER_ADMIN_TELEGRAM_ID = 1040687384
+# Get SUPER_ADMIN_TELEGRAM_ID from environment variable
+SUPER_ADMIN_TELEGRAM_ID = int(os.getenv("SUPER_ADMIN_TELEGRAM_ID", "0"))
+
+# Validate at module load time
+if not SUPER_ADMIN_TELEGRAM_ID:
+    raise ValueError(
+        "SUPER_ADMIN_TELEGRAM_ID environment variable is required. "
+        "Set it in your .env file with your Telegram user ID."
+    )
 
 router = Router()
 
@@ -58,11 +67,11 @@ async def show_master_key_menu(
 ) -> None:
     """
     Show master key management menu.
-    
-    Only accessible to super admin (telegram_id: 1040687384).
+
+    Only accessible to super admin (configured via SUPER_ADMIN_TELEGRAM_ID env var).
     NOTE: This handler does NOT require master key authentication
     because it's used to GET the master key.
-    
+
     SECURITY:
     - Checks telegram_id == SUPER_ADMIN_TELEGRAM_ID
     - Verifies admin exists in database
@@ -368,6 +377,7 @@ async def regenerate_master_key(
         )
         await session.commit()
     except Exception as e:
+        await session.rollback()
         logger.error(f"Failed to log master key action: {e}")
 
     # Show new key to user (ONLY ONCE!)

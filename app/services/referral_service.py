@@ -7,8 +7,9 @@ Manages referral chains, relationships, and reward processing.
 from decimal import Decimal
 
 from loguru import logger
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.referral import Referral
 from app.models.user import User
@@ -283,9 +284,10 @@ class ReferralService(BaseService):
         """
         offset = (page - 1) * limit
 
-        # Get referrals with pagination
+        # Get referrals with pagination, eager load referral users to avoid N+1
         stmt = (
             select(Referral)
+            .options(selectinload(Referral.referral))
             .where(Referral.referrer_id == user_id, Referral.level == level)
             .order_by(Referral.created_at.desc())
             .limit(limit)
@@ -295,19 +297,17 @@ class ReferralService(BaseService):
         result = await self.session.execute(stmt)
         relationships = list(result.scalars().all())
 
-        # Get total count
-        count_stmt = select(Referral).where(
+        # Get total count using SQL COUNT (avoid loading all records)
+        count_stmt = select(func.count(Referral.id)).where(
             Referral.referrer_id == user_id, Referral.level == level
         )
         count_result = await self.session.execute(count_stmt)
-        total = len(list(count_result.scalars().all()))
+        total = count_result.scalar() or 0
 
-        # Load referral users
+        # Build referrals list (users already loaded via eager loading)
         referrals = []
         for rel in relationships:
-            user_stmt = select(User).where(User.id == rel.referral_id)
-            user_result = await self.session.execute(user_stmt)
-            user = user_result.scalar_one_or_none()
+            user = rel.referral  # Already loaded via selectinload
 
             if user:
                 referrals.append({
@@ -331,6 +331,8 @@ class ReferralService(BaseService):
         """
         Get pending (unpaid) earnings for user.
 
+        Uses SQL aggregation to avoid OOM on large datasets.
+
         Args:
             user_id: User ID
             page: Page number
@@ -339,6 +341,8 @@ class ReferralService(BaseService):
         Returns:
             Dict with earnings, total, total_amount, page, pages
         """
+        from app.models.referral_earning import ReferralEarning
+
         # Get user's referral relationships
         relationships = await self.referral_repo.find_by(
             referrer_id=user_id
@@ -356,19 +360,26 @@ class ReferralService(BaseService):
 
         offset = (page - 1) * limit
 
-        # Get unpaid earnings
+        # Get unpaid earnings with pagination
         earnings = await self.earning_repo.get_unpaid_by_referral_ids(
             relationship_ids, limit=limit, offset=offset
         )
 
-        # Get total count and amount
-        all_earnings = await self.earning_repo.get_unpaid_by_referral_ids(
-            relationship_ids
+        # Use SQL aggregation for count and sum
+        stats_stmt = select(
+            func.count(ReferralEarning.id).label('total'),
+            func.sum(ReferralEarning.amount).label('total_amount')
+        ).where(
+            ReferralEarning.referral_id.in_(relationship_ids),
+            ReferralEarning.paid == False  # noqa: E712
         )
-        total = len(all_earnings)
-        total_amount = sum(e.amount for e in all_earnings)
 
-        pages = (total + limit - 1) // limit
+        stats_result = await self.session.execute(stats_stmt)
+        stats = stats_result.one()
+
+        total = stats.total or 0
+        total_amount = stats.total_amount or Decimal("0")
+        pages = (total + limit - 1) // limit if total > 0 else 0
 
         return {
             "earnings": earnings,
@@ -586,32 +597,56 @@ class ReferralService(BaseService):
         """
         Get platform-wide referral statistics.
 
+        Uses SQL aggregation to avoid OOM on large datasets.
+
         Returns:
             Dict with total referrals, earnings breakdown
         """
-        # Get all referrals
-        all_referrals = await self.referral_repo.find_by()
+        from app.models.referral_earning import ReferralEarning
 
-        # Count by level
+        # Aggregate referral stats by level using SQL
+        referral_stats_stmt = select(
+            Referral.level,
+            func.count(Referral.id).label('count'),
+            func.sum(Referral.total_earned).label('earnings')
+        ).group_by(Referral.level)
+
+        referral_result = await self.session.execute(referral_stats_stmt)
+        referral_rows = referral_result.all()
+
+        # Build by_level dict
         by_level = {}
-        for level in [1, 2, 3]:
-            level_refs = [r for r in all_referrals if r.level == level]
-            level_earnings = sum(r.total_earned for r in level_refs)
-            by_level[level] = {
-                "count": len(level_refs),
-                "earnings": level_earnings,
+        total_referrals = 0
+        for row in referral_rows:
+            by_level[row.level] = {
+                "count": row.count or 0,
+                "earnings": row.earnings or Decimal("0"),
             }
+            total_referrals += row.count or 0
 
-        # Get all earnings
-        all_earnings = await self.earning_repo.find_by()
-        total_earnings = sum(e.amount for e in all_earnings)
-        paid_earnings = sum(e.amount for e in all_earnings if e.paid)
-        pending_earnings = sum(e.amount for e in all_earnings if not e.paid)
+        # Ensure all levels are present
+        for level in [1, 2, 3]:
+            if level not in by_level:
+                by_level[level] = {"count": 0, "earnings": Decimal("0")}
+
+        # Aggregate earning stats using SQL
+        earning_stats_stmt = select(
+            func.sum(ReferralEarning.amount).label('total_earnings'),
+            func.sum(
+                func.case((ReferralEarning.paid == True, ReferralEarning.amount), else_=0)  # noqa: E712
+            ).label('paid_earnings'),
+            func.sum(
+                func.case((ReferralEarning.paid == False, ReferralEarning.amount), else_=0)  # noqa: E712
+            ).label('pending_earnings')
+        )
+
+        earning_result = await self.session.execute(earning_stats_stmt)
+        earning_stats = earning_result.one()
 
         return {
-            "total_referrals": len(all_referrals),
-            "total_earnings": total_earnings,
-            "paid_earnings": paid_earnings,
-            "pending_earnings": pending_earnings,
+            "total_referrals": total_referrals,
+            "total_earnings": earning_stats.total_earnings or Decimal("0"),
+            "paid_earnings": earning_stats.paid_earnings or Decimal("0"),
+            "pending_earnings": earning_stats.pending_earnings or Decimal("0"),
             "by_level": by_level,
         }

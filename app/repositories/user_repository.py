@@ -89,6 +89,9 @@ class UserRepository(BaseRepository[User]):
         """
         Get all user Telegram IDs.
 
+        WARNING: This loads all IDs into memory. For large datasets,
+        use get_telegram_ids_batched() instead.
+
         Returns:
             List of Telegram IDs
         """
@@ -122,3 +125,47 @@ class UserRepository(BaseRepository[User]):
             List of verified users
         """
         return await self.find_by(is_verified=True)
+
+    async def get_telegram_ids_batched(self, batch_size: int = 1000):
+        """
+        Generator for getting telegram_ids in batches to avoid OOM.
+
+        Uses OFFSET/LIMIT to stream data from DB without loading all into memory.
+
+        Args:
+            batch_size: Number of IDs per batch
+
+        Yields:
+            Batches of telegram IDs
+        """
+        offset = 0
+        while True:
+            stmt = (
+                select(User.telegram_id)
+                .where(User.is_banned == False)  # noqa: E712
+                .offset(offset)
+                .limit(batch_size)
+            )
+            result = await self.session.execute(stmt)
+            batch = list(result.scalars().all())
+
+            if not batch:
+                break
+
+            yield batch
+            offset += batch_size
+
+    async def count_verified_users(self) -> int:
+        """
+        Count verified users.
+
+        Returns:
+            Number of verified users
+        """
+        from sqlalchemy import func
+
+        stmt = select(func.count(User.id)).where(
+            User.is_banned == False
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0

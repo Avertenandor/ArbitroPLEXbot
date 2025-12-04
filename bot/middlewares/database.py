@@ -89,16 +89,9 @@ class DatabaseMiddleware(BaseMiddleware):
             logger.warning(f"R11-1: Circuit breaker blocked operation: {reason}")
             if isinstance(event, Message):
                 try:
+                    # FIXED: Don't try to access DB when circuit breaker is open
+                    # Use default language instead to avoid connection leak
                     user_language = DEFAULT_LANGUAGE
-                    if hasattr(event, "from_user") and event.from_user:
-                        try:
-                            async with self.session_pool() as lang_session:
-                                user_language = await get_user_language(
-                                    lang_session, event.from_user.id
-                                )
-                        except Exception as e:
-                            logger.warning(f"Failed to get user language from DB: {e}")
-                            pass
                     _ = get_translator(user_language)
                     await event.answer(_("errors.database_unavailable"))
                 except Exception as e:
@@ -129,43 +122,17 @@ class DatabaseMiddleware(BaseMiddleware):
                         f"Database error in handler: {e}",
                         extra={"error_type": type(e).__name__},
                     )
-                    
-                    # R14-3: Record error for aggregation
-                    try:
-                        async with self.session_pool() as agg_session:
-                            from app.services.log_aggregation_service import (
-                                LogAggregationService,
-                            )
-                            agg_service = LogAggregationService(agg_session)
-                            user_id = None
-                            if isinstance(event, Message) and hasattr(event, "from_user"):
-                                user_id = event.from_user.id if event.from_user else None
-                            await agg_service.record_error(
-                                error_type=type(e).__name__,
-                                error_message=str(e)[:500],
-                                user_id=user_id,
-                                context={"handler": handler.__name__ if hasattr(handler, "__name__") else "unknown"},
-                            )
-                    except Exception as agg_error:
-                        # Don't fail if aggregation fails
-                        logger.debug(f"Failed to record error in aggregation: {agg_error}")
+
+                    # FIXED: Don't try to create new DB session when DB is failing
+                    # This would cause connection leak. Just log to file instead.
+                    # R14-3: Error aggregation skipped when DB is unavailable
                     
                     # Send graceful error message to user if it's a Message event
                     if isinstance(event, Message):
                         try:
-                            # R11-1: Get user language for i18n error message
+                            # FIXED: Don't try to access DB when DB is failing
+                            # Use default language to avoid connection leak
                             user_language = DEFAULT_LANGUAGE
-                            if hasattr(event, "from_user") and event.from_user:
-                                try:
-                                    # Try to get user language from DB
-                                    async with self.session_pool() as lang_session:
-                                        user_language = await get_user_language(
-                                            lang_session, event.from_user.id
-                                        )
-                                except Exception as e:
-                                    # If we can't get language, use default
-                                    logger.warning(f"Failed to get user language during error handling: {e}")
-                                    pass
                             
                             _ = get_translator(user_language)
                             
@@ -205,43 +172,17 @@ class DatabaseMiddleware(BaseMiddleware):
                 f"Database connection failure in middleware: {e}",
                 extra={"error_type": type(e).__name__},
             )
-            
-            # R14-3: Record error for aggregation (use separate session)
-            try:
-                async with self.session_pool() as agg_session:
-                    from app.services.log_aggregation_service import (
-                        LogAggregationService,
-                    )
-                    agg_service = LogAggregationService(agg_session)
-                    user_id = None
-                    if isinstance(event, Message) and hasattr(event, "from_user"):
-                        user_id = event.from_user.id if event.from_user else None
-                    await agg_service.record_error(
-                        error_type=type(e).__name__,
-                        error_message=str(e)[:500],
-                        user_id=user_id,
-                        context={"middleware": "DatabaseMiddleware"},
-                    )
-            except Exception as agg_error:
-                # Don't fail if aggregation fails
-                logger.debug(f"Failed to record error in aggregation: {agg_error}")
+
+            # FIXED: Don't try to create new DB session when DB is failing
+            # This would cause connection leak. Just log to file instead.
+            # R14-3: Error aggregation skipped when DB is unavailable
             
             # Send graceful error message to user if it's a Message event
             if isinstance(event, Message):
                 try:
-                    # R11-1: Get user language for i18n error message
+                    # FIXED: Don't try to access DB when DB connection failed
+                    # Use default language to avoid connection leak
                     user_language = DEFAULT_LANGUAGE
-                    if hasattr(event, "from_user") and event.from_user:
-                        try:
-                            # Try to get user language from DB (if DB is still accessible)
-                            # If not, use default language
-                            async with self.session_pool() as lang_session:
-                                user_language = await get_user_language(
-                                    lang_session, event.from_user.id
-                                )
-                        except Exception:
-                            # If we can't get language (DB might be down), use default
-                            pass
                     
                     _ = get_translator(user_language)
                     

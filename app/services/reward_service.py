@@ -8,14 +8,16 @@ from datetime import datetime
 from decimal import Decimal
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.config.settings import settings
 from app.models.deposit import Deposit
 from app.models.deposit_reward import DepositReward
 from app.models.enums import TransactionStatus, TransactionType
 from app.models.reward_session import RewardSession
+from app.models.user import User
 from app.repositories.deposit_repository import DepositRepository
 from app.repositories.deposit_reward_repository import (
     DepositRewardRepository,
@@ -173,11 +175,9 @@ class RewardService(BaseService):
         Returns:
             Tuple of (success, error_message)
         """
-        # Check if rewards have been calculated
-        rewards_count = len(
-            await self.reward_repo.find_by(
-                reward_session_id=session_id
-            )
+        # Check if rewards have been calculated (use SQL COUNT to avoid loading all records)
+        rewards_count = await self.reward_repo.count(
+            reward_session_id=session_id
         )
 
         if rewards_count > 0:
@@ -249,8 +249,10 @@ class RewardService(BaseService):
 
         # R9-2: Find deposits in session period with pessimistic lock
         # This prevents race conditions with withdrawal operations
+        # Eager load users to avoid N+1 queries
         stmt = (
             select(Deposit)
+            .options(selectinload(Deposit.user))
             .where(
                 Deposit.status == TransactionStatus.CONFIRMED.value,
                 Deposit.confirmed_at >= session_obj.start_date,
@@ -274,10 +276,8 @@ class RewardService(BaseService):
         total_reward_amount = Decimal("0")
 
         for deposit in deposits:
-            # Load user to check earnings_blocked
-            user_stmt = select(deposit.user)
-            user_result = await self.session.execute(user_stmt)
-            user = user_result.scalar_one_or_none()
+            # User is already loaded via eager loading (selectinload)
+            user = deposit.user
 
             # CRITICAL: Skip if earnings blocked (finpass recovery)
             if user and user.earnings_blocked:
@@ -461,23 +461,38 @@ class RewardService(BaseService):
         """
         Get session statistics.
 
+        Uses SQL aggregation to avoid OOM on large datasets.
+
         Args:
             session_id: Session ID
 
         Returns:
             Dict with comprehensive session stats
         """
-        # Get all rewards for session
-        rewards = await self.reward_repo.find_by(
-            reward_session_id=session_id
-        )
+        # Aggregate reward stats using SQL
+        stats_stmt = select(
+            func.count(DepositReward.id).label('total_rewards'),
+            func.sum(
+                func.case((DepositReward.paid == True, 1), else_=0)  # noqa: E712
+            ).label('paid_rewards'),
+            func.sum(DepositReward.reward_amount).label('total_amount'),
+            func.sum(
+                func.case(
+                    (DepositReward.paid == True, DepositReward.reward_amount),  # noqa: E712
+                    else_=0
+                )
+            ).label('paid_amount')
+        ).where(DepositReward.reward_session_id == session_id)
 
-        total_rewards = len(rewards)
-        paid_rewards = len([r for r in rewards if r.paid])
+        result = await self.session.execute(stats_stmt)
+        stats = result.one()
+
+        total_rewards = stats.total_rewards or 0
+        paid_rewards = stats.paid_rewards or 0
         pending_rewards = total_rewards - paid_rewards
 
-        total_amount = sum(r.reward_amount for r in rewards)
-        paid_amount = sum(r.reward_amount for r in rewards if r.paid)
+        total_amount = stats.total_amount or Decimal("0")
+        paid_amount = stats.paid_amount or Decimal("0")
         pending_amount = total_amount - paid_amount
 
         return {
@@ -692,25 +707,35 @@ class RewardService(BaseService):
         if reward_amount <= 0:
             return
 
-        user = await self.user_repo.get_by_id(user_id)
-        if not user:
+        # R9-2: Get balance_before for transaction record
+        stmt = select(User.balance).where(User.id == user_id)
+        result = await self.session.execute(stmt)
+        balance_before = result.scalar_one_or_none()
+
+        if balance_before is None:
             logger.error(
                 "Failed to credit ROI to balance: user not found",
                 extra={"user_id": user_id, "reward_amount": str(reward_amount)},
             )
             return
 
-        balance_before = user.balance or Decimal("0")
+        balance_before = balance_before or Decimal("0")
         balance_after = balance_before + reward_amount
 
-        # Update user balances
-        user.balance = balance_after
-        user.total_earned = (user.total_earned or Decimal("0")) + reward_amount
-        self.session.add(user)
+        # R9-2: Atomic update with pessimistic locking to prevent race conditions
+        stmt = (
+            update(User)
+            .where(User.id == user_id)
+            .values(
+                balance=User.balance + reward_amount,
+                total_earned=User.total_earned + reward_amount,
+            )
+        )
+        await self.session.execute(stmt)
 
         # Create accounting transaction for internal ROI credit
         await self.transaction_repo.create(
-            user_id=user.id,
+            user_id=user_id,
             type=TransactionType.DEPOSIT_REWARD.value,
             amount=reward_amount,
             balance_before=balance_before,

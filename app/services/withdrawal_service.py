@@ -113,7 +113,12 @@ class WithdrawalService(BaseService):
                 fee_amount = await self.balance_manager.calculate_fee(amount)
                 net_amount = amount - fee_amount
 
+                # CRITICAL: Validate that fee is less than amount
+                if fee_amount >= amount:
+                    return None, "Комиссия превышает или равна сумме вывода", False
+
                 # Deduct balance BEFORE creating transaction (Gross amount)
+                # User requests 'amount', we deduct 'amount', but send 'net_amount' to blockchain
                 balance_before = user.balance
                 user.balance = user.balance - amount
                 balance_after = user.balance
@@ -217,13 +222,13 @@ class WithdrawalService(BaseService):
         """
         offset = (page - 1) * limit
 
-        # Get total count
-        count_stmt = select(Transaction).where(
+        # Get total count using SQL COUNT (avoid loading all records)
+        count_stmt = select(func.count(Transaction.id)).where(
             Transaction.user_id == user_id,
             Transaction.type == TransactionType.WITHDRAWAL.value,
         )
         count_result = await self.session.execute(count_stmt)
-        total = len(list(count_result.scalars().all()))
+        total = count_result.scalar() or 0
 
         # Get paginated withdrawals
         stmt = (
@@ -407,8 +412,15 @@ class WithdrawalService(BaseService):
             if settings.blockchain_maintenance_mode:
                 return False, "Blockchain в режиме обслуживания", None
 
+            # Get withdrawal transaction to retrieve fee
+            withdrawal = await self.get_withdrawal_by_id(transaction_id)
+            if not withdrawal:
+                return False, "Транзакция не найдена", None
+
+            # CRITICAL: Send net_amount (amount - fee) to user, not gross amount
+            net_amount = withdrawal.amount - withdrawal.fee
             payment_result = await blockchain_service.send_payment(
-                to_address, withdrawal_amount
+                to_address, net_amount
             )
 
             if not payment_result["success"]:

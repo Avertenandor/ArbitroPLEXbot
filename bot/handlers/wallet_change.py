@@ -115,11 +115,12 @@ async def process_financial_password(
         )
     else:
         if "Invalid financial password" in error:
-             await message.answer(
+            await message.answer(
                 "❌ Неверный финансовый пароль.\n"
                 "Попробуйте еще раз или нажмите '❌ Отмена'.",
                 reply_markup=cancel_keyboard(),
             )
+            return  # Остаемся в состоянии для повторной попытки
         else:
             # Other error (e.g. wallet already used)
             await state.clear()

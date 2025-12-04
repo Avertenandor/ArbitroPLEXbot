@@ -79,73 +79,73 @@ async def _process_notification_fallback_async() -> None:
                 f"R11-3: Processing {len(pending_notifications)} pending notifications"
             )
 
-            bot = Bot(token=settings.telegram_bot_token)
-            notification_service = NotificationService(session)
+            # FIXED: Use context manager for Bot to prevent session leak
+            async with Bot(token=settings.telegram_bot_token) as bot:
+                notification_service = NotificationService(session)
 
-            sent = 0
-            failed = 0
+                sent = 0
+                failed = 0
 
-            for notification in pending_notifications:
-                try:
-                    # Extract payload
-                    payload = notification.payload
-                    message = payload.get("message", "")
-                    critical = payload.get("critical", False)
+                for notification in pending_notifications:
+                    try:
+                        # Extract payload
+                        payload = notification.payload
+                        message = payload.get("message", "")
+                        critical = payload.get("critical", False)
 
-                    if not message:
-                        logger.warning(
-                            f"R11-3: Notification {notification.id} has empty message"
+                        if not message:
+                            logger.warning(
+                                f"R11-3: Notification {notification.id} has empty message"
+                            )
+                            # Mark as processed to avoid reprocessing
+                            notification.processed_at = datetime.now(UTC)
+                            failed += 1
+                            continue
+
+                        # Get user telegram_id
+                        user = notification.user
+                        if not user:
+                            logger.warning(
+                                f"R11-3: Notification {notification.id} has no user"
+                            )
+                            notification.processed_at = datetime.now(UTC)
+                            failed += 1
+                            continue
+
+                        # Send notification (without Redis to avoid recursion)
+                        success = await notification_service.send_notification(
+                            bot=bot,
+                            user_telegram_id=user.telegram_id,
+                            message=message,
+                            critical=critical,
+                            redis_client=None,  # Don't use Redis to avoid recursion
                         )
-                        # Mark as processed to avoid reprocessing
-                        notification.processed_at = datetime.now(UTC)
+
+                        if success:
+                            # Mark as processed
+                            notification.processed_at = datetime.now(UTC)
+                            sent += 1
+                            logger.info(
+                                f"R11-3: Notification {notification.id} sent successfully "
+                                f"to user {user.telegram_id}"
+                            )
+                        else:
+                            # Keep as pending for retry
+                            failed += 1
+                            logger.warning(
+                                f"R11-3: Failed to send notification {notification.id} "
+                                f"to user {user.telegram_id}"
+                            )
+
+                    except Exception as e:
+                        logger.error(
+                            f"R11-3: Error processing notification {notification.id}: {e}",
+                            extra={"notification_id": notification.id},
+                            exc_info=True,
+                        )
                         failed += 1
-                        continue
 
-                    # Get user telegram_id
-                    user = notification.user
-                    if not user:
-                        logger.warning(
-                            f"R11-3: Notification {notification.id} has no user"
-                        )
-                        notification.processed_at = datetime.now(UTC)
-                        failed += 1
-                        continue
-
-                    # Send notification (without Redis to avoid recursion)
-                    success = await notification_service.send_notification(
-                        bot=bot,
-                        user_telegram_id=user.telegram_id,
-                        message=message,
-                        critical=critical,
-                        redis_client=None,  # Don't use Redis to avoid recursion
-                    )
-
-                    if success:
-                        # Mark as processed
-                        notification.processed_at = datetime.now(UTC)
-                        sent += 1
-                        logger.info(
-                            f"R11-3: Notification {notification.id} sent successfully "
-                            f"to user {user.telegram_id}"
-                        )
-                    else:
-                        # Keep as pending for retry
-                        failed += 1
-                        logger.warning(
-                            f"R11-3: Failed to send notification {notification.id} "
-                            f"to user {user.telegram_id}"
-                        )
-
-                except Exception as e:
-                    logger.error(
-                        f"R11-3: Error processing notification {notification.id}: {e}",
-                        extra={"notification_id": notification.id},
-                        exc_info=True,
-                    )
-                    failed += 1
-
-            await session.commit()
-            await bot.session.close()
+                await session.commit()
 
             logger.info(
                 f"R11-3: Stats: {len(pending_notifications)} processed, "

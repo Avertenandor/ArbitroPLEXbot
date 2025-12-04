@@ -5,5 +5,4 @@ class AuthStates(StatesGroup):
     """Authorization flow states."""
     waiting_for_wallet = State()  # Step 1: User enters wallet
     waiting_for_payment = State()  # Step 2: User confirms payment
-    waiting_for_payment_wallet = State()  # Legacy: asking wallet after payment click
 

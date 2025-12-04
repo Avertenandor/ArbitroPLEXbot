@@ -22,6 +22,7 @@ from app.services.user_service import UserService
 from app.services.withdrawal_service import WithdrawalService
 from app.utils.security import mask_address
 from app.validators.common import validate_amount
+from bot.i18n.loader import get_text, get_translator, get_user_language
 from bot.keyboards.reply import (
     finpass_input_keyboard,
     main_menu_reply_keyboard,
@@ -55,7 +56,8 @@ async def is_level1_only_user(session: AsyncSession, user_id: int) -> bool:
 
 async def check_withdrawal_eligibility(
     session: AsyncSession,
-    user: User
+    user: User,
+    lang: str = "ru"
 ) -> tuple[bool, str | None]:
     """
     Check if user can withdraw:
@@ -67,10 +69,7 @@ async def check_withdrawal_eligibility(
     """
     # Everyone needs financial password
     if not user.is_verified:
-        return False, (
-            "❌ Для вывода необходим финансовый пароль!\n\n"
-            "Установите финпароль через кнопку '🔐 Получить финпароль' в главном меню."
-        )
+        return False, get_text('withdrawal.finpass_required', lang=lang)
 
     # Check if level 2+ user needs additional verification
     is_level1 = await is_level1_only_user(session, user.id)
@@ -78,10 +77,7 @@ async def check_withdrawal_eligibility(
     if not is_level1:
         # Level 2+ needs phone OR email
         if not user.phone and not user.email:
-            return False, (
-                "❌ Для вывода с депозитами уровня 2+ требуется верификация!\n\n"
-                "Укажите телефон или email через меню '👤 Мой профиль' → '✏️ Редактировать'."
-            )
+            return False, get_text('withdrawal.verification_required', lang=lang)
 
     return True, None
 
@@ -139,11 +135,12 @@ async def process_auto_payout(
 
             # Notify user about success
             try:
+                # Show net amount that was actually sent (amount param is already net_amount)
                 await bot.send_message(
                     chat_id=telegram_id,
                     text=(
                         f"✅ *Выплата отправлена!*\n\n"
-                        f"💰 Сумма: `{amount} USDT`\n"
+                        f"💰 Получено: `{amount} USDT`\n"
                         f"💳 Кошелек: `{to_address[:6]}...{to_address[-4:]}`\n"
                         f"🔗 TX: [Посмотреть транзакцию](https://bscscan.com/tx/{result['tx_hash']})\n\n"
                         f"🤝 Спасибо за ваше доверие к ArbitroPLEXbot!"
@@ -206,16 +203,19 @@ async def withdraw_all(
     """Handle 'Withdraw All' button."""
     user: User | None = data.get("user")
     if not user:
-        await message.answer("❌ Ошибка: пользователь не найден")
+        await message.answer(get_text('errors.user_not_found'))
         return
 
     session = data.get("session")
     if not session:
-        await message.answer("❌ Системная ошибка")
+        await message.answer(get_text('errors.system_error'))
         return
 
+    # R13-3: Get user language
+    user_language = await get_user_language(session, user.id)
+
     # Check withdrawal eligibility (finpass for all, phone/email for level 2+)
-    can_withdraw, error_msg = await check_withdrawal_eligibility(session, user)
+    can_withdraw, error_msg = await check_withdrawal_eligibility(session, user, user_language)
     if not can_withdraw:
         await message.answer(error_msg, reply_markup=withdrawal_keyboard(), parse_mode="Markdown")
         return
@@ -310,16 +310,20 @@ async def withdraw_amount(
     """Handle 'Withdraw Amount' button."""
     user: User | None = data.get("user")
     if not user:
-        await message.answer("❌ Ошибка: пользователь не найден")
+        await message.answer(get_text('errors.user_not_found'))
         return
 
     session = data.get("session")
     if not session:
-        await message.answer("❌ Системная ошибка")
+        await message.answer(get_text('errors.system_error'))
         return
 
+    # R13-3: Get user language
+    user_language = await get_user_language(session, user.id)
+    _ = get_translator(user_language)
+
     # Check withdrawal eligibility (finpass for all, phone/email for level 2+)
-    can_withdraw, error_msg = await check_withdrawal_eligibility(session, user)
+    can_withdraw, error_msg = await check_withdrawal_eligibility(session, user, user_language)
     if not can_withdraw:
         await message.answer(error_msg, reply_markup=withdrawal_keyboard(), parse_mode="Markdown")
         return
@@ -343,18 +347,22 @@ async def process_withdrawal_amount(
     """Process withdrawal amount."""
     user: User | None = data.get("user")
     if not user:
-        await message.answer("❌ Ошибка: пользователь не найден")
+        await message.answer(get_text('errors.user_not_found'))
         await state.clear()
         return
 
     session = data.get("session")
     if not session:
-        await message.answer("❌ Системная ошибка")
+        await message.answer(get_text('errors.system_error'))
         await state.clear()
         return
 
+    # R13-3: Get user language
+    user_language = await get_user_language(session, user.id)
+    _ = get_translator(user_language)
+
     # Check withdrawal eligibility (finpass for all, phone/email for level 2+)
-    can_withdraw, error_msg = await check_withdrawal_eligibility(session, user)
+    can_withdraw, error_msg = await check_withdrawal_eligibility(session, user, user_language)
     if not can_withdraw:
         await message.answer(error_msg, reply_markup=withdrawal_keyboard(), parse_mode="Markdown")
         await state.clear()
@@ -523,10 +531,13 @@ async def process_financial_password(
                 reply_markup=withdrawal_keyboard(),
             )
         elif transaction:
+            net_amount = transaction.amount - transaction.fee
             if is_auto:
                 await message.answer(
                     f"✅ *Заявка #{transaction.id} принята!*\n\n"
-                    f"💰 Сумма: *{transaction.amount} USDT*\n"
+                    f"💰 Запрошено: *{transaction.amount} USDT*\n"
+                    f"💸 Комиссия: *{transaction.fee} USDT*\n"
+                    f"✨ К получению: *{net_amount} USDT*\n"
                     f"💳 Кошелек: `{transaction.to_address[:10]}...{transaction.to_address[-6:]}`\n\n"
                     f"⚡️ *Автоматическая выплата одобрена*\n"
                     f"Средства поступят в течение 1-5 минут.\n\n"
@@ -535,10 +546,11 @@ async def process_financial_password(
                     reply_markup=main_menu_reply_keyboard(user=user)
                 )
                 # Trigger background task with error handling
+                # CRITICAL: Send net_amount (amount - fee) to user, not gross amount
                 asyncio.create_task(
                     _safe_process_auto_payout(
                         transaction.id,
-                        transaction.amount,
+                        net_amount,
                         transaction.to_address,
                         message.bot,
                         user.telegram_id
@@ -547,7 +559,9 @@ async def process_financial_password(
             else:
                 await message.answer(
                     f"✅ *Заявка #{transaction.id} создана!*\n\n"
-                    f"💰 Сумма: *{transaction.amount} USDT*\n"
+                    f"💰 Запрошено: *{transaction.amount} USDT*\n"
+                    f"💸 Комиссия: *{transaction.fee} USDT*\n"
+                    f"✨ К получению: *{net_amount} USDT*\n"
                     f"💳 Кошелек: `{transaction.to_address[:10]}...{transaction.to_address[-6:]}`\n\n"
                     f"⏱ *Время обработки:* до 24 часов\n"
                     f"📊 Статус можно проверить в '📜 История выводов'",
@@ -635,7 +649,8 @@ async def _show_withdrawal_history(
         }.get(tx.status, "❓")
 
         date = tx.created_at.strftime("%d.%m.%Y %H:%M")
-        text += f"{status_icon} *{tx.amount} USDT* | {date}\n"
+        net_amount = tx.amount - tx.fee
+        text += f"{status_icon} *{tx.amount} USDT* (комиссия: {tx.fee}, получено: {net_amount}) | {date}\n"
         text += f"ID: `{tx.id}`\n"
         if tx.tx_hash:
             text += f"🔗 [BscScan](https://bscscan.com/tx/{tx.tx_hash})\n"
@@ -667,11 +682,15 @@ async def handle_smart_withdrawal_amount(
 
     session = data.get("session")
     if not session:
-        await message.answer("❌ Системная ошибка")
+        await message.answer(get_text('errors.system_error'))
         return
 
+    # R13-3: Get user language
+    user_language = await get_user_language(session, user.id)
+    _ = get_translator(user_language)
+
     # Check withdrawal eligibility (finpass for all, phone/email for level 2+)
-    can_withdraw, error_msg = await check_withdrawal_eligibility(session, user)
+    can_withdraw, error_msg = await check_withdrawal_eligibility(session, user, user_language)
     if not can_withdraw:
         await message.answer(error_msg, reply_markup=withdrawal_keyboard(), parse_mode="Markdown")
         return
