@@ -26,7 +26,10 @@ def upgrade() -> None:
         sa.Column('user_id', sa.Integer(), nullable=False),
         sa.Column('telegram_id', sa.BigInteger(), nullable=False),
         sa.Column('initial_question', sa.Text(), nullable=False),
-        sa.Column('status', sa.String(length=20), nullable=False, server_default='new'),
+        sa.Column(
+            'status', sa.String(length=20),
+            nullable=False, server_default='new'
+        ),
         sa.Column('assigned_admin_id', sa.Integer(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
         sa.Column('assigned_at', sa.DateTime(timezone=True), nullable=True),
@@ -36,10 +39,21 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
         sa.PrimaryKeyConstraint('id')
     )
-    op.create_index('ix_user_inquiries_user_id', 'user_inquiries', ['user_id'], unique=False)
-    op.create_index('ix_user_inquiries_telegram_id', 'user_inquiries', ['telegram_id'], unique=False)
-    op.create_index('ix_user_inquiries_status', 'user_inquiries', ['status'], unique=False)
-    op.create_index('ix_user_inquiries_assigned_admin_id', 'user_inquiries', ['assigned_admin_id'], unique=False)
+    op.create_index(
+        'ix_user_inquiries_user_id', 'user_inquiries',
+        ['user_id'], unique=False
+    )
+    op.create_index(
+        'ix_user_inquiries_telegram_id', 'user_inquiries',
+        ['telegram_id'], unique=False
+    )
+    op.create_index(
+        'ix_user_inquiries_status', 'user_inquiries', ['status'], unique=False
+    )
+    op.create_index(
+        'ix_user_inquiries_assigned_admin_id', 'user_inquiries',
+        ['assigned_admin_id'], unique=False
+    )
 
     # Create inquiry_messages table
     op.create_table(
@@ -53,14 +67,23 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(['inquiry_id'], ['user_inquiries.id'], ),
         sa.PrimaryKeyConstraint('id')
     )
-    op.create_index('ix_inquiry_messages_inquiry_id', 'inquiry_messages', ['inquiry_id'], unique=False)
+    op.create_index(
+        'ix_inquiry_messages_inquiry_id', 'inquiry_messages',
+        ['inquiry_id'], unique=False
+    )
 
 
 def downgrade() -> None:
-    op.drop_index('ix_inquiry_messages_inquiry_id', table_name='inquiry_messages')
+    op.drop_index(
+        'ix_inquiry_messages_inquiry_id', table_name='inquiry_messages'
+    )
     op.drop_table('inquiry_messages')
-    op.drop_index('ix_user_inquiries_assigned_admin_id', table_name='user_inquiries')
+    op.drop_index(
+        'ix_user_inquiries_assigned_admin_id', table_name='user_inquiries'
+    )
     op.drop_index('ix_user_inquiries_status', table_name='user_inquiries')
-    op.drop_index('ix_user_inquiries_telegram_id', table_name='user_inquiries')
+    op.drop_index(
+        'ix_user_inquiries_telegram_id', table_name='user_inquiries'
+    )
     op.drop_index('ix_user_inquiries_user_id', table_name='user_inquiries')
     op.drop_table('user_inquiries')
