@@ -44,7 +44,8 @@ async def handle_ask_question(
     """Handle 'Ask Question' button - entry point for user inquiries."""
     if not user:
         await message.answer(
-            "❌ Эта функция доступна только зарегистрированным пользователям.\n"
+            "❌ Эта функция доступна только "
+            "зарегистрированным пользователям.\n"
             "Пожалуйста, пройдите регистрацию.",
         )
         return
@@ -80,14 +81,17 @@ async def handle_ask_question(
             messages_text = ""
             if active_inquiry.messages:
                 for msg in active_inquiry.messages[-5:]:  # Last 5 messages
-                    sender = "👤 Вы" if msg.sender_type == "user" else f"👨‍💼 {admin_name}"
+                    if msg.sender_type == "user":
+                        sender = "👤 Вы"
+                    else:
+                        sender = f"👨‍💼 {admin_name}"
                     messages_text += f"\n{sender}: {msg.message_text}\n"
 
             await message.answer(
                 f"💬 У вас активный диалог с {admin_name}.\n\n"
                 f"**Ваш вопрос:**\n{active_inquiry.initial_question}\n"
                 f"{messages_text}\n"
-                "Напишите ваше сообщение, и оно будет отправлено администратору.",
+                "Напишите сообщение, оно будет отправлено администратору.",
                 parse_mode="Markdown",
                 reply_markup=inquiry_dialog_keyboard(),
             )
@@ -121,9 +125,10 @@ async def handle_cancel_question(
 ) -> None:
     """Cancel question input."""
     await state.clear()
+    is_admin = data.get("is_admin", False)
     await message.answer(
         "❌ Отменено. Возвращаемся в главное меню.",
-        reply_markup=main_menu_reply_keyboard(user=user, is_admin=data.get("is_admin", False)),
+        reply_markup=main_menu_reply_keyboard(user=user, is_admin=is_admin),
     )
 
 
@@ -136,9 +141,10 @@ async def handle_back_from_question(
 ) -> None:
     """Return to main menu from question input."""
     await state.clear()
+    is_admin = data.get("is_admin", False)
     await message.answer(
         "◀️ Главное меню",
-        reply_markup=main_menu_reply_keyboard(user=user, is_admin=data.get("is_admin", False)),
+        reply_markup=main_menu_reply_keyboard(user=user, is_admin=is_admin),
     )
 
 
@@ -161,7 +167,7 @@ async def handle_question_text(
     if len(question_text) < 10:
         await message.answer(
             "❌ Вопрос слишком короткий. "
-            "Пожалуйста, опишите вашу проблему подробнее (минимум 10 символов).",
+            "Опишите проблему подробнее (минимум 10 символов).",
         )
         return
 
@@ -286,9 +292,10 @@ async def handle_cancel_inquiry(
         await inquiry_service.close_inquiry(inquiry_id, closed_by="user")
 
     await state.clear()
+    is_admin = data.get("is_admin", False)
     await message.answer(
         "✅ Обращение закрыто. Спасибо за обратную связь!",
-        reply_markup=main_menu_reply_keyboard(user=user, is_admin=data.get("is_admin", False)),
+        reply_markup=main_menu_reply_keyboard(user=user, is_admin=is_admin),
     )
 
 
@@ -326,9 +333,10 @@ async def handle_close_inquiry(
                 logger.error(f"Failed to notify admin: {e}")
 
     await state.clear()
+    is_admin = data.get("is_admin", False)
     await message.answer(
         "✅ Обращение успешно закрыто. Спасибо!",
-        reply_markup=main_menu_reply_keyboard(user=user, is_admin=data.get("is_admin", False)),
+        reply_markup=main_menu_reply_keyboard(user=user, is_admin=is_admin),
     )
 
 
@@ -341,11 +349,12 @@ async def handle_back_from_dialog(
 ) -> None:
     """Return to main menu (inquiry stays active)."""
     await state.clear()
+    is_admin = data.get("is_admin", False)
     await message.answer(
         "◀️ Главное меню\n\n"
         "Ваше обращение остаётся активным. "
         "Вы получите уведомление, когда администратор ответит.",
-        reply_markup=main_menu_reply_keyboard(user=user, is_admin=data.get("is_admin", False)),
+        reply_markup=main_menu_reply_keyboard(user=user, is_admin=is_admin),
     )
 
 
@@ -485,9 +494,12 @@ async def handle_dialog_message(
 
     if not inquiry_id:
         await state.clear()
+        is_admin = data.get("is_admin", False)
         await message.answer(
             "❌ Обращение не найдено. Попробуйте создать новое.",
-            reply_markup=main_menu_reply_keyboard(user=user, is_admin=data.get("is_admin", False)),
+            reply_markup=main_menu_reply_keyboard(
+                user=user, is_admin=is_admin
+            ),
         )
         return
 
@@ -496,9 +508,12 @@ async def handle_dialog_message(
 
     if not inquiry or inquiry.status == InquiryStatus.CLOSED.value:
         await state.clear()
+        is_admin = data.get("is_admin", False)
         await message.answer(
             "❌ Это обращение уже закрыто. Создайте новое при необходимости.",
-            reply_markup=main_menu_reply_keyboard(user=user, is_admin=data.get("is_admin", False)),
+            reply_markup=main_menu_reply_keyboard(
+                user=user, is_admin=is_admin
+            ),
         )
         return
 

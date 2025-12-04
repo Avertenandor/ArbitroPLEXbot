@@ -9,7 +9,6 @@ from typing import Any
 from aiogram import F, Router
 from aiogram.filters import StateFilter
 from aiogram.types import Message
-from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.referral_service import ReferralService
@@ -54,7 +53,7 @@ async def handle_admin_referral_stats(
 
     text += (
         f"\n**Финансы:**\n"
-        f"💰 Всего начислено: **{format_usdt(stats['total_earnings'])} USDT**\n"
+        f"💰 Начислено: **{format_usdt(stats['total_earnings'])} USDT**\n"
         f"✅ Выплачено: **{format_usdt(stats['paid_earnings'])} USDT**\n"
         f"⏳ Ожидает: **{format_usdt(stats['pending_earnings'])} USDT**\n"
     )
