@@ -129,19 +129,27 @@ class BaseRepository(Generic[ModelType]):
         return entity
 
     async def update(
-        self, id: int, **data: Any
+        self, id: int, for_update: bool = False, **data: Any
     ) -> ModelType | None:
         """
         Update entity by ID.
 
         Args:
             id: Entity ID
+            for_update: Use SELECT FOR UPDATE to lock row (prevents race conditions)
             **data: Updated data
 
         Returns:
             Updated entity or None if not found
         """
-        entity = await self.get_by_id(id)
+        if for_update:
+            # R9-2: Use pessimistic locking to prevent race conditions
+            stmt = select(self.model).where(self.model.id == id).with_for_update()
+            result = await self.session.execute(stmt)
+            entity = result.scalar_one_or_none()
+        else:
+            entity = await self.get_by_id(id)
+
         if not entity:
             return None
 
@@ -202,7 +210,7 @@ class BaseRepository(Generic[ModelType]):
         self, items: list[dict[str, Any]]
     ) -> list[ModelType]:
         """
-        Create multiple entities.
+        Create multiple entities using RETURNING to avoid N+1 refresh.
 
         Args:
             items: List of entity data dicts
@@ -210,11 +218,48 @@ class BaseRepository(Generic[ModelType]):
         Returns:
             List of created entities
         """
-        entities = [self.model(**item) for item in items]
-        self.session.add_all(entities)
-        await self.session.flush()
+        if not items:
+            return []
 
-        for entity in entities:
-            await self.session.refresh(entity)
+        # Use insert with RETURNING to get all created entities in one query
+        from sqlalchemy import insert
+
+        stmt = insert(self.model).values(items).returning(self.model)
+        result = await self.session.execute(stmt)
+        entities = list(result.scalars().all())
 
         return entities
+
+    async def find_paginated(
+        self,
+        page: int = 1,
+        per_page: int = 100,
+        **filters: Any
+    ) -> tuple[list[ModelType], int]:
+        """
+        Find entities with pagination to avoid OOM.
+
+        Args:
+            page: Page number (1-indexed)
+            per_page: Items per page
+            **filters: Column filters
+
+        Returns:
+            Tuple of (items, total_count)
+        """
+        # Count total matching records
+        count_stmt = select(func.count(self.model.id))
+        if filters:
+            count_stmt = count_stmt.filter_by(**filters)
+
+        count_result = await self.session.execute(count_stmt)
+        total = count_result.scalar() or 0
+
+        # Get paginated items
+        offset = (page - 1) * per_page
+        stmt = select(self.model).filter_by(**filters).offset(offset).limit(per_page)
+
+        result = await self.session.execute(stmt)
+        items = list(result.scalars().all())
+
+        return items, total

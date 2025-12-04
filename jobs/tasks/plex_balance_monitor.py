@@ -62,9 +62,7 @@ async def _monitor_plex_balances_async() -> None:
         autoflush=False,
     )
 
-    # Initialize bot for notifications
-    bot = Bot(token=settings.telegram_bot_token)
-
+    # FIXED: Use context manager for Bot to prevent session leak
     stats = {
         "total_checked": 0,
         "sufficient": 0,
@@ -75,53 +73,53 @@ async def _monitor_plex_balances_async() -> None:
     }
 
     try:
-        async with local_session_maker() as session:
-            # Get all active depositors
-            result = await session.execute(
-                select(User).where(
-                    User.is_active == True,
-                    User.is_banned == False,
-                    User.is_active_depositor == True,
-                    User.bot_blocked == False,
+        async with Bot(token=settings.telegram_bot_token) as bot:
+            async with local_session_maker() as session:
+                # Get all active depositors
+                result = await session.execute(
+                    select(User).where(
+                        User.is_active == True,
+                        User.is_banned == False,
+                        User.is_active_depositor == True,
+                        User.bot_blocked == False,
+                    )
                 )
-            )
-            users = list(result.scalars().all())
+                users = list(result.scalars().all())
 
-            logger.info(f"Checking PLEX balance for {len(users)} active depositors")
+                logger.info(f"Checking PLEX balance for {len(users)} active depositors")
 
-            blockchain = get_blockchain_service()
+                blockchain = get_blockchain_service()
 
-            for user in users:
-                try:
-                    await _check_user_plex_balance(
-                        session, bot, blockchain, user, stats
-                    )
+                for user in users:
+                    try:
+                        await _check_user_plex_balance(
+                            session, bot, blockchain, user, stats
+                        )
 
-                    # Rate limiting: delay between users
-                    await asyncio.sleep(TELEGRAM_MESSAGE_DELAY)
-                except Exception as e:
-                    logger.error(
-                        f"Error checking PLEX balance for user {user.id}: {e}"
-                    )
-                    stats["errors"] += 1
+                        # Rate limiting: delay between users
+                        await asyncio.sleep(TELEGRAM_MESSAGE_DELAY)
+                    except Exception as e:
+                        logger.error(
+                            f"Error checking PLEX balance for user {user.id}: {e}"
+                        )
+                        stats["errors"] += 1
 
-            await session.commit()
+                await session.commit()
 
-            logger.info(
-                f"PLEX balance check complete: "
-                f"checked={stats['total_checked']}, "
-                f"sufficient={stats['sufficient']}, "
-                f"insufficient={stats['insufficient']}, "
-                f"suspended={stats['suspended']}, "
-                f"restored={stats['restored']}, "
-                f"errors={stats['errors']}"
-            )
+                logger.info(
+                    f"PLEX balance check complete: "
+                    f"checked={stats['total_checked']}, "
+                    f"sufficient={stats['sufficient']}, "
+                    f"insufficient={stats['insufficient']}, "
+                    f"suspended={stats['suspended']}, "
+                    f"restored={stats['restored']}, "
+                    f"errors={stats['errors']}"
+                )
 
     except Exception as e:
         logger.exception(f"PLEX balance monitoring error: {e}")
         raise
     finally:
-        await bot.session.close()
         await local_engine.dispose()
 
 
@@ -284,34 +282,33 @@ async def _check_single_user_balance_async(user_id: int) -> dict:
         expire_on_commit=False,
     )
 
-    bot = Bot(token=settings.telegram_bot_token)
+    # FIXED: Use context manager for Bot to prevent session leak
     result = {"user_id": user_id, "success": False}
 
     try:
-        async with local_session_maker() as session:
-            user_result = await session.execute(
-                select(User).where(User.id == user_id)
-            )
-            user = user_result.scalars().first()
+        async with Bot(token=settings.telegram_bot_token) as bot:
+            async with local_session_maker() as session:
+                user_result = await session.execute(
+                    select(User).where(User.id == user_id)
+                )
+                user = user_result.scalars().first()
 
-            if not user:
-                result["error"] = "User not found"
-                return result
+                if not user:
+                    result["error"] = "User not found"
+                    return result
 
-            blockchain = get_blockchain_service()
-            stats = {}
+                blockchain = get_blockchain_service()
+                stats = {}
 
-            await _check_user_plex_balance(session, bot, blockchain, user, stats)
-            await session.commit()
+                await _check_user_plex_balance(session, bot, blockchain, user, stats)
+                await session.commit()
 
-            result["success"] = True
-            result["plex_balance"] = float(user.last_plex_balance or 0)
-            result["work_status"] = user.work_status
+                result["success"] = True
+                result["plex_balance"] = float(user.last_plex_balance or 0)
+                result["work_status"] = user.work_status
 
     except Exception as e:
         result["error"] = str(e)
-    finally:
-        await bot.session.close()
         await local_engine.dispose()
 
     return result

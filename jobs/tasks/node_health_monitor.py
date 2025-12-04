@@ -80,24 +80,23 @@ async def _notify_admins_maintenance_mode() -> None:
     """Notify admins about maintenance mode activation."""
     try:
         async with async_session_maker() as session:
-            bot = Bot(token=settings.telegram_bot_token)
-            notification_service = NotificationService(session)
+            # FIXED: Use context manager for Bot to prevent session leak
+            async with Bot(token=settings.telegram_bot_token) as bot:
+                notification_service = NotificationService(session)
 
-            admin_ids = settings.get_admin_ids()
+                admin_ids = settings.get_admin_ids()
 
-            message = (
-                "🚨 **КРИТИЧНО: Blockchain Maintenance Mode активирован**\n\n"
-                "Все blockchain узлы недоступны.\n"
-                "Операции с блокчейном временно приостановлены.\n\n"
-                "Требуется немедленное вмешательство администратора."
-            )
-
-            for admin_id in admin_ids:
-                await notification_service.send_notification(
-                    bot, admin_id, message, critical=True
+                message = (
+                    "🚨 **КРИТИЧНО: Blockchain Maintenance Mode активирован**\n\n"
+                    "Все blockchain узлы недоступны.\n"
+                    "Операции с блокчейном временно приостановлены.\n\n"
+                    "Требуется немедленное вмешательство администратора."
                 )
 
-            await bot.session.close()
+                for admin_id in admin_ids:
+                    await notification_service.send_notification(
+                        bot, admin_id, message, critical=True
+                    )
 
     except Exception as e:
         logger.error(f"Error notifying admins: {e}")

@@ -8,6 +8,7 @@ from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.deposit import Deposit
 from app.models.enums import TransactionStatus
@@ -123,3 +124,63 @@ class DepositRepository(BaseRepository[Deposit]):
             return Decimal("0")
 
         return sum((d.amount for d in deposits), Decimal("0"))
+
+    async def get_with_user(self, deposit_id: int) -> Deposit | None:
+        """
+        Get deposit by ID with user eager loaded.
+
+        Args:
+            deposit_id: Deposit ID
+
+        Returns:
+            Deposit with user or None
+        """
+        stmt = (
+            select(Deposit)
+            .options(selectinload(Deposit.user))
+            .where(Deposit.id == deposit_id)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_many_with_user(
+        self, deposit_ids: list[int]
+    ) -> list[Deposit]:
+        """
+        Get multiple deposits with users eager loaded.
+
+        Args:
+            deposit_ids: List of deposit IDs
+
+        Returns:
+            List of deposits with users loaded
+        """
+        stmt = (
+            select(Deposit)
+            .options(selectinload(Deposit.user))
+            .where(Deposit.id.in_(deposit_ids))
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_active_deposits_with_user(
+        self, user_id: int
+    ) -> list[Deposit]:
+        """
+        Get active deposits with user eager loaded.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            List of active deposits with user loaded
+        """
+        stmt = (
+            select(Deposit)
+            .options(selectinload(Deposit.user))
+            .where(Deposit.user_id == user_id)
+            .where(Deposit.is_roi_completed == False)  # noqa: E712
+            .where(Deposit.status == TransactionStatus.CONFIRMED.value)
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())

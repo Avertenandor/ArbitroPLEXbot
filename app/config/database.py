@@ -27,6 +27,9 @@ engine: AsyncEngine = create_async_engine(
     pool_timeout=30,  # Wait max 30 seconds for connection
 )
 
+# Export as async_engine for jobs
+async_engine = engine
+
 # Create async session factory
 async_session_maker = async_sessionmaker(
     engine,
@@ -52,8 +55,7 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
             await session.rollback()
             logger.error(f"Database session error: {e}")
             raise
-        finally:
-            await session.close()
+        # FIXED: No explicit close() needed - context manager handles it
 
 
 async def init_db() -> None:

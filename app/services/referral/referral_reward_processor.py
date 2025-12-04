@@ -10,9 +10,11 @@ from decimal import Decimal
 from typing import Literal
 
 from loguru import logger
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.referral import Referral
+from app.models.user import User
 from app.repositories.referral_earning_repository import (
     ReferralEarningRepository,
 )
@@ -216,10 +218,18 @@ class ReferralRewardProcessor:
         Returns:
             True if reward was created, False otherwise
         """
-        # Fetch referrer to update balance
-        referrer = await self.user_repo.get_by_id(relationship.referrer_id)
+        # R9-2: Atomic update to prevent race conditions
+        stmt = (
+            update(User)
+            .where(User.id == relationship.referrer_id)
+            .values(
+                balance=User.balance + reward_amount,
+                total_earned=User.total_earned + reward_amount,
+            )
+        )
+        result = await self.session.execute(stmt)
 
-        if not referrer:
+        if result.rowcount == 0:
             logger.warning(
                 "Referrer not found for reward",
                 extra={
@@ -229,11 +239,6 @@ class ReferralRewardProcessor:
                 },
             )
             return False
-
-        # Update referrer balance
-        referrer.balance += reward_amount
-        referrer.total_earned += reward_amount
-        self.session.add(referrer)
 
         # Create earning record
         await self.earning_repo.create(

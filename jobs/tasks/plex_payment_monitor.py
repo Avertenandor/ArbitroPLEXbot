@@ -69,45 +69,43 @@ async def _monitor_plex_payments_async() -> None:
         autoflush=False,
     )
 
-    # Initialize bot for notifications
-    bot = Bot(token=settings.telegram_bot_token)
-
+    # FIXED: Use context manager for Bot to prevent session leak
     try:
-        async with local_session_maker() as session:
-            plex_repo = PlexPaymentRepository(session)
-            deposit_repo = DepositRepository(session)
-            notification_service = NotificationService(session)
+        async with Bot(token=settings.telegram_bot_token) as bot:
+            async with local_session_maker() as session:
+                plex_repo = PlexPaymentRepository(session)
+                deposit_repo = DepositRepository(session)
+                notification_service = NotificationService(session)
 
-            # Step 1: Send reminders for pending first payments (inactive deposits)
-            pending_reminders = await _process_pending_activation_reminders(
-                session, plex_repo, bot
-            )
+                # Step 1: Send reminders for pending first payments (inactive deposits)
+                pending_reminders = await _process_pending_activation_reminders(
+                    session, plex_repo, bot
+                )
 
-            # Step 2: Process warnings
-            warnings_sent = await _process_warnings(
-                session, plex_repo, bot
-            )
+                # Step 2: Process warnings
+                warnings_sent = await _process_warnings(
+                    session, plex_repo, bot
+                )
 
-            # Step 3: Process blocks
-            deposits_blocked = await _process_blocks(
-                session, plex_repo, deposit_repo, bot
-            )
+                # Step 3: Process blocks
+                deposits_blocked = await _process_blocks(
+                    session, plex_repo, deposit_repo, bot
+                )
 
-            # Commit changes
-            await session.commit()
+                # Commit changes
+                await session.commit()
 
-            logger.info(
-                f"PLEX monitoring complete: "
-                f"pending_reminders={pending_reminders}, "
-                f"warnings_sent={warnings_sent}, "
-                f"deposits_blocked={deposits_blocked}"
-            )
+                logger.info(
+                    f"PLEX monitoring complete: "
+                    f"pending_reminders={pending_reminders}, "
+                    f"warnings_sent={warnings_sent}, "
+                    f"deposits_blocked={deposits_blocked}"
+                )
 
     except Exception as e:
         logger.exception(f"PLEX payment monitoring error: {e}")
         raise
     finally:
-        await bot.session.close()
         await local_engine.dispose()
 
 

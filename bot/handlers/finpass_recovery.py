@@ -10,6 +10,7 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from loguru import logger
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -165,7 +166,9 @@ async def process_recovery_reason(
             from app.repositories.blacklist_repository import BlacklistRepository
             blacklist_repo = BlacklistRepository(session)
             blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
-        except Exception:
+        except OperationalError as e:
+            logger.error(f"DB error checking blacklist: {e}")
+            # For cancel operation, we can fallback to None
             pass
         await message.answer(
             "❌ Восстановление пароля отменено.",
@@ -228,19 +231,37 @@ async def process_recovery_confirmation(
 
     is_admin = data.get("is_admin", False)
 
-    # Handle cancel
-    if (
-        is_menu_button(message.text)
-        or message.text == "❌ Отменить"
-        or message.text == "❌ Отмена"
-    ):
+    # Handle cancel button FIRST to avoid getting stuck
+    if message.text == "❌ Отменить" or message.text == "❌ Отмена":
         await state.clear()
         blacklist_entry = None
         try:
             from app.repositories.blacklist_repository import BlacklistRepository
             blacklist_repo = BlacklistRepository(session)
             blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
-        except Exception:
+        except OperationalError as e:
+            logger.error(f"DB error checking blacklist: {e}")
+            # For cancel operation, we can fallback to None
+            pass
+        await message.answer(
+            "Заявка отменена.",
+            reply_markup=main_menu_reply_keyboard(
+                user=user, blacklist_entry=blacklist_entry, is_admin=is_admin
+            ),
+        )
+        return
+
+    # Handle menu buttons
+    if is_menu_button(message.text):
+        await state.clear()
+        blacklist_entry = None
+        try:
+            from app.repositories.blacklist_repository import BlacklistRepository
+            blacklist_repo = BlacklistRepository(session)
+            blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
+        except OperationalError as e:
+            logger.error(f"DB error checking blacklist: {e}")
+            # For menu navigation, we can fallback to None
             pass
         await message.answer(
             "❌ Восстановление пароля отменено.",
@@ -289,7 +310,9 @@ async def process_recovery_confirmation(
             from app.repositories.blacklist_repository import BlacklistRepository
             blacklist_repo = BlacklistRepository(session)
             blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
-        except Exception:
+        except OperationalError as e:
+            logger.error(f"DB error checking blacklist: {e}")
+            # For display purposes, we can fallback to None
             pass
 
         await message.answer(

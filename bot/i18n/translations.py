@@ -79,6 +79,14 @@ RU_TRANSLATIONS = {
             "⚠️ Системная ошибка.\n\n"
             "Попробуйте позже или обратитесь в поддержку."
         ),
+        "user_not_found": "❌ Пользователь не найден",
+        "balance_error": "❌ Ошибка получения баланса",
+        "invalid_input": "❌ Неверный ввод. Попробуйте еще раз.",
+        "operation_failed": "❌ Не удалось выполнить операцию",
+        "user_load_error": (
+            "⚠️ Ошибка: не удалось загрузить данные пользователя. "
+            "Попробуйте отправить /start"
+        ),
     },
     "auth": {
         "welcome_unregistered": (
@@ -144,6 +152,65 @@ RU_TRANSLATIONS = {
             "Транзакция: `{tx_hash_short}`\n\n"
             "⏳ Сканируем ваши депозиты..."
         ),
+    },
+    "withdrawal": {
+        "menu_title": "💸 *Вывод средств*",
+        "available_balance": "Доступно для вывода: `{amount} USDT`",
+        "enter_amount": "Введите сумму для вывода (мин. {min_amount} USDT):",
+        "enter_finpass": "🔐 Введите ваш финансовый пароль:",
+        "cancelled": "❌ Вывод отменён.",
+        "success": "✅ Заявка на вывод создана!",
+        "insufficient_funds": "❌ Недостаточно средств",
+        "min_amount_error": "❌ Минимальная сумма вывода: {min_amount} USDT",
+        "finpass_required": (
+            "❌ Для вывода необходим финансовый пароль!\n\n"
+            "Установите финпароль через кнопку '🔐 Получить финпароль' в главном меню."
+        ),
+        "verification_required": (
+            "❌ Для вывода с депозитами уровня 2+ требуется верификация!\n\n"
+            "Укажите телефон или email через меню '👤 Мой профиль' → '✏️ Редактировать'."
+        ),
+        "confirmation_prompt": (
+            "⚠️ *Подтверждение вывода*\n\n"
+            "💰 Сумма: *{amount} USDT*\n"
+            "💳 Кошелёк: `{wallet}`\n\n"
+            "❗️ Убедитесь, что это ваш *ЛИЧНЫЙ* кошелёк (не биржевой)!\n\n"
+            "Для подтверждения напишите: *да* или *yes*\n"
+            "Для отмены: *нет* или *отмена*"
+        ),
+        "request_created": (
+            "✅ *Заявка #{tx_id} создана!*\n\n"
+            "💰 Запрошено: *{amount} USDT*\n"
+            "💸 Комиссия: *{fee} USDT*\n"
+            "✨ К получению: *{net_amount} USDT*\n"
+            "💳 Кошелек: `{wallet}`\n\n"
+            "⏱ *Время обработки:* до 24 часов\n"
+            "📊 Статус можно проверить в '📜 История выводов'"
+        ),
+    },
+    "verification": {
+        "success": "✅ Верификация успешна!",
+        "failed": "❌ Ошибка верификации",
+        "user_not_found": "❌ Пользователь не найден. Попробуйте /start",
+    },
+    "support": {
+        "menu_title": "💬 *Служба поддержки*",
+        "choose_action": "Выберите действие из меню ниже:",
+        "ticket_sent": "✅ Ваше обращение отправлено!",
+        "ticket_error": "❌ Ошибка отправки обращения",
+    },
+    "profile": {
+        "update_title": "📝 *Обновление контактов*",
+        "phone_updated": "✅ Телефон успешно обновлен!",
+        "email_updated": "✅ Email успешно обновлен!",
+        "view_title": "👤 *Ваш профиль*",
+        "basic_info": "*Основная информация:*",
+        "user_id": "🆔 ID: `{user_id}`",
+        "username": "👤 Username: @{username}",
+        "wallet": "💳 Кошелек: `{wallet}`",
+        "verification_status": "{emoji} Верификация: {status}",
+        "verification_warning": "⚠️ *Вывод недоступен* — нужен финпароль (кнопка '🔐 Получить финпароль')",
+        "account_status": "{status}",
     },
 }
 
@@ -222,6 +289,14 @@ EN_TRANSLATIONS = {
             "⚠️ System error.\n\n"
             "Please try again later or contact support."
         ),
+        "user_not_found": "❌ User not found",
+        "balance_error": "❌ Error fetching balance",
+        "invalid_input": "❌ Invalid input. Please try again.",
+        "operation_failed": "❌ Operation failed",
+        "user_load_error": (
+            "⚠️ Error: could not load user data. "
+            "Please try /start"
+        ),
     },
     "auth": {
         "welcome_unregistered": (
@@ -287,6 +362,65 @@ EN_TRANSLATIONS = {
             "Transaction: `{tx_hash_short}`\n\n"
             "⏳ Scanning your deposits..."
         ),
+    },
+    "withdrawal": {
+        "menu_title": "💸 *Withdrawal*",
+        "available_balance": "Available for withdrawal: `{amount} USDT`",
+        "enter_amount": "Enter withdrawal amount (min. {min_amount} USDT):",
+        "enter_finpass": "🔐 Enter your financial password:",
+        "cancelled": "❌ Withdrawal cancelled.",
+        "success": "✅ Withdrawal request created!",
+        "insufficient_funds": "❌ Insufficient funds",
+        "min_amount_error": "❌ Minimum withdrawal amount: {min_amount} USDT",
+        "finpass_required": (
+            "❌ Financial password required for withdrawal!\n\n"
+            "Set your financial password via '🔐 Get Financial Password' button in main menu."
+        ),
+        "verification_required": (
+            "❌ Verification required for level 2+ deposits!\n\n"
+            "Provide phone or email via '👤 My Profile' → '✏️ Edit'."
+        ),
+        "confirmation_prompt": (
+            "⚠️ *Withdrawal Confirmation*\n\n"
+            "💰 Amount: *{amount} USDT*\n"
+            "💳 Wallet: `{wallet}`\n\n"
+            "❗️ Make sure this is your *PERSONAL* wallet (not exchange)!\n\n"
+            "To confirm, type: *yes*\n"
+            "To cancel: *no* or *cancel*"
+        ),
+        "request_created": (
+            "✅ *Request #{tx_id} created!*\n\n"
+            "💰 Requested: *{amount} USDT*\n"
+            "💸 Fee: *{fee} USDT*\n"
+            "✨ To receive: *{net_amount} USDT*\n"
+            "💳 Wallet: `{wallet}`\n\n"
+            "⏱ *Processing time:* up to 24 hours\n"
+            "📊 Check status in '📜 Withdrawal History'"
+        ),
+    },
+    "verification": {
+        "success": "✅ Verification successful!",
+        "failed": "❌ Verification error",
+        "user_not_found": "❌ User not found. Try /start",
+    },
+    "support": {
+        "menu_title": "💬 *Support Service*",
+        "choose_action": "Choose action from menu below:",
+        "ticket_sent": "✅ Your request has been sent!",
+        "ticket_error": "❌ Error sending request",
+    },
+    "profile": {
+        "update_title": "📝 *Update Contacts*",
+        "phone_updated": "✅ Phone successfully updated!",
+        "email_updated": "✅ Email successfully updated!",
+        "view_title": "👤 *Your Profile*",
+        "basic_info": "*Basic Information:*",
+        "user_id": "🆔 ID: `{user_id}`",
+        "username": "👤 Username: @{username}",
+        "wallet": "💳 Wallet: `{wallet}`",
+        "verification_status": "{emoji} Verification: {status}",
+        "verification_warning": "⚠️ *Withdrawal unavailable* — financial password required (button '🔐 Get Financial Password')",
+        "account_status": "{status}",
     },
 }
 

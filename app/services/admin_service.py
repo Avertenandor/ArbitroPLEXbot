@@ -580,30 +580,29 @@ class AdminService:
             if not super_admins:
                 return
 
-            bot = Bot(token=settings.telegram_bot_token)
-            notification_text = (
-                f"🚨 **Автоматическая блокировка**\n\n"
-                f"Telegram ID `{telegram_id}` был автоматически "
-                f"заблокирован из-за превышения лимита неуспешных "
-                f"попыток входа в админ-панель.\n\n"
-                f"Лимит: {ADMIN_LOGIN_MAX_ATTEMPTS} попыток за "
-                f"{ADMIN_LOGIN_WINDOW_SECONDS // 60} минут"
-            )
+            # FIXED: Use context manager for Bot to prevent session leak
+            async with Bot(token=settings.telegram_bot_token) as bot:
+                notification_text = (
+                    f"🚨 **Автоматическая блокировка**\n\n"
+                    f"Telegram ID `{telegram_id}` был автоматически "
+                    f"заблокирован из-за превышения лимита неуспешных "
+                    f"попыток входа в админ-панель.\n\n"
+                    f"Лимит: {ADMIN_LOGIN_MAX_ATTEMPTS} попыток за "
+                    f"{ADMIN_LOGIN_WINDOW_SECONDS // 60} минут"
+                )
 
-            for super_admin in super_admins:
-                try:
-                    await bot.send_message(
-                        chat_id=super_admin.telegram_id,
-                        text=notification_text,
-                        parse_mode="Markdown",
-                    )
-                except Exception as e:
-                    logger.error(
-                        f"Failed to notify super_admin "
-                        f"{super_admin.id}: {e}"
-                    )
-
-            await bot.session.close()
+                for super_admin in super_admins:
+                    try:
+                        await bot.send_message(
+                            chat_id=super_admin.telegram_id,
+                            text=notification_text,
+                            parse_mode="Markdown",
+                        )
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to notify super_admin "
+                            f"{super_admin.id}: {e}"
+                        )
 
         except Exception as e:
             logger.error(f"Error notifying super_admins: {e}")

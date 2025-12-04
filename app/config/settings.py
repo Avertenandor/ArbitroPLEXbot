@@ -24,6 +24,11 @@ class Settings(BaseSettings):
 
     # Admin
     admin_telegram_ids: str = ""  # Comma-separated list
+    super_admin_telegram_id: int = Field(
+        ...,
+        gt=0,
+        description="Super admin Telegram user ID for master key management"
+    )
 
     # Wallet
     wallet_private_key: str | None = None
@@ -209,6 +214,50 @@ class Settings(BaseSettings):
         """Set default RPC URLs if not provided."""
         if not self.rpc_quicknode_http:
             self.rpc_quicknode_http = self.rpc_url
+        return self
+
+    @model_validator(mode='after')
+    def validate_encryption(self) -> 'Settings':
+        """Validate encryption configuration in production."""
+        if self.environment == 'production':
+            if not self.encryption_key:
+                raise ValueError(
+                    "ENCRYPTION_KEY is required in production environment. "
+                    "Encryption is mandatory for protecting sensitive data. "
+                    "Generate a key with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
+                )
+            if len(self.encryption_key) < 32:
+                raise ValueError(
+                    "ENCRYPTION_KEY must be at least 32 characters in production. "
+                    "Use a proper Fernet key generated with cryptography.fernet.Fernet.generate_key()"
+                )
+        return self
+
+    @model_validator(mode='after')
+    def validate_required_in_production(self) -> 'Settings':
+        """Validate required fields in production environment."""
+        if self.environment == 'production':
+            # Validate super admin ID is set
+            if not self.super_admin_telegram_id:
+                raise ValueError(
+                    'SUPER_ADMIN_TELEGRAM_ID is required in production. '
+                    'Set your Telegram user ID in .env file.'
+                )
+
+            # Validate system wallet is set
+            if not self.auth_system_wallet_address:
+                raise ValueError(
+                    'AUTH_SYSTEM_WALLET_ADDRESS is required in production. '
+                    'Set the system wallet address in .env file.'
+                )
+
+            # Validate PLEX token address is set
+            if not self.auth_plex_token_address:
+                raise ValueError(
+                    'AUTH_PLEX_TOKEN_ADDRESS is required in production. '
+                    'Set the PLEX token contract address in .env file.'
+                )
+
         return self
 
     @model_validator(mode='after')

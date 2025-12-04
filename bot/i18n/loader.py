@@ -14,6 +14,47 @@ from .locales import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES
 from .translations import TRANSLATIONS
 
 
+def get_text(key: str, lang: str = "ru", **kwargs: Any) -> str:
+    """
+    Get translated text by key with fallback mechanism.
+
+    Args:
+        key: Translation key in dot notation (e.g., "menu.main")
+        lang: Language code (ru, en). Defaults to "ru"
+        **kwargs: Variables to interpolate in translation
+
+    Returns:
+        Translated text with interpolated variables
+
+    Example:
+        >>> get_text('withdrawal.min_amount_error', lang='ru', min_amount=10)
+        '❌ Минимальная сумма вывода: 10 USDT'
+    """
+    try:
+        keys = key.split('.')
+        value = TRANSLATIONS[lang]
+        for k in keys:
+            value = value[k]
+
+        # If value is a string, interpolate variables
+        if isinstance(value, str):
+            try:
+                return value.format(**kwargs)
+            except KeyError as e:
+                logger.warning(f"Missing variable in translation {key}: {e}")
+                return value
+
+        return str(value)
+
+    except KeyError:
+        logger.warning(f"Missing translation: {key} for {lang}")
+        # Fallback to Russian if translation not found in other language
+        if lang != "ru":
+            return get_text(key, "ru", **kwargs)
+        # If even Russian translation is missing, return the key itself
+        return key
+
+
 def get_translator(language: str | None = None) -> Any:
     """
     Get translator function for specified language.

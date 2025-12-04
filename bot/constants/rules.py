@@ -6,6 +6,8 @@ Contains access levels, PLEX requirements, and rule texts.
 
 from decimal import Decimal
 
+from app.config.settings import settings
+
 # Access levels configuration
 LEVELS = {
     1: {"plex": 5000, "rabbits": 1, "deposits": 1},
@@ -31,11 +33,11 @@ class WorkStatus:
     SUSPENDED_NO_PLEX = "suspended_no_plex"  # Balance < 5000 PLEX
     SUSPENDED_NO_PAYMENT = "suspended_no_payment"  # PLEX payment not received
 
-# System wallet for PLEX payments
-SYSTEM_WALLET = "0x1C67E0Ff6C76270498525590BE85DD138702Bf67"
+# System wallet for PLEX payments (from settings)
+SYSTEM_WALLET = settings.auth_system_wallet_address
 
-# PLEX token address
-PLEX_TOKEN_ADDRESS = "0xdf179b6cadbc61ffd86a3d2e55f6d6e083ade6c1"
+# PLEX token address (from settings)
+PLEX_TOKEN_ADDRESS = settings.auth_plex_token_address
 
 # Levels table for display
 LEVELS_TABLE = """

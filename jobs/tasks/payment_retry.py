@@ -61,33 +61,19 @@ async def _process_payment_retries_async() -> None:
 
     async with lock.lock("payment_retry_processing", timeout=300):
         try:
-            # Create a dedicated engine and sessionmaker for this run to avoid cross-loop reuse
-            from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-            from sqlalchemy.pool import NullPool
+            # Use global engine instead of creating new one
+            from app.config.database import async_engine, async_session_maker
 
-            engine = create_async_engine(
-                settings.database_url,
-                pool_pre_ping=True,
-                poolclass=NullPool,
-            )
-            SessionLocal = async_sessionmaker(
-                engine,
-                expire_on_commit=False,
-            )
+            async with async_session_maker() as session:
+                # Get blockchain service
+                blockchain_service = get_blockchain_service()
 
-            try:
-                async with SessionLocal() as session:
-                    # Get blockchain service
-                    blockchain_service = get_blockchain_service()
+                # Process retries
+                retry_service = PaymentRetryService(session)
+                await retry_service.process_pending_retries(
+                    blockchain_service
+                )
 
-                    # Process retries
-                    retry_service = PaymentRetryService(session)
-                    await retry_service.process_pending_retries(
-                        blockchain_service
-                    )
-
-            finally:
-                await engine.dispose()
         finally:
             # Close Redis client
             if redis_client:

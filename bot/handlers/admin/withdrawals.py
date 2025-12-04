@@ -202,12 +202,15 @@ async def handle_withdrawal_selection(
         history_text = f"📊 История: депозиты {format_usdt(total_dep)}, выводы {format_usdt(total_wd)}\n"
 
     date = withdrawal.created_at.strftime("%d.%m.%Y %H:%M")
+    net_amount = withdrawal.amount - withdrawal.fee
 
     text = (
         f"💸 **Заявка на вывод #{withdrawal.id}**\n\n"
         f"👤 Пользователь: {username}\n"
         f"{history_text}"
-        f"💰 Сумма: `{format_usdt(withdrawal.amount)} USDT`\n"
+        f"💰 Запрошено: `{format_usdt(withdrawal.amount)} USDT`\n"
+        f"💸 Комиссия: `{format_usdt(withdrawal.fee)} USDT`\n"
+        f"✨ К отправке: `{format_usdt(net_amount)} USDT`\n"
         f"💳 Кошелек: `{withdrawal.to_address}`\n"
         f"📅 Дата: {date}\n\n"
         "Выберите действие:"
@@ -389,9 +392,11 @@ async def handle_confirm_withdrawal_action(
 
             # Send blockchain transaction
             blockchain_service = get_blockchain_service()
-            # Keep Decimal precision for blockchain payment
+            # CRITICAL: Send net_amount (amount - fee) to user, not gross amount
+            # User requested 'amount', we deducted 'amount', but send 'amount - fee'
+            net_amount = withdrawal.amount - withdrawal.fee
             payment_result = await blockchain_service.send_payment(
-                withdrawal.to_address, withdrawal.amount
+                withdrawal.to_address, net_amount
             )
 
             if not payment_result["success"]:
@@ -483,9 +488,10 @@ async def handle_confirm_withdrawal_action(
                 )
 
     except Exception as e:
+        await session.rollback()
         logger.error(f"Error processing withdrawal action: {e}")
         await message.answer(
-            f"❌ Ошибка при обработке: {str(e)}",
+            "❌ Ошибка при обработке. Попробуйте позже.",
             reply_markup=admin_withdrawals_keyboard(),
         )
 
@@ -539,6 +545,7 @@ async def handle_approved_withdrawals(
         )
 
     except Exception as e:
+        await session.rollback()
         await message.answer(
             f"❌ Ошибка при загрузке заявок: {str(e)}",
             reply_markup=admin_withdrawals_keyboard(),
@@ -592,6 +599,7 @@ async def handle_rejected_withdrawals(
         )
 
     except Exception as e:
+        await session.rollback()
         await message.answer(
             f"❌ Ошибка при загрузке заявок: {str(e)}",
             reply_markup=admin_withdrawals_keyboard(),

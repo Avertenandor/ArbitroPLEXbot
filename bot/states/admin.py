@@ -21,15 +21,6 @@ class DepositSettingsStates(StatesGroup):
     waiting_for_max_level = State()
 
 
-class WalletManagementStates(StatesGroup):
-    """States for wallet management."""
-
-    waiting_for_wallet_type = State()
-    waiting_for_new_address = State()
-    waiting_for_private_key = State()
-    waiting_for_reason = State()
-
-
 class BlacklistStates(StatesGroup):
     """States for blacklist management."""
 

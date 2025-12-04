@@ -268,15 +268,84 @@ async def start_scheduler() -> None:
     logger.info("Task scheduler started")
 
 
+async def shutdown_with_timeout(scheduler: AsyncIOScheduler, timeout: int = 30) -> None:
+    """
+    Graceful shutdown с таймаутом.
+
+    Args:
+        scheduler: Scheduler instance to shutdown
+        timeout: Maximum time to wait for shutdown in seconds
+    """
+    logger.info(f"Initiating graceful shutdown with {timeout}s timeout...")
+    try:
+        await asyncio.wait_for(
+            asyncio.to_thread(scheduler.shutdown, wait=True),
+            timeout=timeout
+        )
+        logger.info("Scheduler shutdown completed successfully")
+    except asyncio.TimeoutError:
+        logger.warning(f"Scheduler shutdown timed out after {timeout}s, forcing shutdown...")
+        scheduler.shutdown(wait=False)
+        logger.info("Forced shutdown completed")
+
+
 if __name__ == "__main__":
     import asyncio
+    import signal
+    from jobs.health import start_health_server, stop_health_server, set_scheduler
+
+    # Shutdown event for graceful termination
+    shutdown_event = asyncio.Event()
+
+    def signal_handler(sig, frame):
+        """Handle shutdown signals."""
+        signal_name = signal.Signals(sig).name
+        logger.info(f"Received signal {signal_name} ({sig}), initiating graceful shutdown...")
+        shutdown_event.set()
 
     async def main():
-        await start_scheduler()
-        # Keep running
+        """Main entry point with graceful shutdown support."""
+        # Register signal handlers
+        signal.signal(signal.SIGTERM, signal_handler)
+        signal.signal(signal.SIGINT, signal_handler)
+
+        logger.info("Starting scheduler with graceful shutdown support...")
+        scheduler = create_scheduler()
+
+        # Health check server components
+        health_runner = None
+        health_site = None
+
         try:
-            await asyncio.Event().wait()
-        except KeyboardInterrupt:
-            logger.info("Scheduler stopped")
+            # Start scheduler
+            scheduler.start()
+            logger.info("Task scheduler started successfully")
+
+            # Register scheduler for health checks
+            set_scheduler(scheduler)
+
+            # Start health check server
+            health_runner, health_site = await start_health_server(
+                host="0.0.0.0",
+                port=8081,
+            )
+
+            # Wait for shutdown signal
+            await shutdown_event.wait()
+
+        except Exception as e:
+            logger.error(f"Error in scheduler main loop: {e}")
+            raise
+        finally:
+            # Graceful shutdown
+            logger.info("Shutting down scheduler...")
+
+            # Stop health check server
+            if health_runner is not None:
+                await stop_health_server(health_runner, timeout=5)
+
+            # Stop scheduler
+            await shutdown_with_timeout(scheduler, timeout=30)
+            logger.info("Scheduler shutdown complete")
 
     asyncio.run(main())

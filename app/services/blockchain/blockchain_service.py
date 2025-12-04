@@ -15,6 +15,8 @@ from .deposit_processor import DepositProcessor
 from .event_monitor import EventMonitor
 from .payment_sender import PaymentSender
 from .provider_manager import ProviderManager
+from .rpc_wrapper import with_timeout, BlockchainTimeoutError
+from app.config.constants import BLOCKCHAIN_TIMEOUT, BLOCKCHAIN_LONG_TIMEOUT
 
 
 class BlockchainService:
@@ -39,6 +41,7 @@ class BlockchainService:
         chain_id: int = 56,
         confirmation_blocks: int = 12,
         poll_interval: int = 3,
+        session_factory: Any = None,
     ) -> None:
         """
         Initialize blockchain service.
@@ -53,6 +56,7 @@ class BlockchainService:
             chain_id: BSC chain ID (56=mainnet, 97=testnet)
             confirmation_blocks: Required confirmations
             poll_interval: Event polling interval (seconds)
+            session_factory: Session factory for distributed lock (optional)
         """
         self.https_url = https_url
         self.wss_url = wss_url
@@ -77,6 +81,7 @@ class BlockchainService:
         # Store private key (will be used when initializing payment sender)
         self._payout_wallet_private_key = payout_wallet_private_key
         self._poll_interval = poll_interval
+        self._session_factory = session_factory
 
         # Connected state
         self._initialized = False
@@ -118,6 +123,7 @@ class BlockchainService:
             web3=web3,
             usdt_contract_address=self.usdt_contract_address,
             payout_wallet_private_key=self._payout_wallet_private_key,
+            session_factory=self._session_factory,
         )
 
         self._initialized = True
@@ -283,9 +289,13 @@ class BlockchainService:
         max_amount_wei = int((max_amount * Decimal(10**USDT_DECIMALS)).to_integral_value(ROUND_DOWN))
 
         try:
-            # Get current block if 'latest'
+            # Get current block if 'latest' with timeout
             if to_block == "latest":
-                to_block = await web3.eth.block_number
+                to_block = await with_timeout(
+                    web3.eth.block_number,
+                    timeout=BLOCKCHAIN_TIMEOUT,
+                    operation_name="Get current block for deposit search"
+                )
 
             # Limit search to last 100k blocks (about 3 days on BSC)
             # to avoid excessive RPC calls
@@ -297,19 +307,27 @@ class BlockchainService:
                     f"(from_block={from_block}, to_block={to_block})"
                 )
 
-            # Create filter for Transfer events
+            # Create filter for Transfer events with timeout
             # Filter: from=user_wallet, to=system_wallet
-            event_filter = await usdt_contract.events.Transfer.create_filter(
-                from_block=from_block,
-                to_block=to_block,
-                argument_filters={
-                    "from": user_wallet_checksum,
-                    "to": system_wallet_checksum,
-                },
+            event_filter = await with_timeout(
+                usdt_contract.events.Transfer.create_filter(
+                    from_block=from_block,
+                    to_block=to_block,
+                    argument_filters={
+                        "from": user_wallet_checksum,
+                        "to": system_wallet_checksum,
+                    },
+                ),
+                timeout=BLOCKCHAIN_LONG_TIMEOUT,
+                operation_name="Create deposit search filter"
             )
 
-            # Get all matching events
-            events = await event_filter.get_all_entries()
+            # Get all matching events with timeout
+            events = await with_timeout(
+                event_filter.get_all_entries(),
+                timeout=BLOCKCHAIN_LONG_TIMEOUT,
+                operation_name="Get deposit search events"
+            )
 
             # Find matching event by amount
             for event in events:
@@ -322,8 +340,12 @@ class BlockchainService:
                     tx_hash = event["transactionHash"].hex()
                     block_number = event["blockNumber"]
 
-                    # Get current block for confirmations
-                    current_block = await web3.eth.block_number
+                    # Get current block for confirmations with timeout
+                    current_block = await with_timeout(
+                        web3.eth.block_number,
+                        timeout=BLOCKCHAIN_TIMEOUT,
+                        operation_name="Get current block for confirmations"
+                    )
                     confirmations = current_block - block_number
 
                     logger.info(
