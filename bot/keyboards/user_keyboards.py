@@ -103,7 +103,7 @@ def main_menu_reply_keyboard(
             KeyboardButton(text="📜 История операций"),
         )
         builder.row(
-            KeyboardButton(text="📊 Калькулятор"),
+            # KeyboardButton(text="📊 Калькулятор"),  # TODO: временно отключен
             KeyboardButton(text="🔐 Получить финпароль"),
         )
         builder.row(

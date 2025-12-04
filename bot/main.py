@@ -248,7 +248,7 @@ async def main() -> None:  # noqa: C901
     from bot.handlers import (
         account_recovery,
         appeal,
-        calculator,
+        # calculator,  # TODO: временно отключен
         common,
         contact_update,
         deposit,
@@ -314,7 +314,7 @@ async def main() -> None:  # noqa: C901
     dp.include_router(deposit.router)
     dp.include_router(withdrawal.router)
     dp.include_router(referral.router)
-    dp.include_router(calculator.router)
+    # dp.include_router(calculator.router)  # TODO: временно отключен
     dp.include_router(profile.router)
     dp.include_router(transaction.router)
     dp.include_router(support.router)
