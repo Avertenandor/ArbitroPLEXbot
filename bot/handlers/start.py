@@ -421,7 +421,9 @@ async def process_wallet(
             try:
                 user_language = await get_user_language(session, user.id)
             except Exception as e:
-                logger.warning(f"Failed to get user language, using default: {e}")
+                logger.warning(
+                    f"Failed to get user language, using default: {e}"
+                )
         _ = get_translator(user_language)
 
         await message.answer(
@@ -535,13 +537,18 @@ async def process_wallet(
                         await state.clear()
                         return
 
-                    # Check if wallet is already used by another user (Unique constraint)
+                    # Check if wallet is already used by another user
+                    # (Unique constraint)
                     from app.services.user_service import UserService
                     user_service = UserService(session)
-                    existing_user = await user_service.get_by_wallet(wallet_address)
+                    existing_user = await user_service.get_by_wallet(
+                        wallet_address
+                    )
                     if existing_user:
-                        telegram_id = message.from_user.id if message.from_user else None
-                        if existing_user.telegram_id != telegram_id:
+                        tg_id = (
+                            message.from_user.id if message.from_user else None
+                        )
+                        if existing_user.telegram_id != tg_id:
                             await message.answer(
                                 "вќЊ Р­С‚РѕС‚ РєРѕС€РµР»РµРє СѓР¶Рµ РїСЂРёРІСЏР·Р°РЅ Рє РґСЂСѓРіРѕРјСѓ РїРѕР»СЊР·РѕРІР°С‚РµР»СЋ!\n"
                                 "РџРѕР¶Р°Р»СѓР№СЃС‚Р°, РёСЃРїРѕР»СЊР·СѓР№С‚Рµ РґСЂСѓРіРѕР№ РєРѕС€РµР»РµРє."
