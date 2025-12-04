@@ -275,7 +275,9 @@ async def cmd_start(
     blacklist_entry = data.get("blacklist_entry")
     try:
         if blacklist_entry is None:
-            from app.repositories.blacklist_repository import BlacklistRepository
+            from app.repositories.blacklist_repository import (
+                BlacklistRepository
+            )
             blacklist_repo = BlacklistRepository(session)
             blacklist_entry = await blacklist_repo.find_by_telegram_id(
                 message.from_user.id
