@@ -9,7 +9,7 @@ import re
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -255,6 +255,9 @@ async def handle_referral_stats(
     **data: Any,
 ) -> None:
     """Show comprehensive referral statistics."""
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+    from urllib.parse import quote
+
     referral_service = ReferralService(session)
     user_service = UserService(session)
 
@@ -272,7 +275,7 @@ async def handle_referral_stats(
         if bot:
             bot_info = await bot.get_me()
             bot_username = bot_info.username
-    
+
     # Generate referral link (method now handles referral_code internally)
     referral_link = user_service.generate_referral_link(user, bot_username)
 
@@ -311,12 +314,77 @@ async def handle_referral_stats(
 
     text += (
         f"*Комиссии (от депозитов и дохода):*\n"
-        f"• Уровень 1: *{int(REFERRAL_RATES[1] * 100)}%* от прямых партнеров\n"
-        f"• Уровень 2: *{int(REFERRAL_RATES[2] * 100)}%* от партнеров 2-го уровня\n"
-        f"• Уровень 3: *{int(REFERRAL_RATES[3] * 100)}%* от партнеров 3-го уровня\n\n"
+        f"• Уровень 1: *{int(REFERRAL_RATES[1] * 100)}%* "
+        f"от прямых партнеров\n"
+        f"• Уровень 2: *{int(REFERRAL_RATES[2] * 100)}%* "
+        f"от партнеров 2-го уровня\n"
+        f"• Уровень 3: *{int(REFERRAL_RATES[3] * 100)}%* "
+        f"от партнеров 3-го уровня\n\n"
         f"💡 Приглашайте больше друзей и увеличивайте доход!"
     )
 
+    # Create inline keyboard with share button
+    share_text = (
+        "🚀 Присоединяйся к ArbitroPLEX!\n\n"
+        "💰 Зарабатывай от 0.8% до 1.2% в день\n"
+        "👥 3-уровневая реферальная программа\n\n"
+        f"Регистрируйся по ссылке: {referral_link}"
+    )
+    share_url = f"https://t.me/share/url?url={quote(referral_link)}&text={quote(share_text)}"
+
+    inline_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="📤 Поделиться ссылкой",
+                url=share_url,
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="📋 Копировать ссылку",
+                callback_data="copy_ref_link",
+            )
+        ],
+    ])
+
     await message.answer(
         text, parse_mode="Markdown", reply_markup=referral_keyboard()
+    )
+
+    # Send inline keyboard separately for share functionality
+    await message.answer(
+        "📤 *Поделитесь своей ссылкой:*",
+        parse_mode="Markdown",
+        reply_markup=inline_kb,
+    )
+
+
+@router.callback_query(F.data == "copy_ref_link")
+async def handle_copy_ref_link(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    user: User,
+    **data: Any,
+) -> None:
+    """Handle copy referral link button - send link as copyable message."""
+    from app.config.settings import settings
+    from aiogram import Bot
+
+    user_service = UserService(session)
+
+    bot_username = settings.telegram_bot_username
+    if not bot_username:
+        bot: Bot = data.get("bot")
+        if bot:
+            bot_info = await bot.get_me()
+            bot_username = bot_info.username
+
+    referral_link = user_service.generate_referral_link(user, bot_username)
+
+    await callback.answer()
+    await callback.message.answer(
+        f"📋 *Ваша реферальная ссылка:*\n\n"
+        f"`{referral_link}`\n\n"
+        f"👆 Нажмите на ссылку чтобы скопировать",
+        parse_mode="Markdown",
     )

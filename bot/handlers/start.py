@@ -993,6 +993,24 @@ async def process_password_confirmation(
 
     await state.set_state(RegistrationStates.waiting_for_contacts_choice)
 
+    # Notify referrer about new referral (non-blocking)
+    referrer_telegram_id = state_data.get("referrer_telegram_id")
+    if referrer_telegram_id:
+        try:
+            from app.services.referral.referral_notifications import (
+                notify_new_referral,
+            )
+            bot = data.get("bot")
+            if bot:
+                await notify_new_referral(
+                    bot=bot,
+                    referrer_telegram_id=referrer_telegram_id,
+                    new_user_username=message.from_user.username,
+                    new_user_telegram_id=message.from_user.id,
+                )
+        except Exception as e:
+            logger.warning(f"Failed to notify referrer: {e}")
+
 
 @router.message(RegistrationStates.waiting_for_contacts_choice)
 async def handle_contacts_choice(

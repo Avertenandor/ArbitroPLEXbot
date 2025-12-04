@@ -399,6 +399,11 @@ async def main() -> None:  # noqa: C901
     admin_inquiries.router.callback_query.middleware(admin_auth_middleware)
     dp.include_router(admin_inquiries.router)
 
+    # Admin referral stats handler
+    from bot.handlers.admin import referral_stats as admin_referral_stats
+    admin_referral_stats.router.message.middleware(admin_auth_middleware)
+    dp.include_router(admin_referral_stats.router)
+
     # Fallback handler for orphaned states (must be BEFORE debug_unhandled)
     from bot.handlers import fallback
     dp.include_router(fallback.router)

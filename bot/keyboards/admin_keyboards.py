@@ -65,6 +65,9 @@ def admin_keyboard(
     # User inquiries (questions from users)
     builder.row(KeyboardButton(text="📨 Обращения от пользователей"))
 
+    # Referral stats
+    builder.row(KeyboardButton(text="📊 Реферальная статистика"))
+
     builder.row(KeyboardButton(text="📝 Просмотр сообщений пользователей"))
 
     # Sensitive controls - Extended/Super only
