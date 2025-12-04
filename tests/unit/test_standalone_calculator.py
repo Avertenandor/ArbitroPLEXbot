@@ -4,20 +4,21 @@ Tests for standalone profitability calculator.
 Tests the calculator package without database dependencies.
 """
 
-import pytest
 from decimal import Decimal
 
+import pytest
+
 from calculator import (
-    ProfitabilityCalculator,
-    DepositLevel,
-    CalculationResult,
     DEFAULT_LEVELS,
-    get_level_by_number,
-    get_level_for_amount,
+    CalculationResult,
+    DepositLevel,
+    ProfitabilityCalculator,
     format_currency,
-    format_percentage,
     format_days,
     format_days_ru,
+    format_percentage,
+    get_level_by_number,
+    get_level_for_amount,
 )
 
 

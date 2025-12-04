@@ -13,8 +13,9 @@ Run this script to verify:
 import asyncio
 from typing import Any
 
+from loguru import logger
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config.settings import settings
 from app.models.deposit import Deposit
@@ -22,7 +23,6 @@ from app.models.deposit_level_version import DepositLevelVersion
 from app.repositories.deposit_level_version_repository import (
     DepositLevelVersionRepository,
 )
-from loguru import logger
 
 
 async def verify_deposit_versioning(session: AsyncSession) -> dict[str, Any]:
@@ -87,7 +87,9 @@ async def verify_deposit_versioning(session: AsyncSession) -> dict[str, Any]:
                         "user_id": deposit.user_id,
                         "level": deposit.level,
                         "amount": str(deposit.amount),
-                        "created_at": deposit.created_at.isoformat() if deposit.created_at else None,
+                        "created_at": (
+                            deposit.created_at.isoformat() if deposit.created_at else None
+                        ),
                     }
                 )
 
@@ -133,7 +135,7 @@ async def migrate_legacy_deposits(session: AsyncSession) -> dict[str, Any]:
         version_repo = DepositLevelVersionRepository(session)
 
         # Get deposits without version
-        stmt = select(Deposit).where(Deposit.deposit_version_id == None)
+        stmt = select(Deposit).where(Deposit.deposit_version_id is None)
         result = await session.execute(stmt)
         deposits = result.scalars().all()
 
@@ -205,7 +207,8 @@ async def main() -> None:
 
             if verification_results["deposits_without_version"] > 0:
                 logger.warning(
-                    f"Found {verification_results['deposits_without_version']} deposits without version"
+                    f"Found {verification_results['deposits_without_version']} "
+                    "deposits without version"
                 )
                 logger.info("Attempting to migrate legacy deposits...")
 
@@ -241,4 +244,3 @@ if __name__ == "__main__":
     from typing import Any
 
     asyncio.run(main())
-

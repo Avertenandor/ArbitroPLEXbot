@@ -34,14 +34,14 @@ class Settings(BaseSettings):
     wallet_private_key: str | None = None
     wallet_address: str
     usdt_contract_address: str
-    
+
     # Blockchain RPC Providers
     rpc_url: str  # Default/Legacy RPC URL (QuickNode HTTP)
-    
+
     # QuickNode Endpoints
     rpc_quicknode_http: str | None = None
     rpc_quicknode_wss: str | None = None
-    
+
     # NodeReal Endpoints
     rpc_nodereal_http: str | None = None
     rpc_nodereal_wss: str | None = None
@@ -224,12 +224,14 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "ENCRYPTION_KEY is required in production environment. "
                     "Encryption is mandatory for protecting sensitive data. "
-                    "Generate a key with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
+                    "Generate a key with: python -c 'from cryptography.fernet import Fernet; "
+                    "print(Fernet.generate_key().decode())'"
                 )
             if len(self.encryption_key) < 32:
                 raise ValueError(
                     "ENCRYPTION_KEY must be at least 32 characters in production. "
-                    "Use a proper Fernet key generated with cryptography.fernet.Fernet.generate_key()"
+                    "Use a proper Fernet key generated with "
+                    "cryptography.fernet.Fernet.generate_key()"
                 )
         return self
 
@@ -296,7 +298,7 @@ class Settings(BaseSettings):
             # Check for common insecure patterns (exact matches only)
             # Parse URL to check username:password pairs
             try:
-                from urllib.parse import urlparse, unquote
+                from urllib.parse import unquote, urlparse
                 parsed = urlparse(self.database_url)
                 if parsed.password:
                     # Decode URL-encoded password

@@ -5,9 +5,7 @@ Provides async helpers for sending security event notifications to admins.
 """
 
 import asyncio
-import subprocess
 from pathlib import Path
-from typing import Any
 
 from loguru import logger
 
@@ -44,7 +42,7 @@ async def notify_security_event(
             cmd.append("--critical")
 
         # Run in subprocess (non-blocking)
-        process = await asyncio.create_subprocess_exec(
+        _process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -57,4 +55,3 @@ async def notify_security_event(
 
     except Exception as e:
         logger.error(f"Failed to send security notification: {e}")
-

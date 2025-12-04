@@ -4,8 +4,6 @@ HTTP Health Check Server.
 Provides /health endpoint for external monitoring (nginx, UptimeRobot, etc.).
 """
 
-import asyncio
-from typing import Any
 
 from aiohttp import web
 from loguru import logger
@@ -73,5 +71,3 @@ async def run_health_server(host: str = "0.0.0.0", port: int = 8080) -> None:
     site = web.TCPSite(runner, host, port)
     await site.start()
     logger.info(f"Health check server running on {host}:{port}")
-
-

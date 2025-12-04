@@ -18,9 +18,9 @@ async def run_cleanup_task() -> None:
     Clean up logs older than 30 days.
     """
     logger.info("Starting cleanup task...")
-    
+
     cutoff_date = datetime.now(UTC) - timedelta(days=30)
-    
+
     async with async_session_maker() as session:
         try:
             async with session.begin():
@@ -28,10 +28,10 @@ async def run_cleanup_task() -> None:
                 stmt = delete(AdminAction).where(AdminAction.created_at < cutoff_date)
                 result = await session.execute(stmt)
                 deleted_count = result.rowcount
-            
+
             # Commit handled by context manager session.begin() or explicit commit if needed?
             # session.begin() handles commit on exit.
-            
+
             logger.info(f"Cleanup completed. Deleted {deleted_count} old admin logs.")
 
         except Exception as e:

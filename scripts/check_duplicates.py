@@ -3,8 +3,9 @@
 import asyncio
 import sys
 from pathlib import Path
+
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -15,6 +16,7 @@ from app.config.settings import settings
 # Configure logger for script
 logger.remove()
 logger.add(sys.stderr, level="INFO")
+
 
 async def check():
     engine = create_async_engine(settings.database_url, echo=False)
@@ -31,6 +33,6 @@ async def check():
             logger.success("No duplicate wallets found.")
     await engine.dispose()
 
+
 if __name__ == "__main__":
     asyncio.run(check())
-

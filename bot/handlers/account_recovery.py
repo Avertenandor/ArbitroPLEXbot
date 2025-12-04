@@ -33,11 +33,11 @@ async def cmd_recover_account(
     R16-3: User lost access to Telegram account but has wallet access.
     """
     telegram_id = message.from_user.id if message.from_user else None
-    
+
     logger.info(
         f"R16-3: Account recovery initiated by telegram_id={telegram_id}"
     )
-    
+
     await state.set_state(AccountRecoveryStates.waiting_for_wallet)
 
     text = (
@@ -110,7 +110,7 @@ async def handle_wallet_address(
         )
         await state.clear()
         return
-    
+
     logger.info(
         f"R16-3: Wallet found for recovery: {wallet_address}, "
         f"has_deposits={recovery_info.get('has_deposits')}, "
@@ -210,7 +210,7 @@ async def handle_signature(
             reply_markup=cancel_keyboard()
         )
         return
-    
+
     logger.info(
         f"R16-3: Wallet ownership verified: user_id={user.id}, "
         f"wallet={wallet_address}, "
@@ -350,7 +350,8 @@ async def handle_additional_info(
 
     text = (
         "✅ **Аккаунт успешно восстановлен!**\n\n"
-        f"Ваш аккаунт был привязан к новому Telegram ID: `{message.from_user.id if message.from_user else 'N/A'}`\n\n"
+        f"Ваш аккаунт был привязан к новому Telegram ID: "
+        f"`{message.from_user.id if message.from_user else 'N/A'}`\n\n"
         f"**Новый финансовый пароль:**\n"
         f"```\n{new_finpass}\n```\n\n"
         "⚠️ **Важно:**\n"
@@ -382,4 +383,3 @@ async def handle_additional_info(
         f"Account recovery completed: user {user.id}, "
         f"new_telegram_id={message.from_user.id if message.from_user else None}"
     )
-

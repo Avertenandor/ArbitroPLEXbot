@@ -52,7 +52,7 @@ class UserNotificationSettingsRepository(
             UserNotificationSettings instance
         """
         existing = await self.get_by_user_id(user_id)
-        
+
         if existing:
             # Update existing
             for key, value in kwargs.items():
@@ -69,4 +69,3 @@ class UserNotificationSettingsRepository(
             self.session.add(settings)
             await self.session.flush()
             return settings
-

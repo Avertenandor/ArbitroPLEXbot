@@ -5,25 +5,20 @@ Handles mass message sending with rate limiting and background execution.
 """
 
 import asyncio
-from datetime import datetime
-from typing import Any
 
 from aiogram import Bot
-from aiogram.exceptions import TelegramRetryAfter, TelegramForbiddenError
+from aiogram.exceptions import TelegramForbiddenError
 from aiogram.types import InlineKeyboardMarkup, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.admin import Admin
-from app.services.admin_log_service import AdminLogService
-from app.services.user_service import UserService
 from app.config.constants import (
-    TELEGRAM_TIMEOUT,
-    TELEGRAM_MESSAGE_DELAY,
-    TELEGRAM_BATCH_SIZE,
     TELEGRAM_BATCH_DELAY,
+    TELEGRAM_BATCH_SIZE,
+    TELEGRAM_TIMEOUT,
 )
+from app.services.user_service import UserService
 from app.utils.datetime_utils import utc_now
 
 
@@ -110,8 +105,6 @@ class BroadcastService:
             broadcast_data: Broadcast content data
             button_data: Optional button data
         """
-        admin_telegram_id = admin_message.from_user.id
-
         # Count total users
         user_service = UserService(self.session)
         total_users = await user_service.count_verified_users()
@@ -289,12 +282,112 @@ class BroadcastService:
         except TelegramForbiddenError:
             # User blocked the bot
             return telegram_id, "blocked"
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(f"Timeout sending to {telegram_id}")
             return telegram_id, "failed"
         except Exception as e:
             logger.debug(f"Failed to send to {telegram_id}: {e}")
             return telegram_id, "failed"
+
+    def _prepare_reply_markup(self, button_data: dict | None):
+        """Prepare reply markup from button data."""
+        if not button_data:
+            return None
+
+        builder = InlineKeyboardBuilder()
+        builder.button(text=button_data["text"], url=button_data["url"])
+        return builder.as_markup()
+
+    async def _process_batch_results(
+        self,
+        results: list,
+        stats: dict,
+    ) -> None:
+        """Process batch send results and update stats."""
+        for result in results:
+            if isinstance(result, Exception):
+                stats["failed"] += 1
+                logger.error(f"Task exception: {result}")
+            else:
+                _, status = result
+                stats[status] = stats.get(status, 0) + 1
+
+    async def _send_broadcast_batch(
+        self,
+        batch: list[int],
+        broadcast_type: str,
+        text: str | None,
+        file_id: str | None,
+        caption: str | None,
+        reply_markup,
+    ) -> list:
+        """Send messages to a batch of users in parallel."""
+        tasks = [
+            self._send_message_to_user(
+                telegram_id,
+                broadcast_type,
+                text,
+                file_id,
+                caption,
+                reply_markup,
+            )
+            for telegram_id in batch
+        ]
+        return await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def _notify_admin_completion(
+        self,
+        admin_telegram_id: int,
+        broadcast_id: str,
+        stats: dict,
+        total_sent: int,
+        total_users: int,
+        is_cancelled: bool,
+    ) -> None:
+        """Notify admin about broadcast completion."""
+        try:
+            status_text = "отменена" if is_cancelled else "завершена"
+            await asyncio.wait_for(
+                self.bot.send_message(
+                    admin_telegram_id,
+                    f"✅ **Рассылка {broadcast_id} {status_text}!**\n\n"
+                    f"✅ Успешно: {stats['success']}\n"
+                    f"🚫 Заблокировали бота: {stats['blocked']}\n"
+                    f"❌ Ошибки: {stats['failed']}\n"
+                    f"👥 Всего отправлено: {total_sent}/{total_users}",
+                    parse_mode="Markdown",
+                ),
+                timeout=TELEGRAM_TIMEOUT,
+            )
+        except TimeoutError:
+            logger.warning(
+                f"Timeout notifying admin {admin_telegram_id} about broadcast completion"
+            )
+        except Exception as e:
+            logger.error(f"Failed to notify admin: {e}")
+
+    async def _notify_admin_error(
+        self,
+        admin_telegram_id: int,
+        broadcast_id: str,
+        error: Exception,
+    ) -> None:
+        """Notify admin about broadcast error."""
+        try:
+            await asyncio.wait_for(
+                self.bot.send_message(
+                    admin_telegram_id,
+                    f"❌ **Ошибка рассылки {broadcast_id}**: {error}",
+                    parse_mode="Markdown",
+                ),
+                timeout=TELEGRAM_TIMEOUT,
+            )
+        except TimeoutError:
+            logger.warning(
+                f"Timeout notifying admin {admin_telegram_id} about broadcast error"
+            )
+        except Exception as notify_error:
+            logger.error(f"Failed to notify admin about error: {notify_error}")
 
     async def _broadcast_task(
         self,
@@ -325,13 +418,7 @@ class BroadcastService:
                 logger.info(f"No users to broadcast to for {broadcast_id}")
                 return
 
-            # Prepare markup
-            reply_markup = None
-            if button_data:
-                builder = InlineKeyboardBuilder()
-                builder.button(text=button_data["text"], url=button_data["url"])
-                reply_markup = builder.as_markup()
-
+            reply_markup = self._prepare_reply_markup(button_data)
             stats = {"success": 0, "failed": 0, "blocked": 0}
 
             broadcast_type = broadcast_data["type"]
@@ -350,30 +437,13 @@ class BroadcastService:
                 batch_num += 1
                 logger.debug(f"Processing batch {batch_num} with {len(batch)} users")
 
-                # Create tasks for the batch
-                tasks = [
-                    self._send_message_to_user(
-                        telegram_id,
-                        broadcast_type,
-                        text,
-                        file_id,
-                        caption,
-                        reply_markup,
-                    )
-                    for telegram_id in batch
-                ]
-
                 # Send batch in parallel
-                results = await asyncio.gather(*tasks, return_exceptions=True)
+                results = await self._send_broadcast_batch(
+                    batch, broadcast_type, text, file_id, caption, reply_markup
+                )
 
                 # Process results
-                for result in results:
-                    if isinstance(result, Exception):
-                        stats["failed"] += 1
-                        logger.error(f"Task exception: {result}")
-                    else:
-                        _, status = result
-                        stats[status] = stats.get(status, 0) + 1
+                await self._process_batch_results(results, stats)
 
                 # Update progress
                 total_sent = sum(stats.values())
@@ -390,50 +460,18 @@ class BroadcastService:
                 # Pause between batches for rate limiting
                 await asyncio.sleep(TELEGRAM_BATCH_DELAY)
 
-            # Calculate totals
-            total_sent = sum(stats.values())
-
             # Notify admin about completion
-            try:
-                status_text = "отменена" if self._active_broadcasts[broadcast_id].get("cancelled") else "завершена"
-                await asyncio.wait_for(
-                    self.bot.send_message(
-                        admin_telegram_id,
-                        f"✅ **Рассылка {broadcast_id} {status_text}!**\n\n"
-                        f"✅ Успешно: {stats['success']}\n"
-                        f"🚫 Заблокировали бота: {stats['blocked']}\n"
-                        f"❌ Ошибки: {stats['failed']}\n"
-                        f"👥 Всего отправлено: {total_sent}/{total_users}",
-                        parse_mode="Markdown",
-                    ),
-                    timeout=TELEGRAM_TIMEOUT,
-                )
-            except asyncio.TimeoutError:
-                logger.warning(
-                    f"Timeout notifying admin {admin_telegram_id} about broadcast completion"
-                )
-            except Exception as e:
-                logger.error(f"Failed to notify admin: {e}")
+            total_sent = sum(stats.values())
+            is_cancelled = self._active_broadcasts[broadcast_id].get("cancelled", False)
+            await self._notify_admin_completion(
+                admin_telegram_id, broadcast_id, stats, total_sent, total_users, is_cancelled
+            )
 
         except Exception as e:
             logger.error(f"Broadcast {broadcast_id} failed: {e}", exc_info=True)
-            try:
-                await asyncio.wait_for(
-                    self.bot.send_message(
-                        admin_telegram_id,
-                        f"❌ **Ошибка рассылки {broadcast_id}**: {e}",
-                        parse_mode="Markdown",
-                    ),
-                    timeout=TELEGRAM_TIMEOUT,
-                )
-            except asyncio.TimeoutError:
-                logger.warning(
-                    f"Timeout notifying admin {admin_telegram_id} about broadcast error"
-                )
-            except Exception as notify_error:
-                logger.error(f"Failed to notify admin about error: {notify_error}")
+            await self._notify_admin_error(admin_telegram_id, broadcast_id, e)
+
         finally:
             # Clean up active broadcast tracking
             if broadcast_id in self._active_broadcasts:
                 del self._active_broadcasts[broadcast_id]
-

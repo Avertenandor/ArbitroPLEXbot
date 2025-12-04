@@ -11,8 +11,6 @@ from datetime import UTC, datetime, timedelta
 import dramatiq
 from aiogram import Bot
 from loguru import logger
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
-from sqlalchemy.pool import NullPool
 
 try:
     import redis.asyncio as redis
@@ -47,9 +45,302 @@ def monitor_deposits() -> None:
         logger.exception(f"Deposit monitoring failed: {e}")
 
 
+async def _search_and_confirm_deposit(
+    deposit, blockchain_service, deposit_repo, deposit_service
+):
+    """Search blockchain for deposit and confirm if found."""
+    if not deposit.user or not deposit.user.wallet_address:
+        return None
+
+    try:
+        found_tx = await blockchain_service.search_blockchain_for_deposit(
+            user_wallet=deposit.user.wallet_address,
+            expected_amount=deposit.amount,
+            from_block=0,
+            to_block="latest",
+            tolerance_percent=0.05,
+        )
+
+        if found_tx:
+            await deposit_repo.update(deposit.id, tx_hash=found_tx["tx_hash"])
+            await deposit_service.confirm_deposit(deposit.id, found_tx["block_number"])
+
+        return found_tx
+    except Exception as e:
+        logger.warning(
+            f"Error searching blockchain for deposit {deposit.id}: {e}",
+            extra={"deposit_id": deposit.id},
+        )
+        return None
+
+
+async def _notify_recovery_confirmed(notification_service, bot, deposit, found_tx):
+    """Send notification for recovery deposit confirmation."""
+    if not deposit.user:
+        return
+
+    notification_message = (
+        f"✅ Депозит подтверждён после восстановления сети!\n\n"
+        f"Ваш депозит уровня {deposit.level} "
+        f"({deposit.amount} USDT) был найден в блокчейне "
+        f"и подтверждён.\n\n"
+        f"Транзакция: {found_tx['tx_hash']}"
+    )
+    await notification_service.send_notification(
+        bot, deposit.user.telegram_id, notification_message, critical=True
+    )
+
+
+async def _notify_deposit_confirmed(notification_service, bot, deposit, found_tx):
+    """Send notification for confirmed deposit."""
+    if not deposit.user:
+        return
+
+    notification_message = (
+        f"✅ Депозит подтверждён!\n\n"
+        f"Ваш депозит уровня {deposit.level} "
+        f"({deposit.amount} USDT) был найден в блокчейне и подтверждён.\n\n"
+        f"Транзакция: {found_tx['tx_hash']}"
+    )
+    await notification_service.send_notification(
+        bot, deposit.user.telegram_id, notification_message, critical=True
+    )
+
+
+async def _notify_deposit_expired(notification_service, bot, deposit):
+    """Send notification for expired deposit."""
+    if not deposit.user:
+        return
+
+    notification_message = (
+        f"⚠️ Депозит не был подтверждён в течение 24 часов.\n\n"
+        f"Ваш запрос на депозит уровня {deposit.level} "
+        f"({deposit.amount} USDT) создан более 24 часов назад.\n\n"
+        f"Транзакция не была найдена в блокчейне.\n\n"
+        f"Если вы уже отправили средства, свяжитесь с поддержкой.\n\n"
+        f"Если средства НЕ были отправлены, вы можете создать новый депозит."
+    )
+    await notification_service.send_notification(
+        bot, deposit.user.telegram_id, notification_message, critical=False
+    )
+
+
+async def _process_single_recovery_deposit(
+    deposit, blockchain_service, deposit_repo, deposit_service, notification_service, bot
+):
+    """Process a single recovery deposit."""
+    found_tx = await _search_and_confirm_deposit(
+        deposit, blockchain_service, deposit_repo, deposit_service
+    )
+
+    if found_tx:
+        logger.info(
+            f"R11-2: Found recovery deposit {deposit.id} "
+            f"in blockchain: tx_hash={found_tx['tx_hash']}"
+        )
+        await _notify_recovery_confirmed(notification_service, bot, deposit, found_tx)
+        return "confirmed"
+
+    # Not found - keep as PENDING with new timeout
+    await deposit_repo.update(deposit.id, status=TransactionStatus.PENDING.value)
+    logger.info(
+        f"R11-2: Recovery deposit {deposit.id} not found, converted to PENDING status"
+    )
+    return "pending"
+
+
+async def _process_recovery_deposits(
+    session, deposit_repo, deposit_service, blockchain_service, notification_service, bot
+):
+    """Process deposits with PENDING_NETWORK_RECOVERY status."""
+    if settings.blockchain_maintenance_mode:
+        return 0, 0
+
+    from sqlalchemy import select
+    from sqlalchemy.orm import selectinload
+
+    from app.models.deposit import Deposit as DepositModel
+
+    recovery_stmt = (
+        select(DepositModel)
+        .options(selectinload(DepositModel.user))
+        .where(
+            DepositModel.status == TransactionStatus.PENDING_NETWORK_RECOVERY.value
+        )
+    )
+    recovery_result = await session.execute(recovery_stmt)
+    recovery_deposits = list(recovery_result.scalars().unique().all())
+
+    if not recovery_deposits:
+        return 0, 0
+
+    logger.info(
+        f"R11-2: Processing {len(recovery_deposits)} deposits "
+        "waiting for network recovery"
+    )
+
+    recovery_confirmed = 0
+    recovery_still_pending = 0
+
+    for deposit in recovery_deposits:
+        try:
+            result = await _process_single_recovery_deposit(
+                deposit,
+                blockchain_service,
+                deposit_repo,
+                deposit_service,
+                notification_service,
+                bot,
+            )
+            if result == "confirmed":
+                recovery_confirmed += 1
+            elif result == "pending":
+                recovery_still_pending += 1
+        except Exception as e:
+            logger.error(
+                f"R11-2: Error processing recovery deposit {deposit.id}: {e}",
+                extra={"deposit_id": deposit.id},
+                exc_info=True,
+            )
+
+    if recovery_confirmed > 0 or recovery_still_pending > 0:
+        await session.commit()
+        logger.info(
+            f"R11-2: Recovery processing complete: "
+            f"{recovery_confirmed} confirmed, "
+            f"{recovery_still_pending} converted to PENDING"
+        )
+
+    return recovery_confirmed, recovery_still_pending
+
+
+async def _process_single_expired_deposit(
+    deposit,
+    blockchain_service,
+    deposit_repo,
+    deposit_service,
+    notification_service,
+    bot,
+):
+    """Process a single expired deposit."""
+    found_tx = await _search_and_confirm_deposit(
+        deposit, blockchain_service, deposit_repo, deposit_service
+    )
+
+    if found_tx:
+        logger.info(
+            f"Found expired deposit {deposit.id} in blockchain: "
+            f"tx_hash={found_tx['tx_hash']}, block={found_tx['block_number']}"
+        )
+        await _notify_deposit_confirmed(notification_service, bot, deposit, found_tx)
+        return True  # Continue to next deposit
+
+    # Transaction not found - mark as failed
+    await deposit_repo.update(deposit.id, status=TransactionStatus.FAILED.value)
+
+    logger.warning(
+        f"Deposit {deposit.id} expired (24h timeout, not found in blockchain)",
+        extra={
+            "deposit_id": deposit.id,
+            "user_id": deposit.user_id,
+            "level": deposit.level,
+            "amount": str(deposit.amount),
+            "created_at": deposit.created_at.isoformat(),
+        },
+    )
+
+    await _notify_deposit_expired(notification_service, bot, deposit)
+    return False  # Mark as expired
+
+
+async def _process_expired_deposits(
+    pending_deposits,
+    deposit_repo,
+    deposit_service,
+    blockchain_service,
+    notification_service,
+    bot,
+):
+    """Process expired deposits (24 hours without tx_hash)."""
+    timeout_threshold = datetime.now(UTC) - timedelta(hours=24)
+    pending_without_tx = [
+        d
+        for d in pending_deposits
+        if not d.tx_hash and d.created_at < timeout_threshold
+    ]
+
+    expired_count = 0
+
+    for deposit in pending_without_tx:
+        try:
+            was_confirmed = await _process_single_expired_deposit(
+                deposit,
+                blockchain_service,
+                deposit_repo,
+                deposit_service,
+                notification_service,
+                bot,
+            )
+            if not was_confirmed:
+                expired_count += 1
+        except Exception as e:
+            logger.error(
+                f"Error processing expired deposit {deposit.id}: {e}",
+                extra={"deposit_id": deposit.id},
+                exc_info=True,
+            )
+
+    return expired_count
+
+
+async def _process_pending_deposits(
+    pending_with_tx, blockchain_service, deposit_service
+):
+    """Process pending deposits with tx_hash."""
+    processed = 0
+    confirmed = 0
+    still_pending = 0
+
+    for deposit in pending_with_tx:
+        try:
+            tx_status = await blockchain_service.check_transaction_status(
+                deposit.tx_hash
+            )
+            processed += 1
+
+            if (
+                tx_status.get("status") == "confirmed"
+                and tx_status.get("confirmations", 0) >= 12
+            ):
+                block_number = tx_status.get("block_number", 0)
+                await deposit_service.confirm_deposit(deposit.id, block_number)
+                confirmed += 1
+
+                logger.info(
+                    f"Deposit {deposit.id} confirmed",
+                    extra={
+                        "deposit_id": deposit.id,
+                        "tx_hash": deposit.tx_hash,
+                        "confirmations": tx_status.get("confirmations"),
+                    },
+                )
+            else:
+                still_pending += 1
+
+        except Exception as e:
+            logger.error(
+                f"Error checking deposit {deposit.id}: {e}",
+                extra={
+                    "deposit_id": deposit.id,
+                    "tx_hash": deposit.tx_hash,
+                },
+            )
+
+    return processed, confirmed, still_pending
+
+
 async def _monitor_deposits_async() -> None:
     """Async implementation of deposit monitoring."""
-    # Create Redis client for distributed lock
     redis_client = None
     if redis:
         try:
@@ -63,15 +354,12 @@ async def _monitor_deposits_async() -> None:
         except Exception as e:
             logger.warning(f"Failed to create Redis client for lock: {e}")
 
-    # Use distributed lock to prevent concurrent deposit monitoring
     lock = DistributedLock(redis_client=redis_client)
 
     async with lock.lock("deposit_monitoring", timeout=300):
         try:
-            # Use global engine and session maker
-            from app.config.database import async_engine, async_session_maker
+            from app.config.database import async_session_maker
 
-            # Initialize bot for notifications (used for both recovery and regular processing)
             bot = Bot(token=settings.telegram_bot_token)
 
             try:
@@ -81,119 +369,20 @@ async def _monitor_deposits_async() -> None:
                     blockchain_service = get_blockchain_service()
                     notification_service = NotificationService(session)
 
-                    # R11-2: Batch process deposits with PENDING_NETWORK_RECOVERY status
-                    # when blockchain network is recovered
-                    recovery_confirmed = 0
-                    recovery_still_pending = 0
-                    
-                    if not settings.blockchain_maintenance_mode:
-                        from sqlalchemy import select
-                        from sqlalchemy.orm import selectinload
-                        from app.models.deposit import Deposit as DepositModel
+                    # Process recovery deposits
+                    await _process_recovery_deposits(
+                        session,
+                        deposit_repo,
+                        deposit_service,
+                        blockchain_service,
+                        notification_service,
+                        bot,
+                    )
 
-                        # Find all deposits waiting for network recovery
-                        recovery_stmt = (
-                            select(DepositModel)
-                            .options(selectinload(DepositModel.user))
-                            .where(
-                                DepositModel.status
-                                == TransactionStatus.PENDING_NETWORK_RECOVERY.value
-                            )
-                        )
-                        recovery_result = await session.execute(recovery_stmt)
-                        recovery_deposits = list(recovery_result.scalars().unique().all())
-
-                        if recovery_deposits:
-                            logger.info(
-                                f"R11-2: Processing {len(recovery_deposits)} deposits "
-                                "waiting for network recovery"
-                            )
-
-                            for deposit in recovery_deposits:
-                                try:
-                                    if deposit.user and deposit.user.wallet_address:
-                                        # Search blockchain for the deposit
-                                        found_tx = None
-                                        try:
-                                            found_tx = (
-                                                await blockchain_service.search_blockchain_for_deposit(
-                                                    user_wallet=deposit.user.wallet_address,
-                                                    expected_amount=deposit.amount,
-                                                    from_block=0,
-                                                    to_block="latest",
-                                                    tolerance_percent=0.05,
-                                                )
-                                            )
-                                        except Exception as e:
-                                            logger.warning(
-                                                f"R11-2: Error searching blockchain for "
-                                                f"recovery deposit {deposit.id}: {e}",
-                                                extra={"deposit_id": deposit.id},
-                                            )
-
-                                        if found_tx:
-                                            # Found transaction - confirm deposit
-                                            logger.info(
-                                                f"R11-2: Found recovery deposit {deposit.id} "
-                                                f"in blockchain: tx_hash={found_tx['tx_hash']}"
-                                            )
-
-                                            # Update deposit with transaction hash
-                                            await deposit_repo.update(
-                                                deposit.id, tx_hash=found_tx["tx_hash"]
-                                            )
-
-                                            # Confirm deposit
-                                            await deposit_service.confirm_deposit(
-                                                deposit.id, found_tx["block_number"]
-                                            )
-                                            recovery_confirmed += 1
-
-                                            # Notify user
-                                            if deposit.user:
-                                                notification_message = (
-                                                    f"✅ Депозит подтверждён после восстановления сети!\n\n"
-                                                    f"Ваш депозит уровня {deposit.level} "
-                                                    f"({deposit.amount} USDT) был найден в блокчейне "
-                                                    f"и подтверждён.\n\n"
-                                                    f"Транзакция: {found_tx['tx_hash']}"
-                                                )
-                                                await notification_service.send_notification(
-                                                    bot,
-                                                    deposit.user.telegram_id,
-                                                    notification_message,
-                                                    critical=True,
-                                                )
-                                        else:
-                                            # Not found - keep as PENDING with new timeout
-                                            await deposit_repo.update(
-                                                deposit.id,
-                                                status=TransactionStatus.PENDING.value,
-                                            )
-                                            recovery_still_pending += 1
-                                            logger.info(
-                                                f"R11-2: Recovery deposit {deposit.id} not found, "
-                                                "converted to PENDING status"
-                                            )
-
-                                except Exception as e:
-                                    logger.error(
-                                        f"R11-2: Error processing recovery deposit {deposit.id}: {e}",
-                                        extra={"deposit_id": deposit.id},
-                                        exc_info=True,
-                                    )
-
-                            if recovery_confirmed > 0 or recovery_still_pending > 0:
-                                await session.commit()
-                                logger.info(
-                                    f"R11-2: Recovery processing complete: "
-                                    f"{recovery_confirmed} confirmed, "
-                                    f"{recovery_still_pending} converted to PENDING"
-                                )
-
-                    # Get pending deposits with user relationship loaded
+                    # Get pending deposits
                     from sqlalchemy import select
                     from sqlalchemy.orm import selectinload
+
                     from app.models.deposit import Deposit as DepositModel
 
                     stmt = (
@@ -204,172 +393,31 @@ async def _monitor_deposits_async() -> None:
                     result = await session.execute(stmt)
                     pending_deposits = list(result.scalars().unique().all())
 
+                    # Process expired deposits
+                    expired_count = await _process_expired_deposits(
+                        pending_deposits,
+                        deposit_repo,
+                        deposit_service,
+                        blockchain_service,
+                        notification_service,
+                        bot,
+                    )
+
                     # Filter deposits with tx_hash
                     pending_with_tx = [d for d in pending_deposits if d.tx_hash]
-
-                    # R3-6: Check for expired deposits (24 hours without tx_hash)
-                    expired_count = 0
-                    timeout_threshold = datetime.now(UTC) - timedelta(hours=24)
-                    pending_without_tx = [
-                        d for d in pending_deposits
-                        if not d.tx_hash and d.created_at < timeout_threshold
-                    ]
-
-                    # Process expired deposits
-                    for deposit in pending_without_tx:
-                        try:
-                            # R3-6: Last attempt to find transaction in blockchain history
-                            # before marking as failed
-                            found_tx = None
-                            if deposit.user and deposit.user.wallet_address:
-                                try:
-                                    # Estimate from_block: BSC has ~3 blocks/sec, ~10,800 blocks/hour
-                                    # Search from 24 hours ago (about 259,200 blocks)
-                                    # But limit to last 100k blocks to avoid excessive RPC calls
-                                    from_block = 0  # Search from beginning (limited by service)
-                                    
-                                    found_tx = await blockchain_service.search_blockchain_for_deposit(
-                                        user_wallet=deposit.user.wallet_address,
-                                        expected_amount=deposit.amount,
-                                        from_block=from_block,
-                                        to_block="latest",
-                                        tolerance_percent=0.05,  # 5% tolerance
-                                    )
-                                except Exception as e:
-                                    logger.warning(
-                                        f"Error searching blockchain for deposit {deposit.id}: {e}",
-                                        extra={"deposit_id": deposit.id},
-                                    )
-
-                            if found_tx:
-                                # Found transaction - confirm deposit
-                                logger.info(
-                                    f"Found expired deposit {deposit.id} in blockchain: "
-                                    f"tx_hash={found_tx['tx_hash']}, "
-                                    f"block={found_tx['block_number']}"
-                                )
-                                
-                                # Update deposit with transaction hash first
-                                await deposit_repo.update(
-                                    deposit.id,
-                                    tx_hash=found_tx["tx_hash"],
-                                )
-                                
-                                # Confirm deposit through service (handles status, balance updates, referrals)
-                                await deposit_service.confirm_deposit(
-                                    deposit.id, found_tx["block_number"]
-                                )
-                                
-                                # Notify user of successful confirmation
-                                if deposit.user:
-                                    notification_message = (
-                                        f"✅ Депозит подтверждён!\n\n"
-                                        f"Ваш депозит уровня {deposit.level} "
-                                        f"({deposit.amount} USDT) был найден в блокчейне и подтверждён.\n\n"
-                                        f"Транзакция: {found_tx['tx_hash']}"
-                                    )
-                                    await notification_service.send_notification(
-                                        bot,
-                                        deposit.user.telegram_id,
-                                        notification_message,
-                                        critical=True,
-                                    )
-                                continue
-
-                            # Transaction not found - mark as failed
-                            await deposit_repo.update(
-                                deposit.id, status=TransactionStatus.FAILED.value
-                            )
-                            expired_count += 1
-
-                            logger.warning(
-                                f"Deposit {deposit.id} expired (24h timeout, not found in blockchain)",
-                                extra={
-                                    "deposit_id": deposit.id,
-                                    "user_id": deposit.user_id,
-                                    "level": deposit.level,
-                                    "amount": str(deposit.amount),
-                                    "created_at": deposit.created_at.isoformat(),
-                                },
-                            )
-
-                            # R3-6: Notify user (user already loaded via selectinload)
-                            if deposit.user:
-                                notification_message = (
-                                    f"⚠️ Депозит не был подтверждён в течение 24 часов.\n\n"
-                                    f"Ваш запрос на депозит уровня {deposit.level} "
-                                    f"({deposit.amount} USDT) создан более 24 часов назад.\n\n"
-                                    f"Транзакция не была найдена в блокчейне.\n\n"
-                                    f"Если вы уже отправили средства, свяжитесь с поддержкой.\n\n"
-                                    f"Если средства НЕ были отправлены, вы можете создать новый депозит."
-                                )
-                                await notification_service.send_notification(
-                                    bot,
-                                    deposit.user.telegram_id,
-                                    notification_message,
-                                    critical=False,
-                                )
-
-                        except Exception as e:
-                            logger.error(
-                                f"Error processing expired deposit {deposit.id}: {e}",
-                                extra={"deposit_id": deposit.id},
-                                exc_info=True,
-                            )
 
                     if not pending_with_tx:
                         logger.debug("No pending deposits with tx_hash found")
                         await session.commit()
                         return
 
-                    processed = 0
-                    confirmed = 0
-                    still_pending = 0
-
-                    for deposit in pending_with_tx:
-                        try:
-                            # Check transaction status on blockchain
-                            tx_status = await blockchain_service.check_transaction_status(
-                                deposit.tx_hash
-                            )
-
-                            processed += 1
-
-                            # If confirmed with sufficient confirmations
-                            if (
-                                tx_status.get("status") == "confirmed"
-                                and tx_status.get("confirmations", 0) >= 12
-                            ):
-                                # Confirm deposit
-                                block_number = tx_status.get("block_number", 0)
-                                await deposit_service.confirm_deposit(
-                                    deposit.id, block_number
-                                )
-                                confirmed += 1
-
-                                logger.info(
-                                    f"Deposit {deposit.id} confirmed",
-                                    extra={
-                                        "deposit_id": deposit.id,
-                                        "tx_hash": deposit.tx_hash,
-                                        "confirmations": tx_status.get("confirmations"),
-                                    },
-                                )
-                            else:
-                                still_pending += 1
-
-                        except Exception as e:
-                            logger.error(
-                                f"Error checking deposit {deposit.id}: {e}",
-                                extra={
-                                    "deposit_id": deposit.id,
-                                    "tx_hash": deposit.tx_hash,
-                                },
-                            )
+                    # Process pending deposits with tx_hash
+                    processed, confirmed, still_pending = await _process_pending_deposits(
+                        pending_with_tx, blockchain_service, deposit_service
+                    )
 
                     await session.commit()
 
-                    # R11-2: Include recovery processing results
                     logger.info(
                         f"Deposit monitoring stats: "
                         f"{processed} processed, {confirmed} confirmed, "
@@ -377,9 +425,7 @@ async def _monitor_deposits_async() -> None:
                     )
 
             finally:
-                # Always close bot session to prevent memory leak
                 await bot.session.close()
         finally:
-            # Close Redis client
             if redis_client:
                 await redis_client.close()

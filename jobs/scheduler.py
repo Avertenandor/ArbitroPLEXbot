@@ -49,31 +49,31 @@ except Exception as e:
         "Scheduler will continue, but blockchain operations may fail"
     )
 
+from app.tasks.cleanup_task import run_cleanup_task
+from app.tasks.deposit_reminder_task import run_deposit_reminder_task
+from app.tasks.reward_accrual_task import run_individual_reward_accrual
 from jobs.tasks.admin_session_cleanup import (
     cleanup_expired_admin_sessions,
 )
 from jobs.tasks.daily_rewards import process_daily_rewards
 from jobs.tasks.deposit_monitoring import monitor_deposits
+from jobs.tasks.deposit_scan_task import scan_all_user_deposits
 from jobs.tasks.financial_reconciliation import (
     perform_financial_reconciliation,
 )
+from jobs.tasks.incoming_transfer_monitor import monitor_incoming_transfers
+from jobs.tasks.mark_immutable_audit_logs import mark_immutable_audit_logs
 from jobs.tasks.metrics_monitor import monitor_metrics
 from jobs.tasks.node_health_monitor import monitor_node_health
-from jobs.tasks.notification_retry import process_notification_retries
-from jobs.tasks.payment_retry import process_payment_retries
-from jobs.tasks.stuck_transaction_monitor import monitor_stuck_transactions
-from jobs.tasks.mark_immutable_audit_logs import mark_immutable_audit_logs
 from jobs.tasks.notification_fallback_processor import (
     process_notification_fallback,
 )
-from jobs.tasks.warmup_redis_cache import warmup_redis_cache
-from jobs.tasks.incoming_transfer_monitor import monitor_incoming_transfers
-from jobs.tasks.plex_payment_monitor import monitor_plex_payments
+from jobs.tasks.notification_retry import process_notification_retries
+from jobs.tasks.payment_retry import process_payment_retries
 from jobs.tasks.plex_balance_monitor import monitor_plex_balances
-from jobs.tasks.deposit_scan_task import scan_all_user_deposits
-from app.tasks.reward_accrual_task import run_individual_reward_accrual
-from app.tasks.deposit_reminder_task import run_deposit_reminder_task
-from app.tasks.cleanup_task import run_cleanup_task
+from jobs.tasks.plex_payment_monitor import monitor_plex_payments
+from jobs.tasks.stuck_transaction_monitor import monitor_stuck_transactions
+from jobs.tasks.warmup_redis_cache import warmup_redis_cache
 
 
 def create_scheduler() -> AsyncIOScheduler:
@@ -283,7 +283,7 @@ async def shutdown_with_timeout(scheduler: AsyncIOScheduler, timeout: int = 30) 
             timeout=timeout
         )
         logger.info("Scheduler shutdown completed successfully")
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning(f"Scheduler shutdown timed out after {timeout}s, forcing shutdown...")
         scheduler.shutdown(wait=False)
         logger.info("Forced shutdown completed")
@@ -292,7 +292,8 @@ async def shutdown_with_timeout(scheduler: AsyncIOScheduler, timeout: int = 30) 
 if __name__ == "__main__":
     import asyncio
     import signal
-    from jobs.health import start_health_server, stop_health_server, set_scheduler
+
+    from jobs.health import set_scheduler, start_health_server, stop_health_server
 
     # Shutdown event for graceful termination
     shutdown_event = asyncio.Event()

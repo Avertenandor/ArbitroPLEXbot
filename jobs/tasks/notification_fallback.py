@@ -23,10 +23,10 @@ def process_notification_fallback(notification_data: dict) -> None:
     logger.warning(
         f"Processing fallback notification: {notification_data}"
     )
-    
+
     # Fallback notification logic would go here
     # This could include:
     # - Email fallback
-    # - SMS fallback  
+    # - SMS fallback
     # - Secondary Telegram channel
     # - System log alerts

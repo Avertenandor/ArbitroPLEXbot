@@ -5,13 +5,13 @@ Provides centralized timeout and retry functionality for all blockchain RPC call
 """
 
 import asyncio
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 from loguru import logger
 
-from app.config.constants import BLOCKCHAIN_TIMEOUT, BLOCKCHAIN_LONG_TIMEOUT
-
+from app.config.constants import BLOCKCHAIN_TIMEOUT
 
 T = TypeVar("T")
 
@@ -47,7 +47,7 @@ async def with_timeout(
     """
     try:
         return await asyncio.wait_for(coro, timeout=timeout)
-    except asyncio.TimeoutError as e:
+    except TimeoutError as e:
         error_msg = f"{operation_name} timed out after {timeout}s"
         logger.error(error_msg)
         raise BlockchainTimeoutError(error_msg) from e

@@ -5,7 +5,7 @@ Provides unified transaction history across all types.
 """
 
 from dataclasses import dataclass
-from datetime import datetime, UTC
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from loguru import logger
@@ -68,7 +68,8 @@ class TransactionService:
             offset: Offset for pagination
             transaction_type: Filter by type (optional)
             status: Filter by status (optional)
-            filter_blockchain: Filter by blockchain presence (True=Only with hash, False=Only without)
+            filter_blockchain: Filter by blockchain presence
+                (True=Only with hash, False=Only without)
 
         Returns:
             Dict with transactions, total, has_more
@@ -101,13 +102,13 @@ class TransactionService:
             if filter_blockchain:
                 # Only with hash starting with 0x
                 all_transactions = [
-                    t for t in all_transactions 
+                    t for t in all_transactions
                     if t.tx_hash and t.tx_hash.startswith("0x")
                 ]
             else:
                 # Only without hash OR with internal hash (not starting with 0x)
                 all_transactions = [
-                    t for t in all_transactions 
+                    t for t in all_transactions
                     if not t.tx_hash or not t.tx_hash.startswith("0x")
                 ]
 
@@ -152,13 +153,18 @@ class TransactionService:
         unified = []
         for deposit in deposits:
             tx_hash = deposit.tx_hash
+            created_at = (
+                deposit.created_at.replace(tzinfo=UTC)
+                if deposit.created_at.tzinfo is None
+                else deposit.created_at
+            )
             unified.append(
                 UnifiedTransaction(
                     id=f"deposit:{deposit.id}",
                     type=TransactionType.DEPOSIT,
                     amount=deposit.amount,
                     status=TransactionStatus(deposit.status),
-                    created_at=deposit.created_at.replace(tzinfo=UTC) if deposit.created_at.tzinfo is None else deposit.created_at,
+                    created_at=created_at,
                     description=f"Депозит уровня {deposit.level}",
                     tx_hash=tx_hash,
                     explorer_link=(
@@ -189,13 +195,18 @@ class TransactionService:
         unified = []
         for withdrawal in withdrawals:
             tx_hash = withdrawal.tx_hash
+            created_at = (
+                withdrawal.created_at.replace(tzinfo=UTC)
+                if withdrawal.created_at.tzinfo is None
+                else withdrawal.created_at
+            )
             unified.append(
                 UnifiedTransaction(
                     id=f"withdrawal:{withdrawal.id}",
                     type=TransactionType.WITHDRAWAL,
                     amount=withdrawal.amount,
                     status=TransactionStatus(withdrawal.status),
-                    created_at=withdrawal.created_at.replace(tzinfo=UTC) if withdrawal.created_at.tzinfo is None else withdrawal.created_at,
+                    created_at=created_at,
                     description="Вывод средств",
                     tx_hash=tx_hash,
                     explorer_link=(
@@ -226,13 +237,18 @@ class TransactionService:
             referral = earning.referral
             level = referral.level if referral else None
 
+            created_at = (
+                earning.created_at.replace(tzinfo=UTC)
+                if earning.created_at.tzinfo is None
+                else earning.created_at
+            )
             unified.append(
                 UnifiedTransaction(
                     id=f"referral:{earning.id}",
                     type=TransactionType.REFERRAL_REWARD,
                     amount=earning.amount,
                     status=status,
-                    created_at=earning.created_at.replace(tzinfo=UTC) if earning.created_at.tzinfo is None else earning.created_at,
+                    created_at=created_at,
                     description=(
                         f"Реферальное вознаграждение "
                         f"(уровень {level or '?'})"

@@ -6,7 +6,6 @@ Monitors and handles stuck withdrawal transactions.
 
 import asyncio
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 from typing import Any
 
 from loguru import logger
@@ -14,12 +13,12 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from web3.exceptions import TransactionNotFound
 
+from app.config.constants import BLOCKCHAIN_TIMEOUT
 from app.models.enums import TransactionStatus, TransactionType
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.repositories.transaction_repository import TransactionRepository
 from app.services.user_service import UserService
-from app.config.constants import BLOCKCHAIN_TIMEOUT
 
 
 class StuckTransactionService:
@@ -82,7 +81,7 @@ class StuckTransactionService:
                     web3.eth.get_transaction_receipt(tx_hash),
                     timeout=BLOCKCHAIN_TIMEOUT,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.error(f"Timeout getting transaction receipt for {tx_hash}")
                 return {
                     "status": "error",
@@ -102,7 +101,7 @@ class StuckTransactionService:
                             "in_mempool": True,
                             "receipt": None,
                         }
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     logger.error(f"Timeout checking transaction in mempool {tx_hash}")
                     return {
                         "status": "error",
@@ -142,6 +141,143 @@ class StuckTransactionService:
                 "receipt": None,
             }
 
+    def _handle_confirmed_status(self, withdrawal: Transaction) -> dict[str, Any]:
+        """Handle confirmed transaction status."""
+        withdrawal.status = TransactionStatus.CONFIRMED.value
+        logger.info(
+            f"Stuck transaction {withdrawal.id} confirmed",
+            extra={
+                "transaction_id": withdrawal.id,
+                "tx_hash": withdrawal.tx_hash,
+            },
+        )
+        return {"action": "confirmed", "success": True}
+
+    async def _handle_failed_status(self, withdrawal: Transaction) -> dict[str, Any]:
+        """Handle failed transaction status and refund user."""
+        try:
+            # Get user with lock
+            stmt = (
+                select(User)
+                .where(User.id == withdrawal.user_id)
+                .with_for_update()
+            )
+            result = await self.session.execute(stmt)
+            user = result.scalar_one_or_none()
+
+            if user:
+                user.balance = user.balance + withdrawal.amount
+
+            withdrawal.status = TransactionStatus.FAILED.value
+
+            logger.warning(
+                f"Stuck transaction {withdrawal.id} failed, funds returned to user",
+                extra={
+                    "transaction_id": withdrawal.id,
+                    "tx_hash": withdrawal.tx_hash,
+                    "user_id": withdrawal.user_id,
+                    "amount": str(withdrawal.amount),
+                },
+            )
+
+            return {"action": "failed_refunded", "success": True}
+
+        except Exception as e:
+            await self.session.rollback()
+            logger.error(f"Error handling failed transaction {withdrawal.id}: {e}")
+            return {
+                "action": "failed_refund_error",
+                "success": False,
+                "error": str(e),
+            }
+
+    async def _handle_pending_status(self, withdrawal: Transaction, web3) -> dict[str, Any]:
+        """Handle pending transaction status and check for speed-up."""
+        try:
+            tx = await self._get_transaction_with_timeout(withdrawal.tx_hash, web3)
+            if tx is None:
+                return {"action": "pending_no_tx", "success": False}
+
+            current_gas_price = await self._get_gas_price_with_timeout(web3)
+            if current_gas_price is None:
+                return {
+                    "action": "pending_gas_price_timeout",
+                    "success": False,
+                    "error": "Timeout",
+                }
+
+            tx_gas_price = tx.get("gasPrice", 0)
+
+            if tx_gas_price < current_gas_price:
+                new_gas_price = int(current_gas_price * 1.2)
+                logger.info(
+                    f"Attempting speed-up for transaction {withdrawal.tx_hash}: "
+                    f"old gas {tx_gas_price}, new gas {new_gas_price}",
+                )
+                return {
+                    "action": "pending_speedup_needed",
+                    "success": False,
+                    "current_gas": tx_gas_price,
+                    "recommended_gas": new_gas_price,
+                }
+
+            return {"action": "pending_waiting", "success": False}
+
+        except Exception as e:
+            logger.error(
+                f"Error checking pending transaction {withdrawal.tx_hash}: {e}"
+            )
+            return {
+                "action": "pending_check_error",
+                "success": False,
+                "error": str(e),
+            }
+
+    async def _get_transaction_with_timeout(self, tx_hash: str, web3):
+        """Get transaction with timeout handling."""
+        try:
+            return await asyncio.wait_for(
+                web3.eth.get_transaction(tx_hash),
+                timeout=BLOCKCHAIN_TIMEOUT,
+            )
+        except TimeoutError:
+            logger.error(f"Timeout getting transaction {tx_hash}")
+            return None
+
+    async def _get_gas_price_with_timeout(self, web3):
+        """Get gas price with timeout handling."""
+        try:
+            return await asyncio.wait_for(
+                web3.eth.gas_price,
+                timeout=BLOCKCHAIN_TIMEOUT,
+            )
+        except TimeoutError:
+            logger.error("Timeout getting gas price")
+            return None
+
+    def _handle_not_found_status(self, withdrawal: Transaction) -> dict[str, Any]:
+        """Handle not found transaction status."""
+        logger.warning(
+            f"Transaction {withdrawal.tx_hash} not found, might be dropped",
+            extra={
+                "transaction_id": withdrawal.id,
+                "tx_hash": withdrawal.tx_hash,
+            },
+        )
+        return {"action": "not_found_retry_needed", "success": False}
+
+    def _handle_error_status(self, withdrawal: Transaction, tx_status: dict) -> dict[str, Any]:
+        """Handle error transaction status."""
+        logger.error(
+            f"Error status for transaction {withdrawal.tx_hash}: "
+            f"{tx_status.get('error')}",
+        )
+        return {
+            "action": "error",
+            "success": False,
+            "error": tx_status.get("error"),
+        }
+
     async def handle_stuck_transaction(
         self,
         withdrawal: Transaction,
@@ -162,178 +298,20 @@ class StuckTransactionService:
         status = tx_status.get("status")
 
         if status == "confirmed":
-            # Transaction confirmed - update to CONFIRMED
-            withdrawal.status = TransactionStatus.CONFIRMED.value
+            result = self._handle_confirmed_status(withdrawal)
             await self.session.commit()
+            return result
 
-            logger.info(
-                f"Stuck transaction {withdrawal.id} confirmed",
-                extra={
-                    "transaction_id": withdrawal.id,
-                    "tx_hash": withdrawal.tx_hash,
-                },
-            )
-
-            return {
-                "action": "confirmed",
-                "success": True,
-            }
-
-        elif status == "failed":
-            # Transaction failed - return funds to user
-            try:
-                # Get user with lock
-                stmt = (
-                    select(User)
-                    .where(User.id == withdrawal.user_id)
-                    .with_for_update()
-                )
-                result = await self.session.execute(stmt)
-                user = result.scalar_one_or_none()
-
-                if user:
-                    # Return balance to user
-                    user.balance = user.balance + withdrawal.amount
-
-                # Update withdrawal status
-                withdrawal.status = TransactionStatus.FAILED.value
-
+        if status == "failed":
+            result = await self._handle_failed_status(withdrawal)
+            if result["success"]:
                 await self.session.commit()
+            return result
 
-                logger.warning(
-                    f"Stuck transaction {withdrawal.id} failed, "
-                    f"funds returned to user",
-                    extra={
-                        "transaction_id": withdrawal.id,
-                        "tx_hash": withdrawal.tx_hash,
-                        "user_id": withdrawal.user_id,
-                        "amount": str(withdrawal.amount),
-                    },
-                )
+        if status == "pending":
+            return await self._handle_pending_status(withdrawal, web3)
 
-                return {
-                    "action": "failed_refunded",
-                    "success": True,
-                }
+        if status == "not_found":
+            return self._handle_not_found_status(withdrawal)
 
-            except Exception as e:
-                await self.session.rollback()
-                logger.error(
-                    f"Error handling failed transaction {withdrawal.id}: {e}"
-                )
-                return {
-                    "action": "failed_refund_error",
-                    "success": False,
-                    "error": str(e),
-                }
-
-        elif status == "pending":
-            # Transaction pending in mempool - try speed-up
-            try:
-                # Get current transaction with timeout
-                try:
-                    tx = await asyncio.wait_for(
-                        web3.eth.get_transaction(withdrawal.tx_hash),
-                        timeout=BLOCKCHAIN_TIMEOUT,
-                    )
-                except asyncio.TimeoutError:
-                    logger.error(f"Timeout getting transaction {withdrawal.tx_hash}")
-                    return {
-                        "action": "pending_timeout",
-                        "success": False,
-                        "error": "Timeout",
-                    }
-
-                if not tx:
-                    return {
-                        "action": "pending_no_tx",
-                        "success": False,
-                    }
-
-                # Get current gas price with timeout
-                try:
-                    current_gas_price = await asyncio.wait_for(
-                        web3.eth.gas_price,
-                        timeout=BLOCKCHAIN_TIMEOUT,
-                    )
-                except asyncio.TimeoutError:
-                    logger.error("Timeout getting gas price")
-                    return {
-                        "action": "pending_gas_price_timeout",
-                        "success": False,
-                        "error": "Timeout",
-                    }
-                tx_gas_price = tx.get("gasPrice", 0)
-
-                # If our gas price is lower, try speed-up
-                if tx_gas_price < current_gas_price:
-                    # Increase gas by 20%
-                    new_gas_price = int(current_gas_price * 1.2)
-
-                    logger.info(
-                        f"Attempting speed-up for transaction "
-                        f"{withdrawal.tx_hash}: "
-                        f"old gas {tx_gas_price}, new gas {new_gas_price}",
-                    )
-
-                    # Note: Speed-up requires sending replacement transaction
-                    # with same nonce but higher gas. This is complex and
-                    # requires access to private key. For now, we just log it.
-                    # In production, this should be handled by PaymentSender
-                    # or a dedicated speed-up service.
-
-                    return {
-                        "action": "pending_speedup_needed",
-                        "success": False,
-                        "current_gas": tx_gas_price,
-                        "recommended_gas": new_gas_price,
-                    }
-
-                return {
-                    "action": "pending_waiting",
-                    "success": False,
-                }
-
-            except Exception as e:
-                logger.error(
-                    f"Error checking pending transaction "
-                    f"{withdrawal.tx_hash}: {e}"
-                )
-                return {
-                    "action": "pending_check_error",
-                    "success": False,
-                    "error": str(e),
-                }
-
-        elif status == "not_found":
-            # Transaction not found - might be dropped
-            # Try to resend with new nonce
-            logger.warning(
-                f"Transaction {withdrawal.tx_hash} not found, "
-                f"might be dropped",
-                extra={
-                    "transaction_id": withdrawal.id,
-                    "tx_hash": withdrawal.tx_hash,
-                },
-            )
-
-            return {
-                "action": "not_found_retry_needed",
-                "success": False,
-            }
-
-        else:
-            # Error checking transaction
-            logger.error(
-                f"Error status for transaction {withdrawal.tx_hash}: "
-                f"{tx_status.get('error')}",
-            )
-
-            return {
-                "action": "error",
-                "success": False,
-                "error": tx_status.get("error"),
-            }
-
-
-
+        return self._handle_error_status(withdrawal, tx_status)

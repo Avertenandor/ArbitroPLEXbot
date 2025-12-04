@@ -4,17 +4,15 @@ Session middleware.
 Handles Pay-to-Use authorization, session timeouts, and PLEX balance checks.
 """
 
-from datetime import UTC, datetime
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from aiogram import BaseMiddleware
-from aiogram.types import CallbackQuery, Message, TelegramObject, Update
 from aiogram.fsm.context import FSMContext
+from aiogram.types import CallbackQuery, Message, TelegramObject, Update
 from loguru import logger
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.config.settings import settings
 
 SESSION_TTL = 1500  # 25 minutes
 SESSION_KEY_PREFIX = "auth_session:"
@@ -25,12 +23,12 @@ PLEX_CHECK_KEY_PREFIX = "plex_check:"
 class SessionMiddleware(BaseMiddleware):
     """
     Middleware for session management.
-    
+
     Responsibilities:
     - Check Pay-to-Use session validity
     - Periodically verify PLEX balance (every hour)
     - Send warnings for insufficient PLEX
-    
+
     Note: This middleware is registered on dp.update, so it receives
     Update objects, not Message/CallbackQuery directly.
     """
@@ -42,7 +40,7 @@ class SessionMiddleware(BaseMiddleware):
     def _extract_event(self, event: TelegramObject) -> Message | CallbackQuery | None:
         """
         Extract Message or CallbackQuery from Update object.
-        
+
         If event is already Message/CallbackQuery, return as-is.
         If event is Update, extract the inner message or callback.
         """
@@ -69,12 +67,12 @@ class SessionMiddleware(BaseMiddleware):
         """Process update through middleware."""
         # Extract actual event (Message or CallbackQuery) from Update
         actual_event = self._extract_event(event)
-        
+
         logger.debug(
             f"SessionMiddleware: event type={type(event).__name__}, "
             f"actual_event type={type(actual_event).__name__ if actual_event else 'None'}"
         )
-        
+
         # Get Telegram user
         tg_user = data.get("event_from_user")
         if not tg_user:
@@ -93,11 +91,11 @@ class SessionMiddleware(BaseMiddleware):
                     f"passing through for user {user_id}"
                 )
                 return await handler(event, data)
-            
+
             # Allow authorization buttons (Reply keyboard)
             auth_buttons = {
                 "✅ Я оплатил",
-                "🔄 Проверить снова", 
+                "🔄 Проверить снова",
                 "❌ Отмена",
                 "🚀 Начать работу",
                 "🔄 Обновить депозит",
@@ -199,37 +197,37 @@ class SessionMiddleware(BaseMiddleware):
     ) -> None:
         """
         Check PLEX balance if check interval passed.
-        
+
         Only checks once per hour to avoid excessive blockchain calls.
         """
         if not actual_event:
             return
-            
+
         # Check if we need to verify PLEX balance
         plex_check_key = f"{PLEX_CHECK_KEY_PREFIX}{user_id}"
         last_check = await self.redis.get(plex_check_key)
-        
+
         if last_check:
             # Already checked recently
             return
-        
+
         # Mark as checked (set TTL for interval)
         await self.redis.setex(plex_check_key, PLEX_CHECK_INTERVAL, "1")
-        
+
         try:
             # Get DB session from data
             session: AsyncSession | None = data.get("session")
             if not session:
                 return
-            
+
             # Import here to avoid circular imports
             from app.services.plex_payment_service import PlexPaymentService
-            
+
             plex_service = PlexPaymentService(session)
-            
+
             # Get warning message if PLEX is insufficient
             warning = await plex_service.get_insufficient_plex_message(db_user.id)
-            
+
             if warning:
                 # Send warning
                 try:
@@ -245,10 +243,10 @@ class SessionMiddleware(BaseMiddleware):
                         )
                 except Exception as e:
                     logger.warning(f"Failed to send PLEX warning: {e}")
-                
+
                 logger.warning(
                     f"Insufficient PLEX balance for user {user_id}"
                 )
-                
+
         except Exception as e:
             logger.error(f"PLEX balance check failed for user {user_id}: {e}")

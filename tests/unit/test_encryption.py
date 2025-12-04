@@ -1,6 +1,5 @@
 """Unit tests for encryption utilities."""
 
-import pytest
 from cryptography.fernet import Fernet
 
 from app.utils.encryption import EncryptionService

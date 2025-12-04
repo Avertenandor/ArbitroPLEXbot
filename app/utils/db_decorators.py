@@ -5,8 +5,9 @@ Provides decorators to automatically handle database errors and rollbacks
 in async functions that use SQLAlchemy sessions.
 """
 
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
 
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession

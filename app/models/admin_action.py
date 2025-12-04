@@ -8,12 +8,11 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import (
-    Boolean,
+    JSON,
     DateTime,
     ForeignKey,
     Index,
     Integer,
-    JSON,
     String,
 )
 from sqlalchemy.dialects.postgresql import INET
@@ -118,4 +117,3 @@ Index(
     AdminAction.admin_id,
     AdminAction.created_at,
 )
-

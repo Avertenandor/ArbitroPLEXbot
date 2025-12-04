@@ -85,4 +85,3 @@ class UserMessageLog(Base):
             f"text='{self.message_text[:50]}...', "
             f"created_at={self.created_at})>"
         )
-

@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware
-from aiogram.types import TelegramObject, Update, Message, User
+from aiogram.types import Message, TelegramObject, Update, User
 from loguru import logger
 
 
@@ -32,7 +32,7 @@ class LoggerMiddleware(BaseMiddleware):
         user: User | None = data.get("event_from_user")
         user_id = user.id if user else None
         username = user.username if user else None
-        
+
         # Log language_code as a proxy for region (Telegram doesn't provide IP)
         language_code = user.language_code if user else None
 
@@ -56,7 +56,7 @@ class LoggerMiddleware(BaseMiddleware):
             f"[{request_id}] {update_type} from user {user_id} (@{username}) "
             f"[lang={language_code}]"
         )
-        
+
         # Log message text for debugging
         if isinstance(event, Message) and event.text:
             logger.info(f"[{request_id}] Text: '{event.text}'")

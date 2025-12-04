@@ -43,7 +43,7 @@ async def notify_admins(
                 timeout=TELEGRAM_TIMEOUT,
             )
             return admin_id, True
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(f"Timeout notifying admin {admin_id}")
             return admin_id, False
         except Exception as e:

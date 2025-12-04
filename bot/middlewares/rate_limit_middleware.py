@@ -46,7 +46,7 @@ class RateLimitMiddleware(BaseMiddleware):
         self.redis_client = redis_client
         self.user_limit = user_limit
         self.user_window = user_window
-        
+
         # R11-2: In-memory fallback counters
         # Structure: {user_id: [(timestamp, ...), ...]}
         self._user_counts: dict[int, list[datetime]] = defaultdict(list)
@@ -80,10 +80,10 @@ class RateLimitMiddleware(BaseMiddleware):
         """
         self._cleanup_old_entries(user_id)
         count = len(self._user_counts[user_id])
-        
+
         if count >= self.user_limit:
             return False
-        
+
         # Add current request
         self._user_counts[user_id].append(datetime.now(UTC))
         return True

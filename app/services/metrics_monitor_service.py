@@ -67,7 +67,7 @@ class MetricsMonitorService:
             w for w in withdrawals_last_hour
             if w.status == TransactionStatus.FAILED.value
         ])
-        
+
         total_withdrawals = (
             len(withdrawals_last_hour) if withdrawals_last_hour else 0
         )
@@ -138,151 +138,209 @@ class MetricsMonitorService:
         # Get historical baseline (last 7 days)
         baseline = await self._get_historical_baseline(days=7)
 
-        # Check withdrawal metrics
-        if "withdrawals" in current_metrics:
-            w_metrics = current_metrics["withdrawals"]
-
-            # Pending withdrawals spike
-            if "pending_count" in w_metrics:
-                z_score = self._calculate_z_score(
-                    w_metrics["pending_count"],
-                    baseline.get("pending_withdrawals_mean", 0),
-                    baseline.get("pending_withdrawals_std", 1),
-                )
-                if abs(z_score) > self.Z_SCORE_THRESHOLD:
-                    anomalies.append(
-                        {
-                            "type": "withdrawal_pending_spike",
-                            "metric": "pending_withdrawals",
-                            "current": w_metrics["pending_count"],
-                            "expected_mean": baseline.get(
-                                "pending_withdrawals_mean", 0
-                            ),
-                            "z_score": z_score,
-                            "severity": "critical"
-                            if abs(z_score) > self.CRITICAL_SEVERITY_THRESHOLD
-                            else "high",
-                        }
-                    )
-
-            # Withdrawal amount spike
-            if "last_hour_amount" in w_metrics:
-                z_score = self._calculate_z_score(
-                    w_metrics["last_hour_amount"],
-                    baseline.get("withdrawal_amount_mean", 0),
-                    baseline.get("withdrawal_amount_std", 1),
-                )
-                if abs(z_score) > self.Z_SCORE_THRESHOLD:
-                    anomalies.append(
-                        {
-                            "type": "withdrawal_amount_spike",
-                            "metric": "withdrawal_amount",
-                            "current": w_metrics["last_hour_amount"],
-                            "expected_mean": baseline.get(
-                                "withdrawal_amount_mean", 0
-                            ),
-                            "z_score": z_score,
-                            "severity": "critical"
-                            if abs(z_score) > self.CRITICAL_SEVERITY_THRESHOLD
-                            else "high",
-                        }
-                    )
-
-            # Rejection rate spike
-            if "rejection_rate" in w_metrics:
-                z_score = self._calculate_z_score(
-                    w_metrics["rejection_rate"],
-                    baseline.get("rejection_rate_mean", 2.0),
-                    baseline.get("rejection_rate_std", 1.0),
-                )
-                if abs(z_score) > self.Z_SCORE_THRESHOLD:
-                    anomalies.append(
-                        {
-                            "type": "rejection_rate_spike",
-                            "metric": "rejection_rate",
-                            "current": w_metrics["rejection_rate"],
-                            "expected_mean": baseline.get(
-                                "rejection_rate_mean", 2.0
-                            ),
-                            "z_score": z_score,
-                            "severity": "high",
-                        }
-                    )
-
-        # Check deposit metrics
-        if "deposits" in current_metrics:
-            d_metrics = current_metrics["deposits"]
-
-            # Low deposit count
-            if "last_day_count" in d_metrics:
-                z_score = self._calculate_z_score(
-                    d_metrics["last_day_count"],
-                    baseline.get("deposit_count_mean", 50),
-                    baseline.get("deposit_count_std", 10),
-                )
-                if z_score < -self.Z_SCORE_THRESHOLD:
-                    anomalies.append(
-                        {
-                            "type": "deposit_count_low",
-                            "metric": "deposit_count",
-                            "current": d_metrics["last_day_count"],
-                            "expected_mean": baseline.get(
-                                "deposit_count_mean", 50
-                            ),
-                            "z_score": z_score,
-                            "severity": "medium",
-                        }
-                    )
-
-            # Level 5 spike
-            if "level_5_count" in d_metrics:
-                z_score = self._calculate_z_score(
-                    d_metrics["level_5_count"],
-                    baseline.get("level_5_count_mean", 5),
-                    baseline.get("level_5_count_std", 2),
-                )
-                if abs(z_score) > self.Z_SCORE_THRESHOLD:
-                    anomalies.append(
-                        {
-                            "type": "level_5_deposit_spike",
-                            "metric": "level_5_deposits",
-                            "current": d_metrics["level_5_count"],
-                            "expected_mean": baseline.get(
-                                "level_5_count_mean", 5
-                            ),
-                            "z_score": z_score,
-                            "severity": "high",
-                        }
-                    )
-
-        # Check balance metrics
-        if "balance" in current_metrics:
-            b_metrics = current_metrics["balance"]
-
-            # System liabilities spike
-            if "system_liabilities" in b_metrics:
-                z_score = self._calculate_z_score(
-                    b_metrics["system_liabilities"],
-                    baseline.get("system_liabilities_mean", 0),
-                    baseline.get("system_liabilities_std", 1000),
-                )
-                if abs(z_score) > self.Z_SCORE_THRESHOLD:
-                    anomalies.append(
-                        {
-                            "type": "system_liabilities_spike",
-                            "metric": "system_liabilities",
-                            "current": b_metrics["system_liabilities"],
-                            "expected_mean": baseline.get(
-                                "system_liabilities_mean", 0
-                            ),
-                            "z_score": z_score,
-                            "severity": "critical"
-                            if abs(z_score) > self.CRITICAL_SEVERITY_THRESHOLD
-                            else "high",
-                        }
-                    )
+        # Check each metric category
+        anomalies.extend(self._check_withdrawal_anomalies(current_metrics, baseline))
+        anomalies.extend(self._check_deposit_anomalies(current_metrics, baseline))
+        anomalies.extend(self._check_balance_anomalies(current_metrics, baseline))
 
         return anomalies
+
+    def _check_withdrawal_anomalies(
+        self, current_metrics: dict[str, Any], baseline: dict[str, float]
+    ) -> list[dict[str, Any]]:
+        """Check withdrawal-related anomalies."""
+        anomalies = []
+
+        if "withdrawals" not in current_metrics:
+            return anomalies
+
+        w_metrics = current_metrics["withdrawals"]
+
+        # Pending withdrawals spike
+        anomaly = self._check_metric_anomaly(
+            metric_value=w_metrics.get("pending_count"),
+            baseline_mean_key="pending_withdrawals_mean",
+            baseline_std_key="pending_withdrawals_std",
+            baseline=baseline,
+            anomaly_type="withdrawal_pending_spike",
+            metric_name="pending_withdrawals",
+            default_mean=0,
+            default_std=1,
+            use_critical_severity=True,
+        )
+        if anomaly:
+            anomalies.append(anomaly)
+
+        # Withdrawal amount spike
+        anomaly = self._check_metric_anomaly(
+            metric_value=w_metrics.get("last_hour_amount"),
+            baseline_mean_key="withdrawal_amount_mean",
+            baseline_std_key="withdrawal_amount_std",
+            baseline=baseline,
+            anomaly_type="withdrawal_amount_spike",
+            metric_name="withdrawal_amount",
+            default_mean=0,
+            default_std=1,
+            use_critical_severity=True,
+        )
+        if anomaly:
+            anomalies.append(anomaly)
+
+        # Rejection rate spike
+        anomaly = self._check_metric_anomaly(
+            metric_value=w_metrics.get("rejection_rate"),
+            baseline_mean_key="rejection_rate_mean",
+            baseline_std_key="rejection_rate_std",
+            baseline=baseline,
+            anomaly_type="rejection_rate_spike",
+            metric_name="rejection_rate",
+            default_mean=2.0,
+            default_std=1.0,
+            severity="high",
+        )
+        if anomaly:
+            anomalies.append(anomaly)
+
+        return anomalies
+
+    def _check_deposit_anomalies(
+        self, current_metrics: dict[str, Any], baseline: dict[str, float]
+    ) -> list[dict[str, Any]]:
+        """Check deposit-related anomalies."""
+        anomalies = []
+
+        if "deposits" not in current_metrics:
+            return anomalies
+
+        d_metrics = current_metrics["deposits"]
+
+        # Low deposit count (check for negative z-score)
+        if "last_day_count" in d_metrics:
+            z_score = self._calculate_z_score(
+                d_metrics["last_day_count"],
+                baseline.get("deposit_count_mean", 50),
+                baseline.get("deposit_count_std", 10),
+            )
+            if z_score < -self.Z_SCORE_THRESHOLD:
+                anomalies.append(
+                    {
+                        "type": "deposit_count_low",
+                        "metric": "deposit_count",
+                        "current": d_metrics["last_day_count"],
+                        "expected_mean": baseline.get("deposit_count_mean", 50),
+                        "z_score": z_score,
+                        "severity": "medium",
+                    }
+                )
+
+        # Level 5 spike
+        anomaly = self._check_metric_anomaly(
+            metric_value=d_metrics.get("level_5_count"),
+            baseline_mean_key="level_5_count_mean",
+            baseline_std_key="level_5_count_std",
+            baseline=baseline,
+            anomaly_type="level_5_deposit_spike",
+            metric_name="level_5_deposits",
+            default_mean=5,
+            default_std=2,
+            severity="high",
+        )
+        if anomaly:
+            anomalies.append(anomaly)
+
+        return anomalies
+
+    def _check_balance_anomalies(
+        self, current_metrics: dict[str, Any], baseline: dict[str, float]
+    ) -> list[dict[str, Any]]:
+        """Check balance-related anomalies."""
+        anomalies = []
+
+        if "balance" not in current_metrics:
+            return anomalies
+
+        b_metrics = current_metrics["balance"]
+
+        # System liabilities spike
+        anomaly = self._check_metric_anomaly(
+            metric_value=b_metrics.get("system_liabilities"),
+            baseline_mean_key="system_liabilities_mean",
+            baseline_std_key="system_liabilities_std",
+            baseline=baseline,
+            anomaly_type="system_liabilities_spike",
+            metric_name="system_liabilities",
+            default_mean=0,
+            default_std=1000,
+            use_critical_severity=True,
+        )
+        if anomaly:
+            anomalies.append(anomaly)
+
+        return anomalies
+
+    def _check_metric_anomaly(
+        self,
+        metric_value: float | None,
+        baseline_mean_key: str,
+        baseline_std_key: str,
+        baseline: dict[str, float],
+        anomaly_type: str,
+        metric_name: str,
+        default_mean: float,
+        default_std: float,
+        severity: str | None = None,
+        use_critical_severity: bool = False,
+    ) -> dict[str, Any] | None:
+        """
+        Check if a metric shows anomalous behavior.
+
+        Args:
+            metric_value: Current metric value
+            baseline_mean_key: Key for baseline mean
+            baseline_std_key: Key for baseline std dev
+            baseline: Baseline data dictionary
+            anomaly_type: Type identifier for anomaly
+            metric_name: Human-readable metric name
+            default_mean: Default mean if not in baseline
+            default_std: Default std dev if not in baseline
+            severity: Fixed severity level (or None for dynamic)
+            use_critical_severity: Whether to use critical threshold
+
+        Returns:
+            Anomaly dict or None if no anomaly detected
+        """
+        if metric_value is None:
+            return None
+
+        z_score = self._calculate_z_score(
+            metric_value,
+            baseline.get(baseline_mean_key, default_mean),
+            baseline.get(baseline_std_key, default_std),
+        )
+
+        if abs(z_score) <= self.Z_SCORE_THRESHOLD:
+            return None
+
+        # Determine severity
+        if severity:
+            final_severity = severity
+        elif use_critical_severity:
+            final_severity = (
+                "critical"
+                if abs(z_score) > self.CRITICAL_SEVERITY_THRESHOLD
+                else "high"
+            )
+        else:
+            final_severity = "high"
+
+        return {
+            "type": anomaly_type,
+            "metric": metric_name,
+            "current": metric_value,
+            "expected_mean": baseline.get(baseline_mean_key, default_mean),
+            "z_score": z_score,
+            "severity": final_severity,
+        }
 
     def _calculate_z_score(
         self, value: float, mean: float, std_dev: float
@@ -316,47 +374,47 @@ class MetricsMonitorService:
             Dict with mean and std_dev for each metric
         """
         import statistics
-        
+
         now = datetime.now(UTC)
-        
+
         # Collect daily metrics for the past N days
         daily_deposit_counts: list[int] = []
         daily_withdrawal_amounts: list[float] = []
         daily_level_5_counts: list[int] = []
-        
+
         for i in range(days):
             day_start = (now - timedelta(days=i + 1)).replace(
                 hour=0, minute=0, second=0, microsecond=0
             )
             day_end = day_start + timedelta(days=1)
-            
+
             # Deposits for this day
             deposits = await self._get_deposits_in_period(day_start, day_end)
             daily_deposit_counts.append(len(deposits))
             daily_level_5_counts.append(
                 len([d for d in deposits if d.level == 5])
             )
-            
+
             # Withdrawals for this day
             withdrawals = await self._get_withdrawals_in_period(day_start, day_end)
             daily_withdrawal_amounts.append(
                 float(sum(w.amount for w in withdrawals))
             )
-        
+
         # Current pending withdrawals (snapshot metric, not daily)
         pending = await self.transaction_repo.find_by(
             type=TransactionType.WITHDRAWAL.value,
             status=TransactionStatus.PENDING.value,
         )
         pending_count = len(pending) if pending else 0
-        
+
         # Current system liabilities
         system_liabilities = float(await self._get_total_user_balance())
-        
+
         # Calculate statistics with fallback for insufficient data
         def safe_mean(data: list, default: float = 0.0) -> float:
             return statistics.mean(data) if len(data) >= 2 else default
-        
+
         def safe_stdev(data: list, default: float = 1.0) -> float:
             if len(data) < 2:
                 return default
@@ -364,23 +422,23 @@ class MetricsMonitorService:
                 return max(statistics.stdev(data), 0.1)  # Minimum 0.1 to avoid div by 0
             except statistics.StatisticsError:
                 return default
-        
+
         # Build baseline from actual data
         deposit_mean = safe_mean(daily_deposit_counts, 0.0)
         deposit_std = safe_stdev(daily_deposit_counts, max(deposit_mean * 0.5, 1.0))
-        
+
         withdrawal_mean = safe_mean(daily_withdrawal_amounts, 0.0)
         withdrawal_std = safe_stdev(daily_withdrawal_amounts, max(withdrawal_mean * 0.5, 100.0))
-        
+
         level_5_mean = safe_mean(daily_level_5_counts, 0.0)
         level_5_std = safe_stdev(daily_level_5_counts, max(level_5_mean * 0.5, 1.0))
-        
+
         logger.debug(
             f"Dynamic baseline calculated from {days} days: "
             f"deposits={deposit_mean:.1f}±{deposit_std:.1f}, "
             f"withdrawals={withdrawal_mean:.1f}±{withdrawal_std:.1f}"
         )
-        
+
         return {
             # Pending withdrawals - use current as baseline if no history
             "pending_withdrawals_mean": float(pending_count) or 1.0,
@@ -409,7 +467,7 @@ class MetricsMonitorService:
         # Convert to naive datetime for Transaction model (TIMESTAMP WITHOUT TIME ZONE)
         start_naive = start.replace(tzinfo=None) if start.tzinfo else start
         end_naive = end.replace(tzinfo=None) if end.tzinfo else end
-        
+
         stmt = (
             select(Transaction)
             .where(Transaction.type == TransactionType.WITHDRAWAL.value)
@@ -469,6 +527,3 @@ class MetricsMonitorService:
         """Get referral earnings in last day."""
         # Simplified - would need referral_earnings table
         return Decimal("0")
-
-
-

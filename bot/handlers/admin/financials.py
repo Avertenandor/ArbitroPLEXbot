@@ -164,13 +164,21 @@ async def handle_user_selection(
 
     # Escape data for MarkdownV2
     username = escape_md(details.user.username or "Нет юзернейма")
-    full_name = escape_md(f"{details.user.telegram_id}")  # Use ID if name not available easily here
 
     reg_date = details.user.created_at.strftime('%d\\.%m\\.%Y')
-    last_active = details.user.last_active.strftime('%d\\.%m\\.%Y %H:%M') if details.user.last_active else "Неизвестно"
+    if details.user.last_active:
+        last_active = details.user.last_active.strftime('%d\\.%m\\.%Y %H:%M')
+    else:
+        last_active = "Неизвестно"
 
-    last_dep = details.last_deposit_date.strftime('%d\\.%m\\.%Y %H:%M') if details.last_deposit_date else "Нет"
-    last_with = details.last_withdrawal_date.strftime('%d\\.%m\\.%Y %H:%M') if details.last_withdrawal_date else "Нет"
+    if details.last_deposit_date:
+        last_dep = details.last_deposit_date.strftime('%d\\.%m\\.%Y %H:%M')
+    else:
+        last_dep = "Нет"
+    if details.last_withdrawal_date:
+        last_with = details.last_withdrawal_date.strftime('%d\\.%m\\.%Y %H:%M')
+    else:
+        last_with = "Нет"
 
     text = (
         f"📂 **Личное дело пользователя**\n"
@@ -255,7 +263,9 @@ async def show_user_accruals_stub(
     # For now, just show a message, as detailed accrual logs might be huge
     # Could reuse the Transaction model if we log accruals there, but currently
     # they are in DepositReward which is separate.
-    await message.answer("ℹ️ Детальный лог начислений доступен в базе данных. (Функция в разработке)")
+    await message.answer(
+        "ℹ️ Детальный лог начислений доступен в базе данных. (Функция в разработке)"
+    )
 
 
 @router.message(
@@ -292,7 +302,10 @@ async def handle_back(
                     "Выберите действие:"
                 )
                 await state.set_state(AdminFinancialStates.viewing_user)
-                await message.answer(text, parse_mode="MarkdownV2", reply_markup=admin_user_financial_keyboard())
+                await message.answer(
+                    text, parse_mode="MarkdownV2",
+                    reply_markup=admin_user_financial_keyboard()
+                )
                 return
 
     # Default: Back to List

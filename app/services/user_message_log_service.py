@@ -215,4 +215,3 @@ class UserMessageLogService:
             "first_message": first_message,
             "last_message": last_message,
         }
-

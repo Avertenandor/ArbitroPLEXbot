@@ -330,7 +330,11 @@ class RewardService(BaseService):
             )
 
             # If RewardSession rate is 0 or deposit has version, use version's roi_percent
-            if reward_rate == Decimal("0") or (deposit.deposit_version and deposit.deposit_version.roi_percent):
+            has_version_roi = (
+                deposit.deposit_version
+                and deposit.deposit_version.roi_percent
+            )
+            if reward_rate == Decimal("0") or has_version_roi:
                 # R17-1: Use deposit version's roi_percent as fallback/base rate
                 if deposit.deposit_version:
                     # Convert roi_percent to daily rate (assuming roi_percent is annual)
@@ -399,7 +403,11 @@ class RewardService(BaseService):
                     # Calculate ROI progress as percentage (0-100)
                     # ROI cap = 500% = deposit.amount * 5
                     roi_cap_amount = deposit.roi_cap_amount or (deposit.amount * 5)
-                    roi_progress = (new_roi_paid / roi_cap_amount * 100) if roi_cap_amount > 0 else Decimal("0")
+                    roi_progress = (
+                        (new_roi_paid / roi_cap_amount * 100)
+                        if roi_cap_amount > 0
+                        else Decimal("0")
+                    )
 
                     # Note: Convert to float only at display layer for Telegram API
                     # Financial calculations above remain in Decimal

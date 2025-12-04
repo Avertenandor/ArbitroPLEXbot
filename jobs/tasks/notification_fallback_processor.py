@@ -154,4 +154,3 @@ async def _process_notification_fallback_async() -> None:
 
     finally:
         await local_engine.dispose()
-

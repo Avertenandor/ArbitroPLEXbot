@@ -18,7 +18,6 @@ from app.models.enums import TransactionStatus, TransactionType
 from app.models.referral_earning import ReferralEarning
 from app.models.transaction import Transaction
 from app.models.user import User
-from app.repositories.base import BaseRepository
 
 
 class ReconciliationService:
@@ -440,4 +439,3 @@ class ReconciliationService:
 
             logger.info(f"Created snapshot for {snapshot_date}")
             return snapshot
-

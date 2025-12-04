@@ -5,7 +5,7 @@ Core calculator functionality.
 """
 
 from calculator.core.calculator import ProfitabilityCalculator
-from calculator.core.models import DepositLevel, CalculationResult, DepositCalculation
+from calculator.core.models import CalculationResult, DepositCalculation, DepositLevel
 
 __all__ = [
     "ProfitabilityCalculator",

@@ -52,7 +52,7 @@ class SupportTicket(Base):
     user_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True, index=True
     )
-    
+
     # Telegram ID for guest tickets (when user_id is None)
     telegram_id: Mapped[int | None] = mapped_column(
         Integer, nullable=True, index=True

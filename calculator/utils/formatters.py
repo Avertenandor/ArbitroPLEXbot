@@ -5,12 +5,13 @@ Formatting utilities for numbers and currency.
 в читаемый вид для отображения пользователю.
 """
 
-from typing import Optional, Union
 from decimal import Decimal
+
+from calculator.core.models import CalculationResult
 
 
 def format_currency(
-    amount: Union[float, Decimal],
+    amount: float | Decimal,
     currency: str = "USDT",
     decimals: int = 2,
     thousands_separator: str = ",",
@@ -37,7 +38,11 @@ def format_currency(
     """
     formatted = f"{float(amount):,.{decimals}f}"
     if thousands_separator != ",":
-        formatted = formatted.replace(",", "TEMP").replace(".", decimal_separator).replace("TEMP", thousands_separator)
+        formatted = (
+            formatted.replace(",", "TEMP")
+            .replace(".", decimal_separator)
+            .replace("TEMP", thousands_separator)
+        )
     elif decimal_separator != ".":
         formatted = formatted.replace(".", decimal_separator)
 
@@ -47,7 +52,7 @@ def format_currency(
 
 
 def format_percentage(
-    value: Union[float, Decimal],
+    value: float | Decimal,
     decimals: int = 2,
     show_sign: bool = False
 ) -> str:
@@ -75,8 +80,8 @@ def format_percentage(
 
 
 def format_number(
-    value: Union[float, Decimal, int],
-    decimals: Optional[int] = None,
+    value: float | Decimal | int,
+    decimals: int | None = None,
     thousands_separator: str = ",",
     decimal_separator: str = "."
 ) -> str:
@@ -104,7 +109,11 @@ def format_number(
         formatted = f"{float(value):,.{decimals}f}"
 
     if thousands_separator != "," or decimal_separator != ".":
-        formatted = formatted.replace(",", "TEMP").replace(".", decimal_separator).replace("TEMP", thousands_separator)
+        formatted = (
+            formatted.replace(",", "TEMP")
+            .replace(".", decimal_separator)
+            .replace("TEMP", thousands_separator)
+        )
 
     return formatted
 
@@ -163,7 +172,7 @@ def format_days_ru(days: int) -> str:
 
 
 def format_calculation_result(
-    result: "CalculationResult",
+    result: CalculationResult,
     currency: str = "USDT",
 ) -> str:
     """
@@ -176,7 +185,6 @@ def format_calculation_result(
     Returns:
         Multi-line formatted report
     """
-    from calculator.core.models import CalculationResult
 
     lines = [
         "Projection:",
@@ -192,7 +200,7 @@ def format_calculation_result(
 
 
 def format_calculation_result_ru(
-    result: "CalculationResult",
+    result: CalculationResult,
     currency: str = "USDT",
 ) -> str:
     """
@@ -205,7 +213,6 @@ def format_calculation_result_ru(
     Returns:
         Multi-line formatted report in Russian
     """
-    from calculator.core.models import CalculationResult
 
     lines = [
         "Прогноз заработка:",

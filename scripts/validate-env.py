@@ -51,7 +51,7 @@ def validate_database_url(url: str) -> tuple[bool, str]:
         return False, "Must use postgresql:// or postgresql+asyncpg:// driver"
     # Parse URL to check password more precisely
     try:
-        from urllib.parse import urlparse, unquote
+        from urllib.parse import unquote, urlparse
         parsed = urlparse(url)
         if parsed.password:
             password = unquote(parsed.password).lower()
@@ -97,7 +97,7 @@ def validate_env() -> tuple[bool, list[str]]:  # noqa: C901
             errors.append(f"{env_name} is not set or empty")
         elif "your_" in value.lower() or "placeholder" in value.lower():
             errors.append(f"{env_name} contains placeholder value")
-    
+
     # WALLET_PRIVATE_KEY is optional - warn but don't error
     wallet_key = getattr(settings, "wallet_private_key", None)
     if not wallet_key or wallet_key.strip() == "":

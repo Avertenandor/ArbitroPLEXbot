@@ -92,8 +92,6 @@ async def show_deposit_statistics(
     if not admin:
         return
 
-    deposit_repo = DepositRepository(session)
-
     # Get total statistics
     stmt = select(
         func.count(Deposit.id).label("total"),
@@ -559,7 +557,9 @@ async def process_level_action(
         level = state_data.get("managing_level")
         if level:
             await clear_state_preserve_admin_token(state)
-            await show_level_roi_config(message, session, state, level, from_level_management=True, **data)
+            await show_level_roi_config(
+                message, session, state, level, from_level_management=True, **data
+            )
         return
 
     # Get level from state
@@ -621,88 +621,37 @@ async def process_level_action(
     )
 
 
-@router.message(AdminDepositManagementStates.confirming_level_status)
-async def confirm_level_status_change(
-    message: Message,
-    session: AsyncSession,
-    state: FSMContext,
-    **data: Any,
-) -> None:
+def _is_confirmation_text(text: str | None) -> bool:
+    """Check if text is a confirmation."""
+    if not text:
+        return False
+    normalized = text.strip().lower()
+    return normalized in ("да", "yes", "✅ да")
+
+
+def _get_status_messages(action: str, level: int) -> tuple[str, str]:
     """
-    Confirm enabling/disabling a deposit level.
+    Get status message and notify action for level change.
 
-    Args:
-        message: Message object
-        session: Database session
-        state: FSM context
-        data: Handler data
+    Returns:
+        Tuple of (status_msg, notify_action)
     """
-    admin = await get_admin_or_deny(message, session, **data)
-    if not admin:
-        return
-
-    # Handle cancellation
-    if message.text in ("❌ Отмена", "◀️ Назад", "◀️ Назад к уровням"):
-        await clear_state_preserve_admin_token(state)
-        await show_levels_management(message, session, **data)
-        return
-
-    normalized = (message.text or "").strip().lower()
-    if normalized not in ("да", "yes", "✅ да"):
-        # Treat anything other than explicit "yes" as cancellation
-        await clear_state_preserve_admin_token(state)
-        await message.answer(
-            "❌ Действие отменено.",
-            reply_markup=admin_deposit_levels_keyboard(),
-        )
-        return
-
-    state_data = await state.get_data()
-    level = state_data.get("managing_level")
-    action = state_data.get("level_action")
-
-    if not level or action not in ("enable", "disable"):
-        await clear_state_preserve_admin_token(state)
-        await message.answer(
-            "❌ Ошибка: данные уровня не найдены.",
-            reply_markup=admin_deposit_management_keyboard(),
-        )
-        return
-
-    version_repo = DepositLevelVersionRepository(session)
-    current_version = await version_repo.get_current_version(level)
-
-    if not current_version:
-        await clear_state_preserve_admin_token(state)
-        await message.answer(
-            f"❌ Уровень {level} не найден.",
-            reply_markup=admin_deposit_management_keyboard(),
-        )
-        return
-
-    # Apply status change
     if action == "enable":
-        current_version.is_active = True
-        status_msg = "✅ Уровень {level} включён!"
-        notify_action = "включён"
-    else:
-        current_version.is_active = False
-        status_msg = "❌ Уровень {level} отключён!"
-        notify_action = "отключён"
+        return f"✅ Уровень {level} включён!", "включён"
+    return f"❌ Уровень {level} отключён!", "отключён"
 
-    await session.commit()
 
-    await message.answer(
-        status_msg.format(level=level),
-        reply_markup=admin_deposit_levels_keyboard(),
-    )
-
-    # Notify other admins about level status change
+async def _notify_admins_about_level_change(
+    session: AsyncSession,
+    admin_id: int | None,
+    level: int,
+    notify_action: str,
+) -> None:
+    """Notify other admins about level status change."""
     try:
         from app.repositories.admin_repository import AdminRepository
         from bot.utils.notification import send_telegram_message
 
-        admin_id = admin.id if admin else None
         admin_repo = AdminRepository(session)
         all_admins = await admin_repo.get_extended_admins()
 
@@ -729,6 +678,80 @@ async def confirm_level_status_change(
             "Failed to notify admins about level status change",
             extra={"error": str(e)},
         )
+
+
+@router.message(AdminDepositManagementStates.confirming_level_status)
+async def confirm_level_status_change(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """
+    Confirm enabling/disabling a deposit level.
+
+    Args:
+        message: Message object
+        session: Database session
+        state: FSM context
+        data: Handler data
+    """
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
+        return
+
+    # Handle cancellation
+    if message.text in ("❌ Отмена", "◀️ Назад", "◀️ Назад к уровням"):
+        await clear_state_preserve_admin_token(state)
+        await show_levels_management(message, session, **data)
+        return
+
+    if not _is_confirmation_text(message.text):
+        await clear_state_preserve_admin_token(state)
+        await message.answer(
+            "❌ Действие отменено.",
+            reply_markup=admin_deposit_levels_keyboard(),
+        )
+        return
+
+    # Get and validate state data
+    state_data = await state.get_data()
+    level = state_data.get("managing_level")
+    action = state_data.get("level_action")
+
+    if not level or action not in ("enable", "disable"):
+        await clear_state_preserve_admin_token(state)
+        await message.answer(
+            "❌ Ошибка: данные уровня не найдены.",
+            reply_markup=admin_deposit_management_keyboard(),
+        )
+        return
+
+    # Get current version
+    version_repo = DepositLevelVersionRepository(session)
+    current_version = await version_repo.get_current_version(level)
+
+    if not current_version:
+        await clear_state_preserve_admin_token(state)
+        await message.answer(
+            f"❌ Уровень {level} не найден.",
+            reply_markup=admin_deposit_management_keyboard(),
+        )
+        return
+
+    # Apply status change
+    current_version.is_active = (action == "enable")
+    await session.commit()
+
+    status_msg, notify_action = _get_status_messages(action, level)
+    await message.answer(
+        status_msg,
+        reply_markup=admin_deposit_levels_keyboard(),
+    )
+
+    # Notify other admins
+    admin_id = admin.id if admin else None
+    await _notify_admins_about_level_change(session, admin_id, level, notify_action)
 
     await clear_state_preserve_admin_token(state)
 
@@ -811,8 +834,6 @@ async def show_roi_statistics(
     admin = await get_admin_or_deny(message, session, **data)
     if not admin:
         return
-
-    deposit_repo = DepositRepository(session)
 
     text = "📈 **ROI Статистика**\n\n"
 

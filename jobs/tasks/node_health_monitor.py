@@ -100,6 +100,3 @@ async def _notify_admins_maintenance_mode() -> None:
 
     except Exception as e:
         logger.error(f"Error notifying admins: {e}")
-
-
-

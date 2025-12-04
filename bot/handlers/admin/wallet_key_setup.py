@@ -346,7 +346,10 @@ async def process_output_key(message: Message, state: FSMContext):
         return
 
     # Save encrypted key to state (Private Key flow)
-    await state.update_data(new_private_key_encrypted=encrypted_key, new_output_address=wallet_address)
+    await state.update_data(
+        new_private_key_encrypted=encrypted_key,
+        new_output_address=wallet_address
+    )
 
     # SECURITY: Clear plaintext key from memory
     secure_zero_memory(private_key)

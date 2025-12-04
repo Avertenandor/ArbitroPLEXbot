@@ -1,18 +1,20 @@
 [tool.ruff]
-target-version = "py311"
 line-length = 100
+target-version = "py312"
 exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
-preview = true
-extend-select = [
-    "E",  # pycodestyle errors
-    "F",  # pyflakes
-    "W",  # pycodestyle warnings
-    "C90",  # mccabe complexity
-    "I",  # isort
-    "UP",  # pyupgrade
-]
+select = ["E", "F", "W", "I", "C901"]
+ignore = ["E402"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 15
+
+[tool.ruff.lint.per-file-ignores]
+"jobs/scheduler.py" = ["E402"]
+"jobs/worker.py" = ["E402"]
+"bot/main.py" = ["E402"]
+"tests/*" = ["E501", "E402"]
 
 [tool.ruff.format]
 quote-style = "double"

@@ -11,4 +11,3 @@ class NotificationSettingsStates(StatesGroup):
     """FSM states for notification settings."""
 
     waiting_for_setting_change = State()
-

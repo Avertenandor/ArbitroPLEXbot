@@ -11,9 +11,10 @@ from loguru import logger
 from web3 import AsyncHTTPProvider, AsyncWeb3
 from web3.providers.async_base import AsyncBaseProvider
 
-from .constants import WS_MAX_RECONNECT_ATTEMPTS, WS_RECONNECT_DELAY
-from .rpc_wrapper import with_timeout, BlockchainTimeoutError
 from app.config.constants import BLOCKCHAIN_TIMEOUT
+
+from .constants import WS_MAX_RECONNECT_ATTEMPTS, WS_RECONNECT_DELAY
+from .rpc_wrapper import BlockchainTimeoutError, with_timeout
 
 
 class ProviderManager:

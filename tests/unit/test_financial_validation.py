@@ -9,12 +9,12 @@ Tests cover:
 - Minimum/maximum amount validation
 """
 
-import pytest
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from app.services.deposit_validation_service import (
-    DepositValidationService,
     DEPOSIT_LEVELS,
     PARTNER_REQUIREMENTS,
 )

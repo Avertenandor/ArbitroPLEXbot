@@ -9,7 +9,6 @@ Run periodically to track database health.
 import asyncio
 import os
 import sys
-from datetime import datetime
 
 import asyncpg
 from loguru import logger
@@ -32,7 +31,7 @@ async def check_db_connections(
 ) -> dict[str, any]:
     """
     Check database connection state.
-    
+
     Returns:
         dict: Connection statistics
     """
@@ -44,37 +43,37 @@ async def check_db_connections(
             password=password,
             database=database,
         )
-        
+
         # Get connection statistics
         stats_query = """
-        SELECT 
+        SELECT
             application_name,
             state,
             COUNT(*) as count,
             MAX(NOW() - state_change) as max_idle,
             MAX(NOW() - xact_start) as max_transaction_age
-        FROM pg_stat_activity 
+        FROM pg_stat_activity
         WHERE datname = $1
         GROUP BY application_name, state
         ORDER BY count DESC;
         """
-        
+
         stats = await conn.fetch(stats_query, database)
-        
+
         # Get total connections
         total_query = """
-        SELECT 
+        SELECT
             COUNT(*) as total,
             (SELECT setting::int FROM pg_settings WHERE name = 'max_connections') as max_conn
-        FROM pg_stat_activity 
+        FROM pg_stat_activity
         WHERE datname = $1;
         """
-        
+
         total_info = await conn.fetchrow(total_query, database)
-        
+
         # Get longest running queries
         long_queries = """
-        SELECT 
+        SELECT
             pid,
             NOW() - query_start as duration,
             state,
@@ -84,9 +83,9 @@ async def check_db_connections(
         ORDER BY duration DESC
         LIMIT 5;
         """
-        
+
         queries = await conn.fetch(long_queries, database)
-        
+
         await conn.close()
 
         return {
@@ -95,7 +94,7 @@ async def check_db_connections(
             "long_queries": queries,
             "timestamp": utc_now(),
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to check DB connections: {e}")
         return None
@@ -104,20 +103,20 @@ async def check_db_connections(
 def analyze_and_report(data: dict) -> tuple[bool, list[str]]:
     """
     Analyze connection data and generate warnings.
-    
+
     Returns:
         tuple: (is_healthy, list of warnings)
     """
     warnings = []
     is_healthy = True
-    
+
     if not data:
         return False, ["Failed to connect to database"]
-    
+
     total_info = data["total"]
     total_conn = total_info["total"]
     max_conn = total_info["max_conn"]
-    
+
     # Check total connections
     conn_usage = (total_conn / max_conn) * 100
     if conn_usage > 80:
@@ -129,13 +128,13 @@ def analyze_and_report(data: dict) -> tuple[bool, list[str]]:
         warnings.append(
             f"⚡ Warning: Connection usage at {conn_usage:.1f}% ({total_conn}/{max_conn})"
         )
-    
+
     # Check idle in transaction
     for stat in data["stats"]:
         if stat["state"] == "idle in transaction":
             count = stat["count"]
             max_idle = stat["max_idle"]
-            
+
             if max_idle and max_idle.total_seconds() > 300:  # 5 minutes
                 warnings.append(
                     f"🔴 CRITICAL: {count} connections in 'idle in transaction' "
@@ -147,7 +146,7 @@ def analyze_and_report(data: dict) -> tuple[bool, list[str]]:
                     f"⚠️  Warning: {count} connections in 'idle in transaction' "
                     f"for up to {max_idle}"
                 )
-    
+
     # Check long-running queries
     for query in data["long_queries"]:
         duration = query["duration"]
@@ -156,7 +155,7 @@ def analyze_and_report(data: dict) -> tuple[bool, list[str]]:
                 f"⏱️  Long query detected: {duration} - "
                 f"PID {query['pid']}, State: {query['state']}"
             )
-    
+
     return is_healthy, warnings
 
 
@@ -218,11 +217,11 @@ async def main():
         password=db_password,
         database=db_name,
     )
-    
+
     if data:
         is_healthy, warnings = analyze_and_report(data)
         print_report(data, is_healthy, warnings)
-        
+
         # Exit with error code if unhealthy
         sys.exit(0 if is_healthy else 1)
     else:

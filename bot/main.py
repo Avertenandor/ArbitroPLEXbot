@@ -71,7 +71,6 @@ from bot.middlewares.redis_middleware import (
 )
 from bot.middlewares.request_id import RequestIDMiddleware  # noqa: E402
 
-
 # Global bot instance for external access (e.g. from services)
 bot_instance: Bot | None = None
 
@@ -173,13 +172,13 @@ async def main() -> None:  # noqa: C901
     # Register middlewares (PART5: RequestID must be first!)
     # RateLimit must be BEFORE Database to reduce DB load on spam
     dp.update.middleware(RequestIDMiddleware())
-    
+
     # Global Error Handler
     from bot.middlewares.error_handler import ErrorHandlerMiddleware
     dp.update.middleware(ErrorHandlerMiddleware())
 
     dp.update.middleware(LoggerMiddleware())
-    
+
     # Rate limiting (optional, requires Redis) - BEFORE Database
     # This prevents spam requests from hitting the database
     # R11-2: RateLimitMiddleware now supports fallback to in-memory counters
@@ -197,7 +196,7 @@ async def main() -> None:  # noqa: C901
             logger.info("Rate limiting enabled with in-memory fallback (before Database)")
     except Exception as e:
         logger.warning(f"Rate limiting disabled: {e}")
-    
+
     dp.update.middleware(DatabaseMiddleware(session_pool=async_session_maker))
     # Add Redis client to data for handlers that need it
     if redis_client:
@@ -262,39 +261,43 @@ async def main() -> None:  # noqa: C901
         support,
         transaction,
         verification,
-        withdrawal,
         wallet_change,
-    )
-    from bot.handlers.admin import (
-        admins,
-        blacklist,
-        broadcast,
-        deposit_management,
-        deposit_settings,
-        emergency,  # R17-3: Emergency stop controls
-        finpass_recovery as admin_finpass,
-        panel,
-        roi_corridor,
-        support as admin_support,
-        user_messages,
-        users,
-        wallet_key_setup,
-        wallets,
-        wallet_management,
-        withdrawals,
-        withdrawal_settings,
-        blockchain_settings,
-        financials,
+        withdrawal,
     )
 
     # Master key management (only for super admin telegram_id: 1040687384)
     # NOTE: This router does NOT use AdminAuthMiddleware because it's used
     # to GET the master key, so it can't require master key authentication
     # MUST be registered BEFORE menu.router to have priority
-    from bot.handlers.admin import master_key_management
+    from bot.handlers.admin import (
+        admins,
+        blacklist,
+        blockchain_settings,
+        broadcast,
+        deposit_management,
+        deposit_settings,
+        emergency,  # R17-3: Emergency stop controls
+        financials,
+        master_key_management,
+        panel,
+        roi_corridor,
+        user_messages,
+        users,
+        wallet_key_setup,
+        wallet_management,
+        wallets,
+        withdrawal_settings,
+        withdrawals,
+    )
+    from bot.handlers.admin import (
+        finpass_recovery as admin_finpass,
+    )
+    from bot.handlers.admin import (
+        support as admin_support,
+    )
     # Security check is done inside the handler by checking telegram_id
     dp.include_router(master_key_management.router)
-    
+
     # Core handlers (menu must be registered BEFORE deposit/withdrawal
     # to have priority over FSM state handlers)
     dp.include_router(start.router)
@@ -332,7 +335,7 @@ async def main() -> None:  # noqa: C901
     # Admin handlers (wallet_key_setup must be first for security)
     # Apply AdminAuthMiddleware to all admin routers
     admin_auth_middleware = AdminAuthMiddleware()
-    
+
     # Apply middleware to admin routers
     wallet_key_setup.router.message.middleware(admin_auth_middleware)
     wallet_key_setup.router.callback_query.middleware(admin_auth_middleware)
@@ -372,10 +375,12 @@ async def main() -> None:  # noqa: C901
     user_messages.router.callback_query.middleware(admin_auth_middleware)
     emergency.router.message.middleware(admin_auth_middleware)
     emergency.router.callback_query.middleware(admin_auth_middleware)
-    
+
     dp.include_router(wallet_key_setup.router)
-    dp.include_router(financials.router)  # MUST be before panel.router to catch "💰 Финансовая отчётность"
-    dp.include_router(withdrawals.router)  # MUST be before panel.router for withdrawal buttons
+    # MUST be before panel.router to catch "💰 Финансовая отчётность"
+    dp.include_router(financials.router)
+    # MUST be before panel.router for withdrawal buttons
+    dp.include_router(withdrawals.router)
     dp.include_router(panel.router)
     dp.include_router(users.router)
     dp.include_router(withdrawal_settings.router)
@@ -407,16 +412,16 @@ async def main() -> None:  # noqa: C901
     # Fallback handler for orphaned states (must be BEFORE debug_unhandled)
     from bot.handlers import fallback
     dp.include_router(fallback.router)
-    
+
     # Debug handler (MUST BE LAST to catch unhandled messages)
     from bot.handlers import debug_unhandled
     dp.include_router(debug_unhandled.router)
-    
+
     # Test bot connection
     try:
         bot_info = await bot.get_me()
         logger.info(f"Bot connected: @{bot_info.username} (ID: {bot_info.id})")
-        
+
         # Set bot username in settings if not already set
         import os
         if not settings.telegram_bot_username:
@@ -461,12 +466,12 @@ async def main() -> None:  # noqa: C901
 
     # Graceful shutdown handler
     shutdown_event = asyncio.Event()
-    
+
     async def shutdown_handler():
         """Handle graceful shutdown."""
         logger.info("Graceful shutdown initiated...")
         shutdown_event.set()
-        
+
         # Stop scheduler if running
         try:
             from jobs.scheduler import scheduler_instance
@@ -475,7 +480,7 @@ async def main() -> None:  # noqa: C901
                 logger.info("Scheduler stopped")
         except Exception as e:
             logger.warning(f"Error stopping scheduler: {e}")
-        
+
         # Close database connections
         try:
             from app.config.database import engine
@@ -483,7 +488,7 @@ async def main() -> None:  # noqa: C901
             logger.info("Database connections closed")
         except Exception as e:
             logger.warning(f"Error closing database: {e}")
-        
+
         logger.info("Graceful shutdown complete")
 
     try:

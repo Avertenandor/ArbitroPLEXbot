@@ -6,7 +6,6 @@ Loads users, deposit levels, and system settings in batches.
 """
 
 import asyncio
-from typing import Any
 
 import dramatiq
 from loguru import logger
@@ -62,7 +61,6 @@ async def _warmup_redis_cache_async() -> None:
 
     users_loaded = 0
     deposit_levels_loaded = 0
-    settings_loaded = 0
 
     # Create local engine to avoid event loop issues in threaded worker
     local_engine = create_async_engine(
@@ -144,12 +142,15 @@ async def _warmup_redis_cache_async() -> None:
 
             try:
                 import json
-                from decimal import Decimal
-                
+
                 # Convert settings to dict for caching
                 settings_dict = {
                     "min_withdrawal_amount": str(global_settings.min_withdrawal_amount),
-                    "daily_withdrawal_limit": str(global_settings.daily_withdrawal_limit) if global_settings.daily_withdrawal_limit else None,
+                    "daily_withdrawal_limit": (
+                        str(global_settings.daily_withdrawal_limit)
+                        if global_settings.daily_withdrawal_limit
+                        else None
+                    ),
                     "is_daily_limit_enabled": global_settings.is_daily_limit_enabled,
                     "auto_withdrawal_enabled": global_settings.auto_withdrawal_enabled,
                     "active_rpc_provider": global_settings.active_rpc_provider,
@@ -157,11 +158,10 @@ async def _warmup_redis_cache_async() -> None:
                     "max_open_deposit_level": global_settings.max_open_deposit_level,
                     "roi_settings": global_settings.roi_settings,
                 }
-                
+
                 await redis_client.set(
                     "global_settings", json.dumps(settings_dict), ex=1800
                 )  # 30 min TTL
-                settings_loaded = 1
                 logger.info("R11-3: Cached global settings")
             except Exception as e:
                 logger.warning(f"R11-3: Failed to cache global settings: {e}")
@@ -171,5 +171,3 @@ async def _warmup_redis_cache_async() -> None:
     finally:
         await redis_client.close()
         await local_engine.dispose()
-
-

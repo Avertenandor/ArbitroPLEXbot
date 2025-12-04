@@ -4,9 +4,8 @@ Circuit Breaker for Database Operations.
 R11-1: Implements circuit breaker pattern for gradual recovery after database failures.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from enum import Enum
-from typing import Any
 
 from loguru import logger
 
@@ -208,4 +207,3 @@ def reset_db_circuit_breaker() -> None:
     global _db_circuit_breaker
     if _db_circuit_breaker:
         _db_circuit_breaker.reset()
-

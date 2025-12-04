@@ -11,8 +11,9 @@ from decimal import Decimal
 from loguru import logger
 from web3 import AsyncWeb3
 
-from .constants import USDT_ABI, USDT_DECIMALS
 from app.config.constants import BLOCKCHAIN_LONG_TIMEOUT
+
+from .constants import USDT_ABI, USDT_DECIMALS
 
 
 class EventMonitor:
@@ -124,7 +125,7 @@ class EventMonitor:
                     ),
                     timeout=BLOCKCHAIN_LONG_TIMEOUT,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.error(
                     f"Timeout creating event filter for blocks "
                     f"{self._last_processed_block + 1} to {current_block}"
@@ -145,7 +146,7 @@ class EventMonitor:
                 # Update last processed block
                 self._last_processed_block = current_block
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.error(
                     f"Timeout getting events for blocks "
                     f"{self._last_processed_block + 1} to {current_block}"
@@ -158,8 +159,8 @@ class EventMonitor:
                     except Exception as e:
                         logger.warning(f"Failed to uninstall event filter: {e}")
 
-        except asyncio.TimeoutError:
-            logger.error(f"Timeout polling events")
+        except TimeoutError:
+            logger.error("Timeout polling events")
         except Exception as e:
             logger.error(f"Error polling events: {e}")
 

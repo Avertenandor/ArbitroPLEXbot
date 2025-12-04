@@ -12,4 +12,3 @@ class AdminWithdrawalSettingsStates(StatesGroup):
     waiting_for_min_amount = State()
     waiting_for_daily_limit = State()
     waiting_for_service_fee = State()
-

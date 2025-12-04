@@ -27,13 +27,11 @@ async def run_deposit_reminder_task() -> None:
     try:
         async with async_session_maker() as session:
             try:
-                from sqlalchemy import select, and_
-                from app.models.deposit import Deposit
-                from app.models.user import User
-                from app.models.enums import DepositStatus
-                from app.services.notification_service import NotificationService
+                from sqlalchemy import and_, select
 
-                notification_service = NotificationService(session)
+                from app.models.deposit import Deposit
+                from app.models.enums import DepositStatus
+                from app.models.user import User
 
                 # Find pending deposits older than 24 hours
                 cutoff_24h = datetime.now(UTC) - timedelta(hours=24)
@@ -102,4 +100,3 @@ async def run_deposit_reminder_task() -> None:
             f"Fatal error in deposit reminder task: {e}",
             extra={"error": str(e)},
         )
-

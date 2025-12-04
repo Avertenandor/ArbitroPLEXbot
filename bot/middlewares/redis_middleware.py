@@ -17,8 +17,8 @@ try:
     import redis.asyncio as redis
     from redis.exceptions import (
         ConnectionError,
-        TimeoutError,
         RedisError,
+        TimeoutError,
     )
 except ImportError:
     redis = None  # type: ignore
@@ -30,10 +30,10 @@ except ImportError:
 class RedisMiddleware(BaseMiddleware):
     """
     Redis middleware - provides Redis client to handlers.
-    
+
     R11-2: Handles Redis failures gracefully, allowing system to continue
     without Redis (degraded mode).
-    
+
     Adds redis_client to handler data if available.
     """
 
@@ -140,6 +140,5 @@ class RedisMiddleware(BaseMiddleware):
             # Redis not available or unhealthy
             # Handlers should check for redis_client existence
             pass
-        
-        return await handler(event, data)
 
+        return await handler(event, data)

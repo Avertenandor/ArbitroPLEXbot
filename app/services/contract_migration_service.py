@@ -10,7 +10,6 @@ from typing import Any
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.deposit import Deposit
 from app.models.enums import TransactionStatus
 from app.repositories.deposit_repository import DepositRepository
 from app.repositories.user_repository import UserRepository
@@ -115,7 +114,8 @@ class ContractMigrationService:
                 )
 
             result["success"] = True
-            logger.info(f"Contract migration {'simulated' if dry_run else 'completed'} successfully")
+            mode = 'simulated' if dry_run else 'completed'
+            logger.info(f"Contract migration {mode} successfully")
 
         except Exception as e:
             logger.error(f"Error during contract migration: {e}")
@@ -208,4 +208,3 @@ class ContractMigrationService:
             "migration_history": [],
             "last_migration": None,
         }
-

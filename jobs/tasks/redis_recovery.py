@@ -8,7 +8,6 @@ Migrates data from PostgreSQL fallback back to Redis.
 import asyncio
 import json
 from datetime import UTC, datetime, timedelta
-from typing import Any
 
 import dramatiq
 from loguru import logger
@@ -58,9 +57,8 @@ def recover_redis_data() -> dict:
         }
 
 
-async def _recover_redis_data_async() -> dict:
-    """Async implementation of Redis recovery."""
-    # Check if Redis is available
+async def _check_redis_available():
+    """Check if Redis is available for recovery."""
     try:
         redis_client = AsyncRedis(
             host=settings.redis_host,
@@ -71,8 +69,152 @@ async def _recover_redis_data_async() -> dict:
         )
         await redis_client.ping()
         logger.info("R11-3: Redis is available, starting recovery")
+        return redis_client
     except Exception as e:
         logger.warning(f"R11-3: Redis not available for recovery: {e}")
+        return None
+
+
+async def _migrate_single_notification(notification, redis_client):
+    """Migrate a single notification to Redis."""
+    # Add to Redis queue (using JSON for proper serialization)
+    queue_key = (
+        "notification_queue:critical"
+        if notification.priority >= 100
+        else "notification_queue:normal"
+    )
+    notification_data = {
+        "user_id": notification.user_id,
+        "type": notification.notification_type,
+        "payload": notification.payload,
+        "created_at": notification.created_at.isoformat(),
+    }
+    await redis_client.lpush(queue_key, json.dumps(notification_data))
+
+    # Mark as processed
+    notification.processed_at = datetime.now(UTC)
+
+
+async def _migrate_notifications(session, redis_client):
+    """Migrate notification queue from PostgreSQL to Redis."""
+    from sqlalchemy import select
+
+    # Get pending notifications
+    stmt = (
+        select(NotificationQueueFallback)
+        .where(NotificationQueueFallback.processed_at.is_(None))
+        .order_by(
+            NotificationQueueFallback.priority.desc(),
+            NotificationQueueFallback.created_at.asc(),
+        )
+        .limit(1000)  # Process in batches
+    )
+
+    result = await session.execute(stmt)
+    pending_notifications = list(result.scalars().all())
+
+    if not pending_notifications:
+        return 0
+
+    logger.info(
+        f"R11-3: Migrating {len(pending_notifications)} "
+        "notifications from PostgreSQL to Redis"
+    )
+
+    notifications_migrated = 0
+
+    for notification in pending_notifications:
+        try:
+            await _migrate_single_notification(notification, redis_client)
+            notifications_migrated += 1
+        except Exception as e:
+            logger.error(
+                f"R11-3: Failed to migrate notification {notification.id}: {e}"
+            )
+
+    await session.commit()
+    logger.info(f"R11-3: Migrated {notifications_migrated} notifications")
+
+    return notifications_migrated
+
+
+async def _migrate_single_fsm_state(fsm_state, user_repo, redis_storage):
+    """Migrate a single FSM state to Redis."""
+    user = await user_repo.get_by_id(fsm_state.user_id)
+    if not user:
+        return False
+
+    # Create storage key
+    from aiogram.fsm.storage.base import StorageKey
+
+    storage_key = StorageKey(
+        chat_id=user.telegram_id,
+        user_id=user.telegram_id,
+        bot_id=int(settings.telegram_bot_token.split(":")[0]),
+    )
+
+    # Set state in Redis
+    if fsm_state.state:
+        await redis_storage.set_state(storage_key, state=fsm_state.state)
+
+    # Set data in Redis
+    if fsm_state.data:
+        await redis_storage.set_data(storage_key, data=fsm_state.data)
+
+    return True
+
+
+async def _migrate_fsm_states(session, redis_client):
+    """Migrate FSM states from PostgreSQL to Redis."""
+    from sqlalchemy import select
+
+    user_repo = UserRepository(session)
+
+    # Get active FSM states (updated in last 24 hours)
+    cutoff_time = datetime.now(UTC) - timedelta(hours=24)
+    stmt = (
+        select(UserFsmState)
+        .where(UserFsmState.updated_at >= cutoff_time)
+        .where(UserFsmState.state.isnot(None))
+    )
+
+    result = await session.execute(stmt)
+    active_fsm_states = list(result.scalars().all())
+
+    if not active_fsm_states:
+        return 0
+
+    logger.info(
+        f"R11-3: Migrating {len(active_fsm_states)} "
+        "FSM states from PostgreSQL to Redis"
+    )
+
+    redis_storage = RedisStorage(redis=redis_client)
+    fsm_states_migrated = 0
+
+    for fsm_state in active_fsm_states:
+        try:
+            success = await _migrate_single_fsm_state(
+                fsm_state, user_repo, redis_storage
+            )
+            if success:
+                fsm_states_migrated += 1
+        except Exception as e:
+            logger.error(
+                f"R11-3: Failed to migrate FSM state "
+                f"for user {fsm_state.user_id}: {e}"
+            )
+
+    logger.info(f"R11-3: Migrated {fsm_states_migrated} FSM states")
+
+    return fsm_states_migrated
+
+
+async def _recover_redis_data_async() -> dict:
+    """Async implementation of Redis recovery."""
+    redis_client = await _check_redis_available()
+
+    if not redis_client:
         return {
             "notifications_migrated": 0,
             "fsm_states_migrated": 0,
@@ -84,122 +226,13 @@ async def _recover_redis_data_async() -> dict:
 
     try:
         async with async_session_maker() as session:
-            # 1. Migrate notification queue from PostgreSQL to Redis
-            from sqlalchemy import select
-
-            # Get pending notifications
-            stmt = (
-                select(NotificationQueueFallback)
-                .where(NotificationQueueFallback.processed_at.is_(None))
-                .order_by(
-                    NotificationQueueFallback.priority.desc(),
-                    NotificationQueueFallback.created_at.asc(),
-                )
-                .limit(1000)  # Process in batches
+            # Migrate notifications
+            notifications_migrated = await _migrate_notifications(
+                session, redis_client
             )
 
-            result = await session.execute(stmt)
-            pending_notifications = list(result.scalars().all())
-
-            if pending_notifications:
-                logger.info(
-                    f"R11-3: Migrating {len(pending_notifications)} "
-                    "notifications from PostgreSQL to Redis"
-                )
-
-                for notification in pending_notifications:
-                    try:
-                        # Add to Redis queue (using JSON for proper serialization)
-                        queue_key = (
-                            "notification_queue:critical"
-                            if notification.priority >= 100
-                            else "notification_queue:normal"
-                        )
-                        notification_data = {
-                            "user_id": notification.user_id,
-                            "type": notification.notification_type,
-                            "payload": notification.payload,
-                            "created_at": notification.created_at.isoformat(),
-                        }
-                        await redis_client.lpush(
-                            queue_key, json.dumps(notification_data)
-                        )
-
-                        # Mark as processed
-                        notification.processed_at = datetime.now(UTC)
-                        notifications_migrated += 1
-
-                    except Exception as e:
-                        logger.error(
-                            f"R11-3: Failed to migrate notification "
-                            f"{notification.id}: {e}"
-                        )
-
-                await session.commit()
-                logger.info(
-                    f"R11-3: Migrated {notifications_migrated} notifications"
-                )
-
-            # 2. Migrate FSM states from PostgreSQL to Redis
-            user_repo = UserRepository(session)
-
-            # Get active FSM states (updated in last 24 hours)
-            cutoff_time = datetime.now(UTC) - timedelta(hours=24)
-            stmt = (
-                select(UserFsmState)
-                .where(UserFsmState.updated_at >= cutoff_time)
-                .where(UserFsmState.state.isnot(None))
-            )
-
-            result = await session.execute(stmt)
-            active_fsm_states = list(result.scalars().all())
-
-            if active_fsm_states:
-                logger.info(
-                    f"R11-3: Migrating {len(active_fsm_states)} "
-                    "FSM states from PostgreSQL to Redis"
-                )
-
-                redis_storage = RedisStorage(redis=redis_client)
-
-                for fsm_state in active_fsm_states:
-                    try:
-                        user = await user_repo.get_by_id(fsm_state.user_id)
-                        if not user:
-                            continue
-
-                        # Create storage key
-                        from aiogram.fsm.storage.base import StorageKey
-
-                        storage_key = StorageKey(
-                            chat_id=user.telegram_id,
-                            user_id=user.telegram_id,
-                            bot_id=int(settings.telegram_bot_token.split(":")[0]),
-                        )
-
-                        # Set state in Redis
-                        if fsm_state.state:
-                            await redis_storage.set_state(
-                                storage_key, state=fsm_state.state
-                            )
-
-                        # Set data in Redis
-                        if fsm_state.data:
-                            await redis_storage.set_data(
-                                storage_key, data=fsm_state.data
-                            )
-
-                        fsm_states_migrated += 1
-
-                    except Exception as e:
-                        logger.error(
-                            f"R11-3: Failed to migrate FSM state "
-                            f"for user {fsm_state.user_id}: {e}"
-                        )
-
-                logger.info(
-                    f"R11-3: Migrated {fsm_states_migrated} FSM states"
-                )
+            # Migrate FSM states
+            fsm_states_migrated = await _migrate_fsm_states(session, redis_client)
 
     except Exception as e:
         logger.error(f"R11-3: Error during Redis recovery: {e}", exc_info=True)
@@ -210,4 +243,3 @@ async def _recover_redis_data_async() -> dict:
         "notifications_migrated": notifications_migrated,
         "fsm_states_migrated": fsm_states_migrated,
     }
-

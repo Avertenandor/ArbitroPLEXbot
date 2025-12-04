@@ -8,6 +8,7 @@ from aiogram import F, Router
 from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
+from loguru import logger
 
 from app.models.user import User
 from bot.keyboards.reply import support_keyboard
@@ -44,7 +45,6 @@ async def handle_create_ticket(
 
     R1-7: Supports guest tickets (user_id=None, telegram_id required).
     """
-    user: User | None = data.get("user")
     telegram_id = message.from_user.id if message.from_user else None
 
     # R1-7: Разрешаем гостевые тикеты

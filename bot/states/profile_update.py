@@ -13,4 +13,3 @@ class ProfileUpdateStates(StatesGroup):
     choosing_contact_type = State()
     waiting_for_phone = State()
     waiting_for_email = State()
-

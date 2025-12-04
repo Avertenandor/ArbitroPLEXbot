@@ -4,8 +4,8 @@ InquiryRepository.
 Repository for user inquiries (questions to admins).
 """
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Sequence
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession

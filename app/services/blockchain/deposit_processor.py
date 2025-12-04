@@ -12,8 +12,9 @@ from loguru import logger
 from web3 import AsyncWeb3
 from web3.exceptions import TransactionNotFound
 
-from .constants import DEFAULT_CONFIRMATION_BLOCKS, USDT_ABI, USDT_DECIMALS
 from app.config.constants import BLOCKCHAIN_TIMEOUT
+
+from .constants import DEFAULT_CONFIRMATION_BLOCKS, USDT_ABI, USDT_DECIMALS
 
 
 class DepositProcessor:
@@ -78,132 +79,40 @@ class DepositProcessor:
             Dict with status, confirmations, amount, etc.
         """
         try:
-            # Get transaction with timeout
-            try:
-                tx = await asyncio.wait_for(
-                    self.web3.eth.get_transaction(tx_hash),
-                    timeout=BLOCKCHAIN_TIMEOUT,
-                )
-            except asyncio.TimeoutError:
-                logger.error(f"Timeout getting transaction {tx_hash}")
-                return {
-                    "valid": False,
-                    "error": "Transaction lookup timeout",
-                    "confirmations": 0,
-                }
+            # Get and validate transaction receipt
+            receipt = await self._get_transaction_receipt(tx_hash)
+            if "error" in receipt:
+                return receipt
 
-            if not tx:
-                return {
-                    "valid": False,
-                    "error": "Transaction not found",
-                    "confirmations": 0,
-                }
+            # Validate transaction status
+            status_error = self._validate_transaction_status(receipt)
+            if status_error:
+                return status_error
 
-            # Get transaction receipt with timeout
-            try:
-                receipt = await asyncio.wait_for(
-                    self.web3.eth.get_transaction_receipt(tx_hash),
-                    timeout=BLOCKCHAIN_TIMEOUT,
-                )
-            except asyncio.TimeoutError:
-                logger.error(f"Timeout getting transaction receipt {tx_hash}")
-                return {
-                    "valid": False,
-                    "error": "Transaction receipt timeout",
-                    "confirmations": 0,
-                }
+            # Calculate confirmations
+            confirmations = await self._calculate_confirmations(tx_hash, receipt)
+            if isinstance(confirmations, dict):  # Error occurred
+                return confirmations
 
-            if not receipt:
-                return {
-                    "valid": False,
-                    "error": "Transaction not mined yet",
-                    "confirmations": 0,
-                }
-
-            # Check transaction success
-            if receipt["status"] != 1:
-                return {
-                    "valid": False,
-                    "error": "Transaction failed",
-                    "confirmations": 0,
-                }
-
-            # Calculate confirmations with timeout
-            try:
-                current_block = await asyncio.wait_for(
-                    self.web3.eth.block_number,
-                    timeout=BLOCKCHAIN_TIMEOUT,
-                )
-            except asyncio.TimeoutError:
-                logger.error(f"Timeout getting block number for {tx_hash}")
-                return {
-                    "valid": False,
-                    "error": "Block number timeout",
-                    "confirmations": 0,
-                }
-
-            tx_block = receipt["blockNumber"]
-            confirmations = current_block - tx_block + 1
-
-            # Parse Transfer event from logs
-            transfer_data = self._parse_transfer_logs(
-                receipt["logs"]
+            # Validate transfer data
+            transfer_result = self._validate_transfer_data(
+                receipt, expected_to_address, confirmations
             )
+            if "error" in transfer_result:
+                return transfer_result
 
-            if not transfer_data:
-                return {
-                    "valid": False,
-                    "error": "No USDT transfer found in transaction",
-                    "confirmations": confirmations,
-                }
-
-            # Verify recipient
-            if transfer_data["to"].lower() != expected_to_address.lower():
-                return {
-                    "valid": False,
-                    "error": f"Wrong recipient: {transfer_data['to']}",
-                    "confirmations": confirmations,
-                }
-
-            # R18-1: Dust attack protection - check minimum deposit amount
-            from app.config.settings import settings
+            transfer_data = transfer_result["data"]
             actual_amount = transfer_data["amount"]
-            min_deposit = Decimal(str(settings.minimum_deposit_amount))
-            
-            if actual_amount < min_deposit:
-                logger.warning(
-                    f"Dust attack detected in transaction {tx_hash}: "
-                    f"amount {actual_amount} < minimum {min_deposit}"
-                )
-                return {
-                    "valid": False,
-                    "error": (
-                        f"Dust attack: amount {actual_amount} is below "
-                        f"minimum {min_deposit} USDT"
-                    ),
-                    "confirmations": confirmations,
-                    "amount": actual_amount,
-                }
 
-            # Verify amount (if provided)
-            if expected_amount is not None:
-                min_amount = expected_amount * Decimal(1 - tolerance_percent)
-                max_amount = expected_amount * Decimal(1 + tolerance_percent)
+            # Validate amount constraints
+            amount_error = self._validate_amount(
+                actual_amount, expected_amount, tolerance_percent, confirmations, tx_hash
+            )
+            if amount_error:
+                return amount_error
 
-                if not (min_amount <= actual_amount <= max_amount):
-                    return {
-                        "valid": False,
-                        "error": (
-                            f"Amount mismatch: expected {expected_amount}, "
-                            f"got {actual_amount}"
-                        ),
-                        "confirmations": confirmations,
-                        "amount": actual_amount,
-                    }
-
-            # Check if enough confirmations
+            # Success - return full details
             is_confirmed = confirmations >= self.confirmation_blocks
-
             return {
                 "valid": True,
                 "confirmed": is_confirmed,
@@ -212,7 +121,7 @@ class DepositProcessor:
                 "from_address": transfer_data["from"],
                 "to_address": transfer_data["to"],
                 "amount": actual_amount,
-                "block_number": tx_block,
+                "block_number": receipt["blockNumber"],
                 "tx_hash": tx_hash,
             }
 
@@ -230,6 +139,151 @@ class DepositProcessor:
                 "error": str(e),
                 "confirmations": 0,
             }
+
+    async def _get_transaction_receipt(self, tx_hash: str) -> dict[str, Any]:
+        """Get and validate transaction receipt."""
+        # Get transaction with timeout
+        try:
+            tx = await asyncio.wait_for(
+                self.web3.eth.get_transaction(tx_hash),
+                timeout=BLOCKCHAIN_TIMEOUT,
+            )
+        except TimeoutError:
+            logger.error(f"Timeout getting transaction {tx_hash}")
+            return {
+                "valid": False,
+                "error": "Transaction lookup timeout",
+                "confirmations": 0,
+            }
+
+        if not tx:
+            return {
+                "valid": False,
+                "error": "Transaction not found",
+                "confirmations": 0,
+            }
+
+        # Get transaction receipt with timeout
+        try:
+            receipt = await asyncio.wait_for(
+                self.web3.eth.get_transaction_receipt(tx_hash),
+                timeout=BLOCKCHAIN_TIMEOUT,
+            )
+        except TimeoutError:
+            logger.error(f"Timeout getting transaction receipt {tx_hash}")
+            return {
+                "valid": False,
+                "error": "Transaction receipt timeout",
+                "confirmations": 0,
+            }
+
+        if not receipt:
+            return {
+                "valid": False,
+                "error": "Transaction not mined yet",
+                "confirmations": 0,
+            }
+
+        return receipt
+
+    def _validate_transaction_status(self, receipt: dict) -> dict[str, Any] | None:
+        """Validate transaction execution status."""
+        if receipt["status"] != 1:
+            return {
+                "valid": False,
+                "error": "Transaction failed",
+                "confirmations": 0,
+            }
+        return None
+
+    async def _calculate_confirmations(
+        self, tx_hash: str, receipt: dict
+    ) -> int | dict[str, Any]:
+        """Calculate number of confirmations."""
+        try:
+            current_block = await asyncio.wait_for(
+                self.web3.eth.block_number,
+                timeout=BLOCKCHAIN_TIMEOUT,
+            )
+        except TimeoutError:
+            logger.error(f"Timeout getting block number for {tx_hash}")
+            return {
+                "valid": False,
+                "error": "Block number timeout",
+                "confirmations": 0,
+            }
+
+        tx_block = receipt["blockNumber"]
+        return current_block - tx_block + 1
+
+    def _validate_transfer_data(
+        self, receipt: dict, expected_to_address: str, confirmations: int
+    ) -> dict[str, Any]:
+        """Validate transfer event data."""
+        transfer_data = self._parse_transfer_logs(receipt["logs"])
+
+        if not transfer_data:
+            return {
+                "valid": False,
+                "error": "No USDT transfer found in transaction",
+                "confirmations": confirmations,
+            }
+
+        # Verify recipient
+        if transfer_data["to"].lower() != expected_to_address.lower():
+            return {
+                "valid": False,
+                "error": f"Wrong recipient: {transfer_data['to']}",
+                "confirmations": confirmations,
+            }
+
+        return {"data": transfer_data}
+
+    def _validate_amount(
+        self,
+        actual_amount: Decimal,
+        expected_amount: Decimal | None,
+        tolerance_percent: float,
+        confirmations: int,
+        tx_hash: str,
+    ) -> dict[str, Any] | None:
+        """Validate amount against minimum and expected values."""
+        # R18-1: Dust attack protection
+        from app.config.settings import settings
+        min_deposit = Decimal(str(settings.minimum_deposit_amount))
+
+        if actual_amount < min_deposit:
+            logger.warning(
+                f"Dust attack detected in transaction {tx_hash}: "
+                f"amount {actual_amount} < minimum {min_deposit}"
+            )
+            return {
+                "valid": False,
+                "error": (
+                    f"Dust attack: amount {actual_amount} is below "
+                    f"minimum {min_deposit} USDT"
+                ),
+                "confirmations": confirmations,
+                "amount": actual_amount,
+            }
+
+        # Verify expected amount (if provided)
+        if expected_amount is not None:
+            min_amount = expected_amount * Decimal(1 - tolerance_percent)
+            max_amount = expected_amount * Decimal(1 + tolerance_percent)
+
+            if not (min_amount <= actual_amount <= max_amount):
+                return {
+                    "valid": False,
+                    "error": (
+                        f"Amount mismatch: expected {expected_amount}, "
+                        f"got {actual_amount}"
+                    ),
+                    "confirmations": confirmations,
+                    "amount": actual_amount,
+                }
+
+        return None
 
     def _parse_transfer_logs(
         self, logs: list
@@ -294,7 +348,7 @@ class DepositProcessor:
                     self.web3.eth.get_transaction_receipt(tx_hash),
                     timeout=BLOCKCHAIN_TIMEOUT,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.error(f"Timeout getting transaction receipt for confirmations {tx_hash}")
                 return 0
 
@@ -307,7 +361,7 @@ class DepositProcessor:
                     self.web3.eth.block_number,
                     timeout=BLOCKCHAIN_TIMEOUT,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.error(f"Timeout getting block number for confirmations {tx_hash}")
                 return 0
 
@@ -315,7 +369,7 @@ class DepositProcessor:
 
             return current_block - tx_block + 1
 
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.error(f"Timeout getting confirmations for {tx_hash}")
             return 0
         except Exception as e:

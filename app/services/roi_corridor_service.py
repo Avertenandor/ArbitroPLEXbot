@@ -77,6 +77,61 @@ class RoiCorridorService:
             "roi_fixed": roi_fixed,
         }
 
+    def _validate_corridor_mode(
+        self,
+        mode: str,
+        roi_min: Decimal | None,
+        roi_max: Decimal | None,
+        roi_fixed: Decimal | None,
+    ) -> tuple[bool, str | None]:
+        """
+        Validate corridor mode and parameters.
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        if mode == "custom":
+            if roi_min is None or roi_max is None:
+                return False, "Для режима Custom требуются min и max"
+            if roi_min >= roi_max:
+                return False, "Минимум должен быть меньше максимума"
+            if roi_min < 0 or roi_max < 0:
+                return False, "Проценты не могут быть отрицательными"
+        elif mode == "equal":
+            if roi_fixed is None:
+                return False, "Для режима Поровну требуется фиксированный процент"
+            if roi_fixed < 0:
+                return False, "Процент не может быть отрицательным"
+        else:
+            return False, f"Неизвестный режим: {mode}"
+
+        return True, None
+
+    async def _apply_custom_mode_settings(
+        self,
+        level: int,
+        roi_min: Decimal,
+        roi_max: Decimal,
+        applies_to: str,
+    ) -> None:
+        """Apply custom mode settings."""
+        if applies_to == "current":
+            await self._set_roi_setting(f"LEVEL_{level}_ROI_MIN", str(roi_min))
+            await self._set_roi_setting(f"LEVEL_{level}_ROI_MAX", str(roi_max))
+        else:
+            await self._set_roi_setting(f"LEVEL_{level}_ROI_MIN_NEXT", str(roi_min))
+            await self._set_roi_setting(f"LEVEL_{level}_ROI_MAX_NEXT", str(roi_max))
+
+    async def _apply_equal_mode_settings(
+        self,
+        level: int,
+        roi_fixed: Decimal,
+        applies_to: str,
+    ) -> None:
+        """Apply equal mode settings."""
+        suffix = "" if applies_to == "current" else "_NEXT"
+        await self._set_roi_setting(f"LEVEL_{level}_ROI_FIXED{suffix}", str(roi_fixed))
+
     async def set_corridor(
         self,
         level: int,
@@ -104,20 +159,9 @@ class RoiCorridorService:
             Tuple of (success, error_message)
         """
         # Validation
-        if mode == "custom":
-            if roi_min is None or roi_max is None:
-                return False, "Для режима Custom требуются min и max"
-            if roi_min >= roi_max:
-                return False, "Минимум должен быть меньше максимума"
-            if roi_min < 0 or roi_max < 0:
-                return False, "Проценты не могут быть отрицательными"
-        elif mode == "equal":
-            if roi_fixed is None:
-                return False, "Для режима Поровну требуется фиксированный процент"
-            if roi_fixed < 0:
-                return False, "Процент не может быть отрицательным"
-        else:
-            return False, f"Неизвестный режим: {mode}"
+        is_valid, error_msg = self._validate_corridor_mode(mode, roi_min, roi_max, roi_fixed)
+        if not is_valid:
+            return False, error_msg
 
         # Save to history
         await self.history_repo.create(
@@ -131,24 +175,15 @@ class RoiCorridorService:
             reason=reason,
         )
 
-        # Apply settings
-        if applies_to == "current":
-            await self._set_roi_setting(f"LEVEL_{level}_ROI_MODE", mode)
-            if mode == "custom":
-                await self._set_roi_setting(f"LEVEL_{level}_ROI_MIN", str(roi_min))
-                await self._set_roi_setting(f"LEVEL_{level}_ROI_MAX", str(roi_max))
-            else:
-                await self._set_roi_setting(f"LEVEL_{level}_ROI_FIXED", str(roi_fixed))
-        else:
-            # Store for next session
-            await self._set_roi_setting(f"LEVEL_{level}_ROI_MODE_NEXT", mode)
-            if mode == "custom":
-                await self._set_roi_setting(f"LEVEL_{level}_ROI_MIN_NEXT", str(roi_min))
-                await self._set_roi_setting(f"LEVEL_{level}_ROI_MAX_NEXT", str(roi_max))
-            else:
-                await self._set_roi_setting(f"LEVEL_{level}_ROI_FIXED_NEXT", str(roi_fixed))
+        # Apply mode setting
+        suffix = "" if applies_to == "current" else "_NEXT"
+        await self._set_roi_setting(f"LEVEL_{level}_ROI_MODE{suffix}", mode)
 
-        # Commit done by _set_roi_setting -> update_settings
+        # Apply mode-specific settings
+        if mode == "custom":
+            await self._apply_custom_mode_settings(level, roi_min, roi_max, applies_to)
+        else:
+            await self._apply_equal_mode_settings(level, roi_fixed, applies_to)
 
         logger.info(
             "Corridor set for level",
@@ -259,23 +294,23 @@ class RoiCorridorService:
 
         # Get current configuration to preserve settings
         config = await self.get_corridor_config(level)
-        
+
         # Get current version for additional fields
         from app.repositories.deposit_level_version_repository import (
             DepositLevelVersionRepository,
         )
         version_repo = DepositLevelVersionRepository(self.session)
         current_version = await version_repo.get_current_version(level)
-        
+
         # Determine new version number
         new_version = (current_version.version + 1) if current_version else 1
-        
+
         # Use fixed ROI if available, otherwise min or 0
         roi_percent = config["roi_fixed"]
-        
+
         # Use existing cap or default 500
         roi_cap_percent = current_version.roi_cap_percent if current_version else 500
-        
+
         # Create new version with updated amount
         await version_repo.create(
             level_number=level,
@@ -286,7 +321,7 @@ class RoiCorridorService:
             is_active=current_version.is_active if current_version else True,
             created_by_admin_id=admin_id,
         )
-        
+
         await self.session.commit()
 
         logger.info(

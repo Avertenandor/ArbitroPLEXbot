@@ -4,11 +4,11 @@ User model.
 Represents a registered Telegram user in the system.
 """
 
-import bcrypt
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
+import bcrypt
 from sqlalchemy import (
     DECIMAL,
     BigInteger,
@@ -64,7 +64,7 @@ class User(Base):
     referral_code: Mapped[str | None] = mapped_column(
         String(20), nullable=True, unique=True, index=True
     )
-    
+
     # Wallet and financial
     wallet_address: Mapped[str] = mapped_column(
         String(255), nullable=False, unique=True
@@ -277,9 +277,9 @@ class User(Base):
     def required_daily_plex(self) -> Decimal:
         """
         Calculate required daily PLEX based on deposit amount.
-        
+
         Formula: deposit_amount * 10 PLEX per dollar per day.
-        
+
         Returns:
             Required PLEX amount per day
         """

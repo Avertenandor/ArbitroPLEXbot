@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     DECIMAL,
-    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -29,7 +28,7 @@ if TYPE_CHECKING:
 
 class PlexPaymentStatus:
     """PLEX payment status constants."""
-    
+
     ACTIVE = "active"           # Normal state, waiting for payment
     WARNING_SENT = "warning"    # Warning sent after 25h without payment
     BLOCKED = "blocked"         # Blocked after 49h without payment
@@ -39,7 +38,7 @@ class PlexPaymentStatus:
 class PlexPaymentRequirement(Base):
     """
     PLEX payment requirement for deposits.
-    
+
     Tracks the daily PLEX payment obligation for each deposit.
     Timeline from deposit creation:
     - 0h: Deposit created, next_payment_due = created_at + 24h
@@ -88,13 +87,13 @@ class PlexPaymentRequirement(Base):
         index=True,
         comment="Next payment due (deposit_created_at + 24h)"
     )
-    
+
     warning_due: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         comment="Warning will be sent at this time (deposit_created_at + 25h)"
     )
-    
+
     block_due: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -116,20 +115,20 @@ class PlexPaymentRequirement(Base):
         nullable=True,
         comment="Last successful PLEX payment timestamp"
     )
-    
+
     last_payment_tx_hash: Mapped[str | None] = mapped_column(
         String(255),
         nullable=True,
         comment="Last payment transaction hash"
     )
-    
+
     total_paid_plex: Mapped[Decimal] = mapped_column(
         DECIMAL(18, 8),
         nullable=False,
         default=Decimal("0"),
         comment="Total PLEX paid for this deposit"
     )
-    
+
     days_paid: Mapped[int] = mapped_column(
         Integer,
         nullable=False,
@@ -171,7 +170,7 @@ class PlexPaymentRequirement(Base):
         default=lambda: datetime.now(UTC),
         nullable=False
     )
-    
+
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
@@ -185,7 +184,7 @@ class PlexPaymentRequirement(Base):
         back_populates="plex_payments",
         lazy="selectin"
     )
-    
+
     deposit: Mapped["Deposit"] = relationship(
         "Deposit",
         back_populates="plex_payment",
@@ -210,10 +209,10 @@ class PlexPaymentRequirement(Base):
     ) -> tuple[datetime, datetime, datetime]:
         """
         Calculate payment deadlines from deposit creation time.
-        
+
         Args:
             deposit_created_at: Deposit creation timestamp
-            
+
         Returns:
             Tuple of (next_payment_due, warning_due, block_due)
         """
@@ -274,4 +273,3 @@ class PlexPaymentRequirement(Base):
     def mark_blocked(self) -> None:
         """Mark deposit as blocked due to non-payment."""
         self.status = PlexPaymentStatus.BLOCKED
-

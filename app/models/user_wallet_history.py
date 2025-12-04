@@ -10,6 +10,7 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
+from app.models.user import User
 
 
 class UserWalletHistory(Base):
@@ -32,7 +33,7 @@ class UserWalletHistory(Base):
     changed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
-    
+
     # Relationship
     user: Mapped["User"] = relationship("User", backref="wallet_history")
 
@@ -42,4 +43,3 @@ class UserWalletHistory(Base):
             f"<UserWalletHistory(user_id={self.user_id}, "
             f"old={self.old_wallet_address}, new={self.new_wallet_address})>"
         )
-

@@ -11,12 +11,11 @@ Runs every hour via scheduler.
 
 import asyncio
 from datetime import UTC, datetime
-from decimal import Decimal
 
 import dramatiq
 from aiogram import Bot
 from loguru import logger
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -24,8 +23,7 @@ from app.config.constants import TELEGRAM_MESSAGE_DELAY
 from app.config.settings import settings
 from app.models.user import User
 from app.services.blockchain_service import get_blockchain_service
-from bot.constants.rules import MINIMUM_PLEX_BALANCE, WorkStatus, SYSTEM_WALLET
-from bot.utils.qr_generator import generate_payment_qr
+from bot.constants.rules import MINIMUM_PLEX_BALANCE, WorkStatus
 
 
 @dramatiq.actor(max_retries=2, time_limit=600_000)  # 10 min timeout
@@ -78,10 +76,10 @@ async def _monitor_plex_balances_async() -> None:
                 # Get all active depositors
                 result = await session.execute(
                     select(User).where(
-                        User.is_active == True,
-                        User.is_banned == False,
-                        User.is_active_depositor == True,
-                        User.bot_blocked == False,
+                        User.is_active,
+                        not User.is_banned,
+                        User.is_active_depositor,
+                        not User.bot_blocked,
                     )
                 )
                 users = list(result.scalars().all())
@@ -201,10 +199,6 @@ async def _check_user_plex_balance(
             )
 
         shortage = MINIMUM_PLEX_BALANCE - balance_int
-
-        # Generate QR code for PLEX purchase/top-up
-        # QR will contain wallet address for PLEX transfer
-        qr_data = f"ethereum:{settings.auth_system_wallet_address}"
 
         # Send warning notification
         message = (

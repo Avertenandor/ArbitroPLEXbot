@@ -85,6 +85,7 @@ async def _cleanup_sessions_async() -> dict:
 
                 # Cleanup inactive sessions (no activity > 15 minutes)
                 from datetime import UTC, datetime, timedelta
+
                 from sqlalchemy import select
 
                 from app.models.admin_session import AdminSession
@@ -120,4 +121,3 @@ async def _cleanup_sessions_async() -> dict:
             # Close Redis client
             if redis_client:
                 await redis_client.close()
-

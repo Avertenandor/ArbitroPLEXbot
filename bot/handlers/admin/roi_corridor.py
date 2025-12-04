@@ -725,7 +725,6 @@ async def show_confirmation(
     level = state_data["level"]
     mode = state_data["mode"]
     mode_text = state_data["mode_text"]
-    applies_to = state_data["applies_to"]
     applies_text = state_data["applies_text"]
 
     if mode == "custom":
@@ -963,6 +962,48 @@ async def start_history_view(
     )
 
 
+async def _build_admin_label(
+    admin_id: int | None,
+    admin_repo,
+) -> str:
+    """Build admin label for display."""
+    if not admin_id:
+        return "Система"
+
+    admin = await admin_repo.get_by_id(admin_id)
+    if not admin:
+        return f"Admin ID: {admin_id}"
+
+    if admin.username:
+        return f"@{admin.username} (ID: {admin.telegram_id})"
+
+    return f"Admin (ID: {admin.telegram_id})"
+
+
+def _format_history_record(record, admin_label: str) -> str:
+    """Format a single history record for display."""
+    mode_text = "Custom" if record.mode == "custom" else "Поровну"
+    applies_text = (
+        "текущая" if record.applies_to == "current" else "следующая"
+    )
+
+    if record.mode == "custom":
+        config_text = f"{record.roi_min}% - {record.roi_max}%"
+    else:
+        config_text = f"{record.roi_fixed}%"
+
+    reason_block = f"   💬 Причина: {record.reason}\n" if record.reason else ""
+
+    return (
+        f"📅 {record.changed_at.strftime('%d.%m.%Y %H:%M')}\n"
+        f"   Режим: {mode_text}\n"
+        f"   Значение: {config_text}\n"
+        f"   Применено к: {applies_text}\n"
+        f"   Изменил: {admin_label}\n"
+        f"{reason_block}\n"
+    )
+
+
 @router.message(AdminRoiCorridorStates.viewing_history_level)
 async def show_level_history(
     message: Message,
@@ -1008,47 +1049,17 @@ async def show_level_history(
         await clear_state_preserve_admin_token(state)
         return
 
-    text = f"📜 **История изменений - Уровень {level}**\n\n"
-
     # Lazy import to avoid circular dependencies
     from app.repositories.admin_repository import AdminRepository
-
     admin_repo = AdminRepository(session)
 
+    # Format history records
+    text = f"📜 **История изменений - Уровень {level}**\n\n"
     for record in history[:10]:
-        mode_text = "Custom" if record.mode == "custom" else "Поровну"
-        applies_text = (
-            "текущая" if record.applies_to == "current" else "следующая"
+        admin_label = await _build_admin_label(
+            record.changed_by_admin_id, admin_repo
         )
-
-        if record.mode == "custom":
-            config_text = f"{record.roi_min}% - {record.roi_max}%"
-        else:
-            config_text = f"{record.roi_fixed}%"
-
-        # Build admin info: @username (ID: 123) or "Система"
-        if record.changed_by_admin_id:
-            admin = await admin_repo.get_by_id(record.changed_by_admin_id)
-            if admin and admin.username:
-                admin_label = f"@{admin.username} (ID: {admin.telegram_id})"
-            elif admin:
-                admin_label = f"Admin (ID: {admin.telegram_id})"
-            else:
-                admin_label = f"Admin ID: {record.changed_by_admin_id}"
-        else:
-            admin_label = "Система"
-
-        reason = record.reason
-        reason_block = f"   💬 Причина: {reason}\n" if reason else ""
-
-        text += (
-            f"📅 {record.changed_at.strftime('%d.%m.%Y %H:%M')}\n"
-            f"   Режим: {mode_text}\n"
-            f"   Значение: {config_text}\n"
-            f"   Применено к: {applies_text}\n"
-            f"   Изменил: {admin_label}\n"
-            f"{reason_block}\n"
-        )
+        text += _format_history_record(record, admin_label)
 
     if len(history) > 10:
         text += f"... и еще {len(history) - 10} записей"

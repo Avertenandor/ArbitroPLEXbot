@@ -9,7 +9,6 @@ from aiogram import F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
-from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -30,7 +29,8 @@ async def start_wallet_change(
         "📝 *Смена кошелька*\n\n"
         "Введите новый адрес вашего BEP-20 кошелька.\n\n"
         "⚠️ **КРИТИЧНО:**\n"
-        "• Указывайте только *ЛИЧНЫЙ* кошелек (Trust Wallet, MetaMask, SafePal или холодный кошелек)\n"
+        "• Указывайте только *ЛИЧНЫЙ* кошелек "
+        "(Trust Wallet, MetaMask, SafePal или холодный кошелек)\n"
         "• 🚫 *НЕ указывайте* адрес биржи (Binance, Bybit)\n"
         "• Выплаты на биржевые адреса могут быть *УТЕРЯНЫ*!\n\n"
         "Формат: `0x...` (42 символа)",
@@ -99,7 +99,7 @@ async def process_financial_password(
 
     if success:
         await state.clear()
-        
+
         # Get blacklist info for main menu
         from app.repositories.blacklist_repository import BlacklistRepository
         blacklist_repo = BlacklistRepository(session)
@@ -128,4 +128,3 @@ async def process_financial_password(
                 f"❌ Ошибка при смене кошелька: {error}",
                 reply_markup=settings_keyboard(),
             )
-

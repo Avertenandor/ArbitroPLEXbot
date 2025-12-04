@@ -4,7 +4,6 @@ Appeal handler.
 Handles user appeals for blocked accounts.
 """
 
-from datetime import datetime
 from typing import Any
 
 from aiogram import F, Router

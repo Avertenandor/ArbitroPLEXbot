@@ -94,4 +94,3 @@ async def _mark_immutable_async() -> dict:
             await session.rollback()
             logger.error(f"R18-4: Failed to mark immutable audit logs: {e}")
             raise
-

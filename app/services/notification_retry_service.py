@@ -12,14 +12,14 @@ from aiogram import Bot
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.failed_notification_repository import (
-    FailedNotificationRepository,
-)
 from app.config.constants import (
-    TELEGRAM_TIMEOUT,
-    TELEGRAM_MESSAGE_DELAY,
     TELEGRAM_BATCH_DELAY,
     TELEGRAM_BATCH_SIZE,
+    TELEGRAM_MESSAGE_DELAY,
+    TELEGRAM_TIMEOUT,
+)
+from app.repositories.failed_notification_repository import (
+    FailedNotificationRepository,
 )
 
 # Retry configuration: 1min, 5min, 15min, 1h, 2h
@@ -140,7 +140,7 @@ class NotificationRetryService:
                         )
                         await asyncio.sleep(TELEGRAM_BATCH_DELAY)
 
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # Timeout - increment counter
                     error_msg = f"Timeout sending message (>{TELEGRAM_TIMEOUT}s)"
 

@@ -114,7 +114,10 @@ async def process_auto_payout(
         logger.error(f"Blockchain service not initialized for auto-payout tx {tx_id}")
         return
 
-    logger.info(f"Starting auto-payout for tx {tx_id}, amount {amount} to {mask_address(to_address)}")
+    logger.info(
+        f"Starting auto-payout for tx {tx_id}, amount {amount} "
+        f"to {mask_address(to_address)}"
+    )
 
     # Send payment (keep Decimal for precision)
     result = await blockchain_service.send_payment(to_address, amount)
@@ -427,6 +430,153 @@ async def process_withdrawal_amount(
     await state.set_state(WithdrawalStates.waiting_for_financial_password)
 
 
+async def _check_withdrawal_rate_limit(
+    message: Message,
+    state: FSMContext,
+    data: dict[str, Any],
+) -> bool:
+    """Check withdrawal rate limit. Returns True if should return early."""
+    telegram_id = message.from_user.id if message.from_user else None
+    if not telegram_id:
+        return False
+
+    from bot.utils.operation_rate_limit import OperationRateLimiter
+    redis_client = data.get("redis_client")
+    rate_limiter = OperationRateLimiter(redis_client=redis_client)
+    allowed, error_msg = await rate_limiter.check_withdrawal_limit(telegram_id)
+
+    if not allowed:
+        await message.answer(
+            error_msg or "Слишком много заявок на вывод",
+            reply_markup=withdrawal_keyboard(),
+        )
+        await state.clear()
+        return True
+
+    return False
+
+
+async def _process_withdrawal_with_password(
+    session_factory: Any,
+    user_id: int,
+    password: str,
+    state_data: dict[str, Any],
+) -> tuple[Any, str | None, bool, bool]:
+    """
+    Process withdrawal with password verification.
+
+    Returns:
+        (transaction, error, is_auto, no_finpass)
+    """
+    transaction = None
+    error = None
+    is_auto = False
+    no_finpass = False
+
+    async with session_factory() as session:
+        user_service = UserService(session)
+        current_user = await user_service.get_by_id(user_id)
+
+        if not current_user:
+            raise ValueError("User not found")
+
+        if not current_user.financial_password:
+            return None, None, False, True
+
+        # Verify password with rate limiting
+        is_valid, rate_error = await user_service.verify_financial_password(
+            current_user.id, password
+        )
+
+        if not is_valid:
+            return None, rate_error or "Неверный финансовый пароль", False, False
+
+        # Password valid - create withdrawal
+        amount = Decimal(str(state_data.get("amount")))
+        balance = await user_service.get_user_balance(current_user.id)
+
+        withdrawal_service = WithdrawalService(session)
+        transaction, error, is_auto = await withdrawal_service.request_withdrawal(
+            user_id=current_user.id,
+            amount=amount,
+            available_balance=Decimal(str(balance["available_balance"])),
+        )
+
+    return transaction, error, is_auto, no_finpass
+
+
+async def _send_withdrawal_messages(
+    message: Message,
+    user: User,
+    transaction: Any | None,
+    error: str | None,
+    is_auto: bool,
+    no_finpass: bool,
+) -> None:
+    """Send appropriate messages based on withdrawal results."""
+    if no_finpass:
+        await message.answer(
+            "❌ Финансовый пароль не установлен!",
+            reply_markup=main_menu_reply_keyboard(user=user)
+        )
+        return
+
+    if error:
+        await message.answer(
+            f"❌ {error}",
+            reply_markup=withdrawal_keyboard(),
+        )
+        return
+
+    if not transaction:
+        await message.answer(
+            "❌ Неизвестная ошибка",
+            reply_markup=withdrawal_keyboard(),
+        )
+        return
+
+    # Transaction successful
+    net_amount = transaction.amount - transaction.fee
+
+    if is_auto:
+        await message.answer(
+            f"✅ *Заявка #{transaction.id} принята!*\n\n"
+            f"💰 Запрошено: *{transaction.amount} USDT*\n"
+            f"💸 Комиссия: *{transaction.fee} USDT*\n"
+            f"✨ К получению: *{net_amount} USDT*\n"
+            f"💳 Кошелек: "
+            f"`{transaction.to_address[:10]}...{transaction.to_address[-6:]}`\n\n"
+            f"⚡️ *Автоматическая выплата одобрена*\n"
+            f"Средства поступят в течение 1-5 минут.\n\n"
+            f"📊 Статус: '📜 История выводов'",
+            parse_mode="Markdown",
+            reply_markup=main_menu_reply_keyboard(user=user)
+        )
+        # Trigger background task
+        asyncio.create_task(
+            _safe_process_auto_payout(
+                transaction.id,
+                net_amount,
+                transaction.to_address,
+                message.bot,
+                user.telegram_id
+            )
+        )
+    else:
+        await message.answer(
+            f"✅ *Заявка #{transaction.id} создана!*\n\n"
+            f"💰 Запрошено: *{transaction.amount} USDT*\n"
+            f"💸 Комиссия: *{transaction.fee} USDT*\n"
+            f"✨ К получению: *{net_amount} USDT*\n"
+            f"💳 Кошелек: "
+            f"`{transaction.to_address[:10]}...{transaction.to_address[-6:]}`\n\n"
+            f"⏱ *Время обработки:* до 24 часов\n"
+            f"📊 Статус можно проверить в '📜 История выводов'",
+            parse_mode="Markdown",
+            reply_markup=main_menu_reply_keyboard(user=user)
+        )
+
+
 @router.message(WithdrawalStates.waiting_for_financial_password)
 async def process_financial_password(
     message: Message,
@@ -454,19 +604,8 @@ async def process_financial_password(
         return
 
     # Check rate limit
-    telegram_id = message.from_user.id if message.from_user else None
-    if telegram_id:
-        from bot.utils.operation_rate_limit import OperationRateLimiter
-        redis_client = data.get("redis_client")
-        rate_limiter = OperationRateLimiter(redis_client=redis_client)
-        allowed, error_msg = await rate_limiter.check_withdrawal_limit(telegram_id)
-        if not allowed:
-            await message.answer(
-                error_msg or "Слишком много заявок на вывод",
-                reply_markup=withdrawal_keyboard(),
-            )
-            await state.clear()
-            return
+    if await _check_withdrawal_rate_limit(message, state, data):
+        return
 
     password = (message.text or "").strip()
 
@@ -476,103 +615,19 @@ async def process_financial_password(
         logger.debug(f"Failed to delete password message: {e}")
 
     session_factory = data.get("session_factory")
-
-    # Verify password and create withdrawal
     if not session_factory:
         await message.answer("❌ Системная ошибка (no session factory)")
         return
 
     try:
-        transaction = None
-        error = None
-        is_auto = False
-        no_finpass = False
+        state_data = await state.get_data()
+        transaction, error, is_auto, no_finpass = await _process_withdrawal_with_password(
+            session_factory, user.id, password, state_data
+        )
 
-        async with session_factory() as session:
-            user_service = UserService(session)
-            # Re-check user (detached)
-            current_user = await user_service.get_by_id(user.id)
-            if not current_user:
-                raise ValueError("User not found")
-
-            # Check password
-            if not current_user.financial_password:
-                no_finpass = True
-            else:
-                # Verify password with rate limiting
-                is_valid, rate_error = await user_service.verify_financial_password(
-                    current_user.id, password
-                )
-                if not is_valid:
-                    error = rate_error or "Неверный финансовый пароль"
-                else:
-                    # Proceed
-                    state_data = await state.get_data()
-                    amount = Decimal(str(state_data.get("amount")))
-
-                    balance = await user_service.get_user_balance(current_user.id)
-
-                    withdrawal_service = WithdrawalService(session)
-                    transaction, error, is_auto = await withdrawal_service.request_withdrawal(
-                        user_id=current_user.id,
-                        amount=amount,
-                        available_balance=Decimal(str(balance["available_balance"])),
-                    )
-
-        # Outside session - send messages
-        if no_finpass:
-            await message.answer(
-                "❌ Финансовый пароль не установлен!",
-                reply_markup=main_menu_reply_keyboard(user=user)
-            )
-        elif error:
-            await message.answer(
-                f"❌ {error}",
-                reply_markup=withdrawal_keyboard(),
-            )
-        elif transaction:
-            net_amount = transaction.amount - transaction.fee
-            if is_auto:
-                await message.answer(
-                    f"✅ *Заявка #{transaction.id} принята!*\n\n"
-                    f"💰 Запрошено: *{transaction.amount} USDT*\n"
-                    f"💸 Комиссия: *{transaction.fee} USDT*\n"
-                    f"✨ К получению: *{net_amount} USDT*\n"
-                    f"💳 Кошелек: `{transaction.to_address[:10]}...{transaction.to_address[-6:]}`\n\n"
-                    f"⚡️ *Автоматическая выплата одобрена*\n"
-                    f"Средства поступят в течение 1-5 минут.\n\n"
-                    f"📊 Статус: '📜 История выводов'",
-                    parse_mode="Markdown",
-                    reply_markup=main_menu_reply_keyboard(user=user)
-                )
-                # Trigger background task with error handling
-                # CRITICAL: Send net_amount (amount - fee) to user, not gross amount
-                asyncio.create_task(
-                    _safe_process_auto_payout(
-                        transaction.id,
-                        net_amount,
-                        transaction.to_address,
-                        message.bot,
-                        user.telegram_id
-                    )
-                )
-            else:
-                await message.answer(
-                    f"✅ *Заявка #{transaction.id} создана!*\n\n"
-                    f"💰 Запрошено: *{transaction.amount} USDT*\n"
-                    f"💸 Комиссия: *{transaction.fee} USDT*\n"
-                    f"✨ К получению: *{net_amount} USDT*\n"
-                    f"💳 Кошелек: `{transaction.to_address[:10]}...{transaction.to_address[-6:]}`\n\n"
-                    f"⏱ *Время обработки:* до 24 часов\n"
-                    f"📊 Статус можно проверить в '📜 История выводов'",
-                    parse_mode="Markdown",
-                    reply_markup=main_menu_reply_keyboard(user=user)
-                )
-        else:
-            await message.answer(
-                "❌ Неизвестная ошибка",
-                reply_markup=withdrawal_keyboard(),
-            )
+        await _send_withdrawal_messages(
+            message, user, transaction, error, is_auto, no_finpass
+        )
 
     except Exception as e:
         logger.error(f"Error processing withdrawal: {e}", exc_info=True)
@@ -628,7 +683,6 @@ async def _show_withdrawal_history(
                 )
 
     withdrawals = result["withdrawals"]
-    total = result["total"]
     total_pages = result["pages"]
 
     await state.update_data(withdrawal_page=page)
@@ -650,7 +704,10 @@ async def _show_withdrawal_history(
 
         date = tx.created_at.strftime("%d.%m.%Y %H:%M")
         net_amount = tx.amount - tx.fee
-        text += f"{status_icon} *{tx.amount} USDT* (комиссия: {tx.fee}, получено: {net_amount}) | {date}\n"
+        text += (
+            f"{status_icon} *{tx.amount} USDT* "
+            f"(комиссия: {tx.fee}, получено: {net_amount}) | {date}\n"
+        )
         text += f"ID: `{tx.id}`\n"
         if tx.tx_hash:
             text += f"🔗 [BscScan](https://bscscan.com/tx/{tx.tx_hash})\n"

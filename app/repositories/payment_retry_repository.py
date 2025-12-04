@@ -4,7 +4,6 @@ PaymentRetry repository (КРИТИЧНО - PART5).
 Data access layer for PaymentRetry model.
 """
 
-from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

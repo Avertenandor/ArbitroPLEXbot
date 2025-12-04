@@ -39,12 +39,12 @@ async def get_admin_and_super_status(
 ) -> tuple[Admin | None, bool]:
     """
     Get admin object and super_admin status.
-    
+
     Args:
         session: Database session
         telegram_id: Telegram user ID
         data: Handler data dict
-        
+
     Returns:
         Tuple of (Admin object or None, is_super_admin bool)
     """
@@ -57,6 +57,319 @@ async def get_admin_and_super_status(
 
     is_super_admin = admin.is_super_admin if admin else False
     return admin, is_super_admin
+
+
+async def _validate_master_key(message: Message) -> tuple[int | None, str | None]:
+    """
+    Validate master key input and extract telegram_id.
+
+    Args:
+        message: Telegram message with master key
+
+    Returns:
+        Tuple of (telegram_id, master_key) or (None, None) if validation failed
+    """
+    telegram_id = message.from_user.id if message.from_user else None
+    if not telegram_id:
+        await message.answer("❌ Не удалось определить пользователя")
+        return None, None
+
+    master_key = message.text.strip() if message.text else ""
+    if not master_key:
+        await message.answer("❌ Мастер-ключ не может быть пустым")
+        return None, None
+
+    return telegram_id, master_key
+
+
+async def _handle_authentication_failure(message: Message, error: str | None) -> None:
+    """
+    Handle authentication failure case.
+
+    Args:
+        message: Telegram message
+        error: Error message from authentication
+    """
+    await message.answer(
+        f"❌ {error or 'Ошибка аутентификации'}\n\n"
+        "Попробуйте ввести мастер-ключ еще раз:",
+        parse_mode="Markdown",
+    )
+
+
+async def _restore_previous_state(
+    message: Message,
+    state: FSMContext,
+    telegram_id: int,
+    state_data: dict[str, Any],
+) -> bool:
+    """
+    Restore previous state if it exists.
+
+    Args:
+        message: Telegram message
+        state: FSM context
+        telegram_id: Telegram user ID
+        state_data: State data dictionary
+
+    Returns:
+        True if state was restored, False otherwise
+    """
+    previous_state = state_data.get("auth_previous_state")
+    if not previous_state:
+        return False
+
+    await state.set_state(previous_state)
+    await state.update_data(auth_previous_state=None, auth_redirect_message=None)
+
+    logger.info(
+        f"Admin {telegram_id} authenticated successfully, "
+        f"restoring state {previous_state}"
+    )
+
+    await message.answer(
+        "✅ **Аутентификация успешна!**\n\n"
+        "Вы вернулись в предыдущее меню. Пожалуйста, повторите ваше действие.",
+        parse_mode="Markdown",
+    )
+    return True
+
+
+async def _redirect_to_support(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Redirect to support menu."""
+    from bot.handlers.admin.support import handle_admin_support_menu
+    await handle_admin_support_menu(message, state, **data)
+
+
+async def _redirect_to_deposit_management(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Redirect to deposit management menu."""
+    from bot.handlers.admin.deposit_management import show_deposit_management_menu
+    await show_deposit_management_menu(message, session, **data)
+
+
+async def _redirect_to_deposit_settings(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Redirect to deposit settings."""
+    from bot.handlers.admin.deposit_settings import show_deposit_settings
+    await show_deposit_settings(message, session, **data)
+
+
+async def _redirect_to_admin_management(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Redirect to admin management."""
+    from bot.handlers.admin.admins import show_admin_management
+    await show_admin_management(message, session, **data)
+
+
+async def _redirect_to_blacklist(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Redirect to blacklist management."""
+    from bot.handlers.admin.blacklist import show_blacklist
+    await show_blacklist(message, session, **data)
+
+
+async def _redirect_to_wallet(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Redirect to wallet dashboard."""
+    from bot.handlers.admin.wallet_management import show_wallet_dashboard
+    await show_wallet_dashboard(message, session, state, **data)
+
+
+async def _redirect_to_withdrawals(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Redirect to withdrawal requests."""
+    await handle_admin_withdrawals(message, session, **data)
+
+
+async def _redirect_to_broadcast(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Redirect to broadcast menu."""
+    from bot.handlers.admin.broadcast import handle_broadcast_menu
+    await handle_broadcast_menu(message, session, **data)
+
+
+async def _redirect_to_users(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Redirect to user management."""
+    await handle_admin_users_menu(message, session, **data)
+
+
+async def _redirect_to_stats(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Redirect to statistics."""
+    await handle_admin_stats(message, session, **data)
+
+
+async def _redirect_to_finpass_recovery(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Redirect to finpass recovery."""
+    from bot.handlers.admin.finpass_recovery import show_recovery_requests
+    await show_recovery_requests(message, session, state, **data)
+
+
+async def _redirect_to_financials(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Redirect to financial list."""
+    from bot.handlers.admin.financials import show_financial_list
+    await show_financial_list(message, session, state, **data)
+
+
+def _get_redirect_handler(redirect_text: str):
+    """
+    Get redirect handler function based on redirect text.
+
+    Args:
+        redirect_text: Text indicating which handler to redirect to
+
+    Returns:
+        Handler function or None if no match found
+    """
+    handlers = {
+        "🆘 Техподдержка": _redirect_to_support,
+        "💰 Управление депозитами": _redirect_to_deposit_management,
+        "⚙️ Настроить уровни депозитов": _redirect_to_deposit_settings,
+        "👥 Управление админами": _redirect_to_admin_management,
+        "🚫 Управление черным списком": _redirect_to_blacklist,
+        "🔐 Управление кошельком": _redirect_to_wallet,
+        "💸 Заявки на вывод": _redirect_to_withdrawals,
+        "📢 Рассылка": _redirect_to_broadcast,
+        "👥 Управление пользователями": _redirect_to_users,
+        "📊 Статистика": _redirect_to_stats,
+        "🔑 Восстановление пароля": _redirect_to_finpass_recovery,
+    }
+
+    # Direct match
+    if redirect_text in handlers:
+        return handlers[redirect_text]
+
+    # Special case: check for "Финансовая" substring
+    if "Финансовая" in redirect_text:
+        return _redirect_to_financials
+
+    # Admin panel doesn't need redirect
+    if redirect_text == "👑 Админ-панель":
+        return None
+
+    return None
+
+
+async def _redirect_to_handler(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    redirect_text: str,
+    telegram_id: int,
+    **data: Any,
+) -> bool:
+    """
+    Redirect to appropriate handler based on redirect text.
+
+    Args:
+        message: Telegram message
+        session: Database session
+        state: FSM context
+        redirect_text: Text indicating which handler to redirect to
+        telegram_id: Telegram user ID
+        **data: Handler data
+
+    Returns:
+        True if redirected, False if no redirect occurred
+    """
+    logger.info(f"Attempting to redirect admin {telegram_id} to '{redirect_text}'")
+
+    handler = _get_redirect_handler(redirect_text)
+    if handler is None:
+        return False
+
+    await handler(message, session, state, **data)
+    return True
+
+
+async def _show_admin_panel(
+    message: Message,
+    session: AsyncSession,
+    telegram_id: int,
+    data: dict[str, Any],
+) -> None:
+    """
+    Show admin panel after successful authentication.
+
+    Args:
+        message: Telegram message
+        session: Database session
+        telegram_id: Telegram user ID
+        data: Handler data
+    """
+    text = """
+👑 **Панель администратора**
+
+Добро пожаловать в панель управления ArbitroPLEXbot Bot.
+
+Выберите действие:
+    """.strip()
+
+    admin, is_super_admin = await get_admin_and_super_status(
+        session, telegram_id, data
+    )
+
+    await message.answer(
+        text,
+        parse_mode="Markdown",
+        reply_markup=admin_keyboard(
+            is_super_admin=is_super_admin,
+            is_extended_admin=admin.is_extended_admin if admin else False
+        ),
+    )
 
 
 @router.message(AdminStates.awaiting_master_key_input)
@@ -79,15 +392,9 @@ async def handle_master_key_input(
     if not admin:
         return
 
-    telegram_id = message.from_user.id if message.from_user else None
-    if not telegram_id:
-        await message.answer("❌ Не удалось определить пользователя")
-        return
-
-    master_key = message.text.strip() if message.text else ""
-
-    if not master_key:
-        await message.answer("❌ Мастер-ключ не может быть пустым")
+    # Validate master key input
+    telegram_id, master_key = await _validate_master_key(message)
+    if not telegram_id or not master_key:
         return
 
     # Authenticate admin
@@ -100,134 +407,38 @@ async def handle_master_key_input(
         user_agent=None,  # Telegram doesn't provide user agent
     )
 
+    # Handle authentication failure
     if error or not session_obj or not admin_obj:
-        await message.answer(
-            f"❌ {error or 'Ошибка аутентификации'}\n\n"
-            "Попробуйте ввести мастер-ключ еще раз:",
-            parse_mode="Markdown",
-        )
+        await _handle_authentication_failure(message, error)
         return
 
     # Save session token in FSM state
     await state.update_data(admin_session_token=session_obj.session_token)
 
-    # Restore previous state if it exists
+    # Get state data
     state_data = await state.get_data()
-    previous_state = state_data.get("auth_previous_state")
-    redirect_message_text = state_data.get("auth_redirect_message")
 
-    if previous_state:
-        await state.set_state(previous_state)
-        # Clean up
-        await state.update_data(auth_previous_state=None, auth_redirect_message=None)
-
-        logger.info(
-            f"Admin {telegram_id} authenticated successfully, "
-            f"restoring state {previous_state}"
-        )
-
-        await message.answer(
-            "✅ **Аутентификация успешна!**\n\n"
-            "Вы вернулись в предыдущее меню. Пожалуйста, повторите ваше действие.",
-            parse_mode="Markdown",
-        )
+    # Try to restore previous state
+    if await _restore_previous_state(message, state, telegram_id, state_data):
         return
 
-    # Attempt to redirect based on button text if no state was restored
+    # Try to redirect based on button text
+    redirect_message_text = state_data.get("auth_redirect_message")
     if redirect_message_text:
-        logger.info(f"Attempting to redirect admin {telegram_id} to '{redirect_message_text}'")
-        # Clean up
         await state.update_data(auth_redirect_message=None)
+        if await _redirect_to_handler(
+            message, session, state, redirect_message_text, telegram_id, **data
+        ):
+            return
 
-        # Route to specific handlers manually based on saved text
-        # Note: Don't modify message.text - aiogram Message objects are frozen
-        if redirect_message_text == "🆘 Техподдержка":
-            from bot.handlers.admin.support import handle_admin_support_menu
-            await handle_admin_support_menu(message, state, **data)
-            return
-        elif redirect_message_text == "💰 Управление депозитами":
-            from bot.handlers.admin.deposit_management import (
-                show_deposit_management_menu,
-            )
-            await show_deposit_management_menu(message, session, **data)
-            return
-        elif redirect_message_text == "⚙️ Настроить уровни депозитов":
-            from bot.handlers.admin.deposit_settings import (
-                show_deposit_settings,
-            )
-            await show_deposit_settings(message, session, **data)
-            return
-        elif redirect_message_text == "👥 Управление админами":
-            from bot.handlers.admin.admins import show_admin_management
-            await show_admin_management(message, session, **data)
-            return
-        elif redirect_message_text == "🚫 Управление черным списком":
-            from bot.handlers.admin.blacklist import show_blacklist
-            await show_blacklist(message, session, **data)
-            return
-        elif redirect_message_text == "🔐 Управление кошельком":
-            from bot.handlers.admin.wallet_management import (
-                show_wallet_dashboard,
-            )
-            await show_wallet_dashboard(message, session, state, **data)
-            return
-        elif redirect_message_text == "💸 Заявки на вывод":
-             await handle_admin_withdrawals(message, session, **data)
-             return
-        elif redirect_message_text == "📢 Рассылка":
-             from bot.handlers.admin.broadcast import handle_broadcast_menu
-             await handle_broadcast_menu(message, session, **data)
-             return
-        elif redirect_message_text == "👥 Управление пользователями":
-             await handle_admin_users_menu(message, session, **data)
-             return
-        elif redirect_message_text == "📊 Статистика":
-             await handle_admin_stats(message, session, **data)
-             return
-        elif redirect_message_text == "🔑 Восстановление пароля":
-             from bot.handlers.admin.finpass_recovery import (
-                 show_recovery_requests,
-             )
-             await show_recovery_requests(message, session, state, **data)
-             return
-        elif redirect_message_text and "Финансовая" in redirect_message_text:
-             from bot.handlers.admin.financials import show_financial_list
-             await show_financial_list(message, session, state, **data)
-             return
-        elif redirect_message_text == "👑 Админ-панель":
-             # Just continue to show admin panel below
-             pass
-
-    await state.set_state(None)  # Clear state
-
+    # Clear state and show admin panel
+    await state.set_state(None)
     logger.info(
         f"Admin {telegram_id} authenticated successfully, "
         f"session_id={session_obj.id}"
     )
 
-    # Show admin panel
-    text = """
-👑 **Панель администратора**
-
-Добро пожаловать в панель управления ArbitroPLEXbot Bot.
-
-Выберите действие:
-    """.strip()
-
-    # Get admin and super_admin status
-    telegram_id = message.from_user.id if message.from_user else None
-    admin, is_super_admin = await get_admin_and_super_status(
-        session, telegram_id, data
-    )
-
-    await message.answer(
-        text,
-        parse_mode="Markdown",
-        reply_markup=admin_keyboard(
-        is_super_admin=is_super_admin,
-        is_extended_admin=admin.is_extended_admin if admin else False
-    ),
-    )
+    await _show_admin_panel(message, session, telegram_id, data)
 
 
 @router.message(Command("admin"))
@@ -243,13 +454,6 @@ async def cmd_admin_panel(
     admin = await get_admin_or_deny(message, session, **data)
     if not admin:
         return
-
-    user: User | None = data.get("user")
-    from app.repositories.blacklist_repository import BlacklistRepository
-    blacklist_repo = BlacklistRepository(session)
-    blacklist_entry = None
-    if user:
-        blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
 
     text = """
 👑 **Панель администратора**
@@ -294,13 +498,6 @@ async def handle_admin_panel_button(
 
 Выберите действие:
     """.strip()
-
-    user: User | None = data.get("user")
-    from app.repositories.blacklist_repository import BlacklistRepository
-    blacklist_repo = BlacklistRepository(session)
-    blacklist_entry = None
-    if user:
-        blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
 
     # AdminAuthMiddleware already populates is_extended_admin / is_super_admin in data
     await message.answer(
@@ -445,13 +642,14 @@ async def cmd_dashboard(
 
     # Fraud alerts (users with risk_score > 50)
     # Simplified - count banned users as proxy
-    stmt = select(func.count(User.id)).where(User.is_banned == True)
+    stmt = select(func.count(User.id)).where(User.is_banned)
     result = await session.execute(stmt)
     fraud_alerts = result.scalar() or 0
 
     # 📊 Text-based charts
     def make_bar(value: float, max_val: float, length: int = 10) -> str:
-        if max_val == 0: return "░" * length
+        if max_val == 0:
+            return "░" * length
         filled = int((value / max_val) * length)
         return "█" * filled + "░" * (length - filled)
 
@@ -536,11 +734,17 @@ async def handle_admin_stats(
         text += "Нет активных депозитов.\n"
     else:
         for d in detailed_deposits[:10]:  # Show top 10 recent
-            next_accrual = d["next_accrual_at"].strftime("%d.%m %H:%M") if d["next_accrual_at"] else "Н/Д"
+            if d["next_accrual_at"]:
+                next_accrual = d["next_accrual_at"].strftime("%d.%m %H:%M")
+            else:
+                next_accrual = "Н/Д"
 
             # Escape username for Markdown
             username = str(d['username'])
-            safe_username = username.replace("_", "\\_").replace("*", "\\*").replace("`", "\\`").replace("[", "\\[")
+            safe_username = (
+                username.replace("_", "\\_").replace("*", "\\*")
+                .replace("`", "\\`").replace("[", "\\[")
+            )
 
             text += (
                 f"👤 @{safe_username} (ID: {d['user_id']})\n"
@@ -570,8 +774,10 @@ async def handle_admin_stats(
         "earnings", 0))} USDT)
 
 **💸 Выводы на кошельки:**
-✅ Выведено: {format_usdt(withdrawal_stats["total_confirmed_amount"])} USDT ({withdrawal_stats["total_confirmed"]} транз.)
-❌ Неудачных: {withdrawal_stats["total_failed"]} ({format_usdt(withdrawal_stats["total_failed_amount"])} USDT)
+✅ Выведено: {format_usdt(withdrawal_stats["total_confirmed_amount"])} USDT \
+({withdrawal_stats["total_confirmed"]} транз.)
+❌ Неудачных: {withdrawal_stats["total_failed"]} \
+({format_usdt(withdrawal_stats["total_failed_amount"])} USDT)
 """
 
     # Add per-user withdrawal summary
@@ -603,7 +809,10 @@ async def handle_admin_stats(
             text += f"• @{safe_wd_username}: {format_usdt(wd['amount'])} | `{tx_short}`\n"
 
         if detailed_wd["total_pages"] > 1:
-            text += f"\n_Стр. {detailed_wd['page']}/{detailed_wd['total_pages']}_ | Нажми 📋 для навигации"
+            text += (
+                f"\n_Стр. {detailed_wd['page']}/{detailed_wd['total_pages']}_ | "
+                f"Нажми 📋 для навигации"
+            )
 
     text = text.strip()
 

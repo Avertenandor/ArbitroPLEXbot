@@ -93,7 +93,9 @@ async def _cleanup_old_backups(backup_dir: Path, retention_days: int) -> None:
 
         for backup_file in backup_dir.glob("backup_*.sql"):
             # FIXED: Use timezone-aware datetime
-            file_time = datetime.fromtimestamp(backup_file.stat().st_mtime, tz=datetime.now().astimezone().tzinfo)
+            file_time = datetime.fromtimestamp(
+                backup_file.stat().st_mtime, tz=datetime.now().astimezone().tzinfo
+            )
 
             if file_time < cutoff_date:
                 backup_file.unlink()

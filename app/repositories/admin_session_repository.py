@@ -4,7 +4,6 @@ AdminSession repository.
 Data access layer for AdminSession model.
 """
 
-from datetime import datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

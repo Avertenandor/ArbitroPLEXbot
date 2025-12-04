@@ -105,4 +105,3 @@ class DepositLevelVersionRepository(
         """
         current = await self.get_current_version(level_number)
         return current is not None
-

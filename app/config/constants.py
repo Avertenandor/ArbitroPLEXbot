@@ -20,4 +20,3 @@ TELEGRAM_TIMEOUT = 10.0  # Telegram API operations timeout
 TELEGRAM_MESSAGE_DELAY = 0.1  # 100ms between messages (10 msg/sec)
 TELEGRAM_BATCH_DELAY = 1.0    # 1 second between batches
 TELEGRAM_BATCH_SIZE = 20      # Messages per batch before additional delay
-

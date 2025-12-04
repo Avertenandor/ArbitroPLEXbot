@@ -10,4 +10,3 @@ class WalletChangeStates(StatesGroup):
 
     awaiting_new_wallet = State()
     awaiting_financial_password = State()
-

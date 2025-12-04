@@ -12,8 +12,8 @@ from decimal import Decimal
 from loguru import logger
 
 from app.services.blockchain_service import get_blockchain_service
-from app.utils.validation import validate_bsc_address
 from app.utils.security import mask_address
+from app.utils.validation import validate_bsc_address
 from bot.constants import rules
 
 
@@ -106,5 +106,3 @@ class WalletVerificationService:
             logger.error(f"Wallet verification failed for {mask_address(raw_address)}: {exc}")
             result.error = str(exc)
             return result
-
-

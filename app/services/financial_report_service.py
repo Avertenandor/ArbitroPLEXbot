@@ -11,13 +11,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import func, select, desc, case
+from sqlalchemy import case, desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.models.deposit import Deposit
+from app.models.enums import TransactionStatus, TransactionType
 from app.models.transaction import Transaction
-from app.models.enums import TransactionType, TransactionStatus
 from app.models.user import User
 
 
@@ -30,7 +30,7 @@ class UserFinancialDTO:
     total_deposited: Decimal
     total_withdrawn: Decimal
     total_earned: Decimal
-    
+
     @property
     def net_profit(self) -> Decimal:
         """Calculate net profit (Withdrawn - Deposited)."""
@@ -90,14 +90,14 @@ class UserDetailedFinancialDTO:
     telegram_id: int
     username: str | None
     current_wallet: str
-    
+
     # Общая статистика
     total_deposited: Decimal
     total_earned: Decimal
     total_withdrawn: Decimal
     balance: Decimal
     pending_earnings: Decimal
-    
+
     # Детальные списки
     deposits: list[DepositDetailDTO]
     withdrawals: list[WithdrawalDetailDTO]
@@ -115,7 +115,7 @@ class FinancialReportService:
     ) -> tuple[list[UserFinancialDTO], int]:
         """
         Get paginated list of users with financial summaries.
-        
+
         Returns:
             Tuple of (List of DTOs, Total count of users)
         """
@@ -134,7 +134,7 @@ class FinancialReportService:
                     func.sum(
                         case(
                             (
-                                (Transaction.type == TransactionType.WITHDRAWAL) & 
+                                (Transaction.type == TransactionType.WITHDRAWAL) &
                                 (Transaction.status == TransactionStatus.CONFIRMED),
                                 Transaction.amount
                             ),
@@ -231,16 +231,16 @@ class FinancialReportService:
     ) -> UserDetailedFinancialDTO | None:
         """
         Get complete detailed financial report for a user.
-        
+
         Includes:
         - General statistics (deposits, withdrawals, earnings)
         - Full deposit history with ROI details
         - Full withdrawal history with TX hashes
         - Wallet change history
-        
+
         Args:
             user_id: User ID
-            
+
         Returns:
             UserDetailedFinancialDTO or None if user not found
         """
@@ -270,8 +270,8 @@ class FinancialReportService:
                 is_completed=d.is_roi_completed,
                 tx_hash=d.tx_hash,
                 roi_percent=(
-                    d.deposit_version.roi_percent 
-                    if d.deposit_version 
+                    d.deposit_version.roi_percent
+                    if d.deposit_version
                     else None
                 ),
                 status=d.status
@@ -305,7 +305,7 @@ class FinancialReportService:
 
         # 4. Get wallet change history
         from app.models.user_wallet_history import UserWalletHistory
-        
+
         wallet_history_stmt = (
             select(UserWalletHistory)
             .where(UserWalletHistory.user_id == user_id)
@@ -326,9 +326,9 @@ class FinancialReportService:
         # 5. Calculate totals
         total_deposited = sum(d.amount for d in deposits)
         total_earned = sum(d.roi_paid_amount for d in deposits)
-        
+
         confirmed_withdrawals = [
-            w for w in withdrawals 
+            w for w in withdrawals
             if w.status == TransactionStatus.CONFIRMED.value
         ]
         total_withdrawn = sum(w.amount for w in confirmed_withdrawals)
@@ -351,13 +351,13 @@ class FinancialReportService:
     async def export_all_users_csv(self) -> str:
         """
         Export all users to CSV format.
-        
+
         Returns:
             CSV string with all user data
         """
         import csv
         import io
-        
+
         # Get all users with their stats
         stmt = (
             select(
@@ -378,21 +378,21 @@ class FinancialReportService:
             .group_by(User.id)
             .order_by(User.id.asc())
         )
-        
+
         result = await self.session.execute(stmt)
         rows = result.all()
-        
+
         # Create CSV
         output = io.StringIO()
         writer = csv.writer(output)
-        
+
         # Header
         writer.writerow([
             'ID', 'Telegram ID', 'Username', 'Wallet', 'Balance',
             'Total Earned', 'Total Deposited', 'Deposits Count',
             'Verified', 'Banned', 'Created At', 'Last Active'
         ])
-        
+
         # Data rows
         for row in rows:
             writer.writerow([
@@ -409,6 +409,5 @@ class FinancialReportService:
                 row.created_at.strftime('%Y-%m-%d %H:%M') if row.created_at else '',
                 row.last_active.strftime('%Y-%m-%d %H:%M') if row.last_active else '',
             ])
-        
-        return output.getvalue()
 
+        return output.getvalue()

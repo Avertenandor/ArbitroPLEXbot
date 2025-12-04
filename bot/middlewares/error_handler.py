@@ -6,7 +6,8 @@ Sends friendly message to users - never shows technical details.
 """
 
 import traceback
-from typing import Any, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from aiogram import BaseMiddleware, Bot
 from aiogram.types import CallbackQuery, Message, TelegramObject, Update, User
@@ -106,4 +107,3 @@ class ErrorHandlerMiddleware(BaseMiddleware):
 
             # Return None to prevent crash
             return None
-

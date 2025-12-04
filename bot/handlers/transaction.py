@@ -9,23 +9,20 @@ from typing import Any
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import BufferedInputFile, Message
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import TransactionStatus, TransactionType
 from app.models.user import User
+from app.services.report_service import ReportService
 from app.services.transaction_service import TransactionService
+from app.utils.datetime_utils import utc_now
 from bot.keyboards.reply import (
-    main_menu_reply_keyboard,
     transaction_history_keyboard,
     transaction_history_type_keyboard,
 )
-from bot.utils.formatters import format_transaction_hash, format_usdt, escape_md
-from app.services.report_service import ReportService
-from aiogram.types import BufferedInputFile
-from datetime import datetime
-from app.utils.datetime_utils import utc_now
-from loguru import logger
+from bot.utils.formatters import escape_md, format_transaction_hash, format_usdt
 
 router = Router(name="transaction")
 
@@ -118,7 +115,7 @@ async def _show_transaction_history(
     title = "📊 *История транзакций*"
     if filter_blockchain is not None:
         title = "🔗 *Транзакции в блокчейне*" if filter_blockchain else "🔄 *Внутренние транзакции*"
-    
+
     text = f"{title}\n\n"
 
     # Display filter info
@@ -153,10 +150,10 @@ async def _show_transaction_history(
             type_emoji = get_transaction_type_emoji(tx.type)
             status_emoji = get_status_emoji(tx.status)
             date = tx.created_at.strftime("%d.%m.%Y %H:%M")
-            
+
             # Extract ID from composite ID if possible, or use full ID
             tx_id_display = tx.id.split(':')[1] if ':' in tx.id else tx.id
-            
+
             description = escape_md(tx.description)
 
             text += f"{idx}. {type_emoji} *{description}* (ID: `{tx_id_display}`)\n"
@@ -207,7 +204,7 @@ async def handle_transaction_history_menu(
     state: FSMContext,
 ) -> None:
     """Show transaction history menu."""
-    # Check if we are coming from "Back" - we might want to clear some state, 
+    # Check if we are coming from "Back" - we might want to clear some state,
     # but keeping it is also fine as we re-enter the menu.
     await message.answer(
         "Выберите тип транзакций:",
@@ -231,9 +228,9 @@ async def handle_internal_transactions(
     # Reset to first page, no type filter, INTERNAL only
     safe_data = {k: v for k, v in data.items() if k not in ('user', 'state', 'session')}
     await _show_transaction_history(
-        message, session, state, user, 
-        filter_type=None, 
-        page=0, 
+        message, session, state, user,
+        filter_type=None,
+        page=0,
         filter_blockchain=False,
         **safe_data
     )
@@ -255,9 +252,9 @@ async def handle_blockchain_transactions(
     # Reset to first page, no type filter, BLOCKCHAIN only
     safe_data = {k: v for k, v in data.items() if k not in ('user', 'state', 'session')}
     await _show_transaction_history(
-        message, session, state, user, 
-        filter_type=None, 
-        page=0, 
+        message, session, state, user,
+        filter_type=None,
+        page=0,
         filter_blockchain=True,
         **safe_data
     )
@@ -282,9 +279,9 @@ async def handle_all_transactions(
 
     safe_data = {k: v for k, v in data.items() if k not in ('user', 'state', 'session')}
     await _show_transaction_history(
-        message, session, state, user, 
-        filter_type=None, 
-        page=0, 
+        message, session, state, user,
+        filter_type=None,
+        page=0,
         filter_blockchain=filter_blockchain,
         **safe_data
     )
@@ -315,12 +312,12 @@ async def handle_transaction_filter(
     }
 
     filter_type = filter_map.get(message.text)
-    
+
     safe_data = {k: v for k, v in data.items() if k not in ('user', 'state', 'session')}
     await _show_transaction_history(
-        message, session, state, user, 
-        filter_type=filter_type, 
-        page=0, 
+        message, session, state, user,
+        filter_type=filter_type,
+        page=0,
         filter_blockchain=filter_blockchain,
         **safe_data
     )
@@ -394,15 +391,18 @@ async def handle_export_report(
         report_bytes = await report_service.generate_user_report(user.id)
 
         # Send file
-        filename = f"ArbitroPLEXbot_Report_{user.telegram_id}_{utc_now().strftime('%Y%m%d_%H%M')}.xlsx"
+        timestamp = utc_now().strftime('%Y%m%d_%H%M')
+        filename = f"ArbitroPLEXbot_Report_{user.telegram_id}_{timestamp}.xlsx"
         input_file = BufferedInputFile(report_bytes, filename=filename)
-        
+
         await message.answer_document(
             document=input_file,
             caption="📊 Ваш полный отчет (транзакции, депозиты, рефералы)",
         )
         await wait_msg.delete()
-        
+
     except Exception as e:
         logger.exception(f"Failed to generate report for user {user.id}: {e}")
-        await wait_msg.edit_text("❌ Произошла ошибка при генерации отчета. Обратитесь в поддержку.")
+        await wait_msg.edit_text(
+            "❌ Произошла ошибка при генерации отчета. Обратитесь в поддержку."
+        )
