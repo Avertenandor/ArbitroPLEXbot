@@ -76,17 +76,17 @@ async def cmd_start(
         session_key = f"{SESSION_KEY_PREFIX}{message.from_user.id}"
         if not await redis_client.exists(session_key):
             # Session expired or new user
-            
+
             # Save referrer if present
             if message.text and len(message.text.split()) > 1:
                 ref_arg = message.text.split()[1].strip()
                 await state.update_data(pending_referrer_arg=ref_arg)
-            
+
             from bot.constants.rules import LEVELS_TABLE, RULES_SHORT_TEXT
-            
+
             # Get translator for unregistered user (default language)
             _ = get_translator("ru")
-            
+
             # Step 1: Ask for wallet first
             await message.answer(
                 _('auth.welcome_unregistered',
@@ -115,15 +115,15 @@ async def cmd_start(
                 # But legacy IDs were digits.
                 # New codes are urlsafe base64, which can contain '-' and '_'.
                 # So we should be careful about stripping.
-                
+
                 # Better parsing strategy:
                 # 1. Remove 'ref' prefix (case insensitive?)
                 # 2. If starts with '_' or '-', remove ONE leading separator.
-                
+
                 clean_arg = ref_arg[3:] # Remove 'ref'
                 if clean_arg.startswith("_") or clean_arg.startswith("-"):
                     clean_arg = clean_arg[1:]
-                
+
                 if clean_arg.isdigit():
                     # Legacy ID
                     referrer_telegram_id = int(clean_arg)
@@ -136,11 +136,11 @@ async def cmd_start(
                     )
                 else:
                     # New Referral Code
-                    # We need UserService here. 
+                    # We need UserService here.
                     # Note: Creating service inside handler is fine.
                     user_service = UserService(session)
                     referrer = await user_service.get_by_referral_code(clean_arg)
-                    
+
                     if referrer:
                         referrer_telegram_id = referrer.telegram_id
                         logger.info(
@@ -170,7 +170,7 @@ async def cmd_start(
         )
         # РљР РРўРР§РќРћ: РѕС‡РёСЃС‚РёРј Р»СЋР±РѕРµ FSM СЃРѕСЃС‚РѕСЏРЅРёРµ, С‡С‚РѕР±С‹ /start РІСЃРµРіРґР° СЂР°Р±РѕС‚Р°Р»
         await state.clear()
-        
+
         # R8-2: Reset bot_blocked flag if user successfully sent /start
         # (means user unblocked the bot)
         try:
@@ -189,7 +189,7 @@ async def cmd_start(
         # R13-3: Get user language for i18n
         user_language = await get_user_language(session, user.id)
         _ = get_translator(user_language)
-        
+
         # Format balance properly (avoid scientific notation)
         balance_str = f"{user.balance:.8f}".rstrip('0').rstrip('.')
         if balance_str == '':
@@ -268,10 +268,10 @@ async def cmd_start(
             blacklist_entry = await blacklist_repo.find_by_telegram_id(
                 message.from_user.id
             )
-        
+
         if blacklist_entry and blacklist_entry.is_active:
             from app.models.blacklist import BlacklistActionType
-            
+
             if blacklist_entry.action_type == BlacklistActionType.REGISTRATION_DENIED:
                 logger.info(
                     f"[START] Registration denied for telegram_id {message.from_user.id}"
@@ -342,7 +342,7 @@ async def cmd_start(
             logger.warning(f"Failed to get user language, using default: {e}")
             pass
     _ = get_translator(user_language)
-    
+
     # For unregistered users, is_admin will be False
     is_admin = data.get("is_admin", False)
     await message.answer(
@@ -408,7 +408,7 @@ async def process_wallet(
             except Exception as e:
                 logger.warning(f"Failed to get user language, using default: {e}")
         _ = get_translator(user_language)
-        
+
         await message.answer(
             _("common.welcome"),
             reply_markup=ReplyKeyboardRemove(),
@@ -519,7 +519,7 @@ async def process_wallet(
                         )
                         await state.clear()
                         return
-                    
+
                     # Check if wallet is already used by another user (Unique constraint)
                     from app.services.user_service import UserService
                     user_service = UserService(session)
@@ -559,9 +559,9 @@ async def process_wallet(
                 "РѕР±СЂР°С‚РёС‚РµСЃСЊ РІ РїРѕРґРґРµСЂР¶РєСѓ."
             )
             return
-        
+
         user_service = UserService(session)
-        
+
         # Check if wallet is already used
         existing = await user_service.get_by_wallet(wallet_address)
     else:
@@ -850,7 +850,7 @@ async def process_password_confirmation(
             # Transaction closed here
         except ValueError as e:
             error_msg = str(e)
-            
+
             # FIX: Handle "User already registered" as success (Double Submit race condition)
             if error_msg == "User already registered":
                 logger.info(
@@ -860,7 +860,7 @@ async def process_password_confirmation(
                 async with session_factory() as session:
                     user_service = UserService(session)
                     user = await user_service.get_by_telegram_id(message.from_user.id)
-                
+
                 if user:
                     logger.info(
                         f"User {user.id} found, treating double registration error as success"
@@ -948,11 +948,11 @@ async def process_password_confirmation(
         blacklist_entry = await blacklist_repo.find_by_telegram_id(
             user.telegram_id
         )
-    
+
     # R1-19: РљРЅРѕРїРєР° РґР»СЏ РїРѕРІС‚РѕСЂРЅРѕРіРѕ РїРѕРєР°Р·Р° РїР°СЂРѕР»СЏ (Reply keyboard)
     # РЎРѕС…СЂР°РЅСЏРµРј user.id РІ FSM РґР»СЏ РѕР±СЂР°Р±РѕС‚С‡РёРєР° "РџРѕРєР°Р·Р°С‚СЊ РїР°СЂРѕР»СЊ РµС‰С‘ СЂР°Р·"
     await state.update_data(show_password_user_id=user.id)
-    
+
     await message.answer(
         "рџЋ‰ Р РµРіРёСЃС‚СЂР°С†РёСЏ Р·Р°РІРµСЂС€РµРЅР°!\n\n"
         f"Р’Р°С€ ID: {user.id}\n"
@@ -962,11 +962,11 @@ async def process_password_confirmation(
         "РћРЅ РїРѕРЅР°РґРѕР±РёС‚СЃСЏ РґР»СЏ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёСЏ С„РёРЅР°РЅСЃРѕРІС‹С… РѕРїРµСЂР°С†РёР№.",
         reply_markup=show_password_keyboard(),
     )
-    
+
     # R13-3: Get user language for i18n
     user_language = await get_user_language(session, user.id)
     _ = get_translator(user_language)
-    
+
     # РћС‚РїСЂР°РІР»СЏРµРј РіР»Р°РІРЅРѕРµ РјРµРЅСЋ РѕС‚РґРµР»СЊРЅС‹Рј СЃРѕРѕР±С‰РµРЅРёРµРј
     await message.answer(
         _("common.choose_action"),
@@ -1026,7 +1026,7 @@ async def handle_contacts_choice(
         )
         await state.clear()
         return  # РџРѕР·РІРѕР»СЏРµРј CommandStart() РѕР±СЂР°Р±РѕС‚Р°С‚СЊ СЌС‚Рѕ
-    
+
     if message.text == "вњ… Р”Р°, РѕСЃС‚Р°РІРёС‚СЊ РєРѕРЅС‚Р°РєС‚С‹":
         await message.answer(
             "рџ“ћ **Р’РІРµРґРёС‚Рµ РЅРѕРјРµСЂ С‚РµР»РµС„РѕРЅР°**\n\n"
@@ -1106,7 +1106,7 @@ async def process_phone(
     import re
     # Remove spaces, dashes, parentheses
     phone_clean = re.sub(r'[\s\-\(\)]', '', phone)
-    
+
     # Must start with + and contain only digits after
     phone_pattern = r'^\+\d{10,15}$'
     if phone and not re.match(phone_pattern, phone_clean):
@@ -1120,7 +1120,7 @@ async def process_phone(
             parse_mode="Markdown",
         )
         return
-    
+
     # Normalize phone
     phone = phone_clean if phone else ""
 
@@ -1258,7 +1258,7 @@ async def handle_show_password_again(
 ) -> None:
     """
     R1-19: РџРѕРєР°Р·Р°С‚СЊ С„РёРЅР°РЅСЃРѕРІС‹Р№ РїР°СЂРѕР»СЊ РµС‰С‘ СЂР°Р· (РІ С‚РµС‡РµРЅРёРµ С‡Р°СЃР° РїРѕСЃР»Рµ СЂРµРіРёСЃС‚СЂР°С†РёРё).
-    
+
     Args:
         callback: Callback query
         data: Handler data
@@ -1270,7 +1270,7 @@ async def handle_show_password_again(
     except ValueError:
         await callback.answer("вќЊ РћС€РёР±РєР°: РЅРµРІРµСЂРЅС‹Р№ С„РѕСЂРјР°С‚ Р·Р°РїСЂРѕСЃР°", show_alert=True)
         return
-    
+
     # РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ СЃСѓС‰РµСЃС‚РІСѓРµС‚ Рё СЌС‚Рѕ РµРіРѕ Р·Р°РїСЂРѕСЃ
     user: User | None = data.get("user")
     if not user or user.id != user_id:
@@ -1279,7 +1279,7 @@ async def handle_show_password_again(
             show_alert=True
         )
         return
-    
+
     # РџРѕР»СѓС‡Р°РµРј РїР°СЂРѕР»СЊ РёР· Redis
     redis_client = data.get("redis_client")
     if not redis_client:
@@ -1304,14 +1304,14 @@ async def handle_show_password_again(
                 show_alert=True
             )
             return
-        
+
         # РџРѕРєР°Р·С‹РІР°РµРј РїР°СЂРѕР»СЊ РІ alert
         await callback.answer(
             f"рџ”‘ Р’Р°С€ С„РёРЅР°РЅСЃРѕРІС‹Р№ РїР°СЂРѕР»СЊ:\n\n{plain_password}\n\n"
             "вљ пёЏ РЎРѕС…СЂР°РЅРёС‚Рµ РµРіРѕ СЃРµР№С‡Р°СЃ! РћРЅ Р±РѕР»СЊС€Рµ РЅРµ Р±СѓРґРµС‚ РїРѕРєР°Р·Р°РЅ.",
             show_alert=True
         )
-        
+
         logger.info(
             f"User {user.id} requested to show password again (within 1 hour window)"
         )
@@ -1328,7 +1328,12 @@ async def handle_show_password_again(
 
 # --- AUTH PAYMENT HANDLERS ---
 
-from bot.constants.rules import LEVELS_TABLE, RULES_SHORT_TEXT, RULES_FULL_TEXT
+from bot.constants.rules import (
+    LEVELS_TABLE,
+    MINIMUM_PLEX_BALANCE,
+    RULES_FULL_TEXT,
+    RULES_SHORT_TEXT,
+)
 
 ECOSYSTEM_INFO = (
     "рџљЂ **Р”РѕР±СЂРѕ РїРѕР¶Р°Р»РѕРІР°С‚СЊ РІ ArbitroPLEXbot!**\n\n"
@@ -1351,7 +1356,7 @@ async def handle_check_payment(
 ) -> None:
     """Check payment status."""
     user: User | None = data.get("user")
-    
+
     if user and user.wallet_address:
         # User known, check directly
         await _check_payment_logic(callback, state, user.wallet_address, data)
@@ -1374,12 +1379,12 @@ async def process_payment_wallet(
 ) -> None:
     """Process wallet address for payment verification."""
     wallet = message.text.strip()
-    
+
     # Simple validation
     if not wallet.startswith("0x") or len(wallet) != 42:
         await message.answer("вќЊ РќРµРІРµСЂРЅС‹Р№ С„РѕСЂРјР°С‚ Р°РґСЂРµСЃР°. РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰Рµ СЂР°Р·:")
         return
-        
+
     # Check payment
     await _check_payment_logic(message, state, wallet, data)
 
@@ -1392,7 +1397,7 @@ async def _check_payment_logic(
 ) -> None:
     """Core payment check logic."""
     from app.services.deposit_scan_service import DepositScanService
-    
+
     # Helper to send message
     async def send(text: str, **kwargs: Any) -> None:
         if isinstance(event, Message):
@@ -1414,19 +1419,19 @@ async def _check_payment_logic(
             amount_plex=settings.auth_price_plex,
             lookback_blocks=2000
         )
-        
+
         logger.info(f"Payment verification result: {result}")
-        
+
         if result["success"]:
             # Payment found!
             redis_client = data.get("redis_client")
             db_session = data.get("session")
             user_id = event.from_user.id
-            
+
             # Set session
             session_key = f"{SESSION_KEY_PREFIX}{user_id}"
             await redis_client.setex(session_key, SESSION_TTL, "1")
-            
+
             # Get translator for user
             _ = get_translator("ru")
             tx_hash_short = f"{result['tx_hash'][:10]}..."
@@ -1434,18 +1439,18 @@ async def _check_payment_logic(
                 _('payment.confirmed_scanning', tx_hash_short=tx_hash_short),
                 parse_mode="Markdown",
             )
-            
+
             # Scan user deposits from blockchain
             db_user = data.get("user")
             if db_user and db_session:
                 deposit_service = DepositScanService(db_session)
                 scan_result = await deposit_service.scan_and_validate(db_user.id)
-                
+
                 if scan_result.get("success"):
                     total_deposit = scan_result.get("total_amount", 0)
                     is_valid = scan_result.get("is_valid", False)
                     required_plex = scan_result.get("required_plex", 0)
-                    
+
                     if is_valid:
                         # Deposit is sufficient (>= 30 USDT)
                         await send(
@@ -1456,9 +1461,9 @@ async def _check_payment_logic(
                             parse_mode="Markdown",
                             disable_web_page_preview=True
                         )
-                        
+
                         await state.clear()
-                        
+
                         await send(
                             "РќР°Р¶РјРёС‚Рµ РєРЅРѕРїРєСѓ РґР»СЏ РЅР°С‡Р°Р»Р° СЂР°Р±РѕС‚С‹:",
                             reply_markup=auth_continue_keyboard()
@@ -1468,7 +1473,7 @@ async def _check_payment_logic(
                         message = scan_result.get("validation_message")
                         if message:
                             await send(message, parse_mode="Markdown")
-                        
+
                         await send(
                             "РџРѕСЃР»Рµ РїРѕРїРѕР»РЅРµРЅРёСЏ РЅР°Р¶РјРёС‚Рµ В«РћР±РЅРѕРІРёС‚СЊ РґРµРїРѕР·РёС‚В»:",
                             reply_markup=auth_rescan_keyboard()
@@ -1486,7 +1491,7 @@ async def _check_payment_logic(
                         "РќР°Р¶РјРёС‚Рµ РєРЅРѕРїРєСѓ:",
                         reply_markup=auth_continue_keyboard()
                     )
-                
+
                 await db_session.commit()
             else:
                 # No DB user context, just let them in
@@ -1496,7 +1501,7 @@ async def _check_payment_logic(
                     "РќР°Р¶РјРёС‚Рµ РєРЅРѕРїРєСѓ РґР»СЏ РЅР°С‡Р°Р»Р° СЂР°Р±РѕС‚С‹:",
                     reply_markup=auth_continue_keyboard()
                 )
-            
+
         else:
             await send(
                 "вќЊ **РћРїР»Р°С‚Р° РЅРµ РЅР°Р№РґРµРЅР°**\n\n"
@@ -1507,7 +1512,7 @@ async def _check_payment_logic(
                 reply_markup=auth_retry_keyboard(),
                 parse_mode="Markdown"
             )
-            
+
     except Exception as e:
         logger.error(f"Auth check failed: {e}")
         await send("вљ пёЏ РћС€РёР±РєР° РїСЂРѕРІРµСЂРєРё. РџРѕРїСЂРѕР±СѓР№С‚Рµ РїРѕР·Р¶Рµ.")
@@ -1523,34 +1528,34 @@ async def handle_rescan_deposits(
 ) -> None:
     """Handle manual deposit rescan request."""
     from app.services.deposit_scan_service import DepositScanService
-    
+
     # Get translator for user
     user_language = await get_user_language(session, user.id) if user else "ru"
     _ = get_translator(user_language)
-    
+
     await callback.answer(_('deposit.scanning'), show_alert=False)
-    
+
     if not user:
         await callback.message.answer(_('deposit.user_not_found'))
         return
-    
+
     deposit_service = DepositScanService(session)
     scan_result = await deposit_service.scan_and_validate(user.id)
-    
+
     if not scan_result.get("success"):
         await callback.message.answer(
             f"вљ пёЏ РћС€РёР±РєР° СЃРєР°РЅРёСЂРѕРІР°РЅРёСЏ: {scan_result.get('error', 'РќРµРёР·РІРµСЃС‚РЅР°СЏ РѕС€РёР±РєР°')}"
         )
         return
-    
+
     total_deposit = scan_result.get("total_amount", 0)
     is_valid = scan_result.get("is_valid", False)
     required_plex = scan_result.get("required_plex", 0)
-    
+
     if is_valid:
         # Deposit now sufficient
         await session.commit()
-        
+
         await callback.message.answer(
             f"вњ… **Р”РµРїРѕР·РёС‚ РїРѕРґС‚РІРµСЂР¶РґС‘РЅ!**\n\n"
             f"рџ’° **Р’Р°С€ РґРµРїРѕР·РёС‚:** {total_deposit:.2f} USDT\n"
@@ -1558,7 +1563,7 @@ async def handle_rescan_deposits(
             f"РўРµРїРµСЂСЊ РІС‹ РјРѕР¶РµС‚Рµ РЅР°С‡Р°С‚СЊ СЂР°Р±РѕС‚Сѓ!",
             parse_mode="Markdown"
         )
-        
+
         await callback.message.answer(
             "РќР°Р¶РјРёС‚Рµ РєРЅРѕРїРєСѓ:",
             reply_markup=auth_continue_keyboard()
@@ -1568,7 +1573,7 @@ async def handle_rescan_deposits(
         message = scan_result.get("validation_message")
         if message:
             await callback.message.answer(message, parse_mode="Markdown")
-        
+
         await callback.message.answer(
             "РџРѕСЃР»Рµ РїРѕРїРѕР»РЅРµРЅРёСЏ РЅР°Р¶РјРёС‚Рµ В«РћР±РЅРѕРІРёС‚СЊ РґРµРїРѕР·РёС‚В»:",
             reply_markup=auth_rescan_keyboard()
@@ -1584,12 +1589,12 @@ async def handle_start_after_auth(
 ) -> None:
     """Handle start after successful auth (callback version - backward compat)."""
     await callback.answer()
-    
+
     # Mimic /start command
     msg = callback.message
     msg.text = "/start"
     msg.from_user = callback.from_user
-    
+
     # Call cmd_start
     await cmd_start(msg, session, state, **data)
 
@@ -1616,7 +1621,7 @@ async def handle_wallet_input(
             reply_markup=main_menu_reply_keyboard(),
         )
         return
-    
+
     wallet = message.text.strip() if message.text else ""
 
     # Basic format validation
@@ -1640,21 +1645,21 @@ async def handle_wallet_input(
         await message.answer(
             _('auth.insufficient_plex',
               plex_balance=verification.plex_balance or 0,
-              minimum_plex=rules.MINIMUM_PLEX_BALANCE),
+              minimum_plex=MINIMUM_PLEX_BALANCE),
             parse_mode="Markdown",
         )
 
     # Save wallet to FSM
     await state.update_data(auth_wallet=wallet)
-    
+
     # Step 2: Show invoice with QR code
     price = settings.auth_price_plex
     system_wallet = settings.auth_system_wallet_address
     token_addr = settings.auth_plex_token_address
-    
+
     # Get translator for unregistered user (default language)
     _ = get_translator("ru")
-    
+
     # Send text message first
     wallet_short = f"{wallet[:6]}...{wallet[-4:]}"
     await message.answer(
@@ -1666,11 +1671,11 @@ async def handle_wallet_input(
         reply_markup=auth_payment_keyboard(),
         parse_mode="Markdown"
     )
-    
+
     # Send QR code as photo
     from bot.utils.qr_generator import generate_payment_qr
     from aiogram.types import BufferedInputFile
-    
+
     qr_bytes = generate_payment_qr(system_wallet)
     if qr_bytes:
         qr_file = BufferedInputFile(qr_bytes, filename="payment_qr.png")
@@ -1679,7 +1684,7 @@ async def handle_wallet_input(
             caption=_('auth.qr_caption', system_wallet=system_wallet),
             parse_mode="Markdown"
         )
-    
+
     await state.set_state(AuthStates.waiting_for_payment)
 
 
@@ -1691,15 +1696,15 @@ async def handle_payment_confirmed_reply(
 ) -> None:
     """Handle payment confirmation via Reply keyboard."""
     logger.info(f"=== PAYMENT CHECK START === user {message.from_user.id}")
-    
+
     # Get wallet from FSM (set in waiting_for_wallet step)
     state_data = await state.get_data()
     current_state = await state.get_state()
     logger.info(f"FSM state: {current_state}, data keys: {list(state_data.keys())}")
-    
+
     wallet = state_data.get("auth_wallet")
     logger.info(f"Wallet from FSM: {mask_address(wallet)}")
-    
+
     if not wallet:
         # Fallback: check if user has wallet in DB
         user: User | None = data.get("user")
@@ -1716,7 +1721,7 @@ async def handle_payment_confirmed_reply(
             )
             await state.set_state(AuthStates.waiting_for_payment_wallet)
             return
-    
+
     # Check payment with known wallet
     logger.info(f"Checking payment for wallet: {mask_address(wallet)}")
     await _check_payment_logic(message, state, wallet, data)
@@ -1745,23 +1750,23 @@ async def handle_rescan_deposits_reply(
 ) -> None:
     """Handle deposit rescan via Reply keyboard."""
     from app.services.deposit_scan_service import DepositScanService
-    
+
     # Get translator for user
     user_language = await get_user_language(session, user.id)
     _ = get_translator(user_language)
-    
+
     await message.answer(_('deposit.scanning'))
-    
+
     scan_service = DepositScanService(session)
     scan_result = await scan_service.scan_and_update_user_deposits(user.id)
-    
+
     is_valid = scan_result.get("is_valid", False)
     total_deposit = scan_result.get("total_deposit", 0)
     required_plex = scan_result.get("required_plex", 0)
-    
+
     if is_valid:
         await session.commit()
-        
+
         await message.answer(
             f"вњ… **Р”РµРїРѕР·РёС‚ РїРѕРґС‚РІРµСЂР¶РґС‘РЅ!**\n\n"
             f"рџ’° **Р’Р°С€ РґРµРїРѕР·РёС‚:** {total_deposit:.2f} USDT\n"
@@ -1769,7 +1774,7 @@ async def handle_rescan_deposits_reply(
             f"РўРµРїРµСЂСЊ РІС‹ РјРѕР¶РµС‚Рµ РЅР°С‡Р°С‚СЊ СЂР°Р±РѕС‚Сѓ!",
             parse_mode="Markdown"
         )
-        
+
         await message.answer(
             "РќР°Р¶РјРёС‚Рµ РєРЅРѕРїРєСѓ:",
             reply_markup=auth_continue_keyboard()
@@ -1778,7 +1783,7 @@ async def handle_rescan_deposits_reply(
         msg = scan_result.get("validation_message")
         if msg:
             await message.answer(msg, parse_mode="Markdown")
-        
+
         await message.answer(
             "РџРѕСЃР»Рµ РїРѕРїРѕР»РЅРµРЅРёСЏ РЅР°Р¶РјРёС‚Рµ В«РћР±РЅРѕРІРёС‚СЊ РґРµРїРѕР·РёС‚В»:",
             reply_markup=auth_rescan_keyboard()
@@ -1808,7 +1813,7 @@ async def handle_retry_payment_reply(
     # Get wallet from FSM
     state_data = await state.get_data()
     wallet = state_data.get("auth_wallet")
-    
+
     if not wallet:
         # Fallback: check if user has wallet in DB
         user: User | None = data.get("user")
@@ -1822,7 +1827,7 @@ async def handle_retry_payment_reply(
             )
             await state.set_state(AuthStates.waiting_for_payment_wallet)
             return
-    
+
     await _check_payment_logic(message, state, wallet, data)
 
 
@@ -1837,7 +1842,7 @@ async def handle_show_password_reply(
     if not user:
         await message.answer("вќЊ РћС€РёР±РєР°: РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ РЅРµ РЅР°Р№РґРµРЅ")
         return
-    
+
     # Get password from Redis
     redis_client = data.get("redis_client")
     if not redis_client:
@@ -1846,7 +1851,7 @@ async def handle_show_password_reply(
             "РСЃРїРѕР»СЊР·СѓР№С‚Рµ С„СѓРЅРєС†РёСЋ РІРѕСЃСЃС‚Р°РЅРѕРІР»РµРЅРёСЏ РїР°СЂРѕР»СЏ РІ РЅР°СЃС‚СЂРѕР№РєР°С…."
         )
         return
-    
+
     try:
         from bot.utils.secure_storage import SecureRedisStorage
 
@@ -1868,7 +1873,7 @@ async def handle_show_password_reply(
             f"вљ пёЏ РЎРѕС…СЂР°РЅРёС‚Рµ РµРіРѕ СЃРµР№С‡Р°СЃ! РћРЅ Р±РѕР»СЊС€Рµ РЅРµ Р±СѓРґРµС‚ РїРѕРєР°Р·Р°РЅ.",
             parse_mode="Markdown"
         )
-        
+
         logger.info(
             f"User {user.id} requested to show password again via Reply keyboard"
         )
@@ -1878,4 +1883,3 @@ async def handle_show_password_reply(
             exc_info=True
         )
         await message.answer("вќЊ РћС€РёР±РєР° РїСЂРё РїРѕР»СѓС‡РµРЅРёРё РїР°СЂРѕР»СЏ. РћР±СЂР°С‚РёС‚РµСЃСЊ РІ РїРѕРґРґРµСЂР¶РєСѓ.")
-
