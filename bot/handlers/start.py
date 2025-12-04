@@ -527,11 +527,11 @@ async def process_wallet(
                     if existing_user:
                         telegram_id = message.from_user.id if message.from_user else None
                         if existing_user.telegram_id != telegram_id:
-                             await message.answer(
+                            await message.answer(
                                 "вќЊ Р­С‚РѕС‚ РєРѕС€РµР»РµРє СѓР¶Рµ РїСЂРёРІСЏР·Р°РЅ Рє РґСЂСѓРіРѕРјСѓ РїРѕР»СЊР·РѕРІР°С‚РµР»СЋ!\n"
                                 "РџРѕР¶Р°Р»СѓР№СЃС‚Р°, РёСЃРїРѕР»СЊР·СѓР№С‚Рµ РґСЂСѓРіРѕР№ РєРѕС€РµР»РµРє."
                             )
-                             return
+                            return
                         else:
                             await message.answer(
                                 "в„№пёЏ Р­С‚РѕС‚ РєРѕС€РµР»РµРє СѓР¶Рµ РїСЂРёРІСЏР·Р°РЅ Рє РІР°С€РµРјСѓ Р°РєРєР°СѓРЅС‚Сѓ.\n"
@@ -645,8 +645,8 @@ async def process_financial_password(
             blacklist_entry = None
             if user:
                 blacklist_entry = await blacklist_repo.find_by_telegram_id(
-            user.telegram_id
-        )
+                    user.telegram_id
+                )
             await message.answer(
                 "рџ“Љ Р“Р»Р°РІРЅРѕРµ РјРµРЅСЋ",
                 reply_markup=main_menu_reply_keyboard(
@@ -946,8 +946,8 @@ async def process_password_confirmation(
         from app.repositories.blacklist_repository import BlacklistRepository
         blacklist_repo = BlacklistRepository(session)
         blacklist_entry = await blacklist_repo.find_by_telegram_id(
-            user.telegram_id
-        )
+                user.telegram_id
+            )
 
     # R1-19: РљРЅРѕРїРєР° РґР»СЏ РїРѕРІС‚РѕСЂРЅРѕРіРѕ РїРѕРєР°Р·Р° РїР°СЂРѕР»СЏ (Reply keyboard)
     # РЎРѕС…СЂР°РЅСЏРµРј user.id РІ FSM РґР»СЏ РѕР±СЂР°Р±РѕС‚С‡РёРєР° "РџРѕРєР°Р·Р°С‚СЊ РїР°СЂРѕР»СЊ РµС‰С‘ СЂР°Р·"
@@ -1079,8 +1079,8 @@ async def process_phone(
         blacklist_entry = None
         if user:
             blacklist_entry = await blacklist_repo.find_by_telegram_id(
-            user.telegram_id
-        )
+                user.telegram_id
+            )
         await message.answer(
             "рџ“Љ Р“Р»Р°РІРЅРѕРµ РјРµРЅСЋ",
             reply_markup=main_menu_reply_keyboard(
@@ -1166,8 +1166,8 @@ async def process_email(
         blacklist_entry = None
         if user:
             blacklist_entry = await blacklist_repo.find_by_telegram_id(
-            user.telegram_id
-        )
+                user.telegram_id
+            )
         await message.answer(
             "рџ“Љ Р“Р»Р°РІРЅРѕРµ РјРµРЅСЋ",
             reply_markup=main_menu_reply_keyboard(
@@ -1331,7 +1331,6 @@ async def handle_show_password_again(
 from bot.constants.rules import (
     LEVELS_TABLE,
     MINIMUM_PLEX_BALANCE,
-    RULES_FULL_TEXT,
     RULES_SHORT_TEXT,
 )
 
