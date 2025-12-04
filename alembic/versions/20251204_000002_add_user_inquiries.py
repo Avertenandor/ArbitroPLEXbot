@@ -1,7 +1,7 @@
 """Add user inquiries tables
 
 Revision ID: 20251204_000002
-Revises: 20251204_000001_add_transaction_fee_constraints
+Revises: 20251204_000001
 Create Date: 2025-12-04
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '20251204_000002'
-down_revision: Union[str, None] = '20251204_000001_add_transaction_fee_constraints'
+down_revision: Union[str, None] = '20251204_000001'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
