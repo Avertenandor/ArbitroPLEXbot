@@ -103,7 +103,7 @@ __all__ = [
     "PlexPaymentRequirement",
     "PlexPaymentStatus",
     "FailedNotification",
-    "NotificationQueueFallback",  # R11-3: PostgreSQL fallback for notifications
+    "NotificationQueueFallback",  # R11-3: PostgreSQL fallback
     # Support Models
     "SupportTicket",
     "SupportMessage",

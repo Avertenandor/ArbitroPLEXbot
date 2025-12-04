@@ -20,7 +20,6 @@ from bot.keyboards.admin_keyboards import (
     admin_inquiry_list_keyboard,
     admin_inquiry_menu_keyboard,
     admin_inquiry_response_keyboard,
-    admin_keyboard,
 )
 from bot.states.inquiry import AdminInquiryStates
 
@@ -239,7 +238,10 @@ async def handle_select_inquiry(
     messages_text = ""
     if inquiry.messages:
         for msg in inquiry.messages:
-            sender = f"👤 {username}" if msg.sender_type == "user" else "👨‍💼 Админ"
+            if msg.sender_type == "user":
+                sender = f"👤 {username}"
+            else:
+                sender = "👨‍💼 Админ"
             time_str = msg.created_at.strftime("%d.%m %H:%M")
             messages_text += f"\n[{time_str}] {sender}:\n{msg.message_text}\n"
 
@@ -268,7 +270,9 @@ async def handle_select_inquiry(
 # ============================================================================
 
 
-@router.message(AdminInquiryStates.viewing_inquiry, F.text == "✋ Взять в работу")
+@router.message(
+    AdminInquiryStates.viewing_inquiry, F.text == "✋ Взять в работу"
+)
 async def handle_take_inquiry(
     message: Message,
     state: FSMContext,
@@ -349,7 +353,7 @@ async def handle_cancel_response(
 ) -> None:
     """Cancel response writing."""
     state_data = await state.get_data()
-    inquiry_id = state_data.get("inquiry_id")
+    _ = state_data.get("inquiry_id")  # Reserved for future use
 
     await state.set_state(AdminInquiryStates.viewing_inquiry)
     await message.answer(
