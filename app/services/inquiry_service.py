@@ -158,3 +158,12 @@ class InquiryService:
     ) -> UserInquiry | None:
         """Get inquiry by ID."""
         return await self.inquiry_repo.get_by_id(inquiry_id)
+
+    async def get_user_inquiries(
+        self,
+        user_id: int,
+        limit: int = 10,
+    ) -> list[UserInquiry]:
+        """Get user's inquiry history."""
+        inquiries = await self.inquiry_repo.get_user_inquiries(user_id, limit)
+        return list(inquiries)

@@ -18,6 +18,7 @@ from app.models.user_inquiry import InquiryStatus
 from app.services.inquiry_service import InquiryService
 from bot.keyboards.user_keyboards import (
     inquiry_dialog_keyboard,
+    inquiry_history_keyboard,
     inquiry_input_keyboard,
     inquiry_waiting_keyboard,
     main_menu_reply_keyboard,
@@ -199,6 +200,64 @@ async def handle_question_text(
 # ============================================================================
 
 
+@router.message(InquiryStates.in_dialog, F.text == "📜 Мои обращения")
+async def handle_my_inquiries_user(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    user: User | None = None,
+    **data: Any,
+) -> None:
+    """Show user's inquiry history."""
+    if not user:
+        return
+
+    inquiry_service = InquiryService(session)
+    inquiries = await inquiry_service.get_user_inquiries(user.id)
+
+    if not inquiries:
+        await message.answer(
+            "📜 У вас пока нет обращений.\n\n"
+            "Нажмите «❓ Задать вопрос» чтобы создать первое обращение.",
+            reply_markup=inquiry_history_keyboard(),
+        )
+        return
+
+    text = "📜 **Ваши обращения:**\n\n"
+    for inq in inquiries[:10]:  # Last 10
+        status_emoji = {
+            InquiryStatus.NEW.value: "🆕",
+            InquiryStatus.IN_PROGRESS.value: "🔄",
+            InquiryStatus.CLOSED.value: "✅",
+        }
+        date_str = inq.created_at.strftime("%d.%m.%Y")
+        preview = inq.initial_question[:40]
+        if len(inq.initial_question) > 40:
+            preview += "..."
+        text += (
+            f"{status_emoji.get(inq.status, '❓')} "
+            f"#{inq.id} ({date_str})\n{preview}\n\n"
+        )
+
+    await message.answer(
+        text,
+        parse_mode="Markdown",
+        reply_markup=inquiry_history_keyboard(),
+    )
+
+
+@router.message(StateFilter("*"), F.text == "❓ Задать новый вопрос")
+async def handle_new_question_shortcut(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    user: User | None = None,
+    **data: Any,
+) -> None:
+    """Shortcut to create new question from history view."""
+    await handle_ask_question(message, state, session, user, **data)
+
+
 @router.message(InquiryStates.in_dialog, F.text == "📝 Дополнить вопрос")
 async def handle_add_to_question(
     message: Message,
@@ -287,6 +346,124 @@ async def handle_back_from_dialog(
         "Ваше обращение остаётся активным. "
         "Вы получите уведомление, когда администратор ответит.",
         reply_markup=main_menu_reply_keyboard(user=user, is_admin=data.get("is_admin", False)),
+    )
+
+
+@router.message(InquiryStates.in_dialog, F.photo)
+async def handle_dialog_photo(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    bot: Bot,
+    user: User | None = None,
+    **data: Any,
+) -> None:
+    """Handle photo in dialog - forward to admin."""
+    if not user:
+        return
+
+    state_data = await state.get_data()
+    inquiry_id = state_data.get("inquiry_id")
+
+    if not inquiry_id:
+        return
+
+    inquiry_service = InquiryService(session)
+    inquiry = await inquiry_service.get_inquiry_by_id(inquiry_id)
+
+    if not inquiry or inquiry.status == InquiryStatus.CLOSED.value:
+        return
+
+    caption = message.caption or "[Фото без подписи]"
+
+    # Save text reference
+    await inquiry_service.add_user_message(
+        inquiry_id=inquiry_id,
+        user_id=user.id,
+        message_text=f"[📷 Фото] {caption}",
+    )
+
+    # Forward photo to admin if assigned
+    if inquiry.assigned_admin_id:
+        try:
+            from app.repositories.admin_repository import AdminRepository
+            admin_repo = AdminRepository(session)
+            admin = await admin_repo.get_by_id(inquiry.assigned_admin_id)
+            if admin:
+                username = user.username or f"ID:{user.telegram_id}"
+                await bot.send_photo(
+                    admin.telegram_id,
+                    photo=message.photo[-1].file_id,
+                    caption=(
+                        f"📷 Фото в обращении #{inquiry_id}\n"
+                        f"От: {username}\n\n{caption}"
+                    ),
+                )
+        except Exception as e:
+            logger.error(f"Failed to forward photo to admin: {e}")
+
+    await message.answer(
+        "✅ Фото отправлено администратору.",
+        reply_markup=inquiry_dialog_keyboard(),
+    )
+
+
+@router.message(InquiryStates.in_dialog, F.document)
+async def handle_dialog_document(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    bot: Bot,
+    user: User | None = None,
+    **data: Any,
+) -> None:
+    """Handle document in dialog - forward to admin."""
+    if not user:
+        return
+
+    state_data = await state.get_data()
+    inquiry_id = state_data.get("inquiry_id")
+
+    if not inquiry_id:
+        return
+
+    inquiry_service = InquiryService(session)
+    inquiry = await inquiry_service.get_inquiry_by_id(inquiry_id)
+
+    if not inquiry or inquiry.status == InquiryStatus.CLOSED.value:
+        return
+
+    filename = message.document.file_name or "файл"
+
+    # Save text reference
+    await inquiry_service.add_user_message(
+        inquiry_id=inquiry_id,
+        user_id=user.id,
+        message_text=f"[📄 Документ] {filename}",
+    )
+
+    # Forward document to admin if assigned
+    if inquiry.assigned_admin_id:
+        try:
+            from app.repositories.admin_repository import AdminRepository
+            admin_repo = AdminRepository(session)
+            admin = await admin_repo.get_by_id(inquiry.assigned_admin_id)
+            if admin:
+                username = user.username or f"ID:{user.telegram_id}"
+                await bot.send_document(
+                    admin.telegram_id,
+                    document=message.document.file_id,
+                    caption=(
+                        f"📄 Документ в обращении #{inquiry_id}\n"
+                        f"От: {username}"
+                    ),
+                )
+        except Exception as e:
+            logger.error(f"Failed to forward document to admin: {e}")
+
+    await message.answer(
+        "✅ Документ отправлен администратору.",
+        reply_markup=inquiry_dialog_keyboard(),
     )
 
 

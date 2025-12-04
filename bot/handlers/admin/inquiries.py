@@ -41,6 +41,7 @@ async def handle_admin_inquiries_menu(
 ) -> None:
     """Show admin inquiries menu."""
     is_admin = data.get("is_admin", False)
+    admin = data.get("admin")
     if not is_admin:
         await message.answer("❌ Доступ запрещён")
         return
@@ -51,9 +52,19 @@ async def handle_admin_inquiries_menu(
     inquiry_service = InquiryService(session)
     new_count = await inquiry_service.count_new_inquiries()
 
+    # Count admin's active inquiries
+    my_count = 0
+    if admin:
+        my_inquiries = await inquiry_service.get_admin_inquiries(
+            admin.id,
+            status=InquiryStatus.IN_PROGRESS.value,
+        )
+        my_count = len(my_inquiries)
+
     await message.answer(
         "📨 **Обращения от пользователей**\n\n"
-        f"📬 Новых обращений: {new_count}\n\n"
+        f"📬 Новых обращений: {new_count}\n"
+        f"📋 Моих в работе: {my_count}\n\n"
         "Выберите раздел:",
         parse_mode="Markdown",
         reply_markup=admin_inquiry_menu_keyboard(),
@@ -420,6 +431,110 @@ async def handle_response_text(
             f"⚠️ Ответ сохранён, но не удалось доставить пользователю: {e}",
             reply_markup=admin_inquiry_detail_keyboard(is_assigned=True),
         )
+
+    await state.set_state(AdminInquiryStates.viewing_inquiry)
+
+
+@router.message(AdminInquiryStates.writing_response, F.photo)
+async def handle_admin_response_photo(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    bot: Bot,
+    **data: Any,
+) -> None:
+    """Handle admin photo response."""
+    admin = data.get("admin")
+    if not admin:
+        return
+
+    state_data = await state.get_data()
+    inquiry_id = state_data.get("inquiry_id")
+
+    if not inquiry_id:
+        return
+
+    inquiry_service = InquiryService(session)
+    inquiry = await inquiry_service.get_inquiry_by_id(inquiry_id)
+
+    if not inquiry:
+        return
+
+    caption = message.caption or "[Фото]"
+
+    # Save reference
+    await inquiry_service.add_admin_message(
+        inquiry_id=inquiry_id,
+        admin_id=admin.id,
+        message_text=f"[📷 Фото] {caption}",
+    )
+
+    # Send to user
+    try:
+        await bot.send_photo(
+            inquiry.telegram_id,
+            photo=message.photo[-1].file_id,
+            caption=f"📷 Ответ на обращение #{inquiry_id}\n\n{caption}",
+        )
+        await message.answer(
+            "✅ Фото отправлено пользователю!",
+            reply_markup=admin_inquiry_detail_keyboard(is_assigned=True),
+        )
+    except Exception as e:
+        logger.error(f"Failed to send photo to user: {e}")
+        await message.answer(f"⚠️ Ошибка отправки: {e}")
+
+    await state.set_state(AdminInquiryStates.viewing_inquiry)
+
+
+@router.message(AdminInquiryStates.writing_response, F.document)
+async def handle_admin_response_document(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    bot: Bot,
+    **data: Any,
+) -> None:
+    """Handle admin document response."""
+    admin = data.get("admin")
+    if not admin:
+        return
+
+    state_data = await state.get_data()
+    inquiry_id = state_data.get("inquiry_id")
+
+    if not inquiry_id:
+        return
+
+    inquiry_service = InquiryService(session)
+    inquiry = await inquiry_service.get_inquiry_by_id(inquiry_id)
+
+    if not inquiry:
+        return
+
+    filename = message.document.file_name or "файл"
+
+    # Save reference
+    await inquiry_service.add_admin_message(
+        inquiry_id=inquiry_id,
+        admin_id=admin.id,
+        message_text=f"[📄 Документ] {filename}",
+    )
+
+    # Send to user
+    try:
+        await bot.send_document(
+            inquiry.telegram_id,
+            document=message.document.file_id,
+            caption=f"📄 Ответ на обращение #{inquiry_id}",
+        )
+        await message.answer(
+            "✅ Документ отправлен пользователю!",
+            reply_markup=admin_inquiry_detail_keyboard(is_assigned=True),
+        )
+    except Exception as e:
+        logger.error(f"Failed to send document to user: {e}")
+        await message.answer(f"⚠️ Ошибка отправки: {e}")
 
     await state.set_state(AdminInquiryStates.viewing_inquiry)
 

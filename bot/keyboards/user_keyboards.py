@@ -885,6 +885,20 @@ def inquiry_waiting_keyboard() -> ReplyKeyboardMarkup:
     """
     builder = ReplyKeyboardBuilder()
     builder.row(KeyboardButton(text="📝 Дополнить вопрос"))
+    builder.row(KeyboardButton(text="📜 Мои обращения"))
     builder.row(KeyboardButton(text="❌ Отменить обращение"))
+    builder.row(KeyboardButton(text="◀️ Главное меню"))
+    return builder.as_markup(resize_keyboard=True)
+
+
+def inquiry_history_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Keyboard for inquiry history view.
+
+    Returns:
+        ReplyKeyboardMarkup with history options
+    """
+    builder = ReplyKeyboardBuilder()
+    builder.row(KeyboardButton(text="❓ Задать новый вопрос"))
     builder.row(KeyboardButton(text="◀️ Главное меню"))
     return builder.as_markup(resize_keyboard=True)
