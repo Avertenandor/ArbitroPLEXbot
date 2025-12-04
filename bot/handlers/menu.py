@@ -130,7 +130,10 @@ async def handle_main_menu(
 
     user: User | None = data.get("user")
     is_admin = data.get("is_admin")
-    logger.info(f"[MENU] User from data: {user.id if user else None}, is_admin={is_admin}, data keys: {list(data.keys())}")
+    logger.info(
+        f"[MENU] User from data: {user.id if user else None}, "
+        f"is_admin={is_admin}, data keys: {list(data.keys())}"
+    )
 
     if not user:
         # Если по какой-то причине DI не предоставил user, просто очистим
@@ -169,7 +172,10 @@ async def show_balance(
     telegram_id = message.from_user.id if message.from_user else None
     logger.info(f"[MENU] show_balance called for user {telegram_id}")
     user: User | None = data.get("user")
-    logger.info(f"[MENU] User from data: {user.id if user else None}, data keys: {list(data.keys())}")
+    logger.info(
+        f"[MENU] User from data: {user.id if user else None}, "
+        f"data keys: {list(data.keys())}"
+    )
     if not user and telegram_id:
         user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
     if not user:
@@ -215,7 +221,10 @@ async def show_deposit_menu(
     telegram_id = message.from_user.id if message.from_user else None
     logger.info(f"[MENU] show_deposit_menu called for user {telegram_id}")
     user: User | None = data.get("user")
-    logger.info(f"[MENU] User from data: {user.id if user else None}, data keys: {list(data.keys())}")
+    logger.info(
+        f"[MENU] User from data: {user.id if user else None}, "
+        f"data keys: {list(data.keys())}"
+    )
     if not user and telegram_id:
         user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
     if not user:
@@ -244,7 +253,6 @@ async def show_deposit_menu(
             level_info = levels_status[level]
             amount = level_info["amount"]
             status = level_info["status"]
-            status_text = level_info.get("status_text", "")
 
             if status == "active":
                 text += f"✅ Level {level}: `{amount} USDT` - Активен\n"
@@ -254,9 +262,15 @@ async def show_deposit_menu(
                 # Show reason for unavailability
                 error = level_info.get("error", "")
                 if "необходимо сначала купить" in error:
-                    text += f"🔒 Level {level}: `{amount} USDT` - Недоступен (нет предыдущего уровня)\n"
+                    text += (
+                        f"🔒 Level {level}: `{amount} USDT` - "
+                        f"Недоступен (нет предыдущего уровня)\n"
+                    )
                 elif "необходимо минимум" in error:
-                    text += f"🔒 Level {level}: `{amount} USDT` - Недоступен (не хватает партнёров)\n"
+                    text += (
+                        f"🔒 Level {level}: `{amount} USDT` - "
+                        f"Недоступен (не хватает партнёров)\n"
+                    )
                 else:
                     text += f"🔒 Level {level}: `{amount} USDT` - Недоступен\n"
         else:
@@ -292,7 +306,10 @@ async def show_withdrawal_menu(
     telegram_id = message.from_user.id if message.from_user else None
     logger.info(f"[MENU] show_withdrawal_menu called for user {telegram_id}")
     user: User | None = data.get("user")
-    logger.info(f"[MENU] User from data: {user.id if user else None}, data keys: {list(data.keys())}")
+    logger.info(
+        f"[MENU] User from data: {user.id if user else None}, "
+        f"data keys: {list(data.keys())}"
+    )
     if not user and telegram_id:
         user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
     if not user:
@@ -956,8 +973,10 @@ async def start_registration(
         "Для начала работы необходимо пройти регистрацию.\n\n"
         "📝 **Шаг 1:** Введите ваш BSC (BEP-20) адрес кошелька\n"
         "Формат: `0x...` (42 символа)\n\n"
-        "⚠️ **КРИТИЧНО:** Указывайте только **ЛИЧНЫЙ** кошелек (Trust Wallet, MetaMask, SafePal или любой холодный кошелек).\n"
-        "🚫 **НЕ указывайте** адрес биржи (Binance, Bybit), иначе выплаты могут быть утеряны!"
+        "⚠️ **КРИТИЧНО:** Указывайте только **ЛИЧНЫЙ** кошелек "
+        "(Trust Wallet, MetaMask, SafePal или любой холодный кошелек).\n"
+        "🚫 **НЕ указывайте** адрес биржи (Binance, Bybit), "
+        "иначе выплаты могут быть утеряны!"
     )
 
     from aiogram.types import ReplyKeyboardRemove
@@ -1263,7 +1282,7 @@ async def show_language_settings(
 ) -> None:
     """
     Show language selection menu.
-    
+
     Args:
         message: Telegram message
         session: Database session
@@ -1309,7 +1328,7 @@ async def process_language_selection(
 ) -> None:
     """
     Process language selection.
-    
+
     Args:
         message: Telegram message
         session: Database session
@@ -1351,7 +1370,7 @@ async def back_to_settings_from_language(
 ) -> None:
     """
     Handle back button from language menu.
-    
+
     Args:
         message: Telegram message
         session: Database session

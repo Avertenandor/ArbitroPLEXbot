@@ -39,7 +39,7 @@ async def _start_finpass_recovery_flow(
         **data: Handler data
     """
     from bot.keyboards.reply import finpass_recovery_keyboard, main_menu_reply_keyboard
-    
+
     recovery_service = FinpassRecoveryService(session)
 
     # Check if already has pending request
@@ -52,12 +52,12 @@ async def _start_finpass_recovery_flow(
             f"Создан: {pending.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
             "Дождитесь рассмотрения администратором."
         )
-        
+
         is_admin = data.get("is_admin", False)
         from app.repositories.blacklist_repository import BlacklistRepository
         blacklist_repo = BlacklistRepository(session)
         blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
-        
+
         await message.answer(
             text,
             parse_mode="Markdown",
@@ -81,12 +81,12 @@ async def _start_finpass_recovery_flow(
             "Сделайте любой вывод с новым паролем — блокировка снимется автоматически.\n\n"
             "👉 Используйте '💸 Вывод' для проверки."
         )
-        
+
         is_admin = data.get("is_admin", False)
         from app.repositories.blacklist_repository import BlacklistRepository
         blacklist_repo = BlacklistRepository(session)
         blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
-        
+
         await message.answer(
             text,
             parse_mode="Markdown",
@@ -105,7 +105,7 @@ async def _start_finpass_recovery_flow(
         "3️⃣ Это защищает ваши средства, если кто-то получил доступ к аккаунту\n\n"
         "📝 Укажите причину восстановления пароля:"
     )
-    
+
     await message.answer(
         text,
         parse_mode="Markdown",

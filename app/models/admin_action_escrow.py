@@ -12,22 +12,20 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    JSON,
     DateTime,
     ForeignKey,
     Integer,
-    JSON,
     String,
     Text,
     text,
 )
-from sqlalchemy.sql import func as sa
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.admin import Admin
-    from app.models.transaction import Transaction
 
 
 class AdminActionEscrow(Base):
@@ -125,4 +123,3 @@ class AdminActionEscrow(Base):
             f"operation_type={self.operation_type!r}, "
             f"status={self.status!r})"
         )
-

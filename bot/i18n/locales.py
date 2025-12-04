@@ -14,4 +14,3 @@ DEFAULT_LANGUAGE = "ru"
 # Language codes
 LANG_RU = "ru"
 LANG_EN = "en"
-

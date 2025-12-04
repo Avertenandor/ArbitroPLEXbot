@@ -62,7 +62,7 @@ async def _process_payment_retries_async() -> None:
     async with lock.lock("payment_retry_processing", timeout=300):
         try:
             # Use global engine instead of creating new one
-            from app.config.database import async_engine, async_session_maker
+            from app.config.database import async_session_maker
 
             async with async_session_maker() as session:
                 # Get blockchain service

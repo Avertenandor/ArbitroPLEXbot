@@ -16,7 +16,7 @@ router = Router()
 async def debug_unhandled(message: Message):
     """
     Catch-all handler for debugging.
-    
+
     This should be registered LAST to catch messages that don't match any other handler.
     """
     text_bytes = message.text.encode('utf-8') if message.text else b''
@@ -26,6 +26,5 @@ async def debug_unhandled(message: Message):
         f"bytes={text_bytes.hex()} "
         f"chat_id={message.chat.id}"
     )
-    
-    # Don't send response to avoid spam, just log
 
+    # Don't send response to avoid spam, just log

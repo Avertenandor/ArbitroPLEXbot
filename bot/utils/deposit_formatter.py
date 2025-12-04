@@ -84,4 +84,3 @@ async def format_deposit_with_corridor(
     )
 
     return text
-

@@ -52,9 +52,9 @@ from jobs.broker import broker  # noqa: F401
 from jobs.tasks import (  # noqa: F401
     daily_rewards,
     deposit_monitoring,
+    incoming_transfer_monitor,
     notification_retry,
     payment_retry,
-    incoming_transfer_monitor,
 )
 
 logger.info("Dramatiq worker initialized with all tasks")

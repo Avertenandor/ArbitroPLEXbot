@@ -6,6 +6,7 @@ Runs every 5 minutes.
 """
 
 import asyncio
+from typing import Any
 
 import dramatiq
 from aiogram import Bot
@@ -13,8 +14,6 @@ from loguru import logger
 
 from app.config.database import async_session_maker
 from app.config.settings import settings
-from typing import Any
-
 from app.services.metrics_monitor_service import MetricsMonitorService
 from app.services.notification_service import NotificationService
 
@@ -152,4 +151,3 @@ async def _take_protective_actions(
             f"Protective action triggered for: {anomaly_type}",
             extra={"anomaly": anomaly},
         )
-

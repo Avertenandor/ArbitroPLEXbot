@@ -8,7 +8,6 @@ import asyncio
 import hashlib
 import time
 from contextlib import asynccontextmanager
-from typing import Any
 
 from loguru import logger
 from sqlalchemy import text
@@ -441,4 +440,3 @@ def get_distributed_lock(
         _distributed_lock = DistributedLock()
 
     return _distributed_lock
-

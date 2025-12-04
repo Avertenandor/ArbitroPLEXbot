@@ -29,9 +29,10 @@ os.environ.setdefault("SYSTEM_WALLET_ADDRESS", "0x742d35Cc6634C0532925a3b844Bc9e
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-import pytest
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 
 @pytest.fixture
@@ -129,6 +130,7 @@ async def test_engine():
     WARNING: Only use for integration tests with real DB.
     """
     from sqlalchemy.ext.asyncio import create_async_engine
+
     from app.config.settings import settings
 
     engine = create_async_engine(

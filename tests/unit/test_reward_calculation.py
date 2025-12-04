@@ -9,9 +9,10 @@ Tests cover:
 - Edge cases for financial calculations
 """
 
-import pytest
 from decimal import Decimal
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
 
 from app.services.reward.reward_calculator import RewardCalculator
 

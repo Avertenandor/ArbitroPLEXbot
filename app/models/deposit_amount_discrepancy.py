@@ -98,6 +98,3 @@ class DepositAmountDiscrepancy(Base):
             f"type={self.discrepancy_type}, "
             f"discrepancy={self.discrepancy})"
         )
-
-
-

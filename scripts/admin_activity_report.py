@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config.settings import settings
 from app.models.admin_action import AdminAction
@@ -138,7 +138,7 @@ async def generate_admin_activity_report(
             # Generate report
             report_lines = [
                 "=" * 80,
-                f"ADMIN ACTIVITY REPORT",
+                "ADMIN ACTIVITY REPORT",
                 f"Period: {start_date.strftime('%Y-%m-%d %H:%M')} - "
                 f"{end_date.strftime('%Y-%m-%d %H:%M')}",
                 f"Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC",
@@ -223,4 +223,3 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
-

@@ -14,7 +14,6 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
-    String,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -105,4 +104,3 @@ class DepositLevelVersion(Base):
             f"version={self.version}, amount={self.amount}, "
             f"is_active={self.is_active})>"
         )
-

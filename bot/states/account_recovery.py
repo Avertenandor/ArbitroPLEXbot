@@ -13,4 +13,3 @@ class AccountRecoveryStates(StatesGroup):
     waiting_for_wallet = State()  # Waiting for wallet address
     waiting_for_signature = State()  # Waiting for signature proof
     waiting_for_additional_info = State()  # Optional: email/phone verification
-

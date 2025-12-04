@@ -22,7 +22,6 @@ from aiogram.types import Message
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config.settings import settings
 from app.services.admin_log_service import AdminLogService
 from app.services.admin_service import AdminService
 from bot.keyboards.reply import (
@@ -48,10 +47,10 @@ router = Router()
 def is_super_admin(telegram_id: int | None) -> bool:
     """
     Check if user is the super admin.
-    
+
     Args:
         telegram_id: Telegram user ID
-        
+
     Returns:
         True if user is super admin
     """
@@ -192,7 +191,7 @@ async def show_master_key_status(
 ) -> None:
     """
     Show current master key status.
-    
+
     Cannot show actual key (it's hashed), but shows:
     - Key exists
     - Security information
@@ -253,7 +252,7 @@ async def confirm_regenerate_master_key(
 ) -> None:
     """
     Ask for confirmation before regenerating master key.
-    
+
     This is a critical operation that will invalidate the old key.
     """
     telegram_id = message.from_user.id if message.from_user else None
@@ -283,7 +282,10 @@ async def confirm_regenerate_master_key(
         )
 
         await state.set_state(AdminMasterKeyStates.awaiting_confirmation)
-        await message.answer(text, parse_mode="Markdown", reply_markup=master_key_management_reply_keyboard())
+        await message.answer(
+            text, parse_mode="Markdown",
+            reply_markup=master_key_management_reply_keyboard()
+        )
     else:
         # First time - generate immediately
         await regenerate_master_key(message, session, state, **data)
@@ -323,7 +325,7 @@ async def regenerate_master_key(
 ) -> None:
     """
     Generate new master key for super admin.
-    
+
     CRITICAL OPERATION:
     - Generates new random key (32 bytes = 256 bits)
     - Hashes with bcrypt
@@ -381,8 +383,12 @@ async def regenerate_master_key(
         logger.error(f"Failed to log master key action: {e}")
 
     # Show new key to user (ONLY ONCE!)
+    title = (
+        "✅ **Новый мастер-ключ сгенерирован!**" if not is_first_key
+        else "✅ **Мастер-ключ создан!**"
+    )
     text_lines = [
-        "✅ **Новый мастер-ключ сгенерирован!**" if not is_first_key else "✅ **Мастер-ключ создан!**",
+        title,
         "",
         "🔑 **Ваш мастер-ключ:**",
         f"`{plain_master_key}`",
@@ -391,7 +397,10 @@ async def regenerate_master_key(
         "• **Сохраните этот ключ в безопасном месте**",
         "• Ключ показывается **только один раз**",
         "• Если вы потеряете ключ, придется создать новый",
-        "• Старый ключ больше не будет работать" if not is_first_key else "• Используйте его для входа в админ-панель",
+        (
+            "• Старый ключ больше не будет работать" if not is_first_key
+            else "• Используйте его для входа в админ-панель"
+        ),
         "",
         "📝 **Рекомендации:**",
         "• Сохраните в менеджере паролей",
@@ -420,7 +429,9 @@ async def regenerate_master_key(
         "2. Введите мастер-ключ когда система попросит\n"
         "3. Получите доступ к админ-функциям\n\n"
         "Для возврата в главное меню используйте кнопку ниже.",
-        reply_markup=main_menu_reply_keyboard(user=user, blacklist_entry=blacklist_entry, is_admin=is_admin)
+        reply_markup=main_menu_reply_keyboard(
+            user=user, blacklist_entry=blacklist_entry, is_admin=is_admin
+        )
     )
 
 
@@ -448,7 +459,9 @@ async def back_to_main_menu(
         "📊 **Главное меню**\n\n"
         "Выберите действие:",
         parse_mode="Markdown",
-        reply_markup=main_menu_reply_keyboard(user=user, blacklist_entry=blacklist_entry, is_admin=is_admin)
+        reply_markup=main_menu_reply_keyboard(
+            user=user, blacklist_entry=blacklist_entry, is_admin=is_admin
+        )
     )
 
     logger.info(f"[MASTER_KEY] Super admin {telegram_id} returned to main menu")

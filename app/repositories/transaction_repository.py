@@ -120,10 +120,10 @@ class TransactionRepository(BaseRepository[Transaction]):
         )
         result = await self.session.execute(stmt)
         transactions = result.scalars().all()
-        
+
         if not transactions:
             return Decimal("0")
-            
+
         return sum((t.amount for t in transactions), Decimal("0"))
 
     async def get_total_withdrawn_today(self) -> Decimal:
@@ -134,15 +134,15 @@ class TransactionRepository(BaseRepository[Transaction]):
         Returns:
             Total amount
         """
-        from datetime import datetime, UTC
-        
+        from datetime import UTC, datetime
+
         today_start = datetime.now(UTC).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
         # Convert to naive datetime to match Transaction model's naive DateTime column
         # This avoids "can't subtract offset-naive and offset-aware datetimes" error
         today_start_naive = today_start.replace(tzinfo=None)
-        
+
         stmt = (
             select(Transaction)
             .where(Transaction.type == TransactionType.WITHDRAWAL.value)
@@ -157,8 +157,8 @@ class TransactionRepository(BaseRepository[Transaction]):
         )
         result = await self.session.execute(stmt)
         transactions = result.scalars().all()
-        
+
         if not transactions:
             return Decimal("0")
-            
+
         return sum((t.amount for t in transactions), Decimal("0"))

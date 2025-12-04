@@ -23,4 +23,3 @@ __all__ = [
     "get_required_plex_for_deposits",
     "get_user_level",
 ]
-

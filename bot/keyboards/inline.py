@@ -14,11 +14,11 @@ def admin_blockchain_keyboard(
 ) -> InlineKeyboardMarkup:
     """
     Keyboard for blockchain settings management.
-    
+
     Args:
         active_provider: Currently active provider name ('quicknode' or 'nodereal')
         is_auto_switch: Whether auto-switch is enabled
-        
+
     Returns:
         InlineKeyboardMarkup
     """

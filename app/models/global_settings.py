@@ -21,7 +21,7 @@ class GlobalSettings(Base):
     __tablename__ = "global_settings"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    
+
     # Withdrawal settings
     min_withdrawal_amount: Mapped[Decimal] = mapped_column(
         Numeric(20, 2), default=Decimal("0.05"), nullable=False
@@ -38,7 +38,7 @@ class GlobalSettings(Base):
     withdrawal_service_fee: Mapped[Decimal] = mapped_column(
         Numeric(5, 2), default=Decimal("0.00"), nullable=False
     )
-    
+
     # Blockchain settings
     active_rpc_provider: Mapped[str] = mapped_column(
         String(20), default="quicknode", nullable=False
@@ -51,7 +51,7 @@ class GlobalSettings(Base):
     max_open_deposit_level: Mapped[int] = mapped_column(
         Integer, default=5, nullable=False
     )
-    
+
     # ROI Corridor settings (JSON)
     # Structure: {
     #   "level_1": {"mode": "custom", "min": "0.8", "max": "1.2", "fixed": "1.0"},

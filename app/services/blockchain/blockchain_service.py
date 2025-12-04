@@ -10,13 +10,14 @@ from typing import Any
 
 from loguru import logger
 
+from app.config.constants import BLOCKCHAIN_LONG_TIMEOUT, BLOCKCHAIN_TIMEOUT
+
 from .constants import USDT_ABI, USDT_DECIMALS
 from .deposit_processor import DepositProcessor
 from .event_monitor import EventMonitor
 from .payment_sender import PaymentSender
 from .provider_manager import ProviderManager
-from .rpc_wrapper import with_timeout, BlockchainTimeoutError
-from app.config.constants import BLOCKCHAIN_TIMEOUT, BLOCKCHAIN_LONG_TIMEOUT
+from .rpc_wrapper import with_timeout
 
 
 class BlockchainService:
@@ -285,8 +286,12 @@ class BlockchainService:
 
         # Convert amounts to wei for comparison using proper precision
         from decimal import ROUND_DOWN
-        min_amount_wei = int((min_amount * Decimal(10**USDT_DECIMALS)).to_integral_value(ROUND_DOWN))
-        max_amount_wei = int((max_amount * Decimal(10**USDT_DECIMALS)).to_integral_value(ROUND_DOWN))
+        min_amount_wei = int(
+            (min_amount * Decimal(10**USDT_DECIMALS)).to_integral_value(ROUND_DOWN)
+        )
+        max_amount_wei = int(
+            (max_amount * Decimal(10**USDT_DECIMALS)).to_integral_value(ROUND_DOWN)
+        )
 
         try:
             # Get current block if 'latest' with timeout

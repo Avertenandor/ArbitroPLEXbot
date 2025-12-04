@@ -4,12 +4,12 @@ PLEX Payment Repository.
 Database operations for PlexPaymentRequirement model.
 """
 
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Sequence
 
 from loguru import logger
-from sqlalchemy import and_, delete, or_, select, update
+from sqlalchemy import and_, delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -32,20 +32,20 @@ class PlexPaymentRepository:
     ) -> PlexPaymentRequirement:
         """
         Create a new PLEX payment requirement.
-        
+
         Args:
             user_id: User ID
             deposit_id: Deposit ID
             daily_plex_required: Daily PLEX amount required
             deposit_created_at: When the deposit was created
-            
+
         Returns:
             Created PlexPaymentRequirement
         """
         next_payment_due, warning_due, block_due = (
             PlexPaymentRequirement.calculate_deadlines(deposit_created_at)
         )
-        
+
         payment = PlexPaymentRequirement(
             user_id=user_id,
             deposit_id=deposit_id,
@@ -55,17 +55,17 @@ class PlexPaymentRepository:
             block_due=block_due,
             status=PlexPaymentStatus.ACTIVE,
         )
-        
+
         self._session.add(payment)
         await self._session.flush()
         await self._session.refresh(payment)
-        
+
         logger.info(
             f"Created PLEX payment requirement: "
             f"user_id={user_id}, deposit_id={deposit_id}, "
             f"daily_plex={daily_plex_required}"
         )
-        
+
         return payment
 
     async def get_by_id(self, payment_id: int) -> PlexPaymentRequirement | None:
@@ -127,7 +127,7 @@ class PlexPaymentRepository:
     ) -> Sequence[PlexPaymentRequirement]:
         """
         Get payment requirements that are overdue (past next_payment_due).
-        
+
         Returns payments that are active and past their due date.
         """
         now = datetime.now(UTC)
@@ -154,7 +154,7 @@ class PlexPaymentRepository:
     ) -> Sequence[PlexPaymentRequirement]:
         """
         Get payment requirements that need warning sent.
-        
+
         Returns active payments past warning_due but not yet warned.
         """
         now = datetime.now(UTC)
@@ -179,7 +179,7 @@ class PlexPaymentRepository:
     ) -> Sequence[PlexPaymentRequirement]:
         """
         Get payment requirements that need to be blocked.
-        
+
         Returns payments past block_due that are still active or warned.
         """
         now = datetime.now(UTC)
@@ -209,28 +209,28 @@ class PlexPaymentRepository:
     ) -> PlexPaymentRequirement | None:
         """
         Mark payment as received.
-        
+
         Args:
             payment_id: Payment requirement ID
             tx_hash: Transaction hash
             amount: Amount paid
-            
+
         Returns:
             Updated payment requirement or None
         """
         payment = await self.get_by_id(payment_id)
         if not payment:
             return None
-        
+
         payment.mark_paid(tx_hash, amount)
         await self._session.flush()
         await self._session.refresh(payment)
-        
+
         logger.info(
             f"PLEX payment confirmed: payment_id={payment_id}, "
             f"tx_hash={tx_hash[:10]}..., amount={amount}"
         )
-        
+
         return payment
 
     async def mark_warning_sent(
@@ -240,15 +240,15 @@ class PlexPaymentRepository:
         payment = await self.get_by_id(payment_id)
         if not payment:
             return None
-        
+
         payment.mark_warning_sent()
         await self._session.flush()
-        
+
         logger.warning(
             f"PLEX payment warning sent: payment_id={payment_id}, "
             f"user_id={payment.user_id}, deposit_id={payment.deposit_id}"
         )
-        
+
         return payment
 
     async def mark_blocked(
@@ -258,24 +258,24 @@ class PlexPaymentRepository:
         payment = await self.get_by_id(payment_id)
         if not payment:
             return None
-        
+
         payment.mark_blocked()
         await self._session.flush()
-        
+
         logger.error(
             f"PLEX payment blocked: payment_id={payment_id}, "
             f"user_id={payment.user_id}, deposit_id={payment.deposit_id}"
         )
-        
+
         return payment
 
     async def get_total_daily_plex_required(self, user_id: int) -> Decimal:
         """
         Get total daily PLEX required for all active deposits.
-        
+
         Args:
             user_id: User ID
-            
+
         Returns:
             Total daily PLEX required
         """
@@ -344,7 +344,7 @@ class PlexPaymentRepository:
             select(PlexPaymentRequirement)
             .where(
                 and_(
-                    PlexPaymentRequirement.is_work_active == False,
+                    not PlexPaymentRequirement.is_work_active,
                     PlexPaymentRequirement.status.in_([
                         PlexPaymentStatus.ACTIVE,
                         PlexPaymentStatus.WARNING_SENT,
@@ -370,7 +370,7 @@ class PlexPaymentRepository:
             select(PlexPaymentRequirement)
             .where(
                 and_(
-                    PlexPaymentRequirement.is_work_active == True,
+                    PlexPaymentRequirement.is_work_active,
                     PlexPaymentRequirement.status.in_([
                         PlexPaymentStatus.ACTIVE,
                         PlexPaymentStatus.WARNING_SENT,
@@ -384,4 +384,3 @@ class PlexPaymentRepository:
             .limit(limit)
         )
         return result.scalars().all()
-

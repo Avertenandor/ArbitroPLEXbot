@@ -10,6 +10,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.user_repository import UserRepository
+
 from .locales import DEFAULT_LANGUAGE, SUPPORTED_LANGUAGES
 from .translations import TRANSLATIONS
 
@@ -185,4 +186,3 @@ async def get_user_language(
     except Exception as e:
         logger.error(f"Error getting user language: {e}")
         return DEFAULT_LANGUAGE
-

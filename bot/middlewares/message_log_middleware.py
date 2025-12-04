@@ -66,4 +66,3 @@ class MessageLogMiddleware(BaseMiddleware):
 
         # Continue processing
         return await handler(event, data)
-

@@ -8,13 +8,11 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
-from loguru import logger
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import User
 from app.models.deposit import Deposit
-from app.models.transaction import Transaction
+from app.models.user import User
 
 
 class AnalyticsService:
@@ -238,4 +236,3 @@ class AnalyticsService:
             "total_users": total_users,
             "deposit_rate": round(deposit_rate, 1),
         }
-

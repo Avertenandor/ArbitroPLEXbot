@@ -11,7 +11,6 @@ from aiogram.fsm.state import State
 from aiogram.fsm.storage.base import BaseStorage, StateType, StorageKey
 from loguru import logger
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.database import async_session_maker
 from app.models.user_fsm_state import UserFsmState
@@ -287,4 +286,3 @@ class PostgreSQLFSMStorage(BaseStorage):
                 f"R11-3: Failed to update FSM data for user {key.user_id}: {e}",
                 exc_info=True,
             )
-

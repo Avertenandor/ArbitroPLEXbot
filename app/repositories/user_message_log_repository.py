@@ -178,4 +178,3 @@ class UserMessageLogRepository:
         result = await self.session.execute(stmt)
         await self.session.flush()
         return result.rowcount or 0
-

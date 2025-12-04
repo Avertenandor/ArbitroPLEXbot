@@ -119,7 +119,11 @@ def format_user_profile(user: Any, stats: dict[str, Any]) -> str:
         deposit_status = getattr(user, 'deposit_status_text', 'Неизвестен')
         required_plex = int(getattr(user, 'required_daily_plex', 0))
         tx_count = getattr(user, 'deposit_tx_count', 0)
-        last_scan = user.last_deposit_scan_at.strftime('%d.%m.%Y %H:%M') if hasattr(user, 'last_deposit_scan_at') and user.last_deposit_scan_at else 'Не сканировался'
+        last_scan = (
+            user.last_deposit_scan_at.strftime('%d.%m.%Y %H:%M')
+            if hasattr(user, 'last_deposit_scan_at') and user.last_deposit_scan_at
+            else 'Не сканировался'
+        )
 
         text += (
             f"━━━━━━━━━━━━━━━━━━\n"
@@ -166,7 +170,11 @@ def format_admin_list(admins: list[Any]) -> str:
     for admin in admins:
         # Role emoji and text
         role_emoji = "👑" if admin.is_super_admin else "⭐" if admin.is_extended_admin else "👤"
-        role_text = "Супер-админ" if admin.is_super_admin else "Расширенный админ" if admin.is_extended_admin else "Админ"
+        role_text = (
+            "Супер-админ" if admin.is_super_admin
+            else "Расширенный админ" if admin.is_extended_admin
+            else "Админ"
+        )
 
         # Status
         status_emoji = "✅" if admin.is_active else "❌"

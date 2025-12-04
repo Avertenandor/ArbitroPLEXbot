@@ -69,6 +69,105 @@ _Введите любой из этих идентификаторов:_
     logger.info(f"Admin {admin.id} opened user messages menu")
 
 
+async def _check_navigation_buttons(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> bool:
+    """
+    Check for navigation buttons and handle them.
+
+    Returns True if navigation button was pressed.
+    """
+    # Breakout for financial reports (navigation fix)
+    if message.text and "Финансовая" in message.text:
+        await clear_state_preserve_admin_token(state)
+        from bot.handlers.admin.financials import show_financial_list
+        await show_financial_list(message, session, state, **data)
+        return True
+
+    # Check for cancel/back
+    if message.text in ("◀️ Назад в админ-панель", "❌ Отмена"):
+        await clear_state_preserve_admin_token(state)
+        await message.answer(
+            "👑 **Панель администратора**\n\nВыберите действие:",
+            parse_mode="Markdown",
+            reply_markup=get_admin_keyboard_from_data(data),
+        )
+        return True
+
+    return False
+
+
+async def _find_user_by_query(
+    search_query: str,
+    user_service: UserService,
+) -> tuple[Any | None, int | None]:
+    """
+    Find user by various search methods.
+
+    Returns:
+        Tuple of (user, telegram_id)
+    """
+    # Search by username with @
+    if search_query.startswith("@"):
+        username = search_query.lstrip("@")
+        user = await user_service.find_by_username(username)
+        return (user, user.telegram_id) if user else (None, None)
+
+    # Search by wallet address
+    if search_query.startswith("0x") and len(search_query) == 42:
+        user = await user_service.get_by_wallet(search_query)
+        return (user, user.telegram_id) if user else (None, None)
+
+    # Try as numeric ID
+    try:
+        numeric_id = int(search_query)
+        # Try as telegram_id first
+        user = await user_service.get_user_by_telegram_id(numeric_id)
+        if user:
+            return user, user.telegram_id
+
+        # Try as user_id
+        user = await user_service.get_by_id(numeric_id)
+        return (user, user.telegram_id) if user else (None, None)
+
+    except ValueError:
+        # Try as username without @
+        user = await user_service.find_by_username(search_query)
+        return (user, user.telegram_id) if user else (None, None)
+
+
+def _format_messages_list(
+    user: Any,
+    telegram_id: int,
+    messages: list,
+    total: int,
+) -> str:
+    """Format messages list for display."""
+    text_lines = [
+        f"📝 **Сообщения пользователя {user.username or telegram_id}**",
+        f"Telegram ID: `{telegram_id}`",
+        f"Всего сообщений: {total}",
+        f"Показано: {min(len(messages), 20)}",
+        "",
+        "---",
+        "",
+    ]
+
+    for msg in messages[:20]:  # Show first 20
+        timestamp = msg.created_at.strftime("%Y-%m-%d %H:%M:%S")
+        msg_text = msg.message_text
+        if len(msg_text) > 100:
+            msg_text = msg_text[:100] + "..."
+        text_lines.append(f"🕒 {timestamp}")
+        text_lines.append(f"💬 `{msg_text}`")
+        text_lines.append("")
+
+    return "\n".join(text_lines)
+
+
 @router.message(AdminUserMessagesStates.waiting_for_user_id)
 async def process_user_id_for_messages(
     message: Message,
@@ -84,60 +183,14 @@ async def process_user_id_for_messages(
         await message.answer("❌ Эта функция доступна только администраторам")
         return
 
-    # Parse telegram_id or username
-
-    # Breakout for financial reports (navigation fix)
-    if message.text and "Финансовая" in message.text:
-        await clear_state_preserve_admin_token(state)
-        from bot.handlers.admin.financials import show_financial_list
-        await show_financial_list(message, session, state, **data)
+    # Check for navigation buttons
+    if await _check_navigation_buttons(message, session, state, **data):
         return
 
-    # Check for cancel/back
-    if message.text in ("◀️ Назад в админ-панель", "❌ Отмена"):
-        await clear_state_preserve_admin_token(state)
-        await message.answer(
-            "👑 **Панель администратора**\n\nВыберите действие:",
-            parse_mode="Markdown",
-            reply_markup=get_admin_keyboard_from_data(data),
-        )
-        return
-
+    # Find user by search query
     user_service = UserService(session)
-    user = None
-    telegram_id = None
     search_query = message.text.strip()
-
-    # Try to find user by different methods
-    if search_query.startswith("@"):
-        # Search by username
-        username = search_query.lstrip("@")
-        user = await user_service.find_by_username(username)
-        if user:
-            telegram_id = user.telegram_id
-    elif search_query.startswith("0x") and len(search_query) == 42:
-        # Search by wallet
-        user = await user_service.get_by_wallet(search_query)
-        if user:
-            telegram_id = user.telegram_id
-    else:
-        # Try as numeric ID
-        try:
-            numeric_id = int(search_query)
-            # Try as telegram_id first
-            user = await user_service.get_user_by_telegram_id(numeric_id)
-            if user:
-                telegram_id = user.telegram_id
-            else:
-                # Try as user_id
-                user = await user_service.get_by_id(numeric_id)
-                if user:
-                    telegram_id = user.telegram_id
-        except ValueError:
-            # Try as username without @
-            user = await user_service.find_by_username(search_query)
-            if user:
-                telegram_id = user.telegram_id
+    user, telegram_id = await _find_user_by_query(search_query, user_service)
 
     if not user or not telegram_id:
         await message.answer(
@@ -173,28 +226,8 @@ async def process_user_id_for_messages(
         await clear_state_preserve_admin_token(state)
         return
 
-    # Format messages
-    text_lines = [
-        f"📝 **Сообщения пользователя {user.username or telegram_id}**",
-        f"Telegram ID: `{telegram_id}`",
-        f"Всего сообщений: {total}",
-        f"Показано: {min(len(messages), 20)}",
-        "",
-        "---",
-        "",
-    ]
-
-    for msg in messages[:20]:  # Show first 20
-        timestamp = msg.created_at.strftime("%Y-%m-%d %H:%M:%S")
-        # Truncate long messages
-        msg_text = msg.message_text
-        if len(msg_text) > 100:
-            msg_text = msg_text[:100] + "..."
-        text_lines.append(f"🕒 {timestamp}")
-        text_lines.append(f"💬 `{msg_text}`")
-        text_lines.append("")
-
-    text = "\n".join(text_lines)
+    # Format and send messages
+    text = _format_messages_list(user, telegram_id, messages, total)
 
     # Save state for pagination
     await state.set_state(AdminUserMessagesStates.viewing_messages)

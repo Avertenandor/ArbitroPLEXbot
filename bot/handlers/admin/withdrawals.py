@@ -199,7 +199,10 @@ async def handle_withdrawal_selection(
     if user_balance:
         total_dep = user_balance.get('total_deposits', 0)
         total_wd = user_balance.get('total_withdrawals', 0)
-        history_text = f"📊 История: депозиты {format_usdt(total_dep)}, выводы {format_usdt(total_wd)}\n"
+        history_text = (
+            f"📊 История: депозиты {format_usdt(total_dep)}, "
+            f"выводы {format_usdt(total_wd)}\n"
+        )
 
     date = withdrawal.created_at.strftime("%d.%m.%Y %H:%M")
     net_amount = withdrawal.amount - withdrawal.fee
@@ -287,6 +290,265 @@ async def _show_confirmation(
     )
 
 
+async def _validate_withdrawal_exists(
+    withdrawal_id: int,
+    withdrawal_service: WithdrawalService,
+) -> Transaction | None:
+    """Validate that withdrawal exists and return it."""
+    return await withdrawal_service.get_withdrawal_by_id(withdrawal_id)
+
+
+async def _check_dual_control_requirement(
+    withdrawal: Transaction,
+    admin: Admin | None,
+    session: AsyncSession,
+    message: Message,
+) -> bool:
+    """
+    Check if dual control is required and handle escrow creation.
+
+    Returns:
+        True if dual control is required (escrow created/exists), False otherwise
+    """
+    from app.config.settings import settings
+    from app.repositories.admin_action_escrow_repository import AdminActionEscrowRepository
+
+    withdrawal_amount = float(withdrawal.amount)
+    requires_dual_control = withdrawal_amount >= settings.dual_control_withdrawal_threshold
+
+    if not requires_dual_control:
+        return False
+
+    escrow_repo = AdminActionEscrowRepository(session)
+    admin_id = admin.id if admin else None
+
+    existing_escrow = await escrow_repo.get_pending_by_operation(
+        "WITHDRAWAL_APPROVAL", withdrawal.id
+    )
+
+    if existing_escrow:
+        if existing_escrow.initiator_admin_id == admin_id:
+            await message.answer(
+                f"⚠️ Для вывода {withdrawal_amount} USDT требуется "
+                "подтверждение второго администратора.\n\n"
+                f"Escrow #{existing_escrow.id} ожидает подтверждения.",
+                reply_markup=admin_withdrawals_keyboard(),
+            )
+            return True
+
+    escrow = await escrow_repo.create(
+        operation_type="WITHDRAWAL_APPROVAL",
+        target_id=withdrawal.id,
+        operation_data={
+            "transaction_id": withdrawal.id,
+            "amount": str(withdrawal.amount),
+            "user_id": withdrawal.user_id,
+            "to_address": withdrawal.to_address,
+        },
+        initiator_admin_id=admin_id,
+        expires_in_hours=settings.dual_control_escrow_expiry_hours,
+    )
+    await session.commit()
+
+    await message.answer(
+        f"⚠️ Для вывода {withdrawal_amount} USDT требуется "
+        "подтверждение второго администратора.\n\n"
+        f"Escrow #{escrow.id} создан.",
+        reply_markup=admin_withdrawals_keyboard(),
+    )
+    return True
+
+
+async def _send_blockchain_payment(
+    withdrawal: Transaction,
+    message: Message,
+) -> tuple[bool, str | None]:
+    """
+    Send blockchain payment for withdrawal.
+
+    Returns:
+        (success, tx_hash_or_error)
+    """
+    blockchain_service = get_blockchain_service()
+    net_amount = withdrawal.amount - withdrawal.fee
+    payment_result = await blockchain_service.send_payment(
+        withdrawal.to_address, net_amount
+    )
+
+    if not payment_result["success"]:
+        error_msg = payment_result.get("error", "Неизвестная ошибка")
+        await message.answer(
+            f"❌ Ошибка отправки: {error_msg}",
+            reply_markup=admin_withdrawals_keyboard(),
+        )
+        return False, error_msg
+
+    return True, payment_result["tx_hash"]
+
+
+async def _process_withdrawal_approval(
+    withdrawal_id: int,
+    tx_hash: str,
+    admin: Admin | None,
+    withdrawal_service: WithdrawalService,
+    message: Message,
+) -> bool:
+    """Process withdrawal approval in database."""
+    admin_id = admin.id if admin else None
+    success, error_msg = await withdrawal_service.approve_withdrawal(
+        withdrawal_id, tx_hash, admin_id
+    )
+
+    if not success:
+        await message.answer(
+            f"❌ Ошибка: {error_msg}",
+            reply_markup=admin_withdrawals_keyboard(),
+        )
+        return False
+
+    return True
+
+
+async def _notify_user_and_log_approval(
+    withdrawal: Transaction,
+    tx_hash: str,
+    admin: Admin | None,
+    user_service: UserService,
+    notification_service: NotificationService,
+    session: AsyncSession,
+    message: Message,
+) -> None:
+    """Notify user about approval and log admin action."""
+    user = await user_service.find_by_id(withdrawal.user_id)
+    if user:
+        logger.info(
+            f"Attempting to notify user {user.id} (TG: {user.telegram_id}) "
+            f"about withdrawal {tx_hash}"
+        )
+        notify_result = await notification_service.notify_withdrawal_processed(
+            user.telegram_id, float(withdrawal.amount), tx_hash
+        )
+        logger.info(f"Notification result for user {user.id}: {notify_result}")
+    else:
+        logger.warning(f"User {withdrawal.user_id} not found for notification")
+
+    await message.answer(
+        f"✅ **Заявка #{withdrawal.id} одобрена!**\n\n"
+        f"💰 Сумма: {format_usdt(withdrawal.amount)} USDT\n"
+        f"🔗 TX: `{tx_hash}`\n\n"
+        "Средства отправлены пользователю.",
+        parse_mode="Markdown",
+        reply_markup=admin_withdrawals_keyboard(),
+    )
+
+    if admin:
+        log_service = AdminLogService(session)
+        await log_service.log_withdrawal_approved(
+            admin=admin,
+            withdrawal_id=withdrawal.id,
+            user_id=withdrawal.user_id,
+            amount=str(withdrawal.amount),
+        )
+
+
+async def _handle_withdrawal_approval(
+    withdrawal: Transaction,
+    admin: Admin | None,
+    session: AsyncSession,
+    withdrawal_service: WithdrawalService,
+    user_service: UserService,
+    notification_service: NotificationService,
+    message: Message,
+) -> None:
+    """Handle the complete withdrawal approval flow."""
+    from app.config.settings import settings
+
+    # Check maintenance mode
+    if settings.blockchain_maintenance_mode:
+        await message.answer(
+            "⚠️ **Blockchain в режиме обслуживания**\n\n"
+            "Операции с блокчейном временно недоступны.",
+            parse_mode="Markdown",
+            reply_markup=admin_withdrawals_keyboard(),
+        )
+        return
+
+    # Check dual control requirement
+    requires_dual = await _check_dual_control_requirement(
+        withdrawal, admin, session, message
+    )
+    if requires_dual:
+        return
+
+    # Send blockchain payment
+    success, tx_hash_or_error = await _send_blockchain_payment(withdrawal, message)
+    if not success:
+        return
+
+    # Approve withdrawal in database
+    approval_success = await _process_withdrawal_approval(
+        withdrawal.id, tx_hash_or_error, admin, withdrawal_service, message
+    )
+    if not approval_success:
+        return
+
+    # Notify user and log
+    await _notify_user_and_log_approval(
+        withdrawal,
+        tx_hash_or_error,
+        admin,
+        user_service,
+        notification_service,
+        session,
+        message,
+    )
+
+
+async def _handle_withdrawal_rejection(
+    withdrawal: Transaction,
+    admin: Admin | None,
+    withdrawal_service: WithdrawalService,
+    user_service: UserService,
+    notification_service: NotificationService,
+    session: AsyncSession,
+    message: Message,
+) -> None:
+    """Handle the complete withdrawal rejection flow."""
+    success, error_msg = await withdrawal_service.reject_withdrawal(withdrawal.id)
+
+    if not success:
+        await message.answer(
+            f"❌ Ошибка: {error_msg}",
+            reply_markup=admin_withdrawals_keyboard(),
+        )
+        return
+
+    # Notify user
+    user = await user_service.find_by_id(withdrawal.user_id)
+    if user:
+        await notification_service.notify_withdrawal_rejected(
+            user.telegram_id, float(withdrawal.amount)
+        )
+
+    await message.answer(
+        f"❌ **Заявка #{withdrawal.id} отклонена**\n\n"
+        f"💰 Сумма: {format_usdt(withdrawal.amount)} USDT\n\n"
+        "Средства возвращены на баланс пользователя.",
+        parse_mode="Markdown",
+        reply_markup=admin_withdrawals_keyboard(),
+    )
+
+    # Log action
+    if admin:
+        log_service = AdminLogService(session)
+        await log_service.log_withdrawal_rejected(
+            admin=admin,
+            withdrawal_id=withdrawal.id,
+            user_id=withdrawal.user_id,
+            reason=None,
+        )
+
+
 @router.message(
     F.text.regexp(r"^✅ Да, (одобрить|отклонить) #(\d+)$"),
     AdminStates.confirming_withdrawal_action,
@@ -317,7 +579,7 @@ async def handle_confirm_withdrawal_action(
     admin: Admin | None = data.get("admin")
 
     try:
-        withdrawal = await withdrawal_service.get_withdrawal_by_id(withdrawal_id)
+        withdrawal = await _validate_withdrawal_exists(withdrawal_id, withdrawal_service)
 
         if not withdrawal:
             await message.answer(
@@ -327,165 +589,25 @@ async def handle_confirm_withdrawal_action(
             return
 
         if action == "approve":
-            # Check maintenance mode
-            from app.config.settings import settings
-
-            if settings.blockchain_maintenance_mode:
-                await message.answer(
-                    "⚠️ **Blockchain в режиме обслуживания**\n\n"
-                    "Операции с блокчейном временно недоступны.",
-                    parse_mode="Markdown",
-                    reply_markup=admin_withdrawals_keyboard(),
-                )
-                return
-
-            # Check dual control
-            withdrawal_amount = float(withdrawal.amount)
-            requires_dual_control = (
-                withdrawal_amount >= settings.dual_control_withdrawal_threshold
+            await _handle_withdrawal_approval(
+                withdrawal,
+                admin,
+                session,
+                withdrawal_service,
+                user_service,
+                notification_service,
+                message,
             )
-
-            if requires_dual_control:
-                # Create escrow for dual control
-                from app.repositories.admin_action_escrow_repository import (
-                    AdminActionEscrowRepository,
-                )
-
-                escrow_repo = AdminActionEscrowRepository(session)
-                admin_id = admin.id if admin else None
-
-                existing_escrow = await escrow_repo.get_pending_by_operation(
-                    "WITHDRAWAL_APPROVAL", withdrawal_id
-                )
-
-                if existing_escrow:
-                    if existing_escrow.initiator_admin_id == admin_id:
-                        await message.answer(
-                            f"⚠️ Для вывода {withdrawal_amount} USDT требуется "
-                            "подтверждение второго администратора.\n\n"
-                            f"Escrow #{existing_escrow.id} ожидает подтверждения.",
-                            reply_markup=admin_withdrawals_keyboard(),
-                        )
-                        return
-
-                escrow = await escrow_repo.create(
-                    operation_type="WITHDRAWAL_APPROVAL",
-                    target_id=withdrawal_id,
-                    operation_data={
-                        "transaction_id": withdrawal_id,
-                        "amount": str(withdrawal.amount),
-                        "user_id": withdrawal.user_id,
-                        "to_address": withdrawal.to_address,
-                    },
-                    initiator_admin_id=admin_id,
-                    expires_in_hours=settings.dual_control_escrow_expiry_hours,
-                )
-                await session.commit()
-
-                await message.answer(
-                    f"⚠️ Для вывода {withdrawal_amount} USDT требуется "
-                    "подтверждение второго администратора.\n\n"
-                    f"Escrow #{escrow.id} создан.",
-                    reply_markup=admin_withdrawals_keyboard(),
-                )
-                return
-
-            # Send blockchain transaction
-            blockchain_service = get_blockchain_service()
-            # CRITICAL: Send net_amount (amount - fee) to user, not gross amount
-            # User requested 'amount', we deducted 'amount', but send 'amount - fee'
-            net_amount = withdrawal.amount - withdrawal.fee
-            payment_result = await blockchain_service.send_payment(
-                withdrawal.to_address, net_amount
-            )
-
-            if not payment_result["success"]:
-                error_msg = payment_result.get("error", "Неизвестная ошибка")
-                await message.answer(
-                    f"❌ Ошибка отправки: {error_msg}",
-                    reply_markup=admin_withdrawals_keyboard(),
-                )
-                return
-
-            tx_hash = payment_result["tx_hash"]
-            admin_id = admin.id if admin else None
-            success, error_msg = await withdrawal_service.approve_withdrawal(
-                withdrawal_id, tx_hash, admin_id
-            )
-
-            if not success:
-                await message.answer(
-                    f"❌ Ошибка: {error_msg}",
-                    reply_markup=admin_withdrawals_keyboard(),
-                )
-                return
-
-            # Notify user
-            user = await user_service.find_by_id(withdrawal.user_id)
-            if user:
-                logger.info(f"Attempting to notify user {user.id} (TG: {user.telegram_id}) about withdrawal {tx_hash}")
-                notify_result = await notification_service.notify_withdrawal_processed(
-                    user.telegram_id, float(withdrawal.amount), tx_hash
-                )
-                logger.info(f"Notification result for user {user.id}: {notify_result}")
-            else:
-                logger.warning(f"User {withdrawal.user_id} not found for notification")
-
-            await message.answer(
-                f"✅ **Заявка #{withdrawal_id} одобрена!**\n\n"
-                f"💰 Сумма: {format_usdt(withdrawal.amount)} USDT\n"
-                f"🔗 TX: `{tx_hash}`\n\n"
-                "Средства отправлены пользователю.",
-                parse_mode="Markdown",
-                reply_markup=admin_withdrawals_keyboard(),
-            )
-
-            # Log action
-            if admin:
-                log_service = AdminLogService(session)
-                await log_service.log_withdrawal_approved(
-                    admin=admin,
-                    withdrawal_id=withdrawal_id,
-                    user_id=withdrawal.user_id,
-                    amount=str(withdrawal.amount),
-                )
-
         else:  # reject
-            success, error_msg = await withdrawal_service.reject_withdrawal(
-                withdrawal_id
+            await _handle_withdrawal_rejection(
+                withdrawal,
+                admin,
+                withdrawal_service,
+                user_service,
+                notification_service,
+                session,
+                message,
             )
-
-            if not success:
-                await message.answer(
-                    f"❌ Ошибка: {error_msg}",
-                    reply_markup=admin_withdrawals_keyboard(),
-                )
-                return
-
-            # Notify user
-            user = await user_service.find_by_id(withdrawal.user_id)
-            if user:
-                await notification_service.notify_withdrawal_rejected(
-                    user.telegram_id, float(withdrawal.amount)
-                )
-
-            await message.answer(
-                f"❌ **Заявка #{withdrawal_id} отклонена**\n\n"
-                f"💰 Сумма: {format_usdt(withdrawal.amount)} USDT\n\n"
-                "Средства возвращены на баланс пользователя.",
-                parse_mode="Markdown",
-                reply_markup=admin_withdrawals_keyboard(),
-            )
-
-            # Log action
-            if admin:
-                log_service = AdminLogService(session)
-                await log_service.log_withdrawal_rejected(
-                    admin=admin,
-                    withdrawal_id=withdrawal_id,
-                    user_id=withdrawal.user_id,
-                    reason=None,
-                )
 
     except Exception as e:
         await session.rollback()
@@ -506,8 +628,6 @@ async def handle_approved_withdrawals(
     admin = await get_admin_or_deny(message, session, **data)
     if not admin:
         return
-
-    withdrawal_service = WithdrawalService(session)
 
     try:
         # Get approved withdrawals (last 10)
@@ -562,8 +682,6 @@ async def handle_rejected_withdrawals(
     admin = await get_admin_or_deny(message, session, **data)
     if not admin:
         return
-
-    withdrawal_service = WithdrawalService(session)
 
     try:
         # Get rejected withdrawals (last 10)

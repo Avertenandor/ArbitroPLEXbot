@@ -4,13 +4,12 @@ PLEX Payment Service.
 Manages PLEX payment requirements, verification, and access level checks.
 """
 
-from datetime import UTC, datetime
+from datetime import datetime
 from decimal import Decimal
 
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config.settings import settings
 from app.models.plex_payment import PlexPaymentRequirement, PlexPaymentStatus
 from app.repositories.deposit_repository import DepositRepository
 from app.repositories.plex_payment_repository import PlexPaymentRepository
@@ -27,7 +26,7 @@ from bot.constants.rules import (
 class PlexPaymentService:
     """
     Service for managing PLEX payments.
-    
+
     Handles:
     - User level verification based on PLEX balance
     - Daily payment tracking and verification
@@ -46,10 +45,10 @@ class PlexPaymentService:
     ) -> dict:
         """
         Check user's PLEX level and access permissions.
-        
+
         Args:
             user_id: User ID
-            
+
         Returns:
             Dict with level info and access status
         """
@@ -64,7 +63,7 @@ class PlexPaymentService:
 
         blockchain = get_blockchain_service()
         plex_balance = await blockchain.get_plex_balance(user.wallet_address)
-        
+
         if plex_balance is None:
             logger.error(f"Failed to get PLEX balance for user {user_id} - denying access")
             return {
@@ -76,7 +75,7 @@ class PlexPaymentService:
 
         level = get_user_level(plex_balance)
         max_deposits = get_max_deposits_for_plex_balance(plex_balance)
-        
+
         # Get user's active deposits count
         active_deposits = await self._deposit_repo.get_active_deposits(user_id)
         current_deposits = len(active_deposits) if active_deposits else 0
@@ -84,7 +83,7 @@ class PlexPaymentService:
         # Check if user can create new deposit based on their PLEX level
         # Use strict < to allow room for new deposit
         can_access = current_deposits < max_deposits
-        
+
         return {
             "level": level,
             "plex_balance": plex_balance,
@@ -103,18 +102,18 @@ class PlexPaymentService:
     ) -> PlexPaymentRequirement:
         """
         Create PLEX payment requirement for a new deposit.
-        
+
         Args:
             user_id: User ID
             deposit_id: Deposit ID
             deposit_amount: Deposit amount in USD
             deposit_created_at: When deposit was created
-            
+
         Returns:
             Created PlexPaymentRequirement
         """
         daily_plex = deposit_amount * Decimal(str(PLEX_PER_DOLLAR_DAILY))
-        
+
         return await self._plex_repo.create(
             user_id=user_id,
             deposit_id=deposit_id,
@@ -127,32 +126,32 @@ class PlexPaymentService:
     ) -> dict:
         """
         Get comprehensive payment status for user.
-        
+
         Args:
             user_id: User ID
-            
+
         Returns:
             Dict with payment status details
         """
         payments = await self._plex_repo.get_active_by_user_id(user_id)
-        
+
         total_daily_required = Decimal("0")
         overdue_count = 0
         warning_count = 0
         blocked_count = 0
-        
+
         payment_details = []
-        
+
         for payment in payments:
             total_daily_required += payment.daily_plex_required
-            
+
             if payment.status == PlexPaymentStatus.WARNING_SENT:
                 warning_count += 1
             elif payment.status == PlexPaymentStatus.BLOCKED:
                 blocked_count += 1
             elif payment.is_payment_overdue():
                 overdue_count += 1
-            
+
             payment_details.append({
                 "deposit_id": payment.deposit_id,
                 "daily_required": payment.daily_plex_required,
@@ -160,7 +159,7 @@ class PlexPaymentService:
                 "next_due": payment.next_payment_due,
                 "is_overdue": payment.is_payment_overdue(),
             })
-        
+
         return {
             "total_daily_plex": total_daily_required,
             "active_deposits": len(payments),
@@ -178,13 +177,13 @@ class PlexPaymentService:
     ) -> dict:
         """
         Verify PLEX payment from user's wallet to system wallet.
-        
+
         Checks recent transfers from sender to system wallet.
-        
+
         Args:
             user_id: User ID
             sender_wallet: User's wallet address
-            
+
         Returns:
             Dict with verification result
         """
@@ -196,12 +195,13 @@ class PlexPaymentService:
         # Check for PLEX transfers to system wallet
         # lookback_blocks=200 covers ~10 minutes on BSC (3 sec/block)
         # Note: verify_plex_payment accepts float for amount_plex (non-financial display value)
+        # OK to use float here - verification only, not financial calculation
         result = await blockchain.verify_plex_payment(
             sender_address=sender_wallet,
-            amount_plex=float(required),  # OK to use float here - verification only, not financial calculation
+            amount_plex=float(required),
             lookback_blocks=200,
         )
-        
+
         if not result.get("success"):
             return {
                 "success": False,
@@ -210,15 +210,19 @@ class PlexPaymentService:
 
         # Check if received amount is sufficient
         received = Decimal(str(result.get("amount", 0)))
-        
+
         if received < required:
+            error_msg = (
+                f"Insufficient payment: received {received} PLEX, "
+                f"required {required} PLEX"
+            )
             return {
                 "success": False,
-                "error": f"Insufficient payment: received {received} PLEX, required {required} PLEX",
+                "error": error_msg,
                 "received": received,
                 "required": required,
             }
-        
+
         return {
             "success": True,
             "tx_hash": result.get("tx_hash"),
@@ -234,12 +238,12 @@ class PlexPaymentService:
     ) -> PlexPaymentRequirement | None:
         """
         Process confirmed PLEX payment for a deposit.
-        
+
         Args:
             deposit_id: Deposit ID
             tx_hash: Transaction hash
             amount: Amount paid
-            
+
         Returns:
             Updated payment requirement or None
         """
@@ -247,7 +251,7 @@ class PlexPaymentService:
         if not payment:
             logger.warning(f"No payment requirement for deposit {deposit_id}")
             return None
-        
+
         return await self._plex_repo.mark_paid(payment.id, tx_hash, amount)
 
     async def check_plex_balance_sufficient(
@@ -255,10 +259,10 @@ class PlexPaymentService:
     ) -> dict:
         """
         Check if user has sufficient PLEX balance for their deposits.
-        
+
         Args:
             user_id: User ID
-            
+
         Returns:
             Dict with check result
         """
@@ -272,9 +276,12 @@ class PlexPaymentService:
         # Get PLEX balance
         blockchain = get_blockchain_service()
         plex_balance = await blockchain.get_plex_balance(user.wallet_address)
-        
+
         if plex_balance is None:
-            logger.error(f"Failed to verify PLEX balance for user {user_id} - reporting insufficient")
+            logger.error(
+                f"Failed to verify PLEX balance for user {user_id} - "
+                f"reporting insufficient"
+            )
             return {
                 "sufficient": False,  # Безопасный дефолт - запретить при ошибке
                 "error": "Could not verify balance. Please try again later.",
@@ -283,23 +290,23 @@ class PlexPaymentService:
         # Get user's level and allowed deposits
         level = get_user_level(plex_balance)
         max_deposits = get_max_deposits_for_plex_balance(plex_balance)
-        
+
         # Get current active deposits
         active_deposits = await self._deposit_repo.get_active_deposits(user_id)
         current_count = len(active_deposits) if active_deposits else 0
-        
+
         sufficient = current_count <= max_deposits
-        
+
         if not sufficient:
             required_level = 0
             for lvl in range(1, 6):
                 if LEVELS[lvl]["deposits"] >= current_count:
                     required_level = lvl
                     break
-            
+
             required_plex = LEVELS.get(required_level, {}).get("plex", 0)
             shortage = Decimal(required_plex) - plex_balance
-            
+
             return {
                 "sufficient": False,
                 "plex_balance": plex_balance,
@@ -309,7 +316,7 @@ class PlexPaymentService:
                 "required_plex": required_plex,
                 "shortage": shortage,
             }
-        
+
         return {
             "sufficient": True,
             "plex_balance": plex_balance,
@@ -323,25 +330,25 @@ class PlexPaymentService:
     ) -> str | None:
         """
         Get warning message if user has insufficient PLEX.
-        
+
         Args:
             user_id: User ID
-            
+
         Returns:
             Warning message or None if sufficient
         """
         check = await self.check_plex_balance_sufficient(user_id)
-        
+
         if check.get("sufficient"):
             return None
-        
+
         if check.get("error"):
             return None  # Don't block on check errors
-        
+
         shortage = check.get("shortage", 0)
         required = check.get("required_plex", 0)
         current = check.get("plex_balance", 0)
-        
+
         return (
             f"⚠️ **ВНИМАНИЕ: Недостаточный баланс PLEX!**\n\n"
             f"Для работы с вашими депозитами требуется:\n"
@@ -353,4 +360,3 @@ class PlexPaymentService:
             f"• Существующие депозиты могут быть возвращены\n\n"
             f"Пополните баланс PLEX на кошельке для продолжения работы."
         )
-

@@ -360,21 +360,24 @@ class UserService:
         if is_valid:
             # Reset attempts on success
             should_commit = False
-            
+
             if user.finpass_attempts > 0 or user.finpass_locked_until:
                 user.finpass_attempts = 0
                 user.finpass_locked_until = None
                 should_commit = True
-            
+
             # Unblock earnings if blocked (Recovery Logic - First successful use unblocks)
             if getattr(user, "earnings_blocked", False):
                 user.earnings_blocked = False
-                logger.info(f"User {user_id} earnings unblocked after successful finpass verification")
+                logger.info(
+                    f"User {user_id} earnings unblocked after successful "
+                    f"finpass verification"
+                )
                 should_commit = True
-            
+
             if should_commit:
                 await self.session.commit()
-            
+
             return True, None
         else:
             # Increment attempts
@@ -388,7 +391,7 @@ class UserService:
                     f"🔒 Превышено количество попыток!\n\n"
                     f"Аккаунт заблокирован на {LOCKOUT_MINUTES} минут."
                 )
-            
+
             await self.session.commit()
             return False, (
                 f"❌ Неверный финансовый пароль.\n"
@@ -566,15 +569,15 @@ class UserService:
             Referral link in format: https://t.me/{bot}?start=ref_{code}
         """
         username = bot_username or "bot"
-        
+
         # Use referral_code if available, otherwise fallback to telegram_id
         code = user.referral_code if user.referral_code else str(user.telegram_id)
-        
+
         logger.debug(
             f"Generating referral link for user {user.id}: "
             f"using {'referral_code' if user.referral_code else 'telegram_id'} = {code}"
         )
-        
+
         return f"https://t.me/{username}?start=ref_{code}"
 
     async def find_by_id(self, user_id: int) -> User | None:

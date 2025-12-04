@@ -4,7 +4,6 @@ Secure Redis Storage for sensitive data.
 Provides encryption/decryption for passwords and other secrets stored in Redis.
 """
 
-from typing import Any
 
 from loguru import logger
 from redis.asyncio import Redis

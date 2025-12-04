@@ -44,4 +44,7 @@ logger.info(
     f"Dramatiq broker initialized with graceful shutdown support: "
     f"redis://{settings.redis_host}:{settings.redis_port}/{settings.redis_db}"
 )
-logger.info("Middleware enabled: ShutdownNotifications, CurrentMessage, Retries (exponential backoff)")
+logger.info(
+    "Middleware enabled: ShutdownNotifications, CurrentMessage, "
+    "Retries (exponential backoff)"
+)

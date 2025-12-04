@@ -27,5 +27,3 @@ async def test_wallet_verification_invalid_format() -> None:
     assert result.is_format_valid is False
     assert result.is_onchain_ok is False
     assert result.error is not None
-
-

@@ -84,4 +84,3 @@ class DepositCorridorHistory(Base):
             f"mode={self.mode}, applies_to={self.applies_to}, "
             f"changed_at={self.changed_at})>"
         )
-

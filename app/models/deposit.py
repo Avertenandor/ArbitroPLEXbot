@@ -156,7 +156,7 @@ class Deposit(Base):
         "DepositLevelVersion",
         back_populates="deposits",
     )
-    
+
     # PLEX payment requirement for this deposit
     plex_payment: Mapped["PlexPaymentRequirement | None"] = relationship(
         "PlexPaymentRequirement",

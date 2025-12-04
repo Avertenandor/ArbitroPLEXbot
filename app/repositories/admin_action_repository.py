@@ -7,7 +7,7 @@ Data access layer for AdminAction model.
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import desc, select, Numeric
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin_action import AdminAction
@@ -157,8 +157,6 @@ class AdminActionRepository(BaseRepository[AdminAction]):
         Returns:
             Total withdrawal amount (USDT)
         """
-        from sqlalchemy import func
-        from sqlalchemy.dialects.postgresql import JSONB
 
         # Get all withdrawal actions and sum in Python
         # (PostgreSQL JSONB extraction is complex, so we do it in Python)
@@ -265,4 +263,3 @@ class AdminActionRepository(BaseRepository[AdminAction]):
 
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
-

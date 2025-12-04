@@ -4,8 +4,8 @@ Referral Handler - ТОЛЬКО REPLY KEYBOARDS!
 Handles referral program actions including stats, leaderboard, and earnings.
 """
 
-from typing import Any
 import re
+from typing import Any
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -268,8 +268,9 @@ async def handle_referral_stats(
     **data: Any,
 ) -> None:
     """Show comprehensive referral statistics."""
-    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
     from urllib.parse import quote
+
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
     referral_service = ReferralService(session)
     user_service = UserService(session)
@@ -278,8 +279,9 @@ async def handle_referral_stats(
     stats = await referral_service.get_referral_stats(user.id)
 
     # Get bot info for referral link
-    from app.config.settings import settings
     from aiogram import Bot
+
+    from app.config.settings import settings
 
     bot_username = settings.telegram_bot_username
     # Fallback: get from bot if not in settings
@@ -383,8 +385,9 @@ async def handle_copy_ref_link(
     **data: Any,
 ) -> None:
     """Handle copy referral link button - send link as copyable message."""
-    from app.config.settings import settings
     from aiogram import Bot
+
+    from app.config.settings import settings
 
     user_service = UserService(session)
 

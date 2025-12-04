@@ -5,10 +5,8 @@ Contains default deposit levels configuration for ArbitroPLEX.
 """
 
 from decimal import Decimal
-from typing import Optional
 
 from calculator.core.models import DepositLevel
-
 
 # Default deposit levels for ArbitroPLEX
 DEFAULT_LEVELS: list[DepositLevel] = [
@@ -55,7 +53,7 @@ DEFAULT_LEVELS: list[DepositLevel] = [
 ]
 
 
-def get_level_by_number(level_number: int) -> Optional[DepositLevel]:
+def get_level_by_number(level_number: int) -> DepositLevel | None:
     """
     Get default level by number.
 
@@ -76,7 +74,7 @@ def get_level_by_number(level_number: int) -> Optional[DepositLevel]:
     return None
 
 
-def get_level_for_amount(amount: Decimal) -> Optional[DepositLevel]:
+def get_level_for_amount(amount: Decimal) -> DepositLevel | None:
     """
     Get highest available level for deposit amount.
 
@@ -97,7 +95,7 @@ def get_level_for_amount(amount: Decimal) -> Optional[DepositLevel]:
     ]
     if not matching:
         return None
-    return max(matching, key=lambda l: l.level_number)
+    return max(matching, key=lambda lvl: lvl.level_number)
 
 
 def get_active_levels() -> list[DepositLevel]:

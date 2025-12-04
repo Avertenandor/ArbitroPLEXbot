@@ -5,23 +5,18 @@ Detects suspicious patterns and calculates risk scores for users.
 """
 
 import asyncio
-from datetime import UTC, datetime, timedelta
-from decimal import Decimal
+from datetime import timedelta
 
 from loguru import logger
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.deposit import Deposit
+from app.config.constants import TELEGRAM_MESSAGE_DELAY
 from app.models.enums import TransactionStatus, TransactionType
-from app.models.referral import Referral
-from app.models.transaction import Transaction
 from app.models.user import User
 from app.repositories.deposit_repository import DepositRepository
 from app.repositories.referral_repository import ReferralRepository
 from app.repositories.transaction_repository import TransactionRepository
 from app.repositories.user_repository import UserRepository
-from app.config.constants import TELEGRAM_MESSAGE_DELAY
 
 
 class FraudDetectionService:
@@ -244,7 +239,11 @@ class FraudDetectionService:
 
             cutoff_time = deposit_time + timedelta(hours=24)
             # Convert to naive datetime for comparison with Transaction.created_at (naive)
-            cutoff_time_naive = cutoff_time.replace(tzinfo=None) if cutoff_time.tzinfo else cutoff_time
+            cutoff_time_naive = (
+                cutoff_time.replace(tzinfo=None)
+                if cutoff_time.tzinfo
+                else cutoff_time
+            )
 
             withdrawals = await self.transaction_repo.get_by_user(
                 user_id=user_id,
@@ -360,7 +359,11 @@ class FraudDetectionService:
                         if not deposit_time:
                             continue
                         # Convert to naive for comparison with Transaction.created_at
-                        deposit_time_naive = deposit_time.replace(tzinfo=None) if deposit_time.tzinfo else deposit_time
+                        deposit_time_naive = (
+                            deposit_time.replace(tzinfo=None)
+                            if deposit_time.tzinfo
+                            else deposit_time
+                        )
 
                         for withdrawal in withdrawals:
                             withdrawal_time = withdrawal.created_at
@@ -407,7 +410,6 @@ class FraudDetectionService:
             factors: List of risk factors
         """
         try:
-            from app.services.notification_service import NotificationService
             from app.repositories.admin_repository import AdminRepository
 
             admin_repo = AdminRepository(self.session)
@@ -456,4 +458,3 @@ class FraudDetectionService:
 
         except Exception as e:
             logger.error(f"Failed to send fraud alerts: {e}")
-

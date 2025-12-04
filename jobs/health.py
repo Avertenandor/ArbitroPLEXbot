@@ -5,15 +5,13 @@ Provides HTTP endpoint for health checks and monitoring.
 """
 
 import asyncio
-from typing import Optional
 
 from aiohttp import web
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
 
-
 # Global scheduler reference for health checks
-_scheduler: Optional[AsyncIOScheduler] = None
+_scheduler: AsyncIOScheduler | None = None
 
 
 def set_scheduler(scheduler: AsyncIOScheduler) -> None:
@@ -161,7 +159,7 @@ async def stop_health_server(
     try:
         await asyncio.wait_for(runner.cleanup(), timeout=timeout)
         logger.info("Health check server stopped successfully")
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.warning(f"Health check server cleanup timed out after {timeout}s")
     except Exception as e:
         logger.error(f"Error stopping health check server: {e}")

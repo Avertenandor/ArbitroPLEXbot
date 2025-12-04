@@ -44,7 +44,7 @@ class RequestIDMiddleware(BaseMiddleware):
 
         # Add to data for downstream handlers
         data["request_id"] = request_id
-        
+
         # Store Update object for logger_middleware
         if isinstance(event, Update):
             data["event_update"] = event

@@ -5,13 +5,7 @@ Business logic for deposit management and ROI tracking.
 """
 
 from decimal import Decimal
-
-from loguru import logger
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from typing import Any
-
-from decimal import Decimal
 
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -69,7 +63,8 @@ class DepositService:
         async with lock.lock(lock_key, timeout=30, blocking=True, blocking_timeout=5.0) as acquired:
             if not acquired:
                 logger.warning(
-                    f"Could not acquire lock for creating deposit for user {user_id} (key: {lock_key})"
+                    f"Could not acquire lock for creating deposit for user {user_id} "
+                    f"(key: {lock_key})"
                 )
                 raise ValueError(
                     "Операция уже выполняется. Пожалуйста, подождите."
@@ -198,21 +193,22 @@ class DepositService:
             Updated deposit
         """
         from datetime import UTC, datetime, timedelta
+
         from app.repositories.global_settings_repository import GlobalSettingsRepository
 
         try:
             # R12-1: Calculate next_accrual_at based on settings
             settings_repo = GlobalSettingsRepository(self.session)
             global_settings = await settings_repo.get_settings()
-            
+
             roi_settings = global_settings.roi_settings or {}
             accrual_period_hours = int(roi_settings.get("REWARD_ACCRUAL_PERIOD_HOURS", 6))
-            
+
             # Start cycle immediately or after period?
             # "Установить next_accrual_at = datetime.now(UTC) ... чтобы запустить цикл"
-            # Usually accrual happens after period. But if we want "immediate" effect for new users, 
-            # we might set it to now + period. The previous fix set it to NOW because they were already waiting.
-            # Standard logic: Accrue after X hours.
+            # Usually accrual happens after period. But if we want "immediate" effect
+            # for new users, we might set it to now + period. The previous fix set it
+            # to NOW because they were already waiting. Standard logic: Accrue after X hours.
             now = datetime.now(UTC)
             next_accrual = now + timedelta(hours=accrual_period_hours)
 
@@ -221,14 +217,14 @@ class DepositService:
                 status=TransactionStatus.CONFIRMED.value,
                 block_number=block_number,
                 confirmed_at=now,
-                next_accrual_at=next_accrual, # Set next accrual date
+                next_accrual_at=next_accrual,  # Set next accrual date
             )
 
             if deposit:
                 # Create PLEX payment requirement for this deposit
                 try:
                     from app.services.plex_payment_service import PlexPaymentService
-                    
+
                     plex_service = PlexPaymentService(self.session)
                     await plex_service.create_payment_requirement(
                         user_id=deposit.user_id,
@@ -245,7 +241,7 @@ class DepositService:
                         f"{deposit.id}: {e}"
                     )
                     # Don't fail deposit confirmation, PLEX req can be created later
-                
+
                 await self.session.commit()
                 logger.info(
                     "Deposit confirmed", extra={"deposit_id": deposit_id}
@@ -386,7 +382,7 @@ class DepositService:
     async def get_detailed_stats(self) -> list[dict]:
         """
         Get detailed deposit statistics for admin.
-        
+
         Returns:
             List of dicts with deposit details:
             - user_id, username
@@ -396,6 +392,7 @@ class DepositService:
             - status
         """
         from sqlalchemy import select
+
         from app.models.user import User
 
         # Join User to get username
@@ -404,7 +401,7 @@ class DepositService:
             .join(User, Deposit.user_id == User.id)
             .where(
                 Deposit.status == TransactionStatus.CONFIRMED.value,
-                Deposit.is_roi_completed == False # Active deposits only
+                not Deposit.is_roi_completed  # Active deposits only
             )
             .order_by(Deposit.created_at.desc())
         )
@@ -423,5 +420,5 @@ class DepositService:
                 "next_accrual_at": deposit.next_accrual_at,
                 "level": deposit.level
             })
-        
+
         return stats

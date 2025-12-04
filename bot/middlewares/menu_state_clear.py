@@ -12,8 +12,8 @@ from aiogram import BaseMiddleware
 from aiogram.types import Message, TelegramObject
 from loguru import logger
 
-from bot.utils.menu_buttons import is_menu_button
 from bot.utils.admin_utils import clear_state_preserve_admin_token
+from bot.utils.menu_buttons import is_menu_button
 
 
 class MenuStateClearMiddleware(BaseMiddleware):

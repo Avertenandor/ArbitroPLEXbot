@@ -200,7 +200,7 @@ class AdminService:
         ):
             # Track failed login attempt
             await self._track_failed_login(telegram_id)
-            
+
             logger.warning(
                 "Invalid master key attempt",
                 extra={
@@ -440,17 +440,17 @@ class AdminService:
 
         try:
             key = f"admin_login_attempts:{telegram_id}"
-            
+
             # Get current count
             count_str = await self.redis_client.get(key)
             count = int(count_str) if count_str else 0
-            
+
             # Increment
             count += 1
             await self.redis_client.setex(
                 key, ADMIN_LOGIN_WINDOW_SECONDS, str(count)
             )
-            
+
             # Check if limit exceeded
             if count >= ADMIN_LOGIN_MAX_ATTEMPTS:
                 from app.utils.security_logging import log_security_event
@@ -464,10 +464,10 @@ class AdminService:
                         "limit": ADMIN_LOGIN_MAX_ATTEMPTS,
                     }
                 )
-                
+
                 # Block the Telegram ID
                 await self._block_telegram_id_for_failed_logins(telegram_id)
-                
+
         except Exception as e:
             # R11-2: Redis failed, continue without rate limiting
             logger.warning(
@@ -568,8 +568,9 @@ class AdminService:
             telegram_id: Blocked Telegram ID
         """
         try:
-            from app.config.settings import settings
             from aiogram import Bot
+
+            from app.config.settings import settings
 
             # Get all super_admins
             super_admins = [

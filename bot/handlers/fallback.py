@@ -7,7 +7,7 @@ and user confusion.
 """
 
 from aiogram import F, Router
-from aiogram.types import Message, ReplyKeyboardRemove
+from aiogram.types import Message
 
 from bot.keyboards.reply import main_menu_reply_keyboard
 from bot.utils.menu_buttons import CONFIRMATION_BUTTONS
@@ -19,13 +19,13 @@ router = Router()
 async def handle_orphaned_confirmation(message: Message, **data) -> None:
     """
     Handle confirmation buttons when no FSM state is active.
-    
-    This happens if the bot was restarted or state was cleared, 
+
+    This happens if the bot was restarted or state was cleared,
     but the user still has the confirmation keyboard open.
     """
     # Get is_admin from middleware data to ensure admin button is shown
     is_admin = data.get("is_admin", False)
-    
+
     await message.answer(
         "⚠️ **Действие отменено или устарело**\n\n"
         "Состояние диалога было сброшено (возможно, из-за обновления бота). "
@@ -47,4 +47,3 @@ async def handle_orphaned_wallet_buttons(message: Message) -> None:
         parse_mode="Markdown",
         # Don't send keyboard here, let them use existing or /start
     )
-

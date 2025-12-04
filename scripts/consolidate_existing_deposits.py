@@ -23,7 +23,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from loguru import logger
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -31,7 +31,7 @@ from app.config.settings import settings
 from app.models.deposit import Deposit
 from app.models.plex_payment import PlexPaymentRequirement
 from app.models.user import User
-from bot.constants.rules import PLEX_PER_DOLLAR_DAILY, MAX_DEPOSITS_PER_USER
+from bot.constants.rules import PLEX_PER_DOLLAR_DAILY
 
 
 async def consolidate_user_deposits(
@@ -53,7 +53,7 @@ async def consolidate_user_deposits(
         select(Deposit).where(
             Deposit.user_id == user.id,
             Deposit.status == "confirmed",
-            Deposit.is_consolidated == False,
+            not Deposit.is_consolidated,
         )
     )
     deposits = list(result.scalars().all())
@@ -174,8 +174,8 @@ async def run_consolidation() -> None:
             # Get all users who haven't been consolidated yet
             result = await session.execute(
                 select(User).where(
-                    User.deposits_consolidated == False,
-                    User.is_active == True,
+                    not User.deposits_consolidated,
+                    User.is_active,
                 )
             )
             users = list(result.scalars().all())

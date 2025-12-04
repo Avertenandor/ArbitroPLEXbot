@@ -7,18 +7,16 @@ Run this script after migration to populate initial versions.
 """
 
 import asyncio
-from decimal import Decimal
 from datetime import UTC, datetime
+from decimal import Decimal
 
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config.settings import settings
-from app.models.deposit_level_version import DepositLevelVersion
 from app.repositories.deposit_level_version_repository import (
     DepositLevelVersionRepository,
 )
-from loguru import logger
-
 
 # Default deposit conditions (can be adjusted)
 DEFAULT_CONDITIONS = {
@@ -72,7 +70,7 @@ async def init_deposit_versions(session: AsyncSession) -> None:
         conditions = DEFAULT_CONDITIONS[level]
 
         # Create initial version
-        version = await version_repo.create(
+        _version = await version_repo.create(
             level_number=level,
             amount=conditions["amount"],
             roi_percent=conditions["roi_percent"],
@@ -115,4 +113,3 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
-

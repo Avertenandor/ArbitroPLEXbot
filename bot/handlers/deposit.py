@@ -4,7 +4,6 @@ Deposit handler.
 Handles deposit creation flow.
 """
 
-import re
 from decimal import Decimal
 from typing import Any
 
@@ -12,6 +11,7 @@ from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.services.deposit_service import DepositService
@@ -49,9 +49,14 @@ def extract_level_from_button(text: str) -> int:
 # Regex pattern for deposit level buttons with dynamic amounts
 # Matches: "💰 Пополнить Level N (X USDT)" or "✅ Level N (X USDT) - Активен"
 # or "🔒 Level N (X USDT) - ..." for blocked levels
-@router.message(
-    F.text.regexp(r"^(💰 Пополнить Level [1-5] \([\d\.,]+ USDT\)|✅ Level [1-5] \([\d\.,]+ USDT\) - Активен|🔒 Level [1-5] \([\d\.,]+ USDT\) - .+)$")
+deposit_level_pattern = (
+    r"^(💰 Пополнить Level [1-5] \([\d\.,]+ USDT\)|"
+    r"✅ Level [1-5] \([\d\.,]+ USDT\) - Активен|"
+    r"🔒 Level [1-5] \([\d\.,]+ USDT\) - .+)$"
 )
+
+
+@router.message(F.text.regexp(deposit_level_pattern))
 async def select_deposit_level(
     message: Message,
     state: FSMContext,
@@ -59,7 +64,7 @@ async def select_deposit_level(
 ) -> None:
     """
     Handle deposit level selection with validation.
-    
+
     Uses session_factory for short transaction during validation.
 
     Args:
@@ -71,25 +76,27 @@ async def select_deposit_level(
     if not user:
         await message.answer("❌ Ошибка: пользователь не найден")
         return
-    
+
     # Extract level from button text
     level = extract_level_from_button(message.text or "")
-    
+
     # R3-3: Check if level is already active (button text contains "Активен")
     is_active_level = "Активен" in (message.text or "")
-    
+
     # Validate purchase eligibility with SHORT transaction
     from app.services.deposit_validation_service import (
         DepositValidationService,
     )
 
     session_factory = data.get("session_factory")
-    
+
     if not session_factory:
         # Fallback to old session
         session = data.get("session")
         if not session:
-            await message.answer("❌ Системная ошибка. Отправьте /start или обратитесь в поддержку.")
+            await message.answer(
+                "❌ Системная ошибка. Отправьте /start или обратитесь в поддержку."
+            )
             return
         validation_service = DepositValidationService(session)
         can_purchase, error_msg = await validation_service.can_purchase_level(
@@ -110,12 +117,16 @@ async def select_deposit_level(
         # Transaction closed here
 
     # R3-3: Handle active level - prohibit duplicate purchase
-    if is_active_level or (levels_status and levels_status.get(level, {}).get("status") == "active"):
+    is_status_active = (
+        levels_status and levels_status.get(level, {}).get("status") == "active"
+    )
+    if is_active_level or is_status_active:
         await message.answer(
             f"ℹ️ **Уровень {level} уже активен**\n\n"
             f"У вас уже есть активный депозит уровня {level}.\n"
             f"Повторная покупка того же уровня не разрешена.\n\n"
-            f"Выберите другой уровень депозита или проверьте свои активные депозиты в разделе '📦 Мои депозиты'.",
+            f"Выберите другой уровень депозита или проверьте свои активные "
+            f"депозиты в разделе '📦 Мои депозиты'.",
             parse_mode="Markdown",
             reply_markup=deposit_keyboard(levels_status=levels_status),
         )
@@ -124,10 +135,10 @@ async def select_deposit_level(
     if not can_purchase:
         # R3-4: Improved error messages with specific recommendations
         error_text = "❌ **Нельзя купить этот уровень депозита**\n\n"
-        
+
         if error_msg:
             error_text += f"{error_msg}\n\n"
-            
+
             # Add specific recommendations based on error type
             if "необходимо сначала купить" in error_msg:
                 # Extract previous level from error message
@@ -143,14 +154,15 @@ async def select_deposit_level(
                 required = PARTNER_REQUIREMENTS.get(level, 1)
                 error_text += (
                     f"💡 **Рекомендация:**\n"
-                    f"Пригласите минимум {required} реферала, который создаст активный депозит уровня 1.\n"
+                    f"Пригласите минимум {required} реферала, который создаст "
+                    f"активный депозит уровня 1.\n"
                     f"Используйте раздел '👥 Рефералы' для приглашения партнёров."
                 )
             else:
                 error_text += "Попробуйте выбрать другой уровень депозита."
         else:
             error_text += "Попробуйте выбрать другой уровень депозита."
-        
+
         await message.answer(
             error_text,
             parse_mode="Markdown",
@@ -181,7 +193,7 @@ async def select_deposit_level(
     # Get system wallet address
     from app.config.settings import settings
     system_wallet = settings.system_wallet_address
-    
+
     text += (
         f"📝 *Следующий шаг:*\n"
         f"Отправьте *ровно {expected_amount} USDT* на адрес:\n\n"
@@ -202,160 +214,104 @@ async def select_deposit_level(
 # after selecting level, as amount is fixed per level (10/50/100/150/300 USDT)
 
 
-@router.message(DepositStates.waiting_for_tx_hash)
-async def process_tx_hash(
-    message: Message,
-    state: FSMContext,
-    **data: Any,
-) -> None:
+def _validate_tx_hash_format(tx_hash: str) -> tuple[bool, str | None]:
     """
-    Process transaction hash for deposit.
-    
-    Uses session_factory for short transaction during deposit creation.
+    Validate transaction hash format.
 
-    Args:
-        message: Telegram message
-        state: FSM state
-        data: Additional data including session_factory and user
+    Returns:
+        (is_valid, error_message)
     """
-    user: User | None = data.get("user")
-    if not user:
-        await message.answer("❌ Ошибка: пользователь не найден")
-        await state.clear()
-        return
-    
-    # Check if message is a menu button or cancel - if so, clear state and ignore
-    if is_menu_button(message.text or "") or message.text == "❌ Отмена":
-        await state.clear()
-        if message.text == "❌ Отмена":
-            await message.answer("Создание депозита отменено.", reply_markup=main_menu_reply_keyboard(user=user))
-        return  # Let menu handlers process this
-
-    tx_hash = (message.text or "").strip()
-
-    # Basic validation
     if not tx_hash.startswith("0x") or len(tx_hash) != 66:
-        await message.answer(
+        return False, (
             "❌ Неверный формат hash!\n\n"
             "Transaction hash должен начинаться с '0x' "
             "и содержать 66 символов.\n"
-            "Попробуйте еще раз:",
-            reply_markup=cancel_keyboard()
+            "Попробуйте еще раз:"
         )
-        return
+    return True, None
 
-    # Get level and expected amount from state
-    state_data = await state.get_data()
-    level = state_data.get("level", 1)
+
+def _get_expected_amount(state_data: dict, level: int) -> Decimal:
+    """Get expected deposit amount from state or default levels."""
     expected_amount_str = state_data.get("expected_amount")
 
     if expected_amount_str:
-        expected_amount = Decimal(expected_amount_str)
-    else:
-        from app.services.deposit_validation_service import DEPOSIT_LEVELS
+        return Decimal(expected_amount_str)
 
-        expected_amount = DEPOSIT_LEVELS.get(level, Decimal("10"))
+    from app.services.deposit_validation_service import DEPOSIT_LEVELS
+    return DEPOSIT_LEVELS.get(level, Decimal("10"))
 
-    session_factory = data.get("session_factory")
 
-    # Validate and create deposit with SHORT transaction
-    if not session_factory:
-        # Fallback to old session
-        session = data.get("session")
-        if not session:
-            await message.answer("❌ Системная ошибка.")
-            await state.clear()
-            return
+async def _validate_and_create_deposit(
+    session: AsyncSession,
+    user_id: int,
+    level: int,
+    expected_amount: Decimal,
+    tx_hash: str,
+    redis_client: Any,
+) -> tuple[Any | None, str | None]:
+    """
+    Validate user can purchase level and create deposit.
 
-        from app.services.deposit_validation_service import (
-            DepositValidationService,
-        )
+    Returns:
+        (deposit, error_message)
+    """
+    from app.services.deposit_validation_service import DepositValidationService
 
-        validation_service = DepositValidationService(session)
-        can_purchase, error_msg = await validation_service.can_purchase_level(
-            user.id, level
-        )
-
-        if not can_purchase:
-            await message.answer(
-                f"❌ {error_msg}\n\nПопробуйте выбрать другой уровень."
-            )
-            await state.clear()
-            return
-
-        deposit_service = DepositService(session)
-        redis_client = data.get("redis_client")
-        try:
-            deposit = await deposit_service.create_deposit(
-                user_id=user.id,
-                level=level,
-                amount=expected_amount,
-                tx_hash=tx_hash,
-                redis_client=redis_client,
-            )
-        except ValueError as exc:
-            # R17-3: Show controlled business errors (including emergency stop)
-            await message.answer(str(exc))
-            await state.clear()
-            return
-    else:
-        # NEW pattern: short transaction for validation and creation
-        async with session_factory() as session:
-            async with session.begin():
-                from app.services.deposit_validation_service import (
-                    DepositValidationService,
-                )
-                validation_service = DepositValidationService(session)
-                can_purchase, error_msg = await validation_service.can_purchase_level(
-                    user.id, level
-                )
-
-                if not can_purchase:
-                    await message.answer(
-                        f"❌ {error_msg}\n\nПопробуйте выбрать другой уровень."
-                    )
-                    await state.clear()
-                    return
-
-                deposit_service = DepositService(session)
-                redis_client = data.get("redis_client")
-                try:
-                    deposit = await deposit_service.create_deposit(
-                        user_id=user.id,
-                        level=level,
-                        amount=expected_amount,
-                        tx_hash=tx_hash,
-                        redis_client=redis_client,
-                    )
-                except ValueError as exc:
-                    # R17-3: Show controlled business errors (including emergency stop)
-                    await message.answer(str(exc))
-                    await state.clear()
-                    return
-        # Transaction closed here
-
-    logger.info(
-        "Deposit created with tx hash",
-        extra={
-            "deposit_id": deposit.id,
-            "user_id": user.id,
-            "level": level,
-            "amount": str(expected_amount),
-            "tx_hash": tx_hash,
-        },
+    validation_service = DepositValidationService(session)
+    can_purchase, error_msg = await validation_service.can_purchase_level(
+        user_id, level
     )
 
-    # Get system wallet address
-    from app.config.settings import settings
+    if not can_purchase:
+        return None, f"❌ {error_msg}\n\nПопробуйте выбрать другой уровень."
 
-    system_wallet = settings.system_wallet_address
+    deposit_service = DepositService(session)
+    try:
+        deposit = await deposit_service.create_deposit(
+            user_id=user_id,
+            level=level,
+            amount=expected_amount,
+            tx_hash=tx_hash,
+            redis_client=redis_client,
+        )
+        return deposit, None
+    except ValueError as exc:
+        return None, str(exc)
 
-    # Show deposit info with payment address
+
+async def _get_blacklist_entry(
+    user: User,
+    session_factory: Any | None,
+    session: AsyncSession | None,
+) -> Any | None:
+    """Get blacklist entry for user with proper session handling."""
+    from app.repositories.blacklist_repository import BlacklistRepository
+
+    if user and session_factory:
+        async with session_factory() as fresh_session:
+            blacklist_repo = BlacklistRepository(fresh_session)
+            return await blacklist_repo.find_by_telegram_id(user.telegram_id)
+    elif user and session:
+        blacklist_repo = BlacklistRepository(session)
+        return await blacklist_repo.find_by_telegram_id(user.telegram_id)
+
+    return None
+
+
+def _build_deposit_success_message(
+    level: int,
+    expected_amount: Decimal,
+    deposit_id: int,
+    tx_hash: str,
+    system_wallet: str,
+) -> str:
+    """Build deposit success message text."""
     text = (
         f"✅ **Депозит создан!**\n\n"
         f"📦 Уровень: {level}\n"
         f"💰 Сумма: {expected_amount} USDT\n"
-        f"🆔 ID депозита: {deposit.id}\n"
+        f"🆔 ID депозита: {deposit_id}\n"
         f"🔗 Hash транзакции: `{tx_hash}`\n\n"
     )
 
@@ -377,21 +333,106 @@ async def process_tx_hash(
         f"https://bscscan.com/tx/{tx_hash}"
     )
 
-    is_admin = data.get("is_admin", False)
-    
-    # Get blacklist entry with proper session handling
-    from app.repositories.blacklist_repository import BlacklistRepository
-    blacklist_entry = None
-    if user and session_factory:
-        async with session_factory() as fresh_session:
-            blacklist_repo = BlacklistRepository(fresh_session)
-            blacklist_entry = await blacklist_repo.find_by_telegram_id(
-                user.telegram_id
+    return text
+
+
+@router.message(DepositStates.waiting_for_tx_hash)
+async def process_tx_hash(
+    message: Message,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """
+    Process transaction hash for deposit.
+
+    Uses session_factory for short transaction during deposit creation.
+
+    Args:
+        message: Telegram message
+        state: FSM state
+        data: Additional data including session_factory and user
+    """
+    user: User | None = data.get("user")
+    if not user:
+        await message.answer("❌ Ошибка: пользователь не найден")
+        await state.clear()
+        return
+
+    # Check if message is a menu button or cancel
+    if is_menu_button(message.text or "") or message.text == "❌ Отмена":
+        await state.clear()
+        if message.text == "❌ Отмена":
+            await message.answer(
+                "Создание депозита отменено.",
+                reply_markup=main_menu_reply_keyboard(user=user)
             )
-    elif user and data.get("session"):
-        blacklist_repo = BlacklistRepository(data.get("session"))
-        blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
-    
+        return
+
+    tx_hash = (message.text or "").strip()
+
+    # Validate tx hash format
+    is_valid, error_msg = _validate_tx_hash_format(tx_hash)
+    if not is_valid:
+        await message.answer(error_msg, reply_markup=cancel_keyboard())
+        return
+
+    # Get deposit parameters from state
+    state_data = await state.get_data()
+    level = state_data.get("level", 1)
+    expected_amount = _get_expected_amount(state_data, level)
+
+    session_factory = data.get("session_factory")
+    redis_client = data.get("redis_client")
+
+    # Create deposit using session factory or fallback session
+    if session_factory:
+        async with session_factory() as session:
+            async with session.begin():
+                deposit, error = await _validate_and_create_deposit(
+                    session, user.id, level, expected_amount, tx_hash, redis_client
+                )
+                if error:
+                    await message.answer(error)
+                    await state.clear()
+                    return
+    else:
+        session = data.get("session")
+        if not session:
+            await message.answer("❌ Системная ошибка.")
+            await state.clear()
+            return
+
+        deposit, error = await _validate_and_create_deposit(
+            session, user.id, level, expected_amount, tx_hash, redis_client
+        )
+        if error:
+            await message.answer(error)
+            await state.clear()
+            return
+
+    logger.info(
+        "Deposit created with tx hash",
+        extra={
+            "deposit_id": deposit.id,
+            "user_id": user.id,
+            "level": level,
+            "amount": str(expected_amount),
+            "tx_hash": tx_hash,
+        },
+    )
+
+    # Build and send success message
+    from app.config.settings import settings
+
+    text = _build_deposit_success_message(
+        level, expected_amount, deposit.id, tx_hash, settings.system_wallet_address
+    )
+
+    blacklist_entry = await _get_blacklist_entry(
+        user, session_factory, data.get("session")
+    )
+    is_admin = data.get("is_admin", False)
+
     await message.answer(
         text,
         parse_mode="Markdown",

@@ -209,7 +209,9 @@ RU_TRANSLATIONS = {
         "username": "👤 Username: @{username}",
         "wallet": "💳 Кошелек: `{wallet}`",
         "verification_status": "{emoji} Верификация: {status}",
-        "verification_warning": "⚠️ *Вывод недоступен* — нужен финпароль (кнопка '🔐 Получить финпароль')",
+        "verification_warning": (
+            "⚠️ *Вывод недоступен* — нужен финпароль (кнопка '🔐 Получить финпароль')"
+        ),
         "account_status": "{status}",
     },
 }
@@ -419,7 +421,10 @@ EN_TRANSLATIONS = {
         "username": "👤 Username: @{username}",
         "wallet": "💳 Wallet: `{wallet}`",
         "verification_status": "{emoji} Verification: {status}",
-        "verification_warning": "⚠️ *Withdrawal unavailable* — financial password required (button '🔐 Get Financial Password')",
+        "verification_warning": (
+            "⚠️ *Withdrawal unavailable* — financial password required "
+            "(button '🔐 Get Financial Password')"
+        ),
         "account_status": "{status}",
     },
 }
@@ -429,4 +434,3 @@ TRANSLATIONS = {
     "ru": RU_TRANSLATIONS,
     "en": EN_TRANSLATIONS,
 }
-

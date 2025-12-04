@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 class InquiryStatus(StrEnum):
     """Inquiry status enumeration."""
-    
+
     NEW = "new"  # Новое обращение, ждет ответа
     IN_PROGRESS = "in_progress"  # Админ взял в работу
     CLOSED = "closed"  # Закрыто
@@ -67,7 +67,7 @@ class UserInquiry(Base):
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=False, index=True
     )
-    
+
     # Telegram ID for sending notifications
     telegram_id: Mapped[int] = mapped_column(
         BigInteger, nullable=False, index=True

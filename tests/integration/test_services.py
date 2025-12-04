@@ -1,7 +1,8 @@
 """Integration tests for services."""
 
-import pytest
 from decimal import Decimal
+
+import pytest
 
 from app.services.wallet_verification_service import WalletVerificationService
 

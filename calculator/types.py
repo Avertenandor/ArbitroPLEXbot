@@ -5,7 +5,7 @@ Type definitions for calculator module.
 используемые в калькуляторе доходности.
 """
 
-from typing import TypedDict, Optional
+from typing import TypedDict
 
 
 class LevelDataDict(TypedDict):

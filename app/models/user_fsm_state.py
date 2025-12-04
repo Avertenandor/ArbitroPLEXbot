@@ -7,7 +7,7 @@ R11-2: Fallback storage for FSM states in PostgreSQL when Redis is unavailable.
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -43,4 +43,3 @@ class UserFsmState(Base):
 
     # Relationship
     user: Mapped["User"] = relationship("User", back_populates="fsm_states")
-

@@ -18,4 +18,3 @@ def log_security_event(event_type: str, details: dict[str, Any]) -> None:
         details: Dictionary with context (telegram_id, admin_id, reason, etc.)
     """
     logger.warning(f"[SECURITY] {event_type}", extra=details)
-

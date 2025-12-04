@@ -4,16 +4,15 @@ Account recovery service.
 R16-3: Handles recovery of lost Telegram account access.
 """
 
-from datetime import UTC, datetime
 from typing import Any
 
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.blacklist import BlacklistActionType
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.services.blacklist_service import BlacklistService
-from app.models.blacklist import BlacklistActionType
 
 
 class AccountRecoveryService:
@@ -209,4 +208,3 @@ class AccountRecoveryService:
             "created_at": user.created_at.isoformat() if user.created_at else None,
             # Don't return sensitive info like email/phone directly
         }
-

@@ -7,10 +7,7 @@ Runs periodically to process deposits that are due for accrual.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 from loguru import logger
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.database import async_session_maker
 from app.services.reward_service import RewardService
@@ -57,4 +54,3 @@ async def run_individual_reward_accrual() -> None:
             f"Fatal error in reward accrual task: {e}",
             extra={"error": str(e)},
         )
-

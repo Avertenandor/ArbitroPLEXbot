@@ -296,7 +296,9 @@ def format_transaction_hash_short(tx_hash: str) -> str:
         Shortened transaction hash
 
     Example:
-        >>> format_transaction_hash_short("0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890")
+        >>> format_transaction_hash_short(
+        ...     "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+        ... )
         '0xabcdef...567890'
     """
     if not tx_hash or len(tx_hash) < 20:

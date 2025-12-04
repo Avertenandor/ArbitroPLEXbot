@@ -51,7 +51,10 @@ async def generate_master_key_for_admin(telegram_id: int) -> None:
             logger.error(f"Админ с Telegram ID {telegram_id} не найден!")
             return
 
-        logger.success(f"Найден админ: ID={admin.id}, Role={admin.role}, Username=@{admin.username or 'N/A'}")
+        logger.success(
+            f"Найден админ: ID={admin.id}, Role={admin.role}, "
+            f"Username=@{admin.username or 'N/A'}"
+        )
 
         # Generate new master key
         plain_master_key = admin_service.generate_master_key()
@@ -104,4 +107,3 @@ if __name__ == "__main__":
         sys.exit(1)
 
     asyncio.run(generate_master_key_for_admin(telegram_id))
-

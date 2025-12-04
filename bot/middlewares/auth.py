@@ -82,12 +82,14 @@ class AuthMiddleware(BaseMiddleware):
             # No user in event, skip
             logger.warning(
                 f"AuthMiddleware: No telegram_user found. Event type: {type(event).__name__}, "
-                f"data keys: {list(data.keys())}, event_from_user in data: {'event_from_user' in data}"
+                f"data keys: {list(data.keys())}, "
+                f"event_from_user in data: {'event_from_user' in data}"
             )
             return await handler(event, data)
 
         logger.debug(
-            f"AuthMiddleware: Processing event for user {telegram_user.id} (@{telegram_user.username})"
+            f"AuthMiddleware: Processing event for user {telegram_user.id} "
+            f"(@{telegram_user.username})"
         )
 
         # Load user from database
@@ -134,7 +136,8 @@ class AuthMiddleware(BaseMiddleware):
                 is_admin = True
                 logger.info(
                     f"User {telegram_user.id} (@{telegram_user.username}) "
-                    f"identified as admin from Admin table (role: {admin.role if admin else 'unknown'})"
+                    f"identified as admin from Admin table "
+                    f"(role: {admin.role if admin else 'unknown'})"
                 )
         else:
             logger.debug(
@@ -148,7 +151,8 @@ class AuthMiddleware(BaseMiddleware):
         data["admin"] = admin if admin else None
         data["admin_id"] = admin.id if admin else 0
         logger.info(
-            f"AuthMiddleware: Set is_admin={is_admin}, admin_id={data['admin_id']} for user {telegram_user.id}"
+            f"AuthMiddleware: Set is_admin={is_admin}, admin_id={data['admin_id']} "
+            f"for user {telegram_user.id}"
         )
 
         # Call next handler

@@ -26,12 +26,14 @@ MINIMUM_PLEX_BALANCE = 5000
 # Maximum deposits per user
 MAX_DEPOSITS_PER_USER = 5
 
+
 # Work status constants
 class WorkStatus:
     """User work status constants."""
     ACTIVE = "active"                       # Normal operation
     SUSPENDED_NO_PLEX = "suspended_no_plex"  # Balance < 5000 PLEX
     SUSPENDED_NO_PAYMENT = "suspended_no_payment"  # PLEX payment not received
+
 
 # System wallet for PLEX payments (from settings)
 SYSTEM_WALLET = settings.auth_system_wallet_address
@@ -65,13 +67,13 @@ RULES_SHORT_TEXT = """
 """
 
 # Full rules text (for Rules button)
-RULES_FULL_TEXT = """
+RULES_FULL_TEXT = f"""
 📋 **ПРАВИЛА РАБОТЫ В ArbitroPLEXbot**
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
 📊 **УРОВНИ ДОСТУПА:**
-{levels_table}
+{LEVELS_TABLE}
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
@@ -94,7 +96,7 @@ RULES_FULL_TEXT = """
 ━━━━━━━━━━━━━━━━━━━━━━
 
 💳 **КОШЕЛЕК ДЛЯ ОПЛАТЫ:**
-`{system_wallet}`
+`{SYSTEM_WALLET}`
 
 ━━━━━━━━━━━━━━━━━━━━━━
 
@@ -119,35 +121,35 @@ RULES_FULL_TEXT = """
 ━━━━━━━━━━━━━━━━━━━━━━
 
 📊 **Доход:** от **30% до 70%** в день!
-""".format(levels_table=LEVELS_TABLE, system_wallet=SYSTEM_WALLET)
+"""
 
 
 def get_user_level(plex_balance: int | Decimal) -> int:
     """
     Determine user level based on PLEX balance.
-    
+
     Args:
         plex_balance: User's PLEX token balance
-        
+
     Returns:
         User level (1-5) or 0 if insufficient balance
     """
     balance = int(plex_balance)
-    
+
     for level in range(5, 0, -1):
         if balance >= LEVELS[level]["plex"]:
             return level
-    
+
     return 0
 
 
 def get_max_deposits_for_plex_balance(plex_balance: int | Decimal) -> int:
     """
     Get maximum allowed deposits for given PLEX balance.
-    
+
     Args:
         plex_balance: User's PLEX token balance
-        
+
     Returns:
         Maximum number of deposits allowed
     """
@@ -160,29 +162,28 @@ def get_max_deposits_for_plex_balance(plex_balance: int | Decimal) -> int:
 def get_required_plex_for_deposits(deposit_count: int) -> int:
     """
     Get required PLEX balance for given number of deposits.
-    
+
     Args:
         deposit_count: Number of deposits user wants to have
-        
+
     Returns:
         Required PLEX balance
     """
     for level in range(1, 6):
         if LEVELS[level]["deposits"] >= deposit_count:
             return LEVELS[level]["plex"]
-    
+
     return LEVELS[5]["plex"]  # Max level
 
 
 def calculate_daily_plex_payment(deposit_amount_usd: Decimal) -> Decimal:
     """
     Calculate daily PLEX payment required for deposit.
-    
+
     Args:
         deposit_amount_usd: Deposit amount in USD
-        
+
     Returns:
         Required PLEX payment per day
     """
     return Decimal(str(deposit_amount_usd)) * Decimal(str(PLEX_PER_DOLLAR_DAILY))
-

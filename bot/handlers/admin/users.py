@@ -324,10 +324,14 @@ async def show_user_profile(
 
     # Flags
     flags = []
-    if user.is_admin: flags.append("👑 Админ")
-    if user.earnings_blocked: flags.append("⛔️ Начисления заблокированы")
-    if user.withdrawal_blocked: flags.append("⛔️ Вывод заблокирован")
-    if user.suspicious: flags.append("⚠️ Подозрительный")
+    if user.is_admin:
+        flags.append("👑 Админ")
+    if user.earnings_blocked:
+        flags.append("⛔️ Начисления заблокированы")
+    if user.withdrawal_blocked:
+        flags.append("⛔️ Вывод заблокирован")
+    if user.suspicious:
+        flags.append("⚠️ Подозрительный")
     flags_text = ", ".join(flags) if flags else "Нет особых отметок"
 
     username_display = escape_md(user.username) if user.username else "Не указан"
@@ -365,7 +369,16 @@ async def show_user_profile(
         f"• Статус: {user.deposit_status_text}\n"
         f"• PLEX в сутки: `{int(user.required_daily_plex):,}`\n"
         f"• Транзакций: `{user.deposit_tx_count}`\n"
-        f"• Последнее сканирование: {user.last_deposit_scan_at.strftime('%d.%m.%Y %H:%M') if user.last_deposit_scan_at else 'Не сканировался'}\n\n"
+    )
+
+    # Add last scan date
+    if user.last_deposit_scan_at:
+        last_scan = user.last_deposit_scan_at.strftime('%d.%m.%Y %H:%M')
+    else:
+        last_scan = 'Не сканировался'
+
+    text += (
+        f"• Последнее сканирование: {last_scan}\n\n"
         f"Выберите действие:"
     )
 
@@ -475,7 +488,10 @@ async def process_balance_change(
     admin_id = admin.id if admin else None
 
     # Security log (simplified usage)
-    logger.warning(f"Admin {admin_id} changed balance for user {user_id} by {amount}. New: {new_balance}")
+    logger.warning(
+        f"Admin {admin_id} changed balance for user {user_id} by {amount}. "
+        f"New: {new_balance}"
+    )
 
     admin_log = AdminLogService(session)
     action = "Начисление" if amount > 0 else "Списание"
@@ -484,7 +500,11 @@ async def process_balance_change(
         action=f"balance_change_{'credit' if amount > 0 else 'debit'}",
         entity_type="user",
         entity_id=user_id,
-        details={"amount": float(amount), "old_balance": float(old_balance), "new_balance": float(new_balance)},
+        details={
+            "amount": float(amount),
+            "old_balance": float(old_balance),
+            "new_balance": float(new_balance)
+        },
         ip_address=None
     )
 
@@ -560,10 +580,10 @@ async def handle_profile_terminate(
     if not user_id:
         # Fallback to legacy flow check if state is not set
         if await state.get_state() == AdminStates.awaiting_user_to_terminate:
-             # This is part of the legacy flow which we are restoring below
-             pass
+            # This is part of the legacy flow which we are restoring below
+            pass
         else:
-             return
+            return
 
     user_service = UserService(session)
     user = await user_service.get_by_id(user_id)
@@ -598,7 +618,10 @@ async def handle_profile_history(
     if not user_id:
         return
 
-    stmt = select(Transaction).where(Transaction.user_id == user_id).order_by(desc(Transaction.created_at)).limit(10)
+    stmt = (
+        select(Transaction).where(Transaction.user_id == user_id)
+        .order_by(desc(Transaction.created_at)).limit(10)
+    )
     result = await session.execute(stmt)
     txs = result.scalars().all()
 
@@ -615,7 +638,10 @@ async def handle_profile_history(
             "rejected": "🚫"
         }
         status = status_map.get(tx.status, "❓")
-        text += f"{status} `{tx.created_at.strftime('%d.%m %H:%M')}`: {tx.type} **{tx.amount} USDT**\n"
+        text += (
+            f"{status} `{tx.created_at.strftime('%d.%m %H:%M')}`: "
+            f"{tx.type} **{tx.amount} USDT**\n"
+        )
         if tx.tx_hash:
             text += f"   🔗 `{tx.tx_hash}`\n"
 
@@ -1011,12 +1037,14 @@ async def handle_start_terminate_user_direct(
     # Check permissions first (this is triggered by button)
     # Note: handle_profile_terminate also catches this text!
     # We need to differentiate based on state or context.
-    # If we are in profile mode (selected_user_id set), handle_profile_terminate should take precedence.
+    # If we are in profile mode (selected_user_id set),
+    # handle_profile_terminate should take precedence.
     # But handlers are registered in order.
     # handle_profile_terminate is registered BEFORE this one.
     # So if state has selected_user_id, handle_profile_terminate will run.
     # If not, it will return early (if not user_id: return).
-    # So we can put this handler AFTER handle_profile_terminate and it will catch cases where profile is not active.
+    # So we can put this handler AFTER handle_profile_terminate and
+    # it will catch cases where profile is not active.
 
     admin = await get_admin_or_deny(message, session, **data)
     if not admin:

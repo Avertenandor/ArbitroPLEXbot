@@ -8,12 +8,12 @@ from typing import Any
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import KeyboardButton, Message, ReplyKeyboardMarkup
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
-from bot.i18n import get_translator, set_user_language, get_user_language, SUPPORTED_LANGUAGES
+from bot.i18n import SUPPORTED_LANGUAGES, get_translator, get_user_language, set_user_language
 from bot.keyboards.reply import settings_keyboard
 
 router = Router(name="language")
@@ -96,4 +96,3 @@ async def handle_language_selection(
             reply_markup=settings_keyboard(),
             parse_mode="Markdown",
         )
-

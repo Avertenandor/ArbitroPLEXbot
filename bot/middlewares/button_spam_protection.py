@@ -185,4 +185,3 @@ class ButtonSpamProtectionMiddleware(BaseMiddleware):
             await self.redis_client.setex(key, int(cooldown), "1")
         except Exception as e:
             logger.warning(f"Redis error setting cooldown: {e}")
-

@@ -4,7 +4,7 @@ Datetime utilities.
 Provides timezone-aware datetime functions.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 
 def utc_now() -> datetime:
@@ -14,4 +14,4 @@ def utc_now() -> datetime:
     Returns:
         Current datetime in UTC with timezone awareness
     """
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)

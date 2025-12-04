@@ -773,10 +773,10 @@ def admin_finpass_request_list_keyboard(
         # Try to get user label if available (joined) or just ID
         user_label1 = f"User {r1.user_id}"
         if hasattr(r1, 'user') and r1.user:
-             if r1.user.username:
-                 user_label1 = f"@{r1.user.username}"
-             elif r1.user.telegram_id:
-                 user_label1 = f"TG {r1.user.telegram_id}"
+            if r1.user.username:
+                user_label1 = f"@{r1.user.username}"
+            elif r1.user.telegram_id:
+                user_label1 = f"TG {r1.user.telegram_id}"
 
         row_buttons.append(KeyboardButton(text=f"🔑 Запрос #{r1.id} {user_label1}"))
 
@@ -785,10 +785,10 @@ def admin_finpass_request_list_keyboard(
             r2 = requests[i + 1]
             user_label2 = f"User {r2.user_id}"
             if hasattr(r2, 'user') and r2.user:
-                 if r2.user.username:
-                     user_label2 = f"@{r2.user.username}"
-                 elif r2.user.telegram_id:
-                     user_label2 = f"TG {r2.user.telegram_id}"
+                if r2.user.username:
+                    user_label2 = f"@{r2.user.username}"
+                elif r2.user.telegram_id:
+                    user_label2 = f"TG {r2.user.telegram_id}"
             row_buttons.append(KeyboardButton(text=f"🔑 Запрос #{r2.id} {user_label2}"))
 
         builder.row(*row_buttons)
@@ -854,7 +854,10 @@ def admin_financial_list_keyboard(
         if len(username) > 15:
             username = username[:12] + "..."
 
-        text = f"👤 {user.id}. {username} | +{int(user.total_deposited)} | -{int(user.total_withdrawn)}"
+        text = (
+            f"👤 {user.id}. {username} | "
+            f"+{int(user.total_deposited)} | -{int(user.total_withdrawn)}"
+        )
         builder.row(KeyboardButton(text=text))
 
     # Navigation

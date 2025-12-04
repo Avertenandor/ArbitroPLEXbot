@@ -400,9 +400,9 @@ class SupportService:
         status_stmt = select(
             SupportTicket.status, func.count(SupportTicket.id)
         ).group_by(SupportTicket.status)
-        
+
         status_results = (await self.session.execute(status_stmt)).all()
-        
+
         for status, count in status_results:
             if status == SupportStatus.OPEN.value:
                 stats["open"] = count
@@ -412,5 +412,5 @@ class SupportService:
                 stats["closed"] = count
             elif status == SupportStatus.WAITING_USER.value:
                 stats["waiting_user"] = count
-                
+
         return stats

@@ -49,8 +49,7 @@ async def show_instructions(
     # R1-6: Проверка FSM состояния - если пользователь в процессе регистрации,
     # сбросить состояние и показать главное меню
     from bot.states.registration import RegistrationStates
-    from bot.utils.menu_buttons import is_menu_button
-    
+
     current_state = await state.get_state()
     if current_state and current_state in [
         RegistrationStates.waiting_for_wallet,
@@ -123,7 +122,7 @@ async def show_instructions(
 
     # For registered users: show deposit instructions
     from bot.constants.rules import LEVELS_TABLE, RULES_SHORT_TEXT
-    
+
     instructions_text = (
         "📖 *Инструкция по пополнению депозита*\n\n"
         "*1️⃣ Откройте ваш BSC кошелек* (Trust Wallet, MetaMask, SafePal или холодный кошелек)\n\n"
@@ -173,10 +172,10 @@ async def show_instructions(
 
     # Get actual level statuses for deposit keyboard
     from app.services.deposit_validation_service import DepositValidationService
-    
+
     validation_service = DepositValidationService(session)
     levels_status = await validation_service.get_available_levels(user.id)
-    
+
     await message.answer(
         instructions_text,
         parse_mode="Markdown",

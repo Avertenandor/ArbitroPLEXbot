@@ -9,13 +9,12 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
+    JSON,
     DateTime,
     ForeignKey,
-    Integer,
-    JSON,
-    String,
-    Text,
     Index,
+    Integer,
+    String,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -110,4 +109,3 @@ class NotificationQueueFallback(Base):
             f"type={self.notification_type!r}, "
             f"processed={self.processed_at is not None})"
         )
-

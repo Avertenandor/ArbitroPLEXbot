@@ -6,7 +6,6 @@ Runs every 5 minutes to check for stuck transactions.
 """
 
 import asyncio
-from datetime import UTC, datetime, timedelta
 
 import dramatiq
 from aiogram import Bot
@@ -66,9 +65,179 @@ def monitor_stuck_transactions() -> dict:
         }
 
 
+async def _load_user_for_withdrawal(session, withdrawal):
+    """Load user for a withdrawal transaction."""
+    try:
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+
+        from app.models.user import User
+
+        stmt = (
+            select(User)
+            .where(User.id == withdrawal.user_id)
+            .options(selectinload(User.transactions))
+        )
+
+        result_user = await session.execute(stmt)
+        return result_user.scalar_one_or_none()
+    except Exception as e:
+        logger.error(
+            f"Error loading user for withdrawal {withdrawal.id}: {e}"
+        )
+        return None
+
+
+async def _notify_withdrawal_confirmed(
+    notification_service, bot, session, withdrawal
+):
+    """Notify user about confirmed withdrawal."""
+    user = await _load_user_for_withdrawal(session, withdrawal)
+    if not user:
+        return
+
+    try:
+        await notification_service.send_notification(
+            bot=bot,
+            user_telegram_id=user.telegram_id,
+            message=(
+                f"✅ Ваш вывод подтвержден!\n\n"
+                f"💰 Сумма: {withdrawal.amount} USDT\n"
+                f"🔗 TX: {withdrawal.tx_hash}\n\n"
+                f"Транзакция успешно обработана в блокчейне."
+            ),
+            critical=True,
+        )
+    except Exception as e:
+        logger.error(
+            f"Error sending notification for transaction {withdrawal.id}: {e}"
+        )
+
+
+async def _notify_withdrawal_failed(
+    notification_service, bot, session, withdrawal
+):
+    """Notify user about failed withdrawal and refund."""
+    user = await _load_user_for_withdrawal(session, withdrawal)
+    if not user:
+        return
+
+    try:
+        await notification_service.send_notification(
+            bot=bot,
+            user_telegram_id=user.telegram_id,
+            message=(
+                f"⚠️ Транзакция вывода не прошла\n\n"
+                f"💰 Сумма: {withdrawal.amount} USDT\n"
+                f"🔗 TX: {withdrawal.tx_hash}\n\n"
+                f"Средства возвращены на ваш баланс. "
+                f"Попробуйте создать новый запрос на вывод."
+            ),
+            critical=True,
+        )
+    except Exception as e:
+        logger.error(
+            f"Error sending notification for failed transaction {withdrawal.id}: {e}"
+        )
+
+
+async def _process_single_stuck_withdrawal(
+    withdrawal,
+    stuck_service,
+    blockchain_service,
+    notification_service,
+    bot,
+    session,
+    web3,
+):
+    """Process a single stuck withdrawal transaction."""
+    bs_status = await blockchain_service.check_transaction_status(
+        withdrawal.tx_hash
+    )
+
+    # Map status to format expected by handle_stuck_transaction
+    status_map = {
+        "confirmed": "confirmed",
+        "failed": "failed",
+        "pending": "pending",
+        "unknown": "error",
+    }
+
+    tx_status = {
+        "status": status_map.get(bs_status.get("status"), "error"),
+        "error": None,
+    }
+
+    # Handle based on status
+    result = await stuck_service.handle_stuck_transaction(
+        withdrawal, tx_status, web3
+    )
+
+    # Notify user based on result action
+    if result["action"] == "confirmed":
+        await _notify_withdrawal_confirmed(
+            notification_service, bot, session, withdrawal
+        )
+    elif result["action"] == "failed_refunded":
+        await _notify_withdrawal_failed(
+            notification_service, bot, session, withdrawal
+        )
+
+    return result["action"]
+
+
+async def _process_stuck_withdrawals(
+    stuck_withdrawals,
+    stuck_service,
+    blockchain_service,
+    notification_service,
+    bot,
+    session,
+):
+    """Process all stuck withdrawals."""
+    processed = 0
+    confirmed = 0
+    failed = 0
+    pending = 0
+
+    web3 = blockchain_service.get_active_web3()
+
+    for withdrawal in stuck_withdrawals:
+        try:
+            action = await _process_single_stuck_withdrawal(
+                withdrawal,
+                stuck_service,
+                blockchain_service,
+                notification_service,
+                bot,
+                session,
+                web3,
+            )
+
+            processed += 1
+
+            if action == "confirmed":
+                confirmed += 1
+            elif action == "failed_refunded":
+                failed += 1
+            elif action in [
+                "pending_waiting",
+                "pending_speedup_needed",
+                "not_found_retry_needed",
+            ]:
+                pending += 1
+
+        except Exception as e:
+            logger.error(
+                f"Error processing stuck transaction {withdrawal.id}: {e}",
+                extra={"transaction_id": withdrawal.id},
+            )
+
+    return processed, confirmed, failed, pending
+
+
 async def _monitor_stuck_transactions_async() -> dict:
     """Async implementation of stuck transaction monitoring."""
-    # Create Redis client for distributed lock
     redis_client = None
     if redis:
         try:
@@ -82,7 +251,6 @@ async def _monitor_stuck_transactions_async() -> dict:
         except Exception as e:
             logger.warning(f"Failed to create Redis client for lock: {e}")
 
-    # Use distributed lock to prevent concurrent stuck transaction monitoring
     lock = DistributedLock(redis_client=redis_client)
 
     async with lock.lock("stuck_transaction_monitoring", timeout=300):
@@ -113,126 +281,15 @@ async def _monitor_stuck_transactions_async() -> dict:
                 bot = Bot(token=settings.telegram_bot_token)
                 notification_service = NotificationService(session)
 
-                processed = 0
-                confirmed = 0
-                failed = 0
-                pending = 0
-
-                # Get web3 instance from blockchain service
-                web3 = blockchain_service.get_active_web3()
-
-                for withdrawal in stuck_withdrawals:
-                    try:
-                        # Check transaction status in blockchain
-                        # Use blockchain_service to handle async web3 calls correctly
-                        bs_status = await blockchain_service.check_transaction_status(withdrawal.tx_hash)
-
-                        # Map status to format expected by handle_stuck_transaction
-                        status_map = {
-                            "confirmed": "confirmed",
-                            "failed": "failed",
-                            "pending": "pending",
-                            "unknown": "error"
-                        }
-
-                        tx_status = {
-                            "status": status_map.get(bs_status.get("status"), "error"),
-                            "error": None
-                        }
-
-                        # Handle based on status
-                        result = await stuck_service.handle_stuck_transaction(
-                            withdrawal, tx_status, web3
-                        )
-
-                        processed += 1
-
-                        if result["action"] == "confirmed":
-                            confirmed += 1
-
-                            # Notify user
-                            try:
-                                from sqlalchemy import select
-                                from sqlalchemy.orm import selectinload
-                                from app.models.user import User
-
-                                stmt = (
-                                    select(User)
-                                    .where(User.id == withdrawal.user_id)
-                                    .options(selectinload(User.transactions))
-                                )
-
-                                result_user = await session.execute(stmt)
-                                user = result_user.scalar_one_or_none()
-
-                                if user:
-                                    await notification_service.send_notification(
-                                        bot=bot,
-                                        user_telegram_id=user.telegram_id,
-                                        message=(
-                                            f"✅ Ваш вывод подтвержден!\n\n"
-                                            f"💰 Сумма: {withdrawal.amount} USDT\n"
-                                            f"🔗 TX: {withdrawal.tx_hash}\n\n"
-                                            f"Транзакция успешно обработана в блокчейне."
-                                        ),
-                                        critical=True,
-                                    )
-                            except Exception as e:
-                                logger.error(
-                                    f"Error sending notification for "
-                                    f"transaction {withdrawal.id}: {e}"
-                                )
-
-                        elif result["action"] == "failed_refunded":
-                            failed += 1
-
-                            # Notify user about refund
-                            try:
-                                from sqlalchemy import select
-                                from sqlalchemy.orm import selectinload
-                                from app.models.user import User
-
-                                stmt = (
-                                    select(User)
-                                    .where(User.id == withdrawal.user_id)
-                                    .options(selectinload(User.transactions))
-                                )
-
-                                result_user = await session.execute(stmt)
-                                user = result_user.scalar_one_or_none()
-
-                                if user:
-                                    await notification_service.send_notification(
-                                        bot=bot,
-                                        user_telegram_id=user.telegram_id,
-                                        message=(
-                                            f"⚠️ Транзакция вывода не прошла\n\n"
-                                            f"💰 Сумма: {withdrawal.amount} USDT\n"
-                                            f"🔗 TX: {withdrawal.tx_hash}\n\n"
-                                            f"Средства возвращены на ваш баланс. "
-                                            f"Попробуйте создать новый запрос на вывод."
-                                        ),
-                                        critical=True,
-                                    )
-                            except Exception as e:
-                                logger.error(
-                                    f"Error sending notification for "
-                                    f"failed transaction {withdrawal.id}: {e}"
-                                )
-
-                        elif result["action"] in [
-                            "pending_waiting",
-                            "pending_speedup_needed",
-                            "not_found_retry_needed",
-                        ]:
-                            pending += 1
-
-                    except Exception as e:
-                        logger.error(
-                            f"Error processing stuck transaction "
-                            f"{withdrawal.id}: {e}",
-                            extra={"transaction_id": withdrawal.id},
-                        )
+                # Process all stuck withdrawals
+                processed, confirmed, failed, pending = await _process_stuck_withdrawals(
+                    stuck_withdrawals,
+                    stuck_service,
+                    blockchain_service,
+                    notification_service,
+                    bot,
+                    session,
+                )
 
                 # Check if we have too many stuck transactions (>3)
                 if len(stuck_withdrawals) > 3:
@@ -241,9 +298,6 @@ async def _monitor_stuck_transactions_async() -> dict:
                         f"simultaneously - possible systemic issue",
                         extra={"stuck_count": len(stuck_withdrawals)},
                     )
-
-                    # Notify admins (this would require admin service integration)
-                    # For now, just log it
 
                 await bot.session.close()
 
@@ -255,7 +309,5 @@ async def _monitor_stuck_transactions_async() -> dict:
                     "total_stuck": len(stuck_withdrawals),
                 }
         finally:
-            # Close Redis client
             if redis_client:
                 await redis_client.close()
-

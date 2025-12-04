@@ -12,8 +12,6 @@ Runs every hour via scheduler.
 """
 
 import asyncio
-import io
-from datetime import UTC, datetime
 
 import dramatiq
 from aiogram import Bot
@@ -24,10 +22,8 @@ from sqlalchemy.pool import NullPool
 
 from app.config.constants import TELEGRAM_MESSAGE_DELAY
 from app.config.settings import settings
-from app.models.plex_payment import PlexPaymentRequirement, PlexPaymentStatus
 from app.repositories.deposit_repository import DepositRepository
 from app.repositories.plex_payment_repository import PlexPaymentRepository
-from app.services.notification_service import NotificationService
 from bot.constants.rules import SYSTEM_WALLET
 from bot.utils.qr_generator import generate_payment_qr
 
@@ -36,7 +32,7 @@ from bot.utils.qr_generator import generate_payment_qr
 def monitor_plex_payments() -> None:
     """
     Monitor PLEX payment requirements.
-    
+
     Steps:
     1. Get payments needing warning (25h+ without payment)
     2. Send warnings
@@ -44,7 +40,7 @@ def monitor_plex_payments() -> None:
     4. Block deposits and notify users
     """
     logger.info("Starting PLEX payment monitoring...")
-    
+
     try:
         asyncio.run(_monitor_plex_payments_async())
         logger.info("PLEX payment monitoring complete")
@@ -75,7 +71,6 @@ async def _monitor_plex_payments_async() -> None:
             async with local_session_maker() as session:
                 plex_repo = PlexPaymentRepository(session)
                 deposit_repo = DepositRepository(session)
-                notification_service = NotificationService(session)
 
                 # Step 1: Send reminders for pending first payments (inactive deposits)
                 pending_reminders = await _process_pending_activation_reminders(
@@ -266,32 +261,32 @@ async def _process_blocks(
 ) -> int:
     """
     Process deposit blocks.
-    
+
     Blocks deposits for users who haven't paid after 49h.
     """
     deposits_blocked = 0
-    
+
     # Get payments needing block
     block_due = await plex_repo.get_block_due_payments(limit=50)
-    
+
     for payment in block_due:
         try:
             # Get user's telegram_id
             user = payment.user
             if not user:
                 continue
-            
+
             deposit = payment.deposit
             if not deposit:
                 continue
-            
+
             # Block deposit
             deposit.status = "blocked_plex"
             await session.flush()
-            
+
             # Mark payment as blocked
             await plex_repo.mark_blocked(payment.id)
-            
+
             # Build notification message
             message = (
                 "🚫 **ДЕПОЗИТ ЗАБЛОКИРОВАН**\n\n"
@@ -303,7 +298,7 @@ async def _process_blocks(
                 "• Средства будут возвращены администратором\n\n"
                 "Для восстановления доступа обратитесь в поддержку."
             )
-            
+
             try:
                 await bot.send_message(
                     chat_id=user.telegram_id,
@@ -319,15 +314,15 @@ async def _process_blocks(
                 )
 
             deposits_blocked += 1
-            
+
             logger.error(
                 f"Deposit blocked for PLEX non-payment: "
                 f"user_id={user.id}, deposit_id={deposit.id}"
             )
-            
+
         except Exception as e:
             logger.error(f"Failed to process block for payment {payment.id}: {e}")
-    
+
     return deposits_blocked
 
 
@@ -335,11 +330,11 @@ async def _process_blocks(
 def check_single_user_plex(user_id: int) -> None:
     """
     Check PLEX balance for a single user.
-    
+
     Can be called on-demand (e.g., after deposit creation).
     """
     logger.info(f"Checking PLEX for user {user_id}")
-    
+
     try:
         asyncio.run(_check_single_user_async(user_id))
     except Exception as e:
@@ -353,24 +348,23 @@ async def _check_single_user_async(user_id: int) -> None:
         echo=False,
         poolclass=NullPool,
     )
-    
+
     local_session_maker = async_sessionmaker(
         local_engine,
         class_=AsyncSession,
         expire_on_commit=False,
     )
-    
+
     try:
         async with local_session_maker() as session:
             from app.services.plex_payment_service import PlexPaymentService
-            
+
             plex_service = PlexPaymentService(session)
             result = await plex_service.check_plex_balance_sufficient(user_id)
-            
+
             if not result.get("sufficient"):
                 logger.warning(
                     f"Insufficient PLEX for user {user_id}: {result}"
                 )
     finally:
         await local_engine.dispose()
-

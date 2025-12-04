@@ -1,7 +1,6 @@
 """Pydantic models for calculator."""
 
 from decimal import Decimal
-from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -21,9 +20,11 @@ class DepositLevel(BaseModel):
     level_number: int = Field(..., ge=1, description="Level number (1, 2, 3, etc.)")
     min_amount: Decimal = Field(..., ge=0, description="Minimum deposit amount for this level")
     roi_percent: Decimal = Field(..., ge=0, description="Daily ROI percentage")
-    roi_cap_percent: Decimal = Field(..., ge=0, description="Maximum ROI cap percentage (e.g., 500 = 500%)")
+    roi_cap_percent: Decimal = Field(
+        ..., ge=0, description="Maximum ROI cap percentage (e.g., 500 = 500%)"
+    )
     is_active: bool = Field(default=True, description="Whether this level is currently active")
-    name: Optional[str] = Field(default=None, description="Optional level name")
+    name: str | None = Field(default=None, description="Optional level name")
 
 
 class CalculationResult(BaseModel):

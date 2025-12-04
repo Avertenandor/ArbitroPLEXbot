@@ -214,4 +214,3 @@ class OperationRateLimiter:
             await self.redis_client.delete(key)
         except Exception as e:
             logger.error(f"Error clearing {operation} limit: {e}")
-

@@ -145,56 +145,72 @@ class PaymentRetryService:
         Returns:
             Dict with processed, successful, failed, moved_to_dlq counts
         """
-        # Get pending retries
         pending = await self.retry_repo.get_pending_retries()
 
         if not pending:
-            return {
-                "processed": 0,
-                "successful": 0,
-                "failed": 0,
-                "moved_to_dlq": 0,
-            }
+            return self._create_empty_stats()
 
         logger.info(
             f"Processing {len(pending)} pending payment retries..."
         )
 
-        processed = 0
-        successful = 0
-        failed = 0
-        moved_to_dlq = 0
-
-        for retry in pending:
-            try:
-                result = await self._process_retry(
-                    retry, blockchain_service
-                )
-                processed += 1
-
-                if result["success"]:
-                    successful += 1
-                elif result["moved_to_dlq"]:
-                    moved_to_dlq += 1
-                else:
-                    failed += 1
-            except Exception as e:
-                logger.error(
-                    f"Error processing retry {retry.id}: {e}"
-                )
-                failed += 1
+        stats = self._process_retry_batch(pending, blockchain_service)
 
         logger.info(
-            f"Retry processing complete: {successful} successful, "
-            f"{failed} failed, {moved_to_dlq} moved to DLQ "
-            f"out of {processed} total"
+            f"Retry processing complete: {stats['successful']} successful, "
+            f"{stats['failed']} failed, {stats['moved_to_dlq']} moved to DLQ "
+            f"out of {stats['processed']} total"
         )
 
+        return stats
+
+    async def _process_retry_batch(
+        self, pending: list[PaymentRetry], blockchain_service
+    ) -> dict:
+        """Process a batch of pending retries and collect statistics."""
+        stats = {
+            "processed": 0,
+            "successful": 0,
+            "failed": 0,
+            "moved_to_dlq": 0,
+        }
+
+        for retry in pending:
+            result = await self._process_single_retry_safe(
+                retry, blockchain_service
+            )
+            stats["processed"] += 1
+            stats[result] += 1
+
+        return stats
+
+    async def _process_single_retry_safe(
+        self, retry: PaymentRetry, blockchain_service
+    ) -> str:
+        """
+        Process a single retry with error handling.
+
+        Returns:
+            One of: 'successful', 'failed', 'moved_to_dlq'
+        """
+        try:
+            result = await self._process_retry(retry, blockchain_service)
+            if result["success"]:
+                return "successful"
+            if result["moved_to_dlq"]:
+                return "moved_to_dlq"
+            return "failed"
+        except Exception as e:
+            logger.error(f"Error processing retry {retry.id}: {e}")
+            return "failed"
+
+    def _create_empty_stats(self) -> dict:
+        """Create empty statistics dict."""
         return {
-            "processed": processed,
-            "successful": successful,
-            "failed": failed,
-            "moved_to_dlq": moved_to_dlq,
+            "processed": 0,
+            "successful": 0,
+            "failed": 0,
+            "moved_to_dlq": 0,
         }
 
     async def _process_retry(
@@ -215,166 +231,221 @@ class PaymentRetryService:
             f"attempt {retry.attempt_count + 1}/{retry.max_retries}"
         )
 
-        # Increment attempt count
+        await self._increment_retry_attempt(retry)
+
+        try:
+            user = await self._load_and_validate_user(retry)
+            payment_result = await self._execute_payment(
+                retry, user, blockchain_service
+            )
+            await self._save_payment_tx_hash(retry, payment_result)
+            self._validate_payment_result(payment_result)
+
+            return await self._handle_payment_success(
+                retry, user, payment_result["tx_hash"]
+            )
+
+        except Exception as e:
+            return await self._handle_payment_failure(retry, e)
+
+    async def _increment_retry_attempt(
+        self, retry: PaymentRetry
+    ) -> None:
+        """Increment the retry attempt count."""
         await self.retry_repo.update(
             retry.id,
             attempt_count=retry.attempt_count + 1,
             last_attempt_at=datetime.now(UTC),
         )
 
-        try:
-            # Load user
-            user_stmt = select(retry.user)
-            user_result = await self.session.execute(user_stmt)
-            user = user_result.scalar_one()
+    async def _load_and_validate_user(self, retry: PaymentRetry):
+        """Load user and validate wallet address."""
+        user_stmt = select(retry.user)
+        user_result = await self.session.execute(user_stmt)
+        user = user_result.scalar_one()
 
-            # Validate wallet address
-            if not user.wallet_address:
+        if not user.wallet_address:
+            raise ValueError(
+                f"User {user.telegram_id} has no wallet address"
+            )
+
+        return user
+
+    async def _execute_payment(
+        self, retry: PaymentRetry, user, blockchain_service
+    ) -> dict:
+        """Execute the blockchain payment."""
+        logger.info(
+            f"Attempting payment: {retry.amount} USDT "
+            f"to {user.wallet_address}"
+        )
+
+        previous_tx_hash = retry.tx_hash if retry.tx_hash else None
+        if previous_tx_hash:
+            logger.info(
+                f"Previous tx_hash found: {previous_tx_hash} - "
+                f"will check before sending new transaction"
+            )
+
+        return await blockchain_service.send_payment(
+            user.wallet_address,
+            retry.amount,
+            previous_tx_hash=previous_tx_hash,
+        )
+
+    async def _save_payment_tx_hash(
+        self, retry: PaymentRetry, payment_result: dict
+    ) -> None:
+        """Save transaction hash if present and changed."""
+        tx_hash = payment_result.get("tx_hash")
+        if tx_hash and tx_hash != retry.tx_hash:
+            await self.retry_repo.update(retry.id, tx_hash=tx_hash)
+            await self.session.flush()
+
+    def _validate_payment_result(self, payment_result: dict) -> None:
+        """Validate payment result and raise error if unsuccessful."""
+        if not payment_result["success"]:
+            if payment_result.get("status") == "pending":
+                logger.info(
+                    f"Transaction {payment_result['tx_hash']} pending - "
+                    f"will check again on next retry"
+                )
                 raise ValueError(
-                    f"User {user.telegram_id} has no wallet address"
+                    payment_result.get("error", "Transaction pending")
                 )
-
-            # Send payment via blockchain, passing previous tx_hash if exists
-            logger.info(
-                f"Attempting payment: {retry.amount} USDT "
-                f"to {user.wallet_address}"
+            raise ValueError(
+                payment_result.get("error", "Unknown payment error")
             )
 
-            # Pass previous tx_hash to avoid duplicate transactions
-            previous_tx_hash = retry.tx_hash if retry.tx_hash else None
-            if previous_tx_hash:
-                logger.info(
-                    f"Previous tx_hash found: {previous_tx_hash} - "
-                    f"will check before sending new transaction"
-                )
+    async def _handle_payment_success(
+        self, retry: PaymentRetry, user, tx_hash: str
+    ) -> dict:
+        """Handle successful payment."""
+        logger.info(
+            f"Payment retry {retry.id} succeeded! TxHash: {tx_hash}"
+        )
 
-            payment_result = await blockchain_service.send_payment(
-                user.wallet_address,
-                retry.amount,
-                previous_tx_hash=previous_tx_hash,
+        await self.retry_repo.update(
+            retry.id, resolved=True, tx_hash=tx_hash
+        )
+
+        await self._mark_earnings_as_paid(retry, tx_hash)
+        await self._create_transaction_record(retry, user, tx_hash)
+
+        await self.session.commit()
+
+        logger.info(
+            "Payment retry succeeded",
+            extra={
+                "retry_id": retry.id,
+                "attempt_count": retry.attempt_count,
+                "tx_hash": tx_hash,
+            },
+        )
+
+        return {"success": True, "moved_to_dlq": False}
+
+    async def _mark_earnings_as_paid(
+        self, retry: PaymentRetry, tx_hash: str
+    ) -> None:
+        """Mark earnings or rewards as paid."""
+        if retry.payment_type == PaymentType.REFERRAL_EARNING.value:
+            await self._mark_referral_earnings_paid(
+                retry.earning_ids, tx_hash
+            )
+        elif retry.payment_type == PaymentType.DEPOSIT_REWARD.value:
+            await self._mark_deposit_rewards_paid(
+                retry.earning_ids, tx_hash
             )
 
-            # Save tx_hash even if not successful (for pending status)
-            if payment_result.get("tx_hash") and payment_result["tx_hash"] != retry.tx_hash:
-                await self.retry_repo.update(
-                    retry.id, tx_hash=payment_result["tx_hash"]
-                )
-                await self.session.flush()
-
-            if not payment_result["success"]:
-                # Check if it's pending (not a real failure)
-                if payment_result.get("status") == "pending":
-                    logger.info(
-                        f"Transaction {payment_result['tx_hash']} pending - "
-                        f"will check again on next retry"
-                    )
-                    raise ValueError(
-                        payment_result.get("error", "Transaction pending")
-                    )
-                else:
-                    raise ValueError(
-                        payment_result.get("error", "Unknown payment error")
-                    )
-
-            # Payment succeeded!
-            tx_hash = payment_result["tx_hash"]
-            logger.info(
-                f"Payment retry {retry.id} succeeded! TxHash: {tx_hash}"
+    async def _mark_referral_earnings_paid(
+        self, earning_ids: list[int], tx_hash: str
+    ) -> None:
+        """Mark referral earnings as paid."""
+        for earning_id in earning_ids:
+            await self.earning_repo.update(
+                earning_id, paid=True, tx_hash=tx_hash
             )
 
-            # Mark retry as resolved
-            await self.retry_repo.update(
-                retry.id, resolved=True, tx_hash=tx_hash
-            )
-
-            # Mark earnings/rewards as paid
-            if retry.payment_type == PaymentType.REFERRAL_EARNING.value:
-                for earning_id in retry.earning_ids:
-                    await self.earning_repo.update(
-                        earning_id, paid=True, tx_hash=tx_hash
-                    )
-            elif retry.payment_type == PaymentType.DEPOSIT_REWARD.value:
-                for reward_id in retry.earning_ids:
-                    await self.reward_repo.update(
-                        reward_id,
-                        paid=True,
-                        paid_at=datetime.now(UTC),
-                        tx_hash=tx_hash,
-                    )
-
-            # Create transaction record for on-chain payout
-            tx_type = (
-                TransactionType.REFERRAL_REWARD
-                if retry.payment_type == PaymentType.REFERRAL_EARNING.value
-                else TransactionType.SYSTEM_PAYOUT
-            )
-
-            await self.transaction_repo.create(
-                user_id=retry.user_id,
+    async def _mark_deposit_rewards_paid(
+        self, reward_ids: list[int], tx_hash: str
+    ) -> None:
+        """Mark deposit rewards as paid."""
+        for reward_id in reward_ids:
+            await self.reward_repo.update(
+                reward_id,
+                paid=True,
+                paid_at=datetime.now(UTC),
                 tx_hash=tx_hash,
-                type=tx_type.value,
-                amount=retry.amount,
-                to_address=user.wallet_address,
-                status=TransactionStatus.CONFIRMED.value,
             )
 
-            await self.session.commit()
+    async def _create_transaction_record(
+        self, retry: PaymentRetry, user, tx_hash: str
+    ) -> None:
+        """Create transaction record for on-chain payout."""
+        tx_type = self._get_transaction_type(retry.payment_type)
 
-            logger.info(
-                "Payment retry succeeded",
-                extra={
-                    "retry_id": retry.id,
-                    "attempt_count": retry.attempt_count,
-                    "tx_hash": tx_hash,
-                },
-            )
+        await self.transaction_repo.create(
+            user_id=retry.user_id,
+            tx_hash=tx_hash,
+            type=tx_type.value,
+            amount=retry.amount,
+            to_address=user.wallet_address,
+            status=TransactionStatus.CONFIRMED.value,
+        )
 
-            return {"success": True, "moved_to_dlq": False}
+    def _get_transaction_type(
+        self, payment_type: str
+    ) -> TransactionType:
+        """Get transaction type based on payment type."""
+        if payment_type == PaymentType.REFERRAL_EARNING.value:
+            return TransactionType.REFERRAL_REWARD
+        return TransactionType.SYSTEM_PAYOUT
 
-        except Exception as e:
-            error_msg = str(e)
-            logger.error(
-                f"Retry {retry.id} attempt "
-                f"{retry.attempt_count} failed: {error_msg}"
-            )
+    async def _handle_payment_failure(
+        self, retry: PaymentRetry, error: Exception
+    ) -> dict:
+        """Handle payment failure."""
+        error_msg = str(error)
+        logger.error(
+            f"Retry {retry.id} attempt "
+            f"{retry.attempt_count} failed: {error_msg}"
+        )
 
-            # Update retry with error
-            await self.retry_repo.update(
-                retry.id, last_error=error_msg
-            )
+        await self.retry_repo.update(retry.id, last_error=error_msg)
 
-            # Check if max retries exceeded
-            if retry.attempt_count >= retry.max_retries:
-                # Move to DLQ
-                await self.retry_repo.update(
-                    retry.id, in_dlq=True, next_retry_at=None
-                )
+        if retry.attempt_count >= retry.max_retries:
+            return await self._move_to_dlq(retry)
 
-                logger.warning(
-                    f"Retry {retry.id} moved to DLQ "
-                    f"after {retry.attempt_count} attempts"
-                )
+        return await self._schedule_next_retry(retry)
 
-                await self.session.commit()
+    async def _move_to_dlq(self, retry: PaymentRetry) -> dict:
+        """Move retry to dead letter queue."""
+        await self.retry_repo.update(
+            retry.id, in_dlq=True, next_retry_at=None
+        )
 
-                return {"success": False, "moved_to_dlq": True}
-            else:
-                # Schedule next retry with exponential backoff
-                next_retry = self._calculate_next_retry_time(
-                    retry.attempt_count
-                )
-                await self.retry_repo.update(
-                    retry.id, next_retry_at=next_retry
-                )
+        logger.warning(
+            f"Retry {retry.id} moved to DLQ "
+            f"after {retry.attempt_count} attempts"
+        )
 
-                logger.info(
-                    f"Retry {retry.id} scheduled for next attempt "
-                    f"at: {next_retry.isoformat()}"
-                )
+        await self.session.commit()
+        return {"success": False, "moved_to_dlq": True}
 
-                await self.session.commit()
+    async def _schedule_next_retry(self, retry: PaymentRetry) -> dict:
+        """Schedule next retry with exponential backoff."""
+        next_retry = self._calculate_next_retry_time(retry.attempt_count)
 
-                return {"success": False, "moved_to_dlq": False}
+        await self.retry_repo.update(retry.id, next_retry_at=next_retry)
+
+        logger.info(
+            f"Retry {retry.id} scheduled for next attempt "
+            f"at: {next_retry.isoformat()}"
+        )
+
+        await self.session.commit()
+        return {"success": False, "moved_to_dlq": False}
 
     def _calculate_next_retry_time(
         self, attempt_count: int
@@ -457,7 +528,8 @@ class PaymentRetryService:
         pending = await self.retry_repo.count(
             resolved=False, in_dlq=False
         )
-        dlq = len(await self.retry_repo.get_dlq_entries())  # Keep as is - get_dlq_entries may have complex logic
+        # Keep as is - get_dlq_entries may have complex logic
+        dlq = len(await self.retry_repo.get_dlq_entries())
         resolved = await self.retry_repo.count(resolved=True)
 
         # Get amounts

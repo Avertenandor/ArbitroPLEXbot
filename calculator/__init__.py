@@ -19,26 +19,26 @@ Example:
     Daily reward: 11.17 USDT
 """
 
-from calculator.core.calculator import ProfitabilityCalculator
-from calculator.core.models import (
-    DepositLevel,
-    CalculationResult,
-    DepositCalculation,
-)
 from calculator.constants import (
     DEFAULT_LEVELS,
+    get_active_levels,
     get_level_by_number,
     get_level_for_amount,
-    get_active_levels,
+)
+from calculator.core.calculator import ProfitabilityCalculator
+from calculator.core.models import (
+    CalculationResult,
+    DepositCalculation,
+    DepositLevel,
 )
 from calculator.utils import (
-    format_currency,
-    format_percentage,
-    format_number,
-    format_days,
-    format_days_ru,
     format_calculation_result,
     format_calculation_result_ru,
+    format_currency,
+    format_days,
+    format_days_ru,
+    format_number,
+    format_percentage,
 )
 
 __version__ = "1.0.0"

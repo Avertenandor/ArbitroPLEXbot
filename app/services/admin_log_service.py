@@ -84,7 +84,7 @@ class AdminLogService:
 
                 if check_result.get("suspicious"):
                     logger.warning(
-                        f"R10-3: Suspicious admin activity detected",
+                        "R10-3: Suspicious admin activity detected",
                         extra={
                             "admin_id": admin_id,
                             "action_type": action_type,
@@ -316,4 +316,3 @@ class AdminLogService:
                 "message_preview": message_preview[:100],
             },
         )
-

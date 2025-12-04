@@ -117,8 +117,9 @@ class SupportTicketRepository(BaseRepository[SupportTicket]):
         Returns:
             Active ticket or None
         """
-        from app.models.enums import SupportTicketStatus
         from sqlalchemy import select
+
+        from app.models.enums import SupportTicketStatus
 
         stmt = (
             select(SupportTicket)

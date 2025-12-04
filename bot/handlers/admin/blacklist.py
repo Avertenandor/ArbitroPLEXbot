@@ -497,7 +497,10 @@ async def handle_unban_user(
         return
 
     # Get user info for confirmation
-    user_label = f"Telegram ID: {entry.telegram_id}" if entry.telegram_id else "Wallet: " + (entry.wallet_address or "N/A")
+    if entry.telegram_id:
+        user_label = f"Telegram ID: {entry.telegram_id}"
+    else:
+        user_label = "Wallet: " + (entry.wallet_address or "N/A")
 
     await state.update_data(blacklist_entry_id=entry_id)
     await state.set_state(AdminStates.awaiting_user_to_unban)
@@ -621,9 +624,13 @@ async def handle_edit_notification_texts(
     setting_repo = SystemSettingRepository(session)
 
     # Get current texts or use defaults
+    default_block_text = (
+        "⚠️ Ваш аккаунт временно заблокирован в нашем сообществе. "
+        "Вы можете подать апелляцию в течение 3 рабочих дней."
+    )
     block_text = await setting_repo.get_value(
         "blacklist_block_notification_text",
-        default="⚠️ Ваш аккаунт временно заблокирован в нашем сообществе. Вы можете подать апелляцию в течение 3 рабочих дней."
+        default=default_block_text
     )
     terminate_text = await setting_repo.get_value(
         "blacklist_terminate_notification_text",
@@ -666,9 +673,13 @@ async def handle_start_edit_block_text(
     from bot.states.admin_states import AdminStates
 
     setting_repo = SystemSettingRepository(session)
+    default_block_text = (
+        "⚠️ Ваш аккаунт временно заблокирован в нашем сообществе. "
+        "Вы можете подать апелляцию в течение 3 рабочих дней."
+    )
     current_text = await setting_repo.get_value(
         "blacklist_block_notification_text",
-        default="⚠️ Ваш аккаунт временно заблокирован в нашем сообществе. Вы можете подать апелляцию в течение 3 рабочих дней."
+        default=default_block_text
     )
 
     await state.set_state(AdminStates.awaiting_block_notification_text)

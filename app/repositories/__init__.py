@@ -16,18 +16,23 @@ from app.repositories.base import BaseRepository
 from app.repositories.blacklist_repository import (
     BlacklistRepository,
 )
+from app.repositories.deposit_level_version_repository import (
+    DepositLevelVersionRepository,
+)
 from app.repositories.deposit_repository import DepositRepository
 from app.repositories.deposit_reward_repository import (
     DepositRewardRepository,
-)
-from app.repositories.deposit_level_version_repository import (
-    DepositLevelVersionRepository,
 )
 from app.repositories.failed_notification_repository import (
     FailedNotificationRepository,
 )
 from app.repositories.financial_password_recovery_repository import (
     FinancialPasswordRecoveryRepository,
+)
+
+# System Repositories
+from app.repositories.global_settings_repository import (
+    GlobalSettingsRepository,
 )
 
 # PART5 Critical Repositories
@@ -51,23 +56,18 @@ from app.repositories.support_message_repository import (
 from app.repositories.support_ticket_repository import (
     SupportTicketRepository,
 )
-
-# System Repositories
-from app.repositories.global_settings_repository import (
-    GlobalSettingsRepository,
-)
 from app.repositories.transaction_repository import (
     TransactionRepository,
 )
 from app.repositories.user_action_repository import (
     UserActionRepository,
 )
-
-# Core Repositories
-from app.repositories.user_repository import UserRepository
 from app.repositories.user_notification_settings_repository import (
     UserNotificationSettingsRepository,
 )
+
+# Core Repositories
+from app.repositories.user_repository import UserRepository
 from app.repositories.wallet_change_request_repository import (
     WalletChangeRequestRepository,
 )

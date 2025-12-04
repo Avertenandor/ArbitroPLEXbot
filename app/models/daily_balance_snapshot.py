@@ -98,4 +98,3 @@ class DailyBalanceSnapshot(Base):
             f"date={self.snapshot_date}, "
             f"discrepancy={self.discrepancy})"
         )
-

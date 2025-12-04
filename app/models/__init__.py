@@ -29,10 +29,13 @@ from app.models.enums import (
     WalletChangeType,
 )
 from app.models.failed_notification import FailedNotification
-from app.models.notification_queue_fallback import NotificationQueueFallback
 from app.models.financial_password_recovery import (
     FinancialPasswordRecovery,
 )
+
+# System Models
+from app.models.global_settings import GlobalSettings
+from app.models.notification_queue_fallback import NotificationQueueFallback
 
 # КРИТИЧНЫЕ модели из PART5
 from app.models.payment_retry import PaymentRetry, PaymentType
@@ -46,18 +49,15 @@ from app.models.support_message import SupportMessage
 
 # Support Models
 from app.models.support_ticket import SupportTicket
-
-# User Inquiry Models
-from app.models.user_inquiry import InquiryMessage, InquiryStatus, UserInquiry
-
-# System Models
-from app.models.global_settings import GlobalSettings
 from app.models.transaction import Transaction
 
 # Core Models
 from app.models.user import User
 from app.models.user_action import UserAction
 from app.models.user_fsm_state import UserFsmState
+
+# User Inquiry Models
+from app.models.user_inquiry import InquiryMessage, InquiryStatus, UserInquiry
 from app.models.user_message_log import UserMessageLog
 from app.models.user_notification_settings import UserNotificationSettings
 from app.models.user_wallet_history import UserWalletHistory

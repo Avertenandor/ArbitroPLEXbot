@@ -273,13 +273,15 @@ async def process_amount_input(message: Message, state: FSMContext):
         # Leave some dust for gas if BNB and MAX
         if currency == "BNB" and percent == 100:
             amount = amount - Decimal("0.002")  # Safety margin
-            if amount < 0: amount = Decimal(0)
+            if amount < 0:
+                amount = Decimal(0)
 
     else:
         # Handle Manual Input
         try:
             amount = Decimal(message.text.replace(",", "."))
-            if amount <= 0: raise ValueError
+            if amount <= 0:
+                raise ValueError
         except ValueError:
             await message.answer("❌ Неверный формат суммы. Введите число.")
             return

@@ -19,7 +19,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import settings
 from app.models.deposit import Deposit
-from app.models.enums import TransactionStatus
 from app.models.user import User
 from app.services.deposit_service import DepositService
 from app.services.notification_service import NotificationService
@@ -27,12 +26,11 @@ from app.utils.distributed_lock import get_distributed_lock
 from app.utils.security import mask_address, mask_tx_hash
 from bot.constants.rules import (
     MAX_DEPOSITS_PER_USER,
-    MINIMUM_PLEX_BALANCE,
     PLEX_PER_DOLLAR_DAILY,
     SYSTEM_WALLET,
-    WorkStatus,
 )
 from bot.utils.formatters import escape_md
+
 
 class IncomingDepositService:
     """
@@ -315,8 +313,7 @@ class IncomingDepositService:
             select(func.count(Deposit.id)).where(
                 Deposit.user_id == user_id,
                 Deposit.status == "confirmed",
-                Deposit.is_roi_completed == False,
+                not Deposit.is_roi_completed,
             )
         )
         return result.scalar() or 0
-

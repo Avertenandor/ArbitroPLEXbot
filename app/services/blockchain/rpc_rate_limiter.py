@@ -11,8 +11,6 @@ import time
 from collections import deque
 from typing import Any
 
-from loguru import logger
-
 
 class RPCRateLimiter:
     """
@@ -154,4 +152,3 @@ class RPCRateLimiter:
         self._response_times.clear()
         self._error_count = 0
         self._total_requests = 0
-

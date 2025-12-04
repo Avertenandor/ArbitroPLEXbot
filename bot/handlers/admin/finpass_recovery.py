@@ -36,13 +36,16 @@ async def show_recovery_requests(
 ) -> None:
     """
     Show pending finpass recovery requests list.
-    
+
     Entry point for the recovery requests section.
     """
     logger.info(f"[ADMIN] show_recovery_requests called for user {message.from_user.id}")
     is_admin = data.get("is_admin", False)
     if not is_admin:
-        logger.warning(f"[ADMIN] User {message.from_user.id} tried to access recovery requests but is_admin=False")
+        logger.warning(
+            f"[ADMIN] User {message.from_user.id} tried to access "
+            f"recovery requests but is_admin=False"
+        )
         await message.answer("❌ Эта функция доступна только администраторам")
         return
 
@@ -114,7 +117,10 @@ def escape_markdown(text: str) -> str:
     if not text:
         return ""
     # Escape Markdown special chars: _ * [ ] ( ) ~ ` > # + - = | { } . !
-    special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    special_chars = [
+        '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+',
+        '-', '=', '|', '{', '}', '.', '!'
+    ]
     for char in special_chars:
         text = text.replace(char, f'\\{char}')
     return text
@@ -254,10 +260,14 @@ async def approve_request_action(
         except Exception as e:
             logger.error(f"Failed to notify user {user.id} (tg={user.telegram_id}): {e}")
 
+        admin_notes = (
+            "Password sent to user" if notification_sent
+            else "Password NOT sent - notification failed"
+        )
         await recovery_service.mark_sent(
             request_id=request.id,
             admin_id=admin.id,
-            admin_notes="Password sent to user" if notification_sent else "Password NOT sent - notification failed",
+            admin_notes=admin_notes,
         )
         await session.commit()
 
@@ -360,7 +370,10 @@ async def back_to_list_action(
     await show_recovery_requests(message, session, state, **data)
 
 
-@router.message(AdminFinpassRecoveryStates.viewing_list, F.text.in_({"⬅ Предыдущая", "Следующая ➡"}))
+@router.message(
+    AdminFinpassRecoveryStates.viewing_list,
+    F.text.in_({"⬅ Предыдущая", "Следующая ➡"})
+)
 async def handle_pagination(
     message: Message,
     session: AsyncSession,
