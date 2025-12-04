@@ -325,6 +325,10 @@ async def main() -> None:  # noqa: C901
     dp.include_router(instructions.router)
     dp.include_router(appeal.router)
 
+    # User inquiry handler (questions to admins)
+    from bot.handlers import inquiry
+    dp.include_router(inquiry.router)
+
     # Admin handlers (wallet_key_setup must be first for security)
     # Apply AdminAuthMiddleware to all admin routers
     admin_auth_middleware = AdminAuthMiddleware()
@@ -388,7 +392,13 @@ async def main() -> None:  # noqa: C901
     dp.include_router(admin_support.router)
     dp.include_router(user_messages.router)
     dp.include_router(emergency.router)  # R17-3: Emergency stop controls
-    
+
+    # Admin inquiry handler (user questions management)
+    from bot.handlers.admin import inquiries as admin_inquiries
+    admin_inquiries.router.message.middleware(admin_auth_middleware)
+    admin_inquiries.router.callback_query.middleware(admin_auth_middleware)
+    dp.include_router(admin_inquiries.router)
+
     # Fallback handler for orphaned states (must be BEFORE debug_unhandled)
     from bot.handlers import fallback
     dp.include_router(fallback.router)

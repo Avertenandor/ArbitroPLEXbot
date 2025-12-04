@@ -96,7 +96,7 @@ def main_menu_reply_keyboard(
         )
         builder.row(
             KeyboardButton(text="💬 Поддержка"),
-            KeyboardButton(text="⚙️ Настройки"),
+            KeyboardButton(text="❓ Задать вопрос"),
         )
         builder.row(
             KeyboardButton(text="📖 Инструкции"),
@@ -104,9 +104,10 @@ def main_menu_reply_keyboard(
         )
         builder.row(
             KeyboardButton(text="📊 Калькулятор"),
-            KeyboardButton(text="🔐 Получить финпароль"),
+            KeyboardButton(text="⚙️ Настройки"),
         )
         builder.row(
+            KeyboardButton(text="🔐 Получить финпароль"),
             KeyboardButton(text="🔑 Восстановить финпароль"),
         )
         builder.row(
@@ -841,4 +842,49 @@ def cancel_keyboard() -> ReplyKeyboardMarkup:
         KeyboardButton(text="❌ Отмена"),
     )
 
+    return builder.as_markup(resize_keyboard=True)
+
+
+# ============================================================================
+# INQUIRY KEYBOARDS (User Questions to Admins)
+# ============================================================================
+
+
+def inquiry_input_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Keyboard for inquiry input screen.
+
+    Returns:
+        ReplyKeyboardMarkup with cancel option
+    """
+    builder = ReplyKeyboardBuilder()
+    builder.row(KeyboardButton(text="❌ Отмена"))
+    builder.row(KeyboardButton(text="◀️ Главное меню"))
+    return builder.as_markup(resize_keyboard=True)
+
+
+def inquiry_dialog_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Keyboard for active inquiry dialog (user side).
+
+    Returns:
+        ReplyKeyboardMarkup with dialog options
+    """
+    builder = ReplyKeyboardBuilder()
+    builder.row(KeyboardButton(text="✅ Закрыть обращение"))
+    builder.row(KeyboardButton(text="◀️ Главное меню"))
+    return builder.as_markup(resize_keyboard=True)
+
+
+def inquiry_waiting_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Keyboard while waiting for admin response.
+
+    Returns:
+        ReplyKeyboardMarkup with waiting options
+    """
+    builder = ReplyKeyboardBuilder()
+    builder.row(KeyboardButton(text="📝 Дополнить вопрос"))
+    builder.row(KeyboardButton(text="❌ Отменить обращение"))
+    builder.row(KeyboardButton(text="◀️ Главное меню"))
     return builder.as_markup(resize_keyboard=True)

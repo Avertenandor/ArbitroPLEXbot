@@ -47,6 +47,9 @@ from app.models.support_message import SupportMessage
 # Support Models
 from app.models.support_ticket import SupportTicket
 
+# User Inquiry Models
+from app.models.user_inquiry import InquiryMessage, InquiryStatus, UserInquiry
+
 # System Models
 from app.models.global_settings import GlobalSettings
 from app.models.transaction import Transaction
@@ -104,6 +107,10 @@ __all__ = [
     # Support Models
     "SupportTicket",
     "SupportMessage",
+    # User Inquiry Models
+    "UserInquiry",
+    "InquiryMessage",
+    "InquiryStatus",
     # System Models
     "GlobalSettings",
     "UserAction",
