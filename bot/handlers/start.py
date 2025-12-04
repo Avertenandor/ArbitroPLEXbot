@@ -64,7 +64,7 @@ async def cmd_start(
     )
     logger.info(f"Message text: {message.text}")
 
-    # РљР РРўРР§РќРћ: Р’СЃРµРіРґР° РѕС‡РёС‰Р°РµРј СЃРѕСЃС‚РѕСЏРЅРёРµ РїСЂРё /start
+    # РљР РРўРР§РќРћ: Р’СЃРµРіРґР° РѕС‡РёС‰Р°РµРј СЃРѕСЃС‚РѕСЏРЅРёРµ РїСЂР...
     current_state = await state.get_state()
     if current_state:
         logger.info(f"Clearing FSM state: {current_state}")
@@ -171,7 +171,7 @@ async def cmd_start(
             f"cmd_start: registered user {user.telegram_id}, "
             f"clearing FSM state"
         )
-        # РљР РРўРР§РќРћ: РѕС‡РёСЃС‚РёРј Р»СЋР±РѕРµ FSM СЃРѕСЃС‚РѕСЏРЅРёРµ, С‡С‚РѕР±С‹ /start РІСЃРµРіРґР° СЂР°Р±РѕС‚Р°Р»
+        # РљР РРўРР§РќРћ: РѕС‡РёСЃС‚РёРј Р»СЋР±РѕРµ FSM СЃРѕСЃС‚РѕСЏРЅРёРµ...
         await state.clear()
 
         # R8-2: Reset bot_blocked flag if user successfully sent /start
@@ -222,7 +222,7 @@ async def cmd_start(
             reply_markup=ReplyKeyboardRemove(),
         )
         logger.debug("cmd_start: sending main menu keyboard")
-        # 2) Р РѕС‚РїСЂР°РІРёРј РіР»Р°РІРЅРѕРµ РјРµРЅСЋ РѕС‚РґРµР»СЊРЅС‹Рј СЃРѕРѕР±С‰РµРЅРёРµРј
+        # 2) Р РѕС‚РїСЂР°РІРёРј РіР»Р°РІРЅРѕРµ РјРµРЅСЋ РѕС‚РґРµР»СЊРЅС‹Рј ...
         # Get is_admin from middleware data
         is_admin = data.get("is_admin", False)
         logger.info(
@@ -309,7 +309,7 @@ async def cmd_start(
         )
         return
 
-    # Not registered: РїРѕРєР°Р¶РµРј РїСЂРёРІРµС‚СЃС‚РІРёРµ Рё СЃСЂР°Р·Сѓ РіР»Р°РІРЅРѕРµ РјРµРЅСЋ
+    # Not registered: РїРѕРєР°Р¶РµРј РїСЂРёРІРµС‚СЃС‚РІРёРµ Рё СЃСЂР°Р·Сѓ Рі...
     welcome_text = (
         "🚀 **Добро пожаловать в ArbitroPLEXbot!**\n\n"
         "РњС‹ СЃС‚СЂРѕРёРј **РєСЂРёРїС‚Рѕ-С„РёР°С‚РЅСѓСЋ СЌРєРѕСЃРёСЃС‚РµРјСѓ** РЅР° Р±Р°Р·Рµ РјРѕРЅРµС‚С‹ "
@@ -389,7 +389,7 @@ async def process_wallet(
         state: FSM state
         data: Additional data including session_factory
     """
-    # РљР РРўРР§РќРћ: РѕР±СЂР°Р±Р°С‚С‹РІР°РµРј /start РїСЂСЏРјРѕ Р·РґРµСЃСЊ, РЅРµ РїРѕР»Р°РіР°СЏСЃСЊ РЅР° dispatcher
+    # РљР РРўРР§РќРћ: РѕР±СЂР°Р±Р°С‚С‹РІР°РµРј /start РїСЂСЏРјРѕ Р·РґРµСЃС...
     if message.text and message.text.startswith("/start"):
         logger.info(
             "process_wallet: /start caught, clearing state, showing main menu"
@@ -402,7 +402,7 @@ async def process_wallet(
         session = data.get("session")
         # Try to get from middleware first
         blacklist_entry = data.get("blacklist_entry")
-        # РљР РРўРР§РќРћ: РїСЂРѕРІРµСЂСЏРµРј session РїРµСЂРµРґ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµРј
+        # РљР РРўРР§РќРћ: РїСЂРѕРІРµСЂСЏРµРј session РїРµСЂРµРґ РёСЃРїРѕР»...
         if blacklist_entry is None and user and session:
             try:
                 from app.repositories.blacklist_repository import (
@@ -414,7 +414,8 @@ async def process_wallet(
                 )
             except Exception as e:
                 logger.warning(
-                    f"Failed to get blacklist entry for user {user.telegram_id}: {e}"
+                    f"Failed to get blacklist entry "
+                    f"for user {user.telegram_id}: {e}"
                 )
                 blacklist_entry = None
         # R13-3: Get user language for i18n
@@ -445,8 +446,8 @@ async def process_wallet(
     # Check if message is a menu button - if so, clear state and ignore
     from bot.utils.menu_buttons import is_menu_button
 
-    # Handle "Р РµРіРёСЃС‚СЂР°С†РёСЏ" button specially while in waiting_for_wallet state
-    # This prevents the loop where clicking "Registration" clears state and shows menu again
+    # Handle "Р РµРіРёСЃС‚СЂР°С†РёСЏ" button specially while in waiting_for_...
+    # This prevents the loop where clicking "Registration" clears state and ...
     if message.text == "рџ“ќ Р РµРіРёСЃС‚СЂР°С†РёСЏ":
         await message.answer(
             "рџ“ќ **Р РµРіРёСЃС‚СЂР°С†РёСЏ**\n\n"
@@ -463,13 +464,13 @@ async def process_wallet(
             f"process_wallet: menu button {message.text}, showing main menu"
         )
         await state.clear()
-        # РџРѕРєР°Р¶РµРј РіР»Р°РІРЅРѕРµ РјРµРЅСЋ СЃСЂР°Р·Сѓ, РЅРµ РїРѕР»Р°РіР°СЏСЃСЊ РЅР° РїРѕРІС‚РѕСЂРЅСѓСЋ РґРёСЃРїРµС‚С‡РµСЂРёР·Р°С†РёСЋ
+        # РџРѕРєР°Р¶РµРј РіР»Р°РІРЅРѕРµ РјРµРЅСЋ СЃСЂР°Р·Сѓ, РЅРµ РїРѕР»Р°Рі...
         user: User | None = data.get("user")
         is_admin = data.get("is_admin", False)
         # РџРѕР»СѓС‡Р°РµРј session РёР· data
         session = data.get("session")
         blacklist_entry = None
-        # РљР РРўРР§РќРћ: РїСЂРѕРІРµСЂСЏРµРј session РїРµСЂРµРґ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµРј
+        # РљР РРўРР§РќРћ: РїСЂРѕРІРµСЂСЏРµРј session РїРµСЂРµРґ РёСЃРїРѕР»...
         if user and session:
             try:
                 from app.repositories.blacklist_repository import (
@@ -596,10 +597,10 @@ async def process_wallet(
                 existing = await user_service.get_by_wallet(wallet_address)
         # Transaction closed here, before FSM state change
 
-    # R1-12: РљРѕС€РµР»С‘Рє СѓР¶Рµ РїСЂРёРІСЏР·Р°РЅ Рє СЃСѓС‰РµСЃС‚РІСѓСЋС‰РµРјСѓ РїРѕР»СЊР·РѕРІР°С‚РµР»СЋ
+    # R1-12: РљРѕС€РµР»С‘Рє СѓР¶Рµ РїСЂРёРІСЏР·Р°РЅ Рє СЃСѓС‰РµСЃС‚РІСѓСЋС‰Р...
     if existing:
         telegram_id = message.from_user.id if message.from_user else None
-        # Р•СЃР»Рё СЌС‚Рѕ С‚РѕС‚ Р¶Рµ telegram_id вЂ” РїСЂРµРґР»Р°РіР°РµРј /start Рё РёСЃРїРѕР»СЊР·СѓРµРј СЃС‚Р°СЂС‹Р№ Р°РєРєР°СѓРЅС‚
+        # Р•СЃР»Рё СЌС‚Рѕ С‚РѕС‚ Р¶Рµ telegram_id вЂ” РїСЂРµРґР»Р°РіР°РµРј /...
         if telegram_id and existing.telegram_id == telegram_id:
             await message.answer(
                 "в„№пёЏ Р­С‚РѕС‚ РєРѕС€РµР»РµРє СѓР¶Рµ РїСЂРёРІСЏР·Р°РЅ Рє РІР°С€РµРјСѓ Р°РєРєР°СѓРЅС‚Сѓ.\n\n"
@@ -607,7 +608,7 @@ async def process_wallet(
             )
             await state.clear()
             return
-        # Р•СЃР»Рё РґСЂСѓРіРѕР№ telegram_id вЂ” РІС‹РІРѕРґРёРј СЃРѕРѕР±С‰РµРЅРёРµ, С‡С‚Рѕ РєРѕС€РµР»С‘Рє Р·Р°РЅСЏС‚
+        # Р•СЃР»Рё РґСЂСѓРіРѕР№ telegram_id вЂ” РІС‹РІРѕРґРёРј СЃРѕРѕР±С‰РµР...
         else:
             await message.answer(
                 "вќЊ Р­С‚РѕС‚ РєРѕС€РµР»РµРє СѓР¶Рµ Р·Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°РЅ РґСЂСѓРіРёРј РїРѕР»СЊР·РѕРІР°С‚РµР»РµРј!\n\n"
@@ -648,7 +649,7 @@ async def process_financial_password(
         session: Database session (optional, can be from data)
         data: Additional data from middlewares
     """
-    # РљР РРўРР§РќРћ: РїСЂРѕРїСѓСЃРєР°РµРј /start Рє РѕСЃРЅРѕРІРЅРѕРјСѓ РѕР±СЂР°Р±РѕС‚С‡РёРєСѓ
+    # РљР РРўРР§РќРћ: РїСЂРѕРїСѓСЃРєР°РµРј /start Рє РѕСЃРЅРѕРІРЅРѕРјСѓ Рѕ...
     if message.text and message.text.startswith("/start"):
         await state.clear()
         return  # РџРѕР·РІРѕР»СЏРµРј CommandStart() РѕР±СЂР°Р±РѕС‚Р°С‚СЊ СЌС‚Рѕ
@@ -735,7 +736,7 @@ async def process_password_confirmation(
         state: FSM state
         data: Additional data including session_factory
     """
-    # РљР РРўРР§РќРћ: РїСЂРѕРїСѓСЃРєР°РµРј /start Рє РѕСЃРЅРѕРІРЅРѕРјСѓ РѕР±СЂР°Р±РѕС‚С‡РёРєСѓ
+    # РљР РРўРР§РќРћ: РїСЂРѕРїСѓСЃРєР°РµРј /start Рє РѕСЃРЅРѕРІРЅРѕРјСѓ Рѕ...
     if message.text and message.text.startswith("/start"):
         await state.clear()
         return  # РџРѕР·РІРѕР»СЏРµРј CommandStart() РѕР±СЂР°Р±РѕС‚Р°С‚СЊ СЌС‚Рѕ
@@ -750,7 +751,7 @@ async def process_password_confirmation(
         # РџРѕР»СѓС‡Р°РµРј session РёР· data
         session = data.get("session")
         blacklist_entry = None
-        # РљР РРўРР§РќРћ: РїСЂРѕРІРµСЂСЏРµРј session РїРµСЂРµРґ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµРј
+        # РљР РРўРР§РќРћ: РїСЂРѕРІРµСЂСЏРµРј session РїРµСЂРµРґ РёСЃРїРѕР»...
         if user and session:
             try:
                 from app.repositories.blacklist_repository import (
@@ -875,7 +876,7 @@ async def process_password_confirmation(
         except ValueError as e:
             error_msg = str(e)
 
-            # FIX: Handle "User already registered" as success (Double Submit race condition)
+            # FIX: Handle "User already registered" as success (Double Submi...
             if error_msg == "User already registered":
                 logger.info(
                     f"Double registration attempt caught for user {message.from_user.id} - checking existing user"
@@ -891,7 +892,7 @@ async def process_password_confirmation(
                     )
                     # Proceed to success flow below
                 else:
-                    # User not found but error says registered? Weird race or different user.
+                    # User not found but error says registered? Weird race o...
                     await message.answer(
                         "вќЊ РћС€РёР±РєР°: РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ СѓР¶Рµ Р·Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°РЅ, РЅРѕ РґР°РЅРЅС‹Рµ РЅРµ РЅР°Р№РґРµРЅС‹. РћР±СЂР°С‚РёС‚РµСЃСЊ РІ РїРѕРґРґРµСЂР¶РєСѓ."
                     )
@@ -938,7 +939,7 @@ async def process_password_confirmation(
         },
     )
 
-    # R1-19: РЎРѕС…СЂР°РЅСЏРµРј plain password РІ Redis РЅР° 1 С‡Р°СЃ РґР»СЏ РїРѕРІС‚РѕСЂРЅРѕРіРѕ РїРѕРєР°Р·Р°
+    # R1-19: РЎРѕС…СЂР°РЅСЏРµРј plain password РІ Redis РЅР° 1 С‡Р°СЃ РґР»СЏ...
     redis_client = data.get("redis_client")
     if redis_client and password:
         try:
@@ -963,7 +964,7 @@ async def process_password_confirmation(
 
     # Get is_admin from middleware data
     is_admin = data.get("is_admin", False)
-    # РџРѕР»СѓС‡Р°РµРј session РёР· data РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ blacklist_entry
+    # РџРѕР»СѓС‡Р°РµРј session РёР· data РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ blacklist...
     session = data.get("session")
     blacklist_entry = None
     if session:
@@ -973,8 +974,8 @@ async def process_password_confirmation(
                 user.telegram_id
             )
 
-    # R1-19: РљРЅРѕРїРєР° РґР»СЏ РїРѕРІС‚РѕСЂРЅРѕРіРѕ РїРѕРєР°Р·Р° РїР°СЂРѕР»СЏ (Reply keyboard)
-    # РЎРѕС…СЂР°РЅСЏРµРј user.id РІ FSM РґР»СЏ РѕР±СЂР°Р±РѕС‚С‡РёРєР° "РџРѕРєР°Р·Р°С‚СЊ РїР°СЂРѕР»СЊ РµС‰С‘ СЂР°Р·"
+    # R1-19: РљРЅРѕРїРєР° РґР»СЏ РїРѕРІС‚РѕСЂРЅРѕРіРѕ РїРѕРєР°Р·Р° РїР°СЂРѕР...
+    # РЎРѕС…СЂР°РЅСЏРµРј user.id РІ FSM РґР»СЏ РѕР±СЂР°Р±РѕС‚С‡РёРєР° "РџРѕР...
     await state.update_data(show_password_user_id=user.id)
 
     await message.answer(
@@ -991,7 +992,7 @@ async def process_password_confirmation(
     user_language = await get_user_language(session, user.id)
     _ = get_translator(user_language)
 
-    # РћС‚РїСЂР°РІР»СЏРµРј РіР»Р°РІРЅРѕРµ РјРµРЅСЋ РѕС‚РґРµР»СЊРЅС‹Рј СЃРѕРѕР±С‰РµРЅРёРµРј
+    # РћС‚РїСЂР°РІР»СЏРµРј РіР»Р°РІРЅРѕРµ РјРµРЅСЋ РѕС‚РґРµР»СЊРЅС‹Рј СЃРѕРѕ...
     await message.answer(
         _("common.choose_action"),
         reply_markup=main_menu_reply_keyboard(
@@ -1060,7 +1061,7 @@ async def handle_contacts_choice(
             parse_mode="Markdown",
         )
         await state.set_state(RegistrationStates.waiting_for_phone)
-    # РќРѕСЂРјР°Р»РёР·СѓРµРј С‚РµРєСЃС‚: СѓРґР°Р»СЏРµРј FE0F (emoji variation selector)
+    # РќРѕСЂРјР°Р»РёР·СѓРµРј С‚РµРєСЃС‚: СѓРґР°Р»СЏРµРј FE0F (emoji variatio...
     elif message.text and message.text.replace("\ufe0f", "") in (
         "вЏ­ РџСЂРѕРїСѓСЃС‚РёС‚СЊ", "вЏ­пёЏ РџСЂРѕРїСѓСЃС‚РёС‚СЊ"
     ):
@@ -1295,7 +1296,7 @@ async def handle_show_password_again(
         await callback.answer("вќЊ РћС€РёР±РєР°: РЅРµРІРµСЂРЅС‹Р№ С„РѕСЂРјР°С‚ Р·Р°РїСЂРѕСЃР°", show_alert=True)
         return
 
-    # РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ СЃСѓС‰РµСЃС‚РІСѓРµС‚ Рё СЌС‚Рѕ РµРіРѕ Р·Р°РїСЂРѕСЃ
+    # РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ СЃСѓС‰РµСЃС‚РІСѓРµ...
     user: User | None = data.get("user")
     if not user or user.id != user_id:
         await callback.answer(
@@ -1435,7 +1436,7 @@ async def _check_payment_logic(
 
     try:
         bs = get_blockchain_service()
-        # Scan blocks: 2000 blocks lookback (~1.5 hours) to catch slightly older transactions
+        # Scan blocks: 2000 blocks lookback (~1.5 hours) to catch slightly o...
         logger.info(f"Verifying PLEX payment for {mask_address(wallet_address)} with lookback=2000")
         result = await bs.verify_plex_payment(
             sender_address=wallet_address,
