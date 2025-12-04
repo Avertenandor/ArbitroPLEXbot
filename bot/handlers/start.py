@@ -111,7 +111,8 @@ async def cmd_start(
             try:
                 # Extract value from ref code
                 # Note: We remove 'ref', '_', '-' prefix/separators.
-                # If the code itself contains '_' or '-', this might be an issue if we strip them globally.
+                # If the code itself contains '_' or '-',
+                # this might be an issue if we strip them globally.
                 # But legacy IDs were digits.
                 # New codes are urlsafe base64, which can contain '-' and '_'.
                 # So we should be careful about stripping.
@@ -120,7 +121,7 @@ async def cmd_start(
                 # 1. Remove 'ref' prefix (case insensitive?)
                 # 2. If starts with '_' or '-', remove ONE leading separator.
 
-                clean_arg = ref_arg[3:] # Remove 'ref'
+                clean_arg = ref_arg[3:]  # Remove 'ref'
                 if clean_arg.startswith("_") or clean_arg.startswith("-"):
                     clean_arg = clean_arg[1:]
 
@@ -139,7 +140,9 @@ async def cmd_start(
                     # We need UserService here.
                     # Note: Creating service inside handler is fine.
                     user_service = UserService(session)
-                    referrer = await user_service.get_by_referral_code(clean_arg)
+                    referrer = await user_service.get_by_referral_code(
+                        clean_arg
+                    )
 
                     if referrer:
                         referrer_telegram_id = referrer.telegram_id
@@ -180,7 +183,8 @@ async def cmd_start(
                 await user_repo.update(user.id, bot_blocked=False)
                 await session.commit()
                 logger.info(
-                    f"User {user.telegram_id} unblocked bot, flag reset in /start"
+                    f"User {user.telegram_id} unblocked bot, "
+                    f"flag reset in /start"
                 )
         except Exception as reset_error:
             # Don't fail /start if flag reset fails
@@ -197,7 +201,12 @@ async def cmd_start(
 
         # Escape username for Markdown to prevent TelegramBadRequest
         raw_username = user.username or _('common.user')
-        safe_username = raw_username.replace("_", "\\_").replace("*", "\\*").replace("`", "\\`").replace("[", "\\[")
+        safe_username = (
+            raw_username.replace("_", "\\_")
+            .replace("*", "\\*")
+            .replace("`", "\\`")
+            .replace("[", "\\[")
+        )
 
         welcome_text = (
             f"{_('common.welcome_back', username=safe_username)}\n\n"
@@ -224,14 +233,17 @@ async def cmd_start(
         blacklist_entry = data.get("blacklist_entry")
         try:
             if blacklist_entry is None:
-                from app.repositories.blacklist_repository import BlacklistRepository
+                from app.repositories.blacklist_repository import (
+                    BlacklistRepository
+                )
                 blacklist_repo = BlacklistRepository(session)
                 blacklist_entry = await blacklist_repo.find_by_telegram_id(
                     user.telegram_id
                 )
         except (OperationalError, InterfaceError, DatabaseError) as e:
             logger.error(
-                f"Database error in /start while checking blacklist for user {user.telegram_id}: {e}",
+                f"Database error in /start while checking blacklist "
+                f"for user {user.telegram_id}: {e}",
                 exc_info=True,
             )
             await message.answer(
@@ -259,7 +271,7 @@ async def cmd_start(
         return
 
     # R1-3: Check blacklist for non-registered users (REGISTRATION_DENIED)
-    # This check must happen BEFORE showing welcome message and setting FSM state
+    # This check must happen BEFORE showing welcome message
     blacklist_entry = data.get("blacklist_entry")
     try:
         if blacklist_entry is None:
@@ -272,9 +284,11 @@ async def cmd_start(
         if blacklist_entry and blacklist_entry.is_active:
             from app.models.blacklist import BlacklistActionType
 
-            if blacklist_entry.action_type == BlacklistActionType.REGISTRATION_DENIED:
+            action = BlacklistActionType.REGISTRATION_DENIED
+            if blacklist_entry.action_type == action:
                 logger.info(
-                    f"[START] Registration denied for telegram_id {message.from_user.id}"
+                    f"[START] Registration denied for "
+                    f"telegram_id {message.from_user.id}"
                 )
                 await message.answer(
                     "вќЊ Р РµРіРёСЃС‚СЂР°С†РёСЏ РЅРµРґРѕСЃС‚СѓРїРЅР°.\n\n"
@@ -284,7 +298,8 @@ async def cmd_start(
                 return
     except (OperationalError, InterfaceError, DatabaseError) as e:
         logger.error(
-            f"Database error in /start while checking blacklist for non-registered user {message.from_user.id}: {e}",
+            f"Database error in /start while checking blacklist "
+            f"for non-registered user {message.from_user.id}: {e}",
             exc_info=True,
         )
         await message.answer(
