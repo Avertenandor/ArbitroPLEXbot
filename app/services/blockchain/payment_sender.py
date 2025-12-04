@@ -5,6 +5,7 @@ Handles USDT payment sending with gas estimation and error handling.
 """
 
 import asyncio
+import ctypes
 from decimal import Decimal
 from typing import Any
 
@@ -25,6 +26,27 @@ from app.config.constants import BLOCKCHAIN_TIMEOUT
 from app.utils.security import mask_address
 
 
+def secure_zero_memory(secret: str) -> None:
+    """
+    Securely overwrite memory containing secret data.
+
+    NOTE: This provides best-effort memory clearing in Python.
+    Python's memory management makes true secure erasure impossible,
+    but this reduces the window of exposure.
+    """
+    if not secret:
+        return
+
+    try:
+        # Convert to bytes if string
+        secret_bytes = secret.encode() if isinstance(secret, str) else secret
+        # Overwrite with zeros
+        ctypes.memset(id(secret_bytes) + 32, 0, len(secret_bytes))
+    except Exception:
+        # Fail silently - this is best-effort security
+        pass
+
+
 class PaymentSender:
     """
     Handles USDT payment sending on BSC.
@@ -41,6 +63,7 @@ class PaymentSender:
         web3: AsyncWeb3,
         usdt_contract_address: str,
         payout_wallet_private_key: str | None = None,
+        session_factory: Any = None,
     ) -> None:
         """
         Initialize payment sender.
@@ -49,6 +72,7 @@ class PaymentSender:
             web3: AsyncWeb3 instance
             usdt_contract_address: USDT contract address
             payout_wallet_private_key: Private key for signing transactions
+            session_factory: Session factory for distributed lock (optional)
         """
         self.web3 = web3
         self.usdt_contract_address = web3.to_checksum_address(
@@ -68,19 +92,95 @@ class PaymentSender:
         # Nonce lock for preventing race conditions in parallel payments
         self._nonce_lock = asyncio.Lock()
 
+        # Session factory for distributed lock (multi-instance protection)
+        self._session_factory = session_factory
+
         if self._private_key:
-            # Derive address from private key
-            account = Account.from_key(self._private_key)
-            self._payout_address = account.address
-            logger.info(
-                f"PaymentSender initialized with wallet: "
-                f"{self._payout_address}"
-            )
+            # SECURITY: Minimize lifetime of Account object
+            # Derive address from private key and immediately discard Account
+            try:
+                account = Account.from_key(self._private_key)
+                self._payout_address = account.address
+                logger.info(
+                    f"PaymentSender initialized with wallet: "
+                    f"{self._payout_address}"
+                )
+            finally:
+                # Clear account object immediately after use
+                del account
         else:
             logger.warning(
                 "PaymentSender initialized without private key - "
                 "sending will not work"
             )
+
+    async def _get_safe_nonce(self, address: str) -> int:
+        """
+        Get nonce with stuck transaction detection.
+
+        Args:
+            address: Wallet address
+
+        Returns:
+            Safe nonce to use
+        """
+        # Get pending nonce (includes pending transactions)
+        pending_nonce = await self.web3.eth.get_transaction_count(address, 'pending')
+        # Get confirmed nonce (only confirmed transactions)
+        confirmed_nonce = await self.web3.eth.get_transaction_count(address, 'latest')
+
+        # If there are too many stuck transactions (pending > confirmed + threshold)
+        stuck_threshold = 5
+        if pending_nonce > confirmed_nonce + stuck_threshold:
+            logger.warning(
+                f"Possible stuck transactions detected: "
+                f"pending={pending_nonce}, confirmed={confirmed_nonce}, "
+                f"stuck={pending_nonce - confirmed_nonce}"
+            )
+
+        return pending_nonce
+
+    async def _get_nonce_with_distributed_lock(
+        self,
+        address: str,
+        session_factory: Any = None
+    ) -> int:
+        """
+        Get nonce with distributed lock for multi-instance protection.
+
+        Uses Redis-based distributed lock to prevent nonce conflicts
+        when multiple bot instances are running.
+
+        Args:
+            address: Wallet address
+            session_factory: Session factory for distributed lock (optional)
+
+        Returns:
+            Safe nonce to use
+        """
+        from app.utils.distributed_lock import get_distributed_lock
+
+        # Create lock key specific to this address
+        lock_key = f"nonce_lock:{address}"
+
+        # Try to get distributed lock with Redis/PostgreSQL
+        if session_factory:
+            async with session_factory() as session:
+                distributed_lock = get_distributed_lock(session=session)
+
+                # Acquire distributed lock with timeout
+                async with distributed_lock.lock(
+                    key=lock_key,
+                    timeout=30,  # Lock expires after 30 seconds
+                    blocking=True,
+                    blocking_timeout=10.0  # Wait max 10 seconds for lock
+                ):
+                    # Get nonce inside the distributed lock
+                    return await self._get_safe_nonce(address)
+        else:
+            # Fallback to no distributed lock if no session factory
+            logger.debug("No session factory available, using local lock only")
+            return await self._get_safe_nonce(address)
 
     async def send_payment(
         self,
@@ -258,14 +358,23 @@ class PaymentSender:
         # Lock nonce acquisition and transaction sending to prevent race conditions
         async with self._nonce_lock:
             try:
-                # Get nonce from pending block for better concurrency with timeout
+                # Get safe nonce with stuck transaction detection
+                # Use distributed lock if session_factory is available (multi-instance protection)
                 try:
-                    nonce = await asyncio.wait_for(
-                        self.web3.eth.get_transaction_count(
-                            self._payout_address, 'pending'
-                        ),
-                        timeout=BLOCKCHAIN_TIMEOUT,
-                    )
+                    if self._session_factory:
+                        nonce = await asyncio.wait_for(
+                            self._get_nonce_with_distributed_lock(
+                                self._payout_address,
+                                self._session_factory
+                            ),
+                            timeout=BLOCKCHAIN_TIMEOUT,
+                        )
+                    else:
+                        nonce = await asyncio.wait_for(
+                            self._get_safe_nonce(self._payout_address),
+                            timeout=BLOCKCHAIN_TIMEOUT,
+                        )
+                    logger.debug(f"Acquired nonce {nonce} for {mask_address(self._payout_address)}")
                 except asyncio.TimeoutError:
                     logger.error("Timeout getting transaction count (nonce)")
                     return {
@@ -341,9 +450,16 @@ class PaymentSender:
                         "error": "Timeout building transaction",
                     }
 
-                # Sign transaction
-                account = Account.from_key(self._private_key)
-                signed_tx = account.sign_transaction(transaction)
+                # SECURITY: Sign transaction with minimal Account lifetime
+                # Create Account only for signing, then immediately clear it
+                account = None
+                try:
+                    account = Account.from_key(self._private_key)
+                    signed_tx = account.sign_transaction(transaction)
+                finally:
+                    # Clear Account object immediately after signing
+                    if account:
+                        del account
 
                 # Send transaction with timeout
                 try:

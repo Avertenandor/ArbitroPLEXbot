@@ -249,6 +249,7 @@ async def main() -> None:  # noqa: C901
         account_recovery,
         appeal,
         calculator,
+        common,
         contact_update,
         deposit,
         finpass_recovery,
@@ -297,10 +298,13 @@ async def main() -> None:  # noqa: C901
     # Core handlers (menu must be registered BEFORE deposit/withdrawal
     # to have priority over FSM state handlers)
     dp.include_router(start.router)
-    
+
+    # Common handlers (cancel button) - MUST be early to catch cancel in any state
+    dp.include_router(common.router)
+
     # ROI corridor router MUST be before menu.router to handle FSM states
     dp.include_router(roi_corridor.router)
-    
+
     dp.include_router(menu.router)
 
     # User handlers (registered AFTER menu to ensure menu handlers

@@ -5,6 +5,7 @@ User Support Handler - УПРОЩЕННАЯ ВЕРСИЯ с Reply Keyboards
 from typing import Any
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramAPIError
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 
@@ -189,8 +190,8 @@ async def process_ticket_message(
                     await bot_instance.send_message(
                         admin_id, admin_text, parse_mode="Markdown"
                     )
-                except Exception:
-                    pass
+                except TelegramAPIError as e:
+                    logger.warning(f"Failed to notify admin {admin_id}: {e}")
 
     except Exception as e:
         await state.clear()

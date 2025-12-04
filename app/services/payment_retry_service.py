@@ -453,14 +453,12 @@ class PaymentRetryService:
         Returns:
             Dict with comprehensive retry stats
         """
-        # Get counts
-        pending = len(
-            await self.retry_repo.find_by(
-                resolved=False, in_dlq=False
-            )
+        # Get counts using SQL COUNT to avoid loading all records
+        pending = await self.retry_repo.count(
+            resolved=False, in_dlq=False
         )
-        dlq = len(await self.retry_repo.get_dlq_entries())
-        resolved = len(await self.retry_repo.find_by(resolved=True))
+        dlq = len(await self.retry_repo.get_dlq_entries())  # Keep as is - get_dlq_entries may have complex logic
+        resolved = await self.retry_repo.count(resolved=True)
 
         # Get amounts
         all_unresolved = await self.retry_repo.find_by(resolved=False)

@@ -286,10 +286,37 @@ class UserService:
         """
         Get all user Telegram IDs.
 
+        WARNING: This loads all IDs into memory. For large datasets
+        (e.g., broadcasts), use get_telegram_ids_batched() instead.
+
         Returns:
             List of Telegram IDs
         """
         return await self.user_repo.get_all_telegram_ids()
+
+    async def get_telegram_ids_batched(self, batch_size: int = 1000):
+        """
+        Generator for getting telegram_ids in batches to avoid OOM.
+
+        Use this for broadcasts and other operations on large user sets.
+
+        Args:
+            batch_size: Number of IDs per batch
+
+        Yields:
+            Batches of telegram IDs
+        """
+        async for batch in self.user_repo.get_telegram_ids_batched(batch_size):
+            yield batch
+
+    async def count_verified_users(self) -> int:
+        """
+        Count verified users.
+
+        Returns:
+            Number of verified users
+        """
+        return await self.user_repo.count_verified_users()
 
     async def verify_financial_password(
         self, user_id: int, password: str
@@ -399,8 +426,8 @@ class UserService:
         Returns:
             Verified user count
         """
-        users = await self.user_repo.find_by(is_verified=True)
-        return len(users)
+        # Use SQL COUNT to avoid loading all user records
+        return await self.user_repo.count(is_verified=True)
 
     async def get_user_stats(self, user_id: int) -> dict:
         """

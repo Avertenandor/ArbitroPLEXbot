@@ -4,6 +4,7 @@ Admin initialization utility.
 Creates default super admin on first startup.
 """
 
+import os
 
 from aiogram import Bot
 from loguru import logger
@@ -12,8 +13,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.admin import Admin
 from app.repositories.admin_repository import AdminRepository
 
-# Default super admin Telegram ID
-DEFAULT_SUPER_ADMIN_TELEGRAM_ID = 1040687384
+# Get super admin Telegram ID from environment variable
+DEFAULT_SUPER_ADMIN_TELEGRAM_ID = int(os.getenv("SUPER_ADMIN_TELEGRAM_ID", "0"))
+
+# Validate at module load time
+if not DEFAULT_SUPER_ADMIN_TELEGRAM_ID:
+    raise ValueError(
+        "SUPER_ADMIN_TELEGRAM_ID environment variable is required. "
+        "Set it in your .env file with your Telegram user ID."
+    )
 
 
 async def ensure_default_super_admin(

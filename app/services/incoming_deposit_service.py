@@ -11,6 +11,7 @@ After consolidation:
 
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 
 from loguru import logger
 from sqlalchemy import func, select
@@ -22,6 +23,7 @@ from app.models.enums import TransactionStatus
 from app.models.user import User
 from app.services.deposit_service import DepositService
 from app.services.notification_service import NotificationService
+from app.utils.distributed_lock import get_distributed_lock
 from app.utils.security import mask_address, mask_tx_hash
 from bot.constants.rules import (
     MAX_DEPOSITS_PER_USER,
@@ -37,16 +39,26 @@ class IncomingDepositService:
     Service for processing incoming blockchain transfers.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        redis_client: Any | None = None
+    ) -> None:
         """
         Initialize service.
 
         Args:
             session: Database session
+            redis_client: Redis client for distributed locks
         """
         self.session = session
+        self.redis_client = redis_client
         self.deposit_service = DepositService(session)
         self.notification_service = NotificationService(session)
+        self.distributed_lock = get_distributed_lock(
+            redis_client=redis_client,
+            session=session
+        )
 
     async def process_incoming_transfer(
         self,
@@ -76,15 +88,53 @@ class IncomingDepositService:
             f"from {mask_address(from_address)} (TX: {mask_tx_hash(tx_hash)})"
         )
 
-        # 1. Idempotency Check
-        existing_deposit = await self.session.execute(
-            select(Deposit).where(Deposit.tx_hash == tx_hash)
-        )
-        if existing_deposit.scalars().first():
-            logger.info(f"⏩ Deposit {tx_hash} already processed. Skipping.")
-            return
+        # Distributed lock for transaction processing to prevent duplicates
+        lock_key = f"deposit_process:{tx_hash}"
+        async with self.distributed_lock.lock(
+            lock_key,
+            timeout=60,
+            blocking=True,
+            blocking_timeout=5.0
+        ) as acquired:
+            if not acquired:
+                logger.warning(
+                    f"Could not acquire lock for processing deposit {tx_hash}. "
+                    "Another process may be handling it."
+                )
+                return
 
-        # 2. Verify Recipient
+            # 1. Idempotency Check (inside lock to prevent race conditions)
+            existing_deposit = await self.session.execute(
+                select(Deposit).where(Deposit.tx_hash == tx_hash)
+            )
+            if existing_deposit.scalars().first():
+                logger.info(f"⏩ Deposit {tx_hash} already processed. Skipping.")
+                return
+
+            await self._process_deposit_internal(
+                tx_hash, from_address, to_address, amount, block_number
+            )
+
+    async def _process_deposit_internal(
+        self,
+        tx_hash: str,
+        from_address: str,
+        to_address: str,
+        amount: Decimal,
+        block_number: int,
+    ) -> None:
+        """
+        Internal method to process deposit after lock is acquired.
+
+        Args:
+            tx_hash: Transaction hash
+            from_address: Sender address
+            to_address: Recipient address
+            amount: Amount in USDT
+            block_number: Block number
+        """
+
+        # Verify Recipient
         if to_address.lower() != settings.system_wallet_address.lower():
             logger.warning(
                 f"⚠️ Transfer recipient mismatch: "
@@ -92,7 +142,7 @@ class IncomingDepositService:
             )
             return
 
-        # 3. User Identification
+        # User Identification
         user_result = await self.session.execute(
             select(User).where(User.wallet_address.ilike(from_address))
         )
@@ -113,33 +163,79 @@ class IncomingDepositService:
 
         logger.info(f"✅ Identified user {user.id} for wallet {mask_address(from_address)}")
 
-        # 4. Check deposit limit (max 5 deposits per user)
-        active_deposits_count = await self._get_active_deposits_count(user.id)
-        if active_deposits_count >= MAX_DEPOSITS_PER_USER:
-            logger.warning(
-                f"⚠️ User {user.id} has reached deposit limit "
-                f"({active_deposits_count}/{MAX_DEPOSITS_PER_USER})"
+        # User-level lock to prevent concurrent deposit creation for same user
+        user_lock_key = f"user_deposit:{user.id}"
+        async with self.distributed_lock.lock(
+            user_lock_key,
+            timeout=30,
+            blocking=True,
+            blocking_timeout=3.0
+        ) as user_lock_acquired:
+            if not user_lock_acquired:
+                logger.warning(
+                    f"Could not acquire user lock for user {user.id}. "
+                    "Concurrent deposit operation in progress."
+                )
+                await self.notification_service.notify_admins(
+                    f"⚠️ **Блокировка пользователя не получена**\n"
+                    f"User: {user.id}\n"
+                    f"TX: `{tx_hash}`\n"
+                    f"Требуется повторная обработка."
+                )
+                return
+
+            # Check deposit limit (max 5 deposits per user) - inside user lock
+            active_deposits_count = await self._get_active_deposits_count(user.id)
+            if active_deposits_count >= MAX_DEPOSITS_PER_USER:
+                logger.warning(
+                    f"⚠️ User {user.id} has reached deposit limit "
+                    f"({active_deposits_count}/{MAX_DEPOSITS_PER_USER})"
+                )
+                await self.notification_service.notify_user(
+                    user.id,
+                    f"⚠️ **Депозит не может быть создан**\n\n"
+                    f"Вы достигли лимита в {MAX_DEPOSITS_PER_USER} депозитов.\n"
+                    f"Сумма: `{amount} USDT`\n"
+                    f"TX: `{tx_hash}`\n\n"
+                    "Дождитесь завершения одного из текущих депозитов "
+                    "или обратитесь в поддержку."
+                )
+                await self.notification_service.notify_admins(
+                    f"⚠️ **Депозит отклонен - лимит**\n"
+                    f"User: {user.id}\n"
+                    f"Amount: {amount} USDT\n"
+                    f"Active deposits: {active_deposits_count}/{MAX_DEPOSITS_PER_USER}\n"
+                    f"TX: `{tx_hash}`"
+                )
+                return
+
+            await self._create_deposit_for_user(
+                user, tx_hash, from_address, amount, block_number, active_deposits_count
             )
-            await self.notification_service.notify_user(
-                user.id,
-                f"⚠️ **Депозит не может быть создан**\n\n"
-                f"Вы достигли лимита в {MAX_DEPOSITS_PER_USER} депозитов.\n"
-                f"Сумма: `{amount} USDT`\n"
-                f"TX: `{tx_hash}`\n\n"
-                "Дождитесь завершения одного из текущих депозитов "
-                "или обратитесь в поддержку."
-            )
-            await self.notification_service.notify_admins(
-                f"⚠️ **Депозит отклонен - лимит**\n"
-                f"User: {user.id}\n"
-                f"Amount: {amount} USDT\n"
-                f"Active deposits: {active_deposits_count}/{MAX_DEPOSITS_PER_USER}\n"
-                f"TX: `{tx_hash}`"
-            )
-            return
+
+    async def _create_deposit_for_user(
+        self,
+        user: User,
+        tx_hash: str,
+        from_address: str,
+        amount: Decimal,
+        block_number: int,
+        active_deposits_count: int,
+    ) -> None:
+        """
+        Create deposit for user after all checks passed.
+
+        Args:
+            user: User object
+            tx_hash: Transaction hash
+            from_address: Sender address
+            amount: Amount in USDT
+            block_number: Block number
+            active_deposits_count: Current active deposits count
+        """
 
         try:
-            # 5. Create new deposit (each transaction = separate deposit)
+            # Create new deposit (each transaction = separate deposit)
             now = datetime.now(UTC)
             daily_plex_required = amount * Decimal(str(PLEX_PER_DOLLAR_DAILY))
 
@@ -150,7 +246,8 @@ class IncomingDepositService:
                 user_id=user.id,
                 level=level,
                 amount=amount,
-                tx_hash=tx_hash
+                tx_hash=tx_hash,
+                redis_client=self.redis_client  # Pass redis_client for distributed lock
             )
 
             # Update deposit with additional info
@@ -159,10 +256,10 @@ class IncomingDepositService:
             deposit.plex_cycle_start = now  # Individual 24h cycle starts now
             await self.session.commit()
 
-            # 6. Confirm deposit
+            # Confirm deposit
             await self.deposit_service.confirm_deposit(deposit.id, block_number)
 
-            # 7. Notify user about new deposit and payment requirement
+            # Notify user about new deposit and payment requirement
             await self.notification_service.notify_user(
                 user.id,
                 f"✅ **Новый депозит зарегистрирован!**\n\n"
@@ -178,7 +275,7 @@ class IncomingDepositService:
                 f"Ваши индивидуальные сутки начнутся с момента первой оплаты."
             )
 
-            # 8. Notify admins
+            # Notify admins
             username = escape_md(user.username) if user.username else "без юзернейма"
             await self.notification_service.notify_admins(
                 f"💰 **Новый депозит создан**\n"
@@ -190,11 +287,12 @@ class IncomingDepositService:
             )
 
             logger.info(
-                f"Created new deposit #{deposit.id} for user {user.id}: "
+                f"✅ Created new deposit #{deposit.id} for user {user.id}: "
                 f"{amount} USDT, daily PLEX: {daily_plex_required}"
             )
 
         except Exception as e:
+            await self.session.rollback()
             logger.error(f"❌ Failed to process deposit for user {user.id}: {e}")
             await self.notification_service.notify_admins(
                 f"❌ **Ошибка обработки депозита**\n"

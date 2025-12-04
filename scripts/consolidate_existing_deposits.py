@@ -210,6 +210,7 @@ async def run_consolidation() -> None:
             await session.commit()
 
     except Exception as e:
+        await session.rollback()
         logger.exception(f"Consolidation failed: {e}")
         raise
     finally:

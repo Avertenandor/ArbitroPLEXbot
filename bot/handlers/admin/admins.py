@@ -675,38 +675,37 @@ async def handle_emergency_block_admin_telegram_id(
 
             from app.config.settings import settings
 
-            bot = Bot(token=settings.telegram_bot_token)
-            notification_text = (
-                f"🚨 **Экстренная блокировка админа**\n\n"
-                f"Админ {admin.display_name} (ID: {admin.id}) "
-                f"экстренно заблокировал админа:\n\n"
-                f"• Telegram ID: `{telegram_id}`\n"
-                f"• Имя: {admin_to_block.display_name}\n"
-                f"• Роль: {admin_to_block.role}\n"
-                f"• Причина: Compromised admin account\n\n"
-                f"Действия выполнены:\n"
-                f"✅ Админ удален из системы\n"
-                f"✅ Telegram ID заблокирован (TERMINATED)\n"
-                f"✅ Все сессии деактивированы"
-            )
+            # FIXED: Use context manager for Bot to prevent session leak
+            async with Bot(token=settings.telegram_bot_token) as bot:
+                notification_text = (
+                    f"🚨 **Экстренная блокировка админа**\n\n"
+                    f"Админ {admin.display_name} (ID: {admin.id}) "
+                    f"экстренно заблокировал админа:\n\n"
+                    f"• Telegram ID: `{telegram_id}`\n"
+                    f"• Имя: {admin_to_block.display_name}\n"
+                    f"• Роль: {admin_to_block.role}\n"
+                    f"• Причина: Compromised admin account\n\n"
+                    f"Действия выполнены:\n"
+                    f"✅ Админ удален из системы\n"
+                    f"✅ Telegram ID заблокирован (TERMINATED)\n"
+                    f"✅ Все сессии деактивированы"
+                )
 
-            # Get super_admins for notification
-            super_admins = [a for a in all_admins if a.is_super_admin]
-            for super_admin in super_admins:
-                if super_admin.id != admin.id:
-                    try:
-                        await bot.send_message(
-                            chat_id=super_admin.telegram_id,
-                            text=notification_text,
-                            parse_mode="Markdown",
-                        )
-                    except Exception as e:
-                        logger.error(
-                            f"Failed to notify super_admin "
-                            f"{super_admin.id}: {e}"
-                        )
-
-            await bot.session.close()
+                # Get super_admins for notification
+                super_admins = [a for a in all_admins if a.is_super_admin]
+                for super_admin in super_admins:
+                    if super_admin.id != admin.id:
+                        try:
+                            await bot.send_message(
+                                chat_id=super_admin.telegram_id,
+                                text=notification_text,
+                                parse_mode="Markdown",
+                            )
+                        except Exception as e:
+                            logger.error(
+                                f"Failed to notify super_admin "
+                                f"{super_admin.id}: {e}"
+                            )
         except Exception as e:
             logger.error(f"Failed to send notifications: {e}")
 

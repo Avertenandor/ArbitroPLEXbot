@@ -11,7 +11,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from loguru import logger
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.transaction import Transaction
@@ -442,26 +442,39 @@ async def process_balance_change(
         return
 
     user_service = UserService(session)
-    user = await user_service.get_by_id(user_id)
+
+    # R9-2: Get current balance with lock to prevent race conditions
+    stmt = select(User).where(User.id == user_id).with_for_update()
+    result = await session.execute(stmt)
+    user = result.scalar_one_or_none()
+
     if not user:
         await message.answer("❌ Пользователь не найден")
         return
 
-    new_balance = user.balance + amount
+    old_balance = user.balance or Decimal("0")
+    new_balance = old_balance + amount
+
     if new_balance < 0:
         await message.reply(
             f"❌ Нельзя списать больше, чем есть на балансе.\n"
-            f"Текущий баланс: {user.balance}"
+            f"Текущий баланс: {old_balance}"
         )
         return
 
-    await user_service.update_profile(user_id, balance=new_balance)
+    # R9-2: Atomic balance update to prevent race conditions
+    stmt = (
+        update(User)
+        .where(User.id == user_id)
+        .values(balance=User.balance + amount)
+    )
+    await session.execute(stmt)
+    await session.commit()
 
     admin = data.get("admin")
     admin_id = admin.id if admin else None
 
     # Security log (simplified usage)
-    from loguru import logger
     logger.warning(f"Admin {admin_id} changed balance for user {user_id} by {amount}. New: {new_balance}")
 
     admin_log = AdminLogService(session)
@@ -471,7 +484,7 @@ async def process_balance_change(
         action=f"balance_change_{'credit' if amount > 0 else 'debit'}",
         entity_type="user",
         entity_id=user_id,
-        details={"amount": float(amount), "old_balance": float(user.balance - amount), "new_balance": float(new_balance)},
+        details={"amount": float(amount), "old_balance": float(old_balance), "new_balance": float(new_balance)},
         ip_address=None
     )
 
@@ -481,6 +494,8 @@ async def process_balance_change(
         f"Новый баланс: {new_balance} USDT"
     )
 
+    # Reload user to show updated profile
+    user = await user_service.get_by_id(user_id)
     await show_user_profile(message, user, state, session)
 
 
@@ -817,38 +832,38 @@ async def handle_block_user_input(  # noqa: C901
         user.is_banned = True
         await session.commit()
 
+        # FIXED: Use context manager for Bot to prevent session leak
         try:
-            bot = Bot(token=settings.telegram_bot_token)
-            setting_repo = SystemSettingRepository(session)
-            notification_text = await setting_repo.get_value(
-                "blacklist_block_notification_text",
-                default=(
-                    "⚠️ Ваш аккаунт временно заблокирован в нашем сообществе. "
-                    "Вы можете подать апелляцию в течение 3 рабочих дней."
+            async with Bot(token=settings.telegram_bot_token) as bot:
+                setting_repo = SystemSettingRepository(session)
+                notification_text = await setting_repo.get_value(
+                    "blacklist_block_notification_text",
+                    default=(
+                        "⚠️ Ваш аккаунт временно заблокирован в нашем сообществе. "
+                        "Вы можете подать апелляцию в течение 3 рабочих дней."
+                    )
                 )
-            )
-            notification_text_with_instruction = (
-                f"{notification_text}\n\n"
-                "Чтобы подать апелляцию, нажмите кнопку "
-                "'📝 Подать апелляцию' в боте."
-            )
-            await bot.send_message(
-                chat_id=user.telegram_id,
-                text=notification_text_with_instruction,
-            )
+                notification_text_with_instruction = (
+                    f"{notification_text}\n\n"
+                    "Чтобы подать апелляцию, нажмите кнопку "
+                    "'📝 Подать апелляцию' в боте."
+                )
+                await bot.send_message(
+                    chat_id=user.telegram_id,
+                    text=notification_text_with_instruction,
+                )
 
-            blacklist_repo = BlacklistRepository(session)
-            blacklist_entry = await blacklist_repo.find_by_telegram_id(
-                user.telegram_id
-            )
-            await bot.send_message(
-                chat_id=user.telegram_id,
-                text="Выберите действие:",
-                reply_markup=main_menu_reply_keyboard(
-                    user=user, blacklist_entry=blacklist_entry, is_admin=False
-                ),
-            )
-            await bot.session.close()
+                blacklist_repo = BlacklistRepository(session)
+                blacklist_entry = await blacklist_repo.find_by_telegram_id(
+                    user.telegram_id
+                )
+                await bot.send_message(
+                    chat_id=user.telegram_id,
+                    text="Выберите действие:",
+                    reply_markup=main_menu_reply_keyboard(
+                        user=user, blacklist_entry=blacklist_entry, is_admin=False
+                    ),
+                )
         except Exception as e:
             logger.warning(f"Failed to send notification to user {user.telegram_id}: {e}")
 
@@ -940,21 +955,21 @@ async def handle_terminate_user_input(  # noqa: C901
         user.is_banned = True
         await session.commit()
 
+        # FIXED: Use context manager for Bot to prevent session leak
         try:
-            bot = Bot(token=settings.telegram_bot_token)
-            setting_repo = SystemSettingRepository(session)
-            notification_text = await setting_repo.get_value(
-                "blacklist_terminate_notification_text",
-                default=(
-                    "❌ Ваш аккаунт терминирован в нашем сообществе "
-                    "без возможности восстановления."
+            async with Bot(token=settings.telegram_bot_token) as bot:
+                setting_repo = SystemSettingRepository(session)
+                notification_text = await setting_repo.get_value(
+                    "blacklist_terminate_notification_text",
+                    default=(
+                        "❌ Ваш аккаунт терминирован в нашем сообществе "
+                        "без возможности восстановления."
+                    )
                 )
-            )
-            await bot.send_message(
-                chat_id=user.telegram_id,
-                text=notification_text,
-            )
-            await bot.session.close()
+                await bot.send_message(
+                    chat_id=user.telegram_id,
+                    text=notification_text,
+                )
         except Exception as e:
             logger.warning(f"Failed to send notification to user {user.telegram_id}: {e}")
 

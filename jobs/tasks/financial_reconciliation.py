@@ -81,10 +81,8 @@ async def _perform_reconciliation_async() -> dict:
 
     async with lock.lock("financial_reconciliation", timeout=600):
         try:
-            # Initialize bot for potential admin notifications
-            bot = Bot(token=settings.telegram_bot_token)
-
-            try:
+            # FIXED: Use context manager for Bot to prevent session leak
+            async with Bot(token=settings.telegram_bot_token) as bot:
                 async with async_session_maker() as session:
                     reconciliation_service = ReconciliationService(session)
 
@@ -118,10 +116,6 @@ async def _perform_reconciliation_async() -> dict:
                             logger.error(f"Error sending admin notification: {e}")
 
                     return result
-
-            finally:
-                # Always close bot session to prevent memory leak
-                await bot.session.close()
         finally:
             # Close Redis client
             if redis_client:

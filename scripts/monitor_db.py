@@ -7,6 +7,7 @@ Run periodically to track database health.
 """
 
 import asyncio
+import os
 import sys
 from datetime import datetime
 
@@ -26,7 +27,7 @@ async def check_db_connections(
     host: str = "localhost",
     port: int = 5432,
     user: str = "arbitragebot",
-    password: str = "SecurePass2024",
+    password: str = "",
     database: str = "arbitragebot",
 ) -> dict[str, any]:
     """
@@ -196,10 +197,27 @@ async def main():
     """Main entry point."""
     # Parse command line args for remote monitoring
     host = sys.argv[1] if len(sys.argv) > 1 else "localhost"
-    
+
+    # Get credentials from environment variables
+    db_user = os.getenv("POSTGRES_USER", "arbitragebot")
+    db_password = os.getenv("POSTGRES_PASSWORD", "")
+    db_name = os.getenv("POSTGRES_DB", "arbitragebot")
+    db_port = int(os.getenv("POSTGRES_PORT", "5432"))
+
+    # Validate required environment variables
+    if not db_password:
+        logger.error("POSTGRES_PASSWORD environment variable is required")
+        sys.exit(2)
+
     logger.info(f"Checking database connections on {host}...")
-    
-    data = await check_db_connections(host=host)
+
+    data = await check_db_connections(
+        host=host,
+        port=db_port,
+        user=db_user,
+        password=db_password,
+        database=db_name,
+    )
     
     if data:
         is_healthy, warnings = analyze_and_report(data)

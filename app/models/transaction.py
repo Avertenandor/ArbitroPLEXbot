@@ -40,6 +40,14 @@ class Transaction(Base):
             'balance_after >= 0',
             name='check_transaction_balance_after_non_negative'
         ),
+        CheckConstraint(
+            'fee < amount',
+            name='check_transaction_fee_less_than_amount'
+        ),
+        CheckConstraint(
+            'fee >= 0',
+            name='check_transaction_fee_non_negative'
+        ),
     )
 
     # Primary key

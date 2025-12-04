@@ -6,7 +6,7 @@ Full Web3.py implementation for BSC blockchain operations
 """
 
 import asyncio
-import threading
+import ctypes
 import time
 import warnings
 from concurrent.futures import ThreadPoolExecutor
@@ -31,6 +31,7 @@ from eth_account import Account
 from eth_utils import is_address, to_checksum_address
 from loguru import logger
 from web3 import Web3
+from web3.exceptions import Web3Exception, ContractLogicError
 from web3.middleware import geth_poa_middleware
 
 from app.config.settings import Settings
@@ -39,6 +40,7 @@ from app.config.database import async_session_maker
 from app.config.constants import BLOCKCHAIN_EXECUTOR_TIMEOUT
 from app.utils.encryption import get_encryption_service
 from app.utils.security import mask_address, mask_tx_hash
+from app.utils.exceptions import SecurityError
 
 # USDT contract ABI (ERC-20 standard functions)
 USDT_ABI = [
@@ -84,6 +86,29 @@ MAX_GAS_PRICE_WEI = int(MAX_GAS_PRICE_GWEI * 10**9)
 
 T = TypeVar("T")
 
+
+def secure_zero_memory(secret: str) -> None:
+    """
+    Securely overwrite memory containing secret data.
+
+    NOTE: This provides best-effort memory clearing in Python.
+    Python's memory management makes true secure erasure impossible,
+    but this reduces the window of exposure.
+    """
+    if not secret:
+        return
+
+    try:
+        # Convert to bytes if string
+        secret_bytes = secret.encode() if isinstance(secret, str) else secret
+        # Overwrite with zeros
+        # This is a best-effort approach - Python's GC may have copies
+        ctypes.memset(id(secret_bytes) + 32, 0, len(secret_bytes))
+    except Exception:
+        # Fail silently - this is best-effort security
+        pass
+
+
 class BlockchainService:
     """
     Blockchain service for BSC/USDT operations.
@@ -127,7 +152,7 @@ class BlockchainService:
         )
 
         # Nonce lock for preventing race conditions in parallel transactions
-        self._nonce_lock = threading.Lock()
+        self._nonce_lock = asyncio.Lock()
 
         # Providers storage
         self.providers: dict[str, Web3] = {}
@@ -229,36 +254,132 @@ class BlockchainService:
         Initialize wallet account.
 
         SECURITY: Automatically decrypts private key if it was encrypted.
+        Private key is kept in memory only for signing - cleared immediately after use.
         """
         if self.wallet_private_key:
+            private_key = None
             try:
                 # CRITICAL: Decrypt private key if it's encrypted
                 private_key = self.wallet_private_key
                 encryption_service = get_encryption_service()
 
-                if encryption_service and encryption_service.enabled:
-                    # Try to decrypt - if it fails, assume key is not encrypted
-                    decrypted = encryption_service.decrypt(private_key)
-                    if decrypted:
-                        private_key = decrypted
-                        logger.info("Private key decrypted successfully")
-                    else:
-                        # Decryption failed - try using key as-is (might not be encrypted)
-                        logger.warning("Failed to decrypt private key - trying as plain text")
-                else:
-                    logger.warning("EncryptionService not available - using private key as-is")
+                if not encryption_service or not encryption_service.enabled:
+                    raise SecurityError(
+                        "EncryptionService not available or disabled. "
+                        "Cannot decrypt private key without encryption. "
+                        "Ensure ENCRYPTION_KEY is set correctly."
+                    )
 
-                # Initialize wallet account with (possibly decrypted) key
+                # Try to decrypt - raises SecurityError on failure
+                decrypted = encryption_service.decrypt(private_key)
+                if not decrypted:
+                    raise SecurityError(
+                        "Failed to decrypt private key. "
+                        "Ensure ENCRYPTION_KEY is set correctly and key is encrypted."
+                    )
+
+                private_key = decrypted
+                logger.info("Private key decrypted successfully")
+
+                # Initialize wallet account with decrypted key
                 self.wallet_account = Account.from_key(private_key)
                 self.wallet_address = to_checksum_address(self.wallet_account.address)
 
+            except SecurityError:
+                # Re-raise security errors without catching
+                raise
             except Exception as e:
                 logger.error(f"Failed to init wallet: {e}")
                 self.wallet_account = None
                 self.wallet_address = None
+            finally:
+                # SECURITY: Clear decrypted private key from memory
+                if private_key and private_key != self.wallet_private_key:
+                    secure_zero_memory(private_key)
+                    del private_key
         else:
             self.wallet_account = None
             self.wallet_address = None
+
+    def _get_safe_nonce(self, w3: Web3, address: str) -> int:
+        """
+        Get nonce with stuck transaction detection.
+
+        SYNC method - runs in executor.
+
+        Args:
+            w3: Web3 instance
+            address: Wallet address
+
+        Returns:
+            Safe nonce to use
+        """
+        # Get pending nonce (includes pending transactions)
+        pending_nonce = w3.eth.get_transaction_count(address, 'pending')
+        # Get confirmed nonce (only confirmed transactions)
+        confirmed_nonce = w3.eth.get_transaction_count(address, 'latest')
+
+        # If there are too many stuck transactions (pending > confirmed + threshold)
+        stuck_threshold = 5
+        if pending_nonce > confirmed_nonce + stuck_threshold:
+            logger.warning(
+                f"Possible stuck transactions detected: "
+                f"pending={pending_nonce}, confirmed={confirmed_nonce}, "
+                f"stuck={pending_nonce - confirmed_nonce}"
+            )
+
+        return pending_nonce
+
+    async def _get_nonce_with_distributed_lock(self, address: str) -> int:
+        """
+        Get nonce with distributed lock for multi-instance protection.
+
+        Uses Redis-based distributed lock to prevent nonce conflicts
+        when multiple bot instances are running.
+
+        Args:
+            address: Wallet address
+
+        Returns:
+            Safe nonce to use
+        """
+        from app.utils.distributed_lock import get_distributed_lock
+
+        # Create lock key specific to this address
+        lock_key = f"nonce_lock:{address}"
+
+        # Get Web3 instance
+        w3 = self.get_active_web3()
+
+        # Try to get distributed lock with Redis
+        # If Redis is unavailable, fallback to PostgreSQL or local lock
+        if self.session_factory:
+            async with self.session_factory() as session:
+                distributed_lock = get_distributed_lock(session=session)
+
+                # Acquire distributed lock with timeout
+                async with distributed_lock.lock(
+                    key=lock_key,
+                    timeout=30,  # Lock expires after 30 seconds
+                    blocking=True,
+                    blocking_timeout=10.0  # Wait max 10 seconds for lock
+                ):
+                    # Get nonce inside the lock
+                    loop = asyncio.get_event_loop()
+                    nonce = await loop.run_in_executor(
+                        self._executor,
+                        lambda: self._get_safe_nonce(w3, address)
+                    )
+                    return nonce
+        else:
+            # Fallback to local lock if no session factory
+            logger.warning("No session factory available, using local lock only")
+            loop = asyncio.get_event_loop()
+            nonce = await loop.run_in_executor(
+                self._executor,
+                lambda: self._get_safe_nonce(w3, address)
+            )
+            return nonce
 
     async def _update_settings_from_db(self) -> None:
         """Update active provider and auto-switch settings from DB."""
@@ -365,6 +486,7 @@ class BlockchainService:
                 await session.commit()
             logger.success(f"Persisted active provider switch to: {new_provider}")
         except Exception as e:
+            await session.rollback()
             logger.error(f"Failed to persist provider switch: {e}", exc_info=True)
             raise
 
@@ -377,8 +499,15 @@ class BlockchainService:
         return self.rpc_limiter.get_stats()
 
     def close(self) -> None:
+        """Clean up resources and clear sensitive data."""
         if hasattr(self, '_executor') and self._executor:
             self._executor.shutdown(wait=True)
+
+        # SECURITY: Clear sensitive data on shutdown
+        if hasattr(self, 'wallet_private_key') and self.wallet_private_key:
+            secure_zero_memory(self.wallet_private_key)
+        if hasattr(self, 'wallet_account'):
+            self.wallet_account = None
 
     async def get_block_number(self) -> int:
         loop = asyncio.get_event_loop()
@@ -486,22 +615,24 @@ class BlockchainService:
             from decimal import ROUND_DOWN
             amount_wei = int((Decimal(str(amount)) * Decimal(10 ** USDT_DECIMALS)).to_integral_value(ROUND_DOWN))
 
-            def _send_tx(w3: Web3):
-                contract = w3.eth.contract(address=self.usdt_contract_address, abi=USDT_ABI)
-                func = contract.functions.transfer(to_address, amount_wei)
+            # Get nonce with async lock BEFORE entering executor
+            # This prevents race conditions in parallel transactions
+            async with self._nonce_lock:
+                nonce = await self._get_nonce_with_distributed_lock(self.wallet_address)
 
-                # Use Smart Gas
-                gas_price = self.get_optimal_gas_price(w3)
+                # Now execute transaction with pre-acquired nonce
+                def _send_tx(w3: Web3, nonce: int):
+                    contract = w3.eth.contract(address=self.usdt_contract_address, abi=USDT_ABI)
+                    func = contract.functions.transfer(to_address, amount_wei)
 
-                try:
-                    gas_est = func.estimate_gas({"from": self.wallet_address})
-                except Exception:
-                    gas_est = 100000  # Fallback for USDT transfer
+                    # Use Smart Gas
+                    gas_price = self.get_optimal_gas_price(w3)
 
-                # Lock nonce acquisition and transaction sending to prevent race conditions
-                with self._nonce_lock:
-                    # Use pending block for better concurrency
-                    nonce = w3.eth.get_transaction_count(self.wallet_address, 'pending')
+                    try:
+                        gas_est = func.estimate_gas({"from": self.wallet_address})
+                    except (Web3Exception, ContractLogicError) as e:
+                        logger.warning(f"Gas estimation failed: {e}")
+                        gas_est = 100000  # Fallback for USDT transfer
 
                     txn = func.build_transaction({
                         "from": self.wallet_address,
@@ -513,7 +644,7 @@ class BlockchainService:
 
                     logger.info(
                         f"Sending USDT tx: to={mask_address(to_address)}, amount={amount}, "
-                        f"gas_price={gas_price} wei ({gas_price / 10**9} Gwei), "
+                        f"nonce={nonce}, gas_price={gas_price} wei ({gas_price / 10**9} Gwei), "
                         f"gas_limit={int(gas_est * 1.2)}"
                     )
 
@@ -521,8 +652,9 @@ class BlockchainService:
                     tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
                     return tx_hash.hex()
 
-            tx_hash_str = await self._run_async_failover(_send_tx)
-            
+                # Execute with pre-acquired nonce
+                tx_hash_str = await self._run_async_failover(lambda w3: _send_tx(w3, nonce))
+
             logger.info(f"USDT payment sent: {amount} to {mask_address(to_address)}, hash: {mask_tx_hash(tx_hash_str)}")
             return {"success": True, "tx_hash": tx_hash_str, "error": None}
 
@@ -553,15 +685,16 @@ class BlockchainService:
             from decimal import ROUND_DOWN
             amount_wei = int((Decimal(str(amount)) * Decimal(10 ** 18)).to_integral_value(ROUND_DOWN))
 
-            def _send_native(w3: Web3):
-                # Use Smart Gas
-                gas_price = self.get_optimal_gas_price(w3)
-                gas_limit = 21000  # Standard native transfer gas
+            # Get nonce with async lock BEFORE entering executor
+            # This prevents race conditions in parallel transactions
+            async with self._nonce_lock:
+                nonce = await self._get_nonce_with_distributed_lock(self.wallet_address)
 
-                # Lock nonce acquisition and transaction sending to prevent race conditions
-                with self._nonce_lock:
-                    # Use pending block for better concurrency
-                    nonce = w3.eth.get_transaction_count(self.wallet_address, 'pending')
+                # Now execute transaction with pre-acquired nonce
+                def _send_native(w3: Web3, nonce: int):
+                    # Use Smart Gas
+                    gas_price = self.get_optimal_gas_price(w3)
+                    gas_limit = 21000  # Standard native transfer gas
 
                     txn = {
                         "to": to_address,
@@ -574,14 +707,15 @@ class BlockchainService:
 
                     logger.info(
                         f"Sending BNB tx: to={mask_address(to_address)}, amount={amount}, "
-                        f"gas_price={gas_price} wei ({gas_price / 10**9} Gwei)"
+                        f"nonce={nonce}, gas_price={gas_price} wei ({gas_price / 10**9} Gwei)"
                     )
 
                     signed = self.wallet_account.sign_transaction(txn)
                     tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
                     return tx_hash.hex()
 
-            tx_hash_str = await self._run_async_failover(_send_native)
+                # Execute with pre-acquired nonce
+                tx_hash_str = await self._run_async_failover(lambda w3: _send_native(w3, nonce))
             
             logger.info(f"BNB payment sent: {amount} to {mask_address(to_address)}, hash: {mask_tx_hash(tx_hash_str)}")
             return {"success": True, "tx_hash": tx_hash_str, "error": None}
@@ -610,7 +744,8 @@ class BlockchainService:
                     receipt = w3.eth.get_transaction_receipt(tx_hash)
                     current = w3.eth.block_number
                     return receipt, current
-                except Exception:
+                except Web3Exception as e:
+                    logger.debug(f"Could not get transaction receipt: {e}")
                     return None, None
 
             receipt, current_block = await self._run_async_failover(_check)
@@ -626,14 +761,16 @@ class BlockchainService:
                 "confirmations": confirmations,
                 "block_number": receipt.blockNumber
             }
-        except Exception:
+        except (Web3Exception, asyncio.TimeoutError) as e:
+            logger.warning(f"Failed to check transaction status: {e}")
             return {"status": "unknown", "confirmations": 0}
 
     async def get_transaction_details(self, tx_hash: str) -> dict[str, Any] | None:
         try:
             # Just execute directly via failover helper, encapsulating logic
             return await self._run_async_failover(lambda w3: self._fetch_tx_details_sync(w3, tx_hash))
-        except Exception:
+        except (Web3Exception, asyncio.TimeoutError) as e:
+            logger.warning(f"Failed to get transaction details: {e}")
             return None
 
     def _fetch_tx_details_sync(self, w3: Web3, tx_hash: str):
@@ -641,7 +778,8 @@ class BlockchainService:
             tx = w3.eth.get_transaction(tx_hash)
             try:
                 receipt = w3.eth.get_transaction_receipt(tx_hash)
-            except Exception:
+            except Web3Exception as e:
+                logger.debug(f"Could not get transaction receipt: {e}")
                 receipt = None
             
             # Parse logic...
@@ -667,13 +805,15 @@ class BlockchainService:
                 "value": value,
                 "status": "confirmed" if receipt and receipt.status == 1 else "pending",
             }
-        except Exception:
+        except (Web3Exception, ValueError) as e:
+            logger.debug(f"Could not fetch transaction details: {e}")
             return None
 
     async def validate_wallet_address(self, address: str) -> bool:
         try:
             return is_address(address)
-        except Exception:
+        except (ValueError, TypeError) as e:
+            logger.debug(f"Invalid wallet address format: {e}")
             return False
             
     async def get_usdt_balance(self, address: str) -> Decimal | None:

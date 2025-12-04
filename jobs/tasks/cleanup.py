@@ -1,14 +1,25 @@
 """Cleanup task for logs and orphaned data."""
 
-from datetime import datetime, timedelta
+import asyncio
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from app.database import async_session_maker
-from app.utils.datetime_utils import utc_now
+import dramatiq
 from loguru import logger
 
+try:
+    import redis.asyncio as redis
+except ImportError:
+    redis = None  # type: ignore
 
-async def cleanup_logs_and_data() -> None:
+from app.config.database import async_session_maker
+from app.config.settings import settings
+from app.utils.datetime_utils import utc_now
+from app.utils.distributed_lock import DistributedLock
+
+
+@dramatiq.actor(max_retries=3, time_limit=300_000)  # 5 min timeout
+def cleanup_logs_and_data() -> None:
     """
     Cleanup old logs and orphaned data.
 
@@ -16,17 +27,47 @@ async def cleanup_logs_and_data() -> None:
     - Removes orphaned pending deposits (>24 hours)
     - Cleans up old sessions
     """
+    logger.info("Starting cleanup task...")
+
     try:
-        # Cleanup log files
-        await _cleanup_log_files()
-
-        # Cleanup database
-        await _cleanup_database()
-
+        asyncio.run(_cleanup_logs_and_data_async())
         logger.info("Cleanup task completed")
 
     except Exception as e:
-        logger.error(f"Cleanup task error: {e}")
+        logger.exception(f"Cleanup task failed: {e}")
+
+
+async def _cleanup_logs_and_data_async() -> None:
+    """Async implementation of cleanup task."""
+    # Create Redis client for distributed lock
+    redis_client = None
+    if redis:
+        try:
+            redis_client = redis.Redis(
+                host=settings.redis_host,
+                port=settings.redis_port,
+                password=settings.redis_password,
+                db=settings.redis_db,
+                decode_responses=True,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to create Redis client for lock: {e}")
+
+    # Use distributed lock to prevent concurrent cleanup
+    lock = DistributedLock(redis_client=redis_client)
+
+    async with lock.lock("cleanup_task", timeout=300):
+        try:
+            # Cleanup log files
+            await _cleanup_log_files()
+
+            # Cleanup database
+            await _cleanup_database()
+
+        finally:
+            # Close Redis client
+            if redis_client:
+                await redis_client.close()
 
 
 async def _cleanup_log_files() -> None:
@@ -41,7 +82,8 @@ async def _cleanup_log_files() -> None:
 
         for log_file in log_dir.glob("*.log*"):
             if log_file.is_file():
-                file_time = datetime.fromtimestamp(log_file.stat().st_mtime)
+                # FIXED: Use timezone-aware datetime
+                file_time = datetime.fromtimestamp(log_file.stat().st_mtime, tz=UTC)
 
                 if file_time < cutoff_date:
                     log_file.unlink()
@@ -53,6 +95,7 @@ async def _cleanup_log_files() -> None:
 
 async def _cleanup_database() -> None:
     """Cleanup orphaned database records."""
+    session = None
     try:
         async with async_session_maker() as session:
             # Cleanup orphaned pending deposits (>24 hours old)
@@ -69,7 +112,8 @@ async def _cleanup_database() -> None:
 
             for deposit in deposits:
                 if deposit.created_at < cutoff_time:
-                    await deposit_repo.delete(deposit.id)
+                    # FIXED: Use session.delete for direct deletion (sync method)
+                    session.delete(deposit)
                     deleted_count += 1
 
             if deleted_count > 0:
@@ -80,4 +124,7 @@ async def _cleanup_database() -> None:
             await session.commit()
 
     except Exception as e:
+        if session:
+            await session.rollback()
         logger.error(f"Database cleanup error: {e}")
+        raise  # For dramatiq retry

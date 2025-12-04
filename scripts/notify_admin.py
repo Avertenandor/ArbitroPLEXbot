@@ -51,29 +51,27 @@ async def notify_admins(message: str, critical: bool = False) -> bool:
         True if at least one admin was notified successfully
     """
     try:
-        # Initialize bot
-        bot = Bot(token=settings.telegram_bot_token)
-
         # Initialize database
         engine = create_async_engine(settings.database_url, echo=False)
         async_session_maker = sessionmaker(
             engine, class_=AsyncSession, expire_on_commit=False
         )
 
-        async with async_session_maker() as session:
-            notification_service = NotificationService(session)
-            success_count = await notification_service.notify_admins(
-                bot, message, critical=critical
-            )
+        # FIXED: Use context manager for Bot to prevent session leak
+        async with Bot(token=settings.telegram_bot_token) as bot:
+            async with async_session_maker() as session:
+                notification_service = NotificationService(session)
+                success_count = await notification_service.notify_admins(
+                    bot, message, critical=critical
+                )
 
-            if success_count > 0:
-                logger.info(f"Successfully notified {success_count} admin(s)")
-                return True
-            else:
-                logger.warning("No admins were notified")
-                return False
+                if success_count > 0:
+                    logger.info(f"Successfully notified {success_count} admin(s)")
+                    return True
+                else:
+                    logger.warning("No admins were notified")
+                    return False
 
-        await bot.session.close()
         await engine.dispose()
 
     except Exception as e:

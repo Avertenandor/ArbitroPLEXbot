@@ -21,7 +21,7 @@ from app.services.reward_service import RewardService
 from app.utils.distributed_lock import DistributedLock
 
 
-@dramatiq.actor(max_retries=3, time_limit=60_000)  # 1 min timeout
+@dramatiq.actor(max_retries=3, time_limit=120_000)  # 2 min timeout (must be > lock timeout)
 def process_daily_rewards(session_id: int | None = None) -> None:
     """
     Process daily rewards for active session.

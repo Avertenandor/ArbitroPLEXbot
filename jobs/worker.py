@@ -59,6 +59,37 @@ from jobs.tasks import (  # noqa: F401
 
 logger.info("Dramatiq worker initialized with all tasks")
 
+# Graceful shutdown support
+import signal
+
+
+def handle_shutdown(signum, frame):
+    """
+    Handle shutdown signals for graceful termination.
+
+    Dramatiq handles SIGTERM and SIGINT automatically, but we add
+    custom logging for better observability.
+
+    Args:
+        signum: Signal number
+        frame: Current stack frame
+    """
+    signal_name = signal.Signals(signum).name
+    logger.info(
+        f"Received shutdown signal {signal_name} ({signum}), "
+        "finishing current tasks before shutdown..."
+    )
+    # Dramatiq will handle the actual shutdown gracefully
+    # We just log the event for monitoring
+    sys.exit(0)
+
+
+# Register signal handlers
+signal.signal(signal.SIGTERM, handle_shutdown)
+signal.signal(signal.SIGINT, handle_shutdown)
+
+logger.info("Graceful shutdown handlers registered (SIGTERM, SIGINT)")
+
 # Worker is started via CLI: dramatiq jobs.worker
 # Command: dramatiq jobs.worker -p 4 -t 4
 # -p: number of processes

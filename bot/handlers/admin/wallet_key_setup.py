@@ -6,6 +6,7 @@ Implements separate management for:
 2. Output Wallet (Private Key/Seed) - System pays from here.
 """
 
+import ctypes
 import os
 from typing import Any
 
@@ -15,6 +16,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
 from eth_account import Account
 from eth_utils import is_address, to_checksum_address
+from loguru import logger
 from mnemonic import Mnemonic
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +25,27 @@ from app.utils.encryption import get_encryption_service
 from bot.utils.admin_utils import clear_state_preserve_admin_token
 
 router = Router()
+
+
+def secure_zero_memory(secret: str) -> None:
+    """
+    Securely overwrite memory containing secret data.
+
+    NOTE: This provides best-effort memory clearing in Python.
+    Python's memory management makes true secure erasure impossible,
+    but this reduces the window of exposure.
+    """
+    if not secret:
+        return
+
+    try:
+        # Convert to bytes if string
+        secret_bytes = secret.encode() if isinstance(secret, str) else secret
+        # Overwrite with zeros
+        ctypes.memset(id(secret_bytes) + 32, 0, len(secret_bytes))
+    except Exception:
+        # Fail silently - this is best-effort security
+        pass
 
 
 class WalletSetupStates(StatesGroup):
@@ -216,6 +239,7 @@ async def process_output_key(message: Message, state: FSMContext):
     wallet_address = None
 
     # Try as Private Key
+    account = None
     try:
         # Remove 0x prefix
         if text.startswith("0x"):
@@ -229,14 +253,46 @@ async def process_output_key(message: Message, state: FSMContext):
             wallet_address = account.address
     except Exception:
         pass
+    finally:
+        # SECURITY: Clear Account object immediately
+        if account:
+            del account
 
     # Try as Seed Phrase
     if not private_key:
         try:
             mnemo = Mnemonic("english")
             if mnemo.check(text):
-                # Valid seed found - ask for derivation index
-                await state.update_data(temp_seed_phrase=text)
+                # SECURITY: Encrypt seed phrase before storing in FSM state
+                encryption_service = get_encryption_service()
+                if not encryption_service or not encryption_service.enabled:
+                    await message.answer(
+                        "❌ **КРИТИЧЕСКАЯ ОШИБКА**\n"
+                        "Сервис шифрования недоступен. Невозможно безопасно сохранить seed-фразу.\n"
+                        "Обратитесь к администратору системы.",
+                        parse_mode="Markdown"
+                    )
+                    # SECURITY: Clear seed phrase from memory
+                    secure_zero_memory(text)
+                    return
+
+                encrypted_seed = encryption_service.encrypt(text)
+                if not encrypted_seed:
+                    await message.answer(
+                        "❌ **КРИТИЧЕСКАЯ ОШИБКА**\n"
+                        "Не удалось зашифровать seed-фразу. Операция отменена.\n"
+                        "Обратитесь к администратору системы.",
+                        parse_mode="Markdown"
+                    )
+                    # SECURITY: Clear seed phrase from memory
+                    secure_zero_memory(text)
+                    return
+
+                # Store encrypted seed phrase
+                await state.update_data(temp_seed_phrase_encrypted=encrypted_seed)
+
+                # SECURITY: Clear plaintext seed from memory
+                secure_zero_memory(text)
 
                 from bot.keyboards.reply import cancel_keyboard
                 await state.set_state(WalletSetupStates.setting_derivation_index)
@@ -258,14 +314,43 @@ async def process_output_key(message: Message, state: FSMContext):
             "Попробуйте еще раз или нажмите Отмена.",
             parse_mode="Markdown",
         )
+        # SECURITY: Clear any sensitive data
+        secure_zero_memory(text)
         return
 
-    # SECURITY: Clear sensitive data from FSM state before storing new key
-    # This ensures seed phrase is not kept in memory after key derivation
-    await state.update_data(temp_seed_phrase=None)
+    # SECURITY: Encrypt private key before storing in FSM state
+    encryption_service = get_encryption_service()
+    if not encryption_service or not encryption_service.enabled:
+        await message.answer(
+            "❌ **КРИТИЧЕСКАЯ ОШИБКА**\n"
+            "Сервис шифрования недоступен. Невозможно безопасно сохранить приватный ключ.\n"
+            "Обратитесь к администратору системы.",
+            parse_mode="Markdown"
+        )
+        # SECURITY: Clear sensitive data
+        secure_zero_memory(private_key)
+        secure_zero_memory(text)
+        return
 
-    # Save to state (Private Key flow)
-    await state.update_data(new_private_key=private_key, new_output_address=wallet_address)
+    encrypted_key = encryption_service.encrypt(private_key)
+    if not encrypted_key:
+        await message.answer(
+            "❌ **КРИТИЧЕСКАЯ ОШИБКА**\n"
+            "Не удалось зашифровать приватный ключ. Операция отменена.\n"
+            "Обратитесь к администратору системы.",
+            parse_mode="Markdown"
+        )
+        # SECURITY: Clear sensitive data
+        secure_zero_memory(private_key)
+        secure_zero_memory(text)
+        return
+
+    # Save encrypted key to state (Private Key flow)
+    await state.update_data(new_private_key_encrypted=encrypted_key, new_output_address=wallet_address)
+
+    # SECURITY: Clear plaintext key from memory
+    secure_zero_memory(private_key)
+    secure_zero_memory(text)
 
     from bot.keyboards.reply import confirmation_keyboard
 
@@ -300,13 +385,35 @@ async def process_derivation_index(message: Message, state: FSMContext):
         return
 
     data = await state.get_data()
-    seed_phrase = data.get("temp_seed_phrase")
+    encrypted_seed = data.get("temp_seed_phrase_encrypted")
 
-    if not seed_phrase:
+    if not encrypted_seed:
         await message.answer("❌ Ошибка: Seed-фраза потеряна. Начните заново.")
         await handle_wallet_menu(message, state)
         return
 
+    # SECURITY: Decrypt seed phrase only for derivation
+    encryption_service = get_encryption_service()
+    if not encryption_service or not encryption_service.enabled:
+        await message.answer(
+            "❌ **КРИТИЧЕСКАЯ ОШИБКА**\n"
+            "Сервис шифрования недоступен. Невозможно продолжить.\n"
+            "Обратитесь к администратору системы.",
+            parse_mode="Markdown"
+        )
+        await state.update_data(temp_seed_phrase_encrypted=None)
+        await handle_wallet_menu(message, state)
+        return
+
+    seed_phrase = encryption_service.decrypt(encrypted_seed)
+    if not seed_phrase:
+        await message.answer("❌ Ошибка: Не удалось расшифровать seed-фразу. Начните заново.")
+        await state.update_data(temp_seed_phrase_encrypted=None)
+        await handle_wallet_menu(message, state)
+        return
+
+    account = None
+    private_key = None
     try:
         # Enable HD Wallet features safely
         if hasattr(Account, "enable_unaudited_hdwallet_features"):
@@ -323,12 +430,28 @@ async def process_derivation_index(message: Message, state: FSMContext):
         private_key = account.key.hex()[2:]  # remove 0x
         wallet_address = account.address
 
-        # SECURITY: Clear seed phrase from FSM state immediately after key derivation
-        # This minimizes exposure time of the seed phrase in memory
-        await state.update_data(temp_seed_phrase=None)
+        # SECURITY: Encrypt private key before storing in FSM state
+        if not encryption_service or not encryption_service.enabled:
+            await message.answer(
+                "❌ **КРИТИЧЕСКАЯ ОШИБКА**\n"
+                "Сервис шифрования недоступен. Невозможно безопасно сохранить ключ.",
+                parse_mode="Markdown"
+            )
+            await handle_wallet_menu(message, state)
+            return
 
-        # Save to state
-        await state.update_data(new_private_key=private_key, new_output_address=wallet_address)
+        encrypted_key = encryption_service.encrypt(private_key)
+        if not encrypted_key:
+            await message.answer("❌ Ошибка шифрования ключа. Начните заново.")
+            await handle_wallet_menu(message, state)
+            return
+
+        # Save encrypted key to state
+        await state.update_data(
+            new_private_key_encrypted=encrypted_key,
+            new_output_address=wallet_address,
+            temp_seed_phrase_encrypted=None  # Clear encrypted seed
+        )
 
         from bot.keyboards.reply import confirmation_keyboard
 
@@ -346,22 +469,73 @@ async def process_derivation_index(message: Message, state: FSMContext):
 
     except Exception as e:
         await message.answer(f"❌ Ошибка деривации кошелька: {e}")
+        # SECURITY: Clear encrypted seed from state on error
+        await state.update_data(temp_seed_phrase_encrypted=None)
         await handle_wallet_menu(message, state)
+    finally:
+        # SECURITY: Clear all sensitive data from memory
+        if seed_phrase:
+            secure_zero_memory(seed_phrase)
+            del seed_phrase
+        if private_key:
+            secure_zero_memory(private_key)
+            del private_key
+        if account:
+            del account
 
 
 @router.message(WalletSetupStates.confirming_output)
 async def confirm_output_wallet(message: Message, state: FSMContext):
     """Confirm and save output wallet."""
     if message.text != "✅ Да":
+        # SECURITY: Clear all encrypted data from state on cancel
+        await state.update_data(
+            temp_seed_phrase_encrypted=None,
+            new_private_key_encrypted=None,
+            new_output_address=None
+        )
         await handle_wallet_menu(message, state)
         return
 
     data = await state.get_data()
-    private_key = data.get("new_private_key")
+    encrypted_key = data.get("new_private_key_encrypted")
     address = data.get("new_output_address")
 
-    if not private_key or not address:
+    if not encrypted_key or not address:
         await message.answer("❌ Ошибка данных.")
+        await state.update_data(
+            temp_seed_phrase_encrypted=None,
+            new_private_key_encrypted=None,
+            new_output_address=None
+        )
+        await handle_wallet_menu(message, state)
+        return
+
+    # SECURITY: Decrypt key only for saving to .env
+    encryption_service = get_encryption_service()
+    if not encryption_service or not encryption_service.enabled:
+        await message.answer(
+            "❌ **КРИТИЧЕСКАЯ ОШИБКА**\n"
+            "Сервис шифрования недоступен. Невозможно сохранить ключ.\n"
+            "Обратитесь к администратору системы.",
+            parse_mode="Markdown"
+        )
+        await state.update_data(
+            temp_seed_phrase_encrypted=None,
+            new_private_key_encrypted=None,
+            new_output_address=None
+        )
+        await handle_wallet_menu(message, state)
+        return
+
+    private_key = encryption_service.decrypt(encrypted_key)
+    if not private_key:
+        await message.answer("❌ Ошибка расшифровки ключа.")
+        await state.update_data(
+            temp_seed_phrase_encrypted=None,
+            new_private_key_encrypted=None,
+            new_output_address=None
+        )
         await handle_wallet_menu(message, state)
         return
 
@@ -372,7 +546,11 @@ async def confirm_output_wallet(message: Message, state: FSMContext):
 
         # SECURITY: Clear all sensitive data from FSM state after saving
         # This ensures no private keys or seed phrases remain in memory/FSM storage
-        await state.update_data(temp_seed_phrase=None, new_private_key=None, new_output_address=None)
+        await state.update_data(
+            temp_seed_phrase_encrypted=None,
+            new_private_key_encrypted=None,
+            new_output_address=None
+        )
 
         # Force restart via exit
         await message.answer(
@@ -385,9 +563,18 @@ async def confirm_output_wallet(message: Message, state: FSMContext):
 
     except Exception as e:
         # SECURITY: Clear sensitive data even on error
-        await state.update_data(temp_seed_phrase=None, new_private_key=None)
+        await state.update_data(
+            temp_seed_phrase_encrypted=None,
+            new_private_key_encrypted=None,
+            new_output_address=None
+        )
         await message.answer(f"❌ Ошибка при сохранении: {e}")
         await handle_wallet_menu(message, state)
+    finally:
+        # SECURITY: Clear plaintext key from memory
+        if private_key:
+            secure_zero_memory(private_key)
+            del private_key
 
 
 def update_env_variable(key: str, value: str) -> None:
@@ -395,9 +582,8 @@ def update_env_variable(key: str, value: str) -> None:
     Update environment variable in .env file.
 
     SECURITY: Automatically encrypts private keys before saving.
+    Raises exception if encryption fails - no fallback to plaintext.
     """
-    from loguru import logger
-
     env_file = "/app/.env"
 
     if not os.path.exists(env_file):
@@ -407,15 +593,25 @@ def update_env_variable(key: str, value: str) -> None:
     # CRITICAL: Encrypt private keys before saving to .env
     if key == "wallet_private_key":
         encryption_service = get_encryption_service()
-        if encryption_service and encryption_service.enabled:
-            encrypted_value = encryption_service.encrypt(value)
-            if encrypted_value:
-                value = encrypted_value
-                logger.info(f"Private key encrypted before saving to .env")
-            else:
-                logger.error("Failed to encrypt private key - saving without encryption!")
-        else:
-            logger.warning("EncryptionService not available - saving private key without encryption!")
+
+        # SECURITY: Encryption is REQUIRED for private keys
+        if not encryption_service or not encryption_service.enabled:
+            raise ValueError(
+                "CRITICAL SECURITY ERROR: EncryptionService not available. "
+                "Cannot save private key without encryption. "
+                "Configure encryption or contact system administrator."
+            )
+
+        encrypted_value = encryption_service.encrypt(value)
+        if not encrypted_value:
+            raise ValueError(
+                "CRITICAL SECURITY ERROR: Failed to encrypt private key. "
+                "Cannot save private key without encryption. "
+                "Check encryption service logs or contact system administrator."
+            )
+
+        value = encrypted_value
+        logger.info("Private key encrypted successfully before saving to .env")
 
     try:
         with open(env_file) as f:

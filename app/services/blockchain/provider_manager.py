@@ -12,6 +12,8 @@ from web3 import AsyncHTTPProvider, AsyncWeb3
 from web3.providers.async_base import AsyncBaseProvider
 
 from .constants import WS_MAX_RECONNECT_ATTEMPTS, WS_RECONNECT_DELAY
+from .rpc_wrapper import with_timeout, BlockchainTimeoutError
+from app.config.constants import BLOCKCHAIN_TIMEOUT
 
 
 class ProviderManager:
@@ -72,11 +74,19 @@ class ProviderManager:
     async def _connect_http(self) -> None:
         """Connect to HTTP provider."""
         try:
-            self._http_provider = AsyncHTTPProvider(self.https_url)
+            # Initialize HTTP provider with timeout in request_kwargs
+            self._http_provider = AsyncHTTPProvider(
+                self.https_url,
+                request_kwargs={'timeout': BLOCKCHAIN_TIMEOUT}
+            )
             self._http_web3 = AsyncWeb3(self._http_provider)
 
-            # Verify connection
-            block = await self._http_web3.eth.block_number
+            # Verify connection with timeout
+            block = await with_timeout(
+                self._http_web3.eth.block_number,
+                timeout=BLOCKCHAIN_TIMEOUT,
+                operation_name="HTTP provider connection verify"
+            )
             self._http_connected = True
 
             logger.success(
@@ -84,7 +94,7 @@ class ProviderManager:
                 f"(current block: {block})"
             )
 
-        except Exception as e:
+        except (BlockchainTimeoutError, Exception) as e:
             self._http_connected = False
             logger.error(f"Failed to connect HTTP provider: {e}")
             raise
@@ -218,19 +228,27 @@ class ProviderManager:
         # Check HTTP
         try:
             if self._http_web3:
-                current_block = await self._http_web3.eth.block_number
+                current_block = await with_timeout(
+                    self._http_web3.eth.block_number,
+                    timeout=BLOCKCHAIN_TIMEOUT,
+                    operation_name="HTTP health check"
+                )
                 http_healthy = True
 
-        except Exception as e:
+        except (BlockchainTimeoutError, Exception) as e:
             logger.error(f"HTTP health check failed: {e}")
 
         # Check WebSocket
         try:
             if self._ws_web3:
-                await self._ws_web3.eth.block_number
+                await with_timeout(
+                    self._ws_web3.eth.block_number,
+                    timeout=BLOCKCHAIN_TIMEOUT,
+                    operation_name="WebSocket health check"
+                )
                 ws_healthy = True
 
-        except Exception as e:
+        except (BlockchainTimeoutError, Exception) as e:
             logger.warning(f"WebSocket health check failed: {e}")
 
         return {
@@ -249,10 +267,14 @@ class ProviderManager:
         """
         try:
             if self._http_web3:
-                # Try to get block number
-                await self._http_web3.eth.block_number
+                # Try to get block number with timeout
+                await with_timeout(
+                    self._http_web3.eth.block_number,
+                    timeout=BLOCKCHAIN_TIMEOUT,
+                    operation_name="Node health check"
+                )
                 return True
-        except Exception:
+        except (BlockchainTimeoutError, Exception):
             pass
 
         return False

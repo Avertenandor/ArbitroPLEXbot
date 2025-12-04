@@ -131,8 +131,8 @@ class ReportService:
                 try:
                     if len(str(cell.value)) > max_length:
                         max_length = len(str(cell.value))
-                except:
-                    pass
+                except (TypeError, AttributeError) as e:
+                    logger.debug(f"Could not get cell value length: {e}")
             adjusted_width = (max_length + 2) * 1.2
             # Cap width at 50 chars to avoid super wide columns
             ws.column_dimensions[column].width = min(adjusted_width, 50)

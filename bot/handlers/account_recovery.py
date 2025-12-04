@@ -14,7 +14,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.account_recovery_service import AccountRecoveryService
-from bot.keyboards.reply import main_menu_reply_keyboard
+from bot.keyboards.reply import cancel_keyboard, main_menu_reply_keyboard
 from bot.states.account_recovery import AccountRecoveryStates
 
 router = Router()
@@ -55,7 +55,7 @@ async def cmd_recover_account(
         "📝 **Шаг 1:** Отправьте адрес вашего кошелька (0x...)"
     )
 
-    await message.answer(text, parse_mode="Markdown")
+    await message.answer(text, parse_mode="Markdown", reply_markup=cancel_keyboard())
 
 
 @router.message(AccountRecoveryStates.waiting_for_wallet)
@@ -70,6 +70,15 @@ async def handle_wallet_address(
 
     R16-3: Validate wallet address and check if account exists.
     """
+    # Check for cancel button
+    if message.text == "❌ Отмена":
+        await state.clear()
+        await message.answer(
+            "Восстановление аккаунта отменено.",
+            reply_markup=main_menu_reply_keyboard()
+        )
+        return
+
     wallet_address = message.text.strip()
 
     # Basic validation
@@ -78,7 +87,8 @@ async def handle_wallet_address(
             "❌ Неверный формат адреса кошелька.\n\n"
             "Адрес должен начинаться с 0x и содержать 42 символа.\n"
             "Пример: 0x1234567890123456789012345678901234567890\n\n"
-            "Попробуйте еще раз:"
+            "Попробуйте еще раз:",
+            reply_markup=cancel_keyboard()
         )
         return
 
@@ -135,7 +145,7 @@ async def handle_wallet_address(
     )
 
     await state.set_state(AccountRecoveryStates.waiting_for_signature)
-    await message.answer(text, parse_mode="Markdown")
+    await message.answer(text, parse_mode="Markdown", reply_markup=cancel_keyboard())
 
 
 @router.message(AccountRecoveryStates.waiting_for_signature)
@@ -150,6 +160,15 @@ async def handle_signature(
 
     R16-3: Verify wallet ownership through signature.
     """
+    # Check for cancel button
+    if message.text == "❌ Отмена":
+        await state.clear()
+        await message.answer(
+            "Восстановление аккаунта отменено.",
+            reply_markup=main_menu_reply_keyboard()
+        )
+        return
+
     signature = message.text.strip()
 
     # Get data from state
@@ -187,7 +206,8 @@ async def handle_signature(
             "• Неправильная подпись\n"
             "• Сообщение было изменено перед подписанием\n"
             "• Использован неправильный приватный ключ\n\n"
-            "Попробуйте еще раз или обратитесь в поддержку."
+            "Попробуйте еще раз или обратитесь в поддержку.",
+            reply_markup=cancel_keyboard()
         )
         return
     
@@ -235,7 +255,7 @@ async def handle_signature(
 
     await state.set_state(AccountRecoveryStates.waiting_for_additional_info)
     await state.update_data(user_id=user.id, signature=signature)
-    await message.answer(text, parse_mode="Markdown")
+    await message.answer(text, parse_mode="Markdown", reply_markup=cancel_keyboard())
 
 
 @router.message(AccountRecoveryStates.waiting_for_additional_info)
@@ -250,6 +270,15 @@ async def handle_additional_info(
 
     R16-3: Optional email/phone verification before account migration.
     """
+    # Check for cancel button
+    if message.text == "❌ Отмена":
+        await state.clear()
+        await message.answer(
+            "Восстановление аккаунта отменено.",
+            reply_markup=main_menu_reply_keyboard()
+        )
+        return
+
     user_input = message.text.strip().lower()
 
     # Get data from state
@@ -286,7 +315,8 @@ async def handle_additional_info(
                 "❌ Неверный формат.\n\n"
                 "Укажите email (например: user@example.com) "
                 "или телефон (например: +1234567890), "
-                "или отправьте /skip чтобы пропустить."
+                "или отправьте /skip чтобы пропустить.",
+                reply_markup=cancel_keyboard()
             )
             return
 

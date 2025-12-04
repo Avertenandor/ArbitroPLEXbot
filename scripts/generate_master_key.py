@@ -5,7 +5,11 @@ Usage:
     python scripts/generate_master_key.py <telegram_id>
 
 Example:
-    python scripts/generate_master_key.py 1040687384
+    python scripts/generate_master_key.py 123456789
+
+Note:
+    Replace 123456789 with your actual Telegram user ID.
+    You can find it using @userinfobot on Telegram.
 """
 
 import asyncio
@@ -88,7 +92,8 @@ async def generate_master_key_for_admin(telegram_id: int) -> None:
 if __name__ == "__main__":
     if len(sys.argv) < 2:
         logger.error("Usage: python scripts/generate_master_key.py <telegram_id>")
-        logger.info("Example: python scripts/generate_master_key.py 1040687384")
+        logger.info("Example: python scripts/generate_master_key.py 123456789")
+        logger.info("Note: Replace with your actual Telegram user ID (find it via @userinfobot)")
         sys.exit(1)
 
     try:

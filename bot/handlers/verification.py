@@ -132,6 +132,7 @@ async def start_verification(
             session.add(user)
             await session.commit()
         except ValueError as e:
+            await session.rollback()
             # R2-10: Handle validation errors (e.g., invalid data)
             logger.error(
                 "Verification failed - validation error",
@@ -149,6 +150,7 @@ async def start_verification(
             )
             return
         except Exception as e:
+            await session.rollback()
             # R2-10: Handle database/system errors
             logger.error(
                 "Verification failed - system error",
@@ -166,6 +168,7 @@ async def start_verification(
             )
             return
     except Exception as e:
+        await session.rollback()
         # R2-10: Handle password generation/hashing errors
         logger.error(
             "Verification failed - password generation error",
