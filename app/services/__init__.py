@@ -34,7 +34,8 @@ from app.services.finpass_recovery_service import (
 from app.services.notification_retry_service import (
     NotificationRetryService,
 )
-from app.services.notification_service import NotificationService
+# Updated to use modular notification service
+from app.services.notification import NotificationService
 from app.services.payment_retry_service import PaymentRetryService
 
 # Referral Services
@@ -51,7 +52,8 @@ from app.services.reward_service import RewardService
 from app.services.support_service import SupportService
 from app.services.transaction_service import TransactionService
 from app.services.user_notification_service import UserNotificationService
-from app.services.user_service import UserService
+# Updated to use modular user service
+from app.services.user import UserService
 from app.services.wallet_admin_service import WalletAdminService
 
 # Withdrawal Services

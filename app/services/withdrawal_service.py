@@ -1,58 +1,71 @@
 """
-Withdrawal service.
+Withdrawal service - Main service facade.
 
-Handles withdrawal requests, balance validation, auto-withdrawals, and admin processing.
+This service acts as a facade that delegates to specialized modules
+for better code organization and maintainability. All functionality
+is preserved and backward compatibility is maintained.
+
+Module structure:
+- withdrawal/withdrawal_request_handler: Request creation and validation
+- withdrawal/withdrawal_lifecycle_handler: Approval, rejection, cancellation
+- withdrawal/withdrawal_query_service: Queries and history
+- withdrawal/withdrawal_statistics_service: Statistics and reporting
+- withdrawal/withdrawal_helpers: Utility functions
 """
 
-import asyncio
-import random
 from decimal import Decimal
 from typing import Any
 
-from loguru import logger
-from sqlalchemy import func, select
-from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config.settings import settings
-from app.models.enums import TransactionStatus, TransactionType
 from app.models.transaction import Transaction
-from app.models.user import User
-from app.repositories.admin_action_escrow_repository import (
-    AdminActionEscrowRepository,
-)
-from app.repositories.deposit_repository import DepositRepository
-from app.repositories.global_settings_repository import (
-    GlobalSettingsRepository,
-)
-from app.repositories.transaction_repository import TransactionRepository
 from app.services.base_service import BaseService
-from app.services.withdrawal.withdrawal_balance_manager import (
-    WithdrawalBalanceManager,
+from app.services.withdrawal.withdrawal_helpers import WithdrawalHelpers
+from app.services.withdrawal.withdrawal_lifecycle_handler import (
+    WithdrawalLifecycleHandler,
 )
-from app.services.withdrawal.withdrawal_validator import WithdrawalValidator
-
-# R9-2: Maximum retries for race condition conflicts
-MAX_RETRIES = 3
-RETRY_DELAY_BASE = 1.0  # Base delay in seconds
+from app.services.withdrawal.withdrawal_query_service import (
+    WithdrawalQueryService,
+)
+from app.services.withdrawal.withdrawal_request_handler import (
+    WithdrawalRequestHandler,
+)
+from app.services.withdrawal.withdrawal_statistics_service import (
+    WithdrawalStatisticsService,
+)
 
 
 class WithdrawalService(BaseService):
-    """Withdrawal service for managing withdrawal requests."""
+    """
+    Withdrawal service for managing withdrawal requests.
+
+    This is a facade that delegates to specialized modules for better
+    code organization. All public methods maintain backward compatibility.
+    """
 
     def __init__(self, session: AsyncSession) -> None:
-        """Initialize withdrawal service."""
+        """Initialize withdrawal service and all sub-components."""
         super().__init__(session)
-        self.transaction_repo = TransactionRepository(session)
-        self.settings_repo = GlobalSettingsRepository(session)
-        self.balance_manager = WithdrawalBalanceManager(session)
+
+        # Initialize all specialized components
+        self.request_handler = WithdrawalRequestHandler(session)
+        self.lifecycle_handler = WithdrawalLifecycleHandler(session)
+        self.query_service = WithdrawalQueryService(session)
+        self.statistics_service = WithdrawalStatisticsService(session)
+        self.helpers = WithdrawalHelpers(session)
+
+    # ========================================================================
+    # REQUEST HANDLING (delegates to WithdrawalRequestHandler)
+    # ========================================================================
 
     async def get_min_withdrawal_amount(self) -> Decimal:
         """
         Get minimum withdrawal amount from global settings.
+
+        Returns:
+            Minimum withdrawal amount
         """
-        settings = await self.settings_repo.get_settings()
-        return settings.min_withdrawal_amount
+        return await self.request_handler.get_min_withdrawal_amount()
 
     async def request_withdrawal(
         self,
@@ -71,188 +84,13 @@ class WithdrawalService(BaseService):
         Returns:
             Tuple of (transaction, error_message, is_auto_approved)
         """
-        # Load global settings
-        global_settings = await self.settings_repo.get_settings()
-
-        # Create validator with global settings
-        validator = WithdrawalValidator(self.session, global_settings)
-
-        # Run all validations
-        validation_result = await validator.validate_withdrawal_request(
+        return await self.request_handler.request_withdrawal(
             user_id, amount, available_balance
         )
 
-        if not validation_result.is_valid:
-            # If finpass recovery is active, freeze pending withdrawals
-            if validation_result.error_code == "FINPASS_RECOVERY":
-                from app.services.finpass_recovery_service import (
-                    FinpassRecoveryService,
-                )
-                finpass_service = FinpassRecoveryService(self.session)
-                if await finpass_service.has_active_recovery(user_id):
-                    await self._freeze_pending_withdrawals(user_id)
-
-            return None, validation_result.error_message, False
-
-        # R9-2: Retry logic for race condition conflicts
-        for attempt in range(MAX_RETRIES):
-            try:
-                # Get user with pessimistic lock (NOWAIT)
-                stmt = (
-                    select(User)
-                    .where(User.id == user_id)
-                    .with_for_update(nowait=True)
-                )
-                result = await self.session.execute(stmt)
-                user = result.scalar_one_or_none()
-
-                if not user:
-                    return None, "Пользователь не найден", False
-
-                # Calculate Fee using balance manager
-                fee_amount = await self.balance_manager.calculate_fee(amount)
-                amount - fee_amount
-
-                # CRITICAL: Validate that fee is less than amount
-                if fee_amount >= amount:
-                    return None, "Комиссия превышает или равна сумме вывода", False
-
-                # Deduct balance BEFORE creating transaction (Gross amount)
-                # User requests 'amount', we deduct 'amount', but send 'net_amount' to blockchain
-                balance_before = user.balance
-                user.balance = user.balance - amount
-                balance_after = user.balance
-
-                # Check Auto-Withdrawal Eligibility
-                is_auto = await validator.check_auto_withdrawal_eligibility(
-                    user_id, amount
-                )
-
-                status = TransactionStatus.PROCESSING.value if is_auto else TransactionStatus.PENDING.value
-
-                # Create withdrawal transaction
-                transaction = await self.transaction_repo.create(
-                    user_id=user_id,
-                    type=TransactionType.WITHDRAWAL.value,
-                    amount=amount,  # Gross amount
-                    fee=fee_amount,  # Service fee
-                    balance_before=balance_before,
-                    balance_after=balance_after,
-                    to_address=user.wallet_address,
-                    status=status,
-                )
-
-                await self.session.commit()
-
-                logger.info(
-                    "Withdrawal request created",
-                    extra={
-                        "transaction_id": transaction.id,
-                        "user_id": user_id,
-                        "amount": str(amount),
-                        "status": status,
-                        "is_auto": is_auto,
-                    },
-                )
-
-                return transaction, None, is_auto
-
-            except OperationalError as e:
-                # Handle lock conflict
-                error_str = str(e).lower()
-                if "could not obtain lock" in error_str or "lock_not_available" in error_str:
-                    if attempt < MAX_RETRIES - 1:
-                        delay = RETRY_DELAY_BASE * (2 ** attempt) + random.uniform(0, 0.5)
-                        await self.session.rollback()
-                        await asyncio.sleep(delay)
-                        continue
-                    else:
-                        await self.session.rollback()
-                        return None, (
-                            "Система временно занята. "
-                            "Попробуйте через несколько секунд."
-                        ), False
-                else:
-                    await self.session.rollback()
-                    logger.error(f"Database error in withdrawal: {e}")
-                    return None, "Ошибка базы данных. Попробуйте позже.", False
-
-            except Exception as e:
-                await self.session.rollback()
-                logger.error(f"Failed to create withdrawal: {e}", exc_info=True)
-                return None, "Ошибка создания заявки на вывод", False
-
-    async def get_pending_withdrawals(
-        self,
-    ) -> list[Transaction]:
-        """
-        Get pending withdrawals (for admin).
-
-        Returns:
-            List of pending withdrawal transactions
-        """
-        stmt = (
-            select(Transaction)
-            .where(
-                Transaction.type == TransactionType.WITHDRAWAL.value,
-                Transaction.status == TransactionStatus.PENDING.value,
-            )
-            .order_by(Transaction.created_at.asc())
-        )
-
-        result = await self.session.execute(stmt)
-        return list(result.scalars().all())
-
-    async def get_user_withdrawals(
-        self,
-        user_id: int,
-        page: int = 1,
-        limit: int = 10,
-    ) -> dict:
-        """
-        Get user withdrawal history.
-
-        Args:
-            user_id: User ID
-            page: Page number (1-indexed)
-            limit: Items per page
-
-        Returns:
-            Dict with withdrawals, total, page, pages
-        """
-        offset = (page - 1) * limit
-
-        # Get total count using SQL COUNT (avoid loading all records)
-        count_stmt = select(func.count(Transaction.id)).where(
-            Transaction.user_id == user_id,
-            Transaction.type == TransactionType.WITHDRAWAL.value,
-        )
-        count_result = await self.session.execute(count_stmt)
-        total = count_result.scalar() or 0
-
-        # Get paginated withdrawals
-        stmt = (
-            select(Transaction)
-            .where(
-                Transaction.user_id == user_id,
-                Transaction.type == TransactionType.WITHDRAWAL.value,
-            )
-            .order_by(Transaction.created_at.desc())
-            .limit(limit)
-            .offset(offset)
-        )
-
-        result = await self.session.execute(stmt)
-        withdrawals = list(result.scalars().all())
-
-        pages = (total + limit - 1) // limit  # Ceiling division
-
-        return {
-            "withdrawals": withdrawals,
-            "total": total,
-            "page": page,
-            "pages": pages,
-        }
+    # ========================================================================
+    # LIFECYCLE MANAGEMENT (delegates to WithdrawalLifecycleHandler)
+    # ========================================================================
 
     async def cancel_withdrawal(
         self, transaction_id: int, user_id: int
@@ -267,50 +105,9 @@ class WithdrawalService(BaseService):
         Returns:
             Tuple of (success, error_message)
         """
-        try:
-            # Get transaction with lock
-            stmt_tx = select(Transaction).where(
-                Transaction.id == transaction_id,
-                Transaction.user_id == user_id,
-                Transaction.type == TransactionType.WITHDRAWAL.value,
-                Transaction.status == TransactionStatus.PENDING.value,
-            ).with_for_update()
-
-            result_tx = await self.session.execute(stmt_tx)
-            transaction = result_tx.scalar_one_or_none()
-
-            if not transaction:
-                return False, "Заявка не найдена или не может быть отменена"
-
-            # CRITICAL: Return balance to user using balance manager
-            success = await self.balance_manager.restore_balance(
-                user_id, transaction.amount, transaction_id
-            )
-
-            if not success:
-                await self.session.rollback()
-                return False, "Ошибка возврата баланса"
-
-            # Update transaction status
-            transaction.status = TransactionStatus.FAILED.value
-
-            await self.session.commit()
-
-            logger.info(
-                "Withdrawal cancelled and balance returned",
-                extra={
-                    "transaction_id": transaction_id,
-                    "user_id": user_id,
-                    "amount": str(transaction.amount),
-                },
-            )
-
-            return True, None
-
-        except Exception as e:
-            await self.session.rollback()
-            logger.error(f"Failed to cancel withdrawal: {e}")
-            return False, "Ошибка отмены заявки"
+        return await self.lifecycle_handler.cancel_withdrawal(
+            transaction_id, user_id
+        )
 
     async def approve_withdrawal(
         self,
@@ -332,50 +129,9 @@ class WithdrawalService(BaseService):
         Returns:
             Tuple of (success, error_message)
         """
-        try:
-            stmt = select(Transaction).where(
-                Transaction.id == transaction_id,
-                Transaction.type == TransactionType.WITHDRAWAL.value,
-                # Can approve PENDING or PROCESSING (if auto-withdrawal failed or stuck)
-                Transaction.status.in_([TransactionStatus.PENDING.value, TransactionStatus.PROCESSING.value]),
-            ).with_for_update()
-
-            result = await self.session.execute(stmt)
-            withdrawal = result.scalar_one_or_none()
-
-            if not withdrawal:
-                return (
-                    False,
-                    "Заявка на вывод не найдена или уже обработана",
-                )
-
-            # Update withdrawal status to PROCESSING (or COMPLETED? Logic says approve means we HAVE tx_hash)
-            # If we pass tx_hash, it means it is DONE (or submitted).
-            # Usually approve_withdrawal marks it as PROCESSING, and blockchain callback marks as COMPLETED.
-            # But here we pass tx_hash, so it means it was sent.
-
-            # Let's keep it PROCESSING for now, background job will check receipt.
-            withdrawal.status = TransactionStatus.PROCESSING.value
-            withdrawal.tx_hash = tx_hash
-            await self.session.commit()
-
-            logger.info(
-                "Withdrawal approved/updated with tx_hash",
-                extra={
-                    "transaction_id": transaction_id,
-                    "user_id": withdrawal.user_id,
-                    "amount": str(withdrawal.amount),
-                    "tx_hash": tx_hash,
-                    "admin_id": admin_id,
-                },
-            )
-
-            return True, None
-
-        except Exception as e:
-            await self.session.rollback()
-            logger.error(f"Failed to approve withdrawal: {e}")
-            return False, "Ошибка подтверждения заявки"
+        return await self.lifecycle_handler.approve_withdrawal(
+            transaction_id, tx_hash, admin_id
+        )
 
     async def approve_withdrawal_via_escrow(
         self,
@@ -385,237 +141,89 @@ class WithdrawalService(BaseService):
     ) -> tuple[bool, str | None, str | None]:
         """
         Approve withdrawal via escrow (second admin).
+
+        Args:
+            escrow_id: Escrow ID
+            approver_admin_id: Second admin ID
+            blockchain_service: Blockchain service instance
+
+        Returns:
+            Tuple of (success, error_message, tx_hash)
         """
-        try:
-            escrow_repo = AdminActionEscrowRepository(self.session)
-            escrow = await escrow_repo.get_by_id(escrow_id)
-
-            if not escrow:
-                return False, "Escrow не найден", None
-
-            if escrow.status != "PENDING":
-                return False, f"Escrow уже обработан (статус: {escrow.status})", None
-
-            if escrow.operation_type != "WITHDRAWAL_APPROVAL":
-                return False, "Неподдерживаемый тип операции", None
-
-            if escrow.initiator_admin_id == approver_admin_id:
-                return False, "Нельзя одобрить собственную инициацию", None
-
-            transaction_id = escrow.operation_data.get("transaction_id")
-            Decimal(str(escrow.operation_data.get("amount", 0)))
-            to_address = escrow.operation_data.get("to_address")
-
-            if not transaction_id or not to_address:
-                return False, "Неверные данные в escrow", None
-
-            if settings.blockchain_maintenance_mode:
-                return False, "Blockchain в режиме обслуживания", None
-
-            # Get withdrawal transaction to retrieve fee
-            withdrawal = await self.get_withdrawal_by_id(transaction_id)
-            if not withdrawal:
-                return False, "Транзакция не найдена", None
-
-            # CRITICAL: Send net_amount (amount - fee) to user, not gross amount
-            net_amount = withdrawal.amount - withdrawal.fee
-            payment_result = await blockchain_service.send_payment(
-                to_address, net_amount
-            )
-
-            if not payment_result["success"]:
-                error_msg = payment_result.get("error", "Неизвестная ошибка")
-                return False, f"Ошибка отправки в блокчейн: {error_msg}", None
-
-            tx_hash = payment_result["tx_hash"]
-
-            approved_escrow = await escrow_repo.approve(escrow_id, approver_admin_id)
-
-            if not approved_escrow:
-                return False, "Ошибка при подтверждении escrow", None
-
-            success, error_msg = await self.approve_withdrawal(
-                transaction_id, tx_hash, approver_admin_id
-            )
-
-            if not success:
-                await self.session.rollback()
-                return False, error_msg or "Ошибка при одобрении вывода", None
-
-            await self.session.commit()
-
-            return True, None, tx_hash
-
-        except Exception as e:
-            await self.session.rollback()
-            logger.error(f"Failed to approve withdrawal via escrow: {e}")
-            return False, f"Ошибка при одобрении через escrow: {str(e)}", None
+        return await self.lifecycle_handler.approve_withdrawal_via_escrow(
+            escrow_id, approver_admin_id, blockchain_service
+        )
 
     async def reject_withdrawal(
         self, transaction_id: int, reason: str | None = None
     ) -> tuple[bool, str | None]:
-        """Reject withdrawal and RETURN BALANCE."""
-        try:
-            stmt_tx = select(Transaction).where(
-                Transaction.id == transaction_id,
-                Transaction.type == TransactionType.WITHDRAWAL.value,
-                Transaction.status == TransactionStatus.PENDING.value,
-            ).with_for_update()
+        """
+        Reject withdrawal and RETURN BALANCE.
 
-            result_tx = await self.session.execute(stmt_tx)
-            withdrawal = result_tx.scalar_one_or_none()
+        Args:
+            transaction_id: Transaction ID
+            reason: Rejection reason (optional)
 
-            if not withdrawal:
-                return (False, "Заявка на вывод не найдена или уже обработана")
+        Returns:
+            Tuple of (success, error_message)
+        """
+        return await self.lifecycle_handler.reject_withdrawal(
+            transaction_id, reason
+        )
 
-            # CRITICAL: Return balance to user using balance manager
-            success = await self.balance_manager.restore_balance(
-                withdrawal.user_id, withdrawal.amount, transaction_id
-            )
+    # ========================================================================
+    # QUERY OPERATIONS (delegates to WithdrawalQueryService)
+    # ========================================================================
 
-            if not success:
-                await self.session.rollback()
-                return False, "Ошибка возврата баланса"
+    async def get_pending_withdrawals(
+        self,
+    ) -> list[Transaction]:
+        """
+        Get pending withdrawals (for admin).
 
-            withdrawal.status = TransactionStatus.FAILED.value
-            await self.session.commit()
+        Returns:
+            List of pending withdrawal transactions
+        """
+        return await self.query_service.get_pending_withdrawals()
 
-            logger.info(
-                "Withdrawal rejected and balance returned",
-                extra={
-                    "transaction_id": transaction_id,
-                    "user_id": withdrawal.user_id,
-                    "amount": str(withdrawal.amount),
-                    "reason": reason,
-                },
-            )
+    async def get_user_withdrawals(
+        self,
+        user_id: int,
+        page: int = 1,
+        limit: int = 10,
+    ) -> dict:
+        """
+        Get user withdrawal history.
 
-            return True, None
+        Args:
+            user_id: User ID
+            page: Page number (1-indexed)
+            limit: Items per page
 
-        except Exception as e:
-            await self.session.rollback()
-            logger.error(f"Failed to reject withdrawal: {e}")
-            return False, "Ошибка отклонения заявки"
+        Returns:
+            Dict with withdrawals, total, page, pages
+        """
+        return await self.query_service.get_user_withdrawals(
+            user_id, page, limit
+        )
 
     async def get_withdrawal_by_id(
         self, transaction_id: int
     ) -> Transaction | None:
-        """Get withdrawal by ID (admin only)."""
-        stmt = select(Transaction).where(
-            Transaction.id == transaction_id,
-            Transaction.type == TransactionType.WITHDRAWAL.value,
-        )
-        result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
-
-    async def _check_daily_withdrawal_limit(
-        self, user_id: int, requested_amount: Decimal
-    ) -> dict:
         """
-        Check if withdrawal exceeds daily limit (= daily ROI).
+        Get withdrawal by ID (admin only).
 
         Args:
-            user_id: User ID
-            requested_amount: Requested withdrawal amount
+            transaction_id: Transaction ID
 
         Returns:
-            Dict with exceeded, daily_roi, withdrawn_today, remaining
+            Transaction or None if not found
         """
-        from datetime import UTC, datetime
+        return await self.query_service.get_withdrawal_by_id(transaction_id)
 
-        from app.models.deposit_reward import DepositReward
-
-        # Create timezone-aware datetime for DepositReward.calculated_at (has timezone=True)
-        today = datetime.now(UTC).date()
-        today_start_aware = datetime(today.year, today.month, today.day, tzinfo=UTC)
-        # Create naive datetime for Transaction.created_at (TIMESTAMP WITHOUT TIME ZONE)
-        today_start_naive = datetime(today.year, today.month, today.day)
-
-        # Calculate today's ROI (sum of rewards accrued today)
-        # DepositReward.calculated_at is timezone-aware, use aware datetime
-        stmt = select(func.coalesce(func.sum(DepositReward.reward_amount), Decimal("0"))).where(
-            DepositReward.user_id == user_id,
-            DepositReward.calculated_at >= today_start_aware,
-        )
-        result = await self.session.execute(stmt)
-        daily_roi = result.scalar() or Decimal("0")
-
-        # If no ROI today, calculate expected daily ROI from active deposits
-        if daily_roi == Decimal("0"):
-            deposit_repo = DepositRepository(self.session)
-            active_deposits = await deposit_repo.get_active_deposits(user_id)
-            for deposit in active_deposits:
-                if deposit.deposit_version and deposit.deposit_version.roi_percent:
-                    daily_roi += (deposit.amount * deposit.deposit_version.roi_percent) / 100
-
-        # Get today's withdrawals (pending, processing, completed)
-        # Transaction.created_at is naive, use naive datetime
-        stmt = select(func.coalesce(func.sum(Transaction.amount), Decimal("0"))).where(
-            Transaction.user_id == user_id,
-            Transaction.type == TransactionType.WITHDRAWAL.value,
-            Transaction.status.in_([
-                TransactionStatus.CONFIRMED.value,
-                TransactionStatus.PROCESSING.value,
-                TransactionStatus.PENDING.value,
-            ]),
-            Transaction.created_at >= today_start_naive,
-        )
-        result = await self.session.execute(stmt)
-        withdrawn_today = result.scalar() or Decimal("0")
-
-        # Calculate remaining
-        remaining = max(daily_roi - withdrawn_today, Decimal("0"))
-
-        # Check if exceeded (only if there's a daily ROI limit)
-        exceeded = False
-        if daily_roi > Decimal("0"):
-            exceeded = (withdrawn_today + requested_amount) > daily_roi
-
-        return {
-            "exceeded": exceeded,
-            "daily_roi": float(daily_roi),
-            "withdrawn_today": float(withdrawn_today),
-            "remaining": float(remaining),
-        }
-
-    async def _freeze_pending_withdrawals(self, user_id: int) -> None:
-        """Freeze pending withdrawals for user."""
-        pending = await self.transaction_repo.get_by_user(
-            user_id=user_id,
-            type=TransactionType.WITHDRAWAL.value,
-            status=TransactionStatus.PENDING.value,
-        )
-
-        if not pending:
-            return
-
-        for withdrawal in pending:
-            # Restore balance using balance manager
-            success = await self.balance_manager.restore_balance(
-                user_id, withdrawal.amount, withdrawal.id
-            )
-            if success:
-                withdrawal.status = TransactionStatus.FAILED.value
-
-        await self.session.commit()
-
-    async def handle_successful_withdrawal_with_old_password(
-        self, user_id: int
-    ) -> None:
-        """Handle successful withdrawal with old password."""
-        from app.services.finpass_recovery_service import (
-            FinpassRecoveryService,
-        )
-
-        finpass_service = FinpassRecoveryService(self.session)
-        active_recovery = await finpass_service.get_pending_by_user(user_id)
-
-        if active_recovery:
-            await finpass_service.reject_recovery(
-                recovery_id=active_recovery.id,
-                admin_id=None,
-                reason="User successfully withdrew with old password",
-            )
+    # ========================================================================
+    # STATISTICS (delegates to WithdrawalStatisticsService)
+    # ========================================================================
 
     async def get_platform_withdrawal_stats(self) -> dict:
         """
@@ -629,73 +237,7 @@ class WithdrawalService(BaseService):
             - total_failed_amount: Total amount of failed withdrawals
             - by_user: List of users with their withdrawal amounts
         """
-        from sqlalchemy import func
-
-        from app.models.transaction import Transaction
-        from app.models.user import User
-
-        # Get confirmed withdrawals stats
-        confirmed_stmt = (
-            select(
-                func.count(Transaction.id).label("count"),
-                func.coalesce(func.sum(Transaction.amount), 0).label("total"),
-            )
-            .where(
-                Transaction.type == "withdrawal",
-                Transaction.status == TransactionStatus.CONFIRMED.value,
-            )
-        )
-        confirmed_result = await self.session.execute(confirmed_stmt)
-        confirmed_row = confirmed_result.one()
-
-        # Get failed withdrawals stats
-        failed_stmt = (
-            select(
-                func.count(Transaction.id).label("count"),
-                func.coalesce(func.sum(Transaction.amount), 0).label("total"),
-            )
-            .where(
-                Transaction.type == "withdrawal",
-                Transaction.status == TransactionStatus.FAILED.value,
-            )
-        )
-        failed_result = await self.session.execute(failed_stmt)
-        failed_row = failed_result.one()
-
-        # Get per-user confirmed withdrawals
-        by_user_stmt = (
-            select(
-                User.username,
-                User.telegram_id,
-                func.sum(Transaction.amount).label("total_withdrawn"),
-            )
-            .join(User, Transaction.user_id == User.id)
-            .where(
-                Transaction.type == "withdrawal",
-                Transaction.status == TransactionStatus.CONFIRMED.value,
-            )
-            .group_by(User.id, User.username, User.telegram_id)
-            .order_by(func.sum(Transaction.amount).desc())
-        )
-        by_user_result = await self.session.execute(by_user_stmt)
-        by_user_rows = by_user_result.all()
-
-        by_user_list = [
-            {
-                "username": row.username,
-                "telegram_id": row.telegram_id,
-                "total_withdrawn": row.total_withdrawn,
-            }
-            for row in by_user_rows
-        ]
-
-        return {
-            "total_confirmed": confirmed_row.count,
-            "total_confirmed_amount": confirmed_row.total,
-            "total_failed": failed_row.count,
-            "total_failed_amount": failed_row.total,
-            "by_user": by_user_list,
-        }
+        return await self.statistics_service.get_platform_withdrawal_stats()
 
     async def get_detailed_withdrawals(
         self, page: int = 1, per_page: int = 5
@@ -710,64 +252,40 @@ class WithdrawalService(BaseService):
         Returns:
             Dictionary with withdrawals list and pagination info
         """
-        from sqlalchemy import func
-
-        from app.models.transaction import Transaction
-        from app.models.user import User
-
-        # Count total confirmed withdrawals
-        count_stmt = (
-            select(func.count(Transaction.id))
-            .where(
-                Transaction.type == "withdrawal",
-                Transaction.status == TransactionStatus.CONFIRMED.value,
-            )
+        return await self.statistics_service.get_detailed_withdrawals(
+            page, per_page
         )
-        count_result = await self.session.execute(count_stmt)
-        total_count = count_result.scalar() or 0
 
-        # Calculate pagination
-        total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 1
-        offset = (page - 1) * per_page
+    # ========================================================================
+    # HELPER METHODS (delegates to WithdrawalHelpers)
+    # ========================================================================
 
-        # Get withdrawals with details
-        withdrawals_stmt = (
-            select(
-                User.username,
-                User.telegram_id,
-                Transaction.amount,
-                Transaction.tx_hash,
-                Transaction.created_at,
-            )
-            .join(User, Transaction.user_id == User.id)
-            .where(
-                Transaction.type == "withdrawal",
-                Transaction.status == TransactionStatus.CONFIRMED.value,
-            )
-            .order_by(Transaction.created_at.desc())
-            .offset(offset)
-            .limit(per_page)
+    async def _check_daily_withdrawal_limit(
+        self, user_id: int, requested_amount: Decimal
+    ) -> dict:
+        """
+        Check if withdrawal exceeds daily limit (= daily ROI).
+
+        Args:
+            user_id: User ID
+            requested_amount: Requested withdrawal amount
+
+        Returns:
+            Dict with exceeded, daily_roi, withdrawn_today, remaining
+        """
+        return await self.helpers.check_daily_withdrawal_limit(
+            user_id, requested_amount
         )
-        result = await self.session.execute(withdrawals_stmt)
-        rows = result.all()
 
-        withdrawals = [
-            {
-                "username": row.username,
-                "telegram_id": row.telegram_id,
-                "amount": row.amount,
-                "tx_hash": row.tx_hash,
-                "created_at": row.created_at,
-            }
-            for row in rows
-        ]
+    async def handle_successful_withdrawal_with_old_password(
+        self, user_id: int
+    ) -> None:
+        """
+        Handle successful withdrawal with old password.
 
-        return {
-            "withdrawals": withdrawals,
-            "page": page,
-            "per_page": per_page,
-            "total_count": total_count,
-            "total_pages": total_pages,
-            "has_prev": page > 1,
-            "has_next": page < total_pages,
-        }
+        Args:
+            user_id: User ID
+        """
+        return await self.helpers.handle_successful_withdrawal_with_old_password(
+            user_id
+        )
