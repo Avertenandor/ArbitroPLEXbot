@@ -79,7 +79,9 @@ async def handle_admin_stats(
     if not detailed_deposits:
         text += "Нет активных депозитов.\n"
     else:
-        for d in detailed_deposits[:10]:  # Show top 10 recent
+        # Show up to 15 recent deposits
+        show_limit = 15
+        for d in detailed_deposits[:show_limit]:
             next_accrual = d["next_accrual_at"].strftime("%d.%m %H:%M") if d["next_accrual_at"] else "Н/Д"
 
             # Escape username for Markdown
@@ -92,8 +94,10 @@ async def handle_admin_stats(
                 f"   ⏳ След. нач: {next_accrual}\n\n"
             )
 
-        if len(detailed_deposits) > 10:
-            text += f"... и еще {len(detailed_deposits) - 10} депозитов\n"
+        if len(detailed_deposits) > show_limit:
+            remaining = len(detailed_deposits) - show_limit
+            text += f"... и еще {remaining} депозитов\n"
+            text += "_Полный список: 💰 Управление депозитами_\n"
 
     # Get referral level stats
     lvl1 = referral_stats["by_level"].get(1, {})

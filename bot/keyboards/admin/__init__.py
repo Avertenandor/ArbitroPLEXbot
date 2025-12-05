@@ -14,6 +14,8 @@ This package contains modular admin keyboard components organized by functionali
 - deposit_keyboards: Deposit and ROI management keyboards
 - financial_keyboards: Financial reporting keyboards
 - inquiry_keyboards: User inquiry management keyboards
+- blockchain_keyboards: Blockchain provider settings keyboards
+- emergency_keyboards: Emergency stop control keyboards
 
 All keyboard functions are re-exported here for convenient access.
 """
@@ -104,6 +106,16 @@ from bot.keyboards.admin.inquiry_keyboards import (
     admin_inquiry_response_keyboard,
 )
 
+# Blockchain settings keyboards
+from bot.keyboards.admin.blockchain_keyboards import (
+    blockchain_settings_keyboard,
+)
+
+# Emergency stop keyboards
+from bot.keyboards.admin.emergency_keyboards import (
+    emergency_stops_keyboard,
+)
+
 # Export all functions
 __all__ = [
     # Main keyboards
@@ -159,4 +171,8 @@ __all__ = [
     "admin_inquiry_list_keyboard",
     "admin_inquiry_detail_keyboard",
     "admin_inquiry_response_keyboard",
+    # Blockchain settings
+    "blockchain_settings_keyboard",
+    # Emergency stops
+    "emergency_stops_keyboard",
 ]

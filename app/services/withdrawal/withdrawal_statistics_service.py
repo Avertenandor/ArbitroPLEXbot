@@ -169,3 +169,90 @@ class WithdrawalStatisticsService:
             "has_prev": page > 1,
             "has_next": page < total_pages,
         }
+
+    async def search_withdrawals(
+        self, query: str, page: int = 1, per_page: int = 5
+    ) -> dict:
+        """
+        Search withdrawal transactions by username, telegram_id or tx_hash.
+
+        Args:
+            query: Search query (username, telegram_id, or tx_hash prefix)
+            page: Page number (1-based)
+            per_page: Items per page
+
+        Returns:
+            Dictionary with withdrawals list and pagination info
+        """
+        from sqlalchemy import or_
+
+        # Build search conditions
+        search_conditions = [
+            User.username.ilike(f"%{query}%"),
+            Transaction.tx_hash.ilike(f"%{query}%"),
+        ]
+
+        # Try to search by telegram_id if query is numeric
+        if query.isdigit():
+            search_conditions.append(User.telegram_id == int(query))
+
+        # Count matching withdrawals
+        count_stmt = (
+            select(func.count(Transaction.id))
+            .join(User, Transaction.user_id == User.id)
+            .where(
+                Transaction.type == "withdrawal",
+                Transaction.status == TransactionStatus.CONFIRMED.value,
+                or_(*search_conditions),
+            )
+        )
+        count_result = await self.session.execute(count_stmt)
+        total_count = count_result.scalar() or 0
+
+        # Calculate pagination
+        total_pages = (total_count + per_page - 1) // per_page if total_count > 0 else 1
+        offset = (page - 1) * per_page
+
+        # Get matching withdrawals
+        withdrawals_stmt = (
+            select(
+                User.username,
+                User.telegram_id,
+                Transaction.amount,
+                Transaction.tx_hash,
+                Transaction.created_at,
+            )
+            .join(User, Transaction.user_id == User.id)
+            .where(
+                Transaction.type == "withdrawal",
+                Transaction.status == TransactionStatus.CONFIRMED.value,
+                or_(*search_conditions),
+            )
+            .order_by(Transaction.created_at.desc())
+            .offset(offset)
+            .limit(per_page)
+        )
+        result = await self.session.execute(withdrawals_stmt)
+        rows = result.all()
+
+        withdrawals = [
+            {
+                "username": row.username,
+                "telegram_id": row.telegram_id,
+                "amount": row.amount,
+                "tx_hash": row.tx_hash,
+                "created_at": row.created_at,
+            }
+            for row in rows
+        ]
+
+        return {
+            "withdrawals": withdrawals,
+            "page": page,
+            "per_page": per_page,
+            "total_count": total_count,
+            "total_pages": total_pages,
+            "has_prev": page > 1,
+            "has_next": page < total_pages,
+            "search_query": query,
+        }

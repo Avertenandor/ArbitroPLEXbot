@@ -1,19 +1,22 @@
 """
 Admin blockchain settings handler.
+
+Uses reply keyboard buttons instead of inline for better UX consistency.
 """
 
 from typing import Any
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.global_settings_repository import (
     GlobalSettingsRepository,
 )
 from app.services.blockchain_service import get_blockchain_service
-from bot.keyboards.inline import admin_blockchain_keyboard
+from bot.keyboards.admin.blockchain_keyboards import blockchain_settings_keyboard
+from bot.keyboards.reply import get_admin_keyboard_from_data
 
 router = Router()
 
@@ -41,6 +44,20 @@ async def get_status_text() -> str:
     return text
 
 
+async def show_blockchain_menu(message: Message, session: AsyncSession) -> None:
+    """Show blockchain settings menu with reply keyboard."""
+    text = await get_status_text()
+    bs = get_blockchain_service()
+
+    await message.answer(
+        text,
+        reply_markup=blockchain_settings_keyboard(
+            bs.active_provider_name, bs.is_auto_switch_enabled
+        ),
+        parse_mode="Markdown",
+    )
+
+
 @router.message(F.text == "📡 Блокчейн Настройки")
 async def show_blockchain_settings(
     message: Message,
@@ -49,62 +66,86 @@ async def show_blockchain_settings(
     **data: Any,
 ) -> None:
     """Show blockchain settings menu."""
-    text = await get_status_text()
-    bs = get_blockchain_service()
-
-    await message.answer(
-        text,
-        reply_markup=admin_blockchain_keyboard(
-            bs.active_provider_name, bs.is_auto_switch_enabled
-        ),
-        parse_mode="Markdown",
-    )
+    await show_blockchain_menu(message, session)
 
 
-@router.callback_query(F.data.startswith("blockchain_"))
-async def handle_blockchain_callback(
-    callback: CallbackQuery,
+@router.message(F.text.in_({"QuickNode", "✅ QuickNode"}))
+async def handle_set_quicknode(
+    message: Message,
     session: AsyncSession,
+    **data: Any,
 ) -> None:
-    """Handle blockchain settings callbacks."""
-    action = callback.data
+    """Set QuickNode as active provider."""
     repo = GlobalSettingsRepository(session)
     bs = get_blockchain_service()
 
-    if action == "blockchain_refresh":
-        # Just refresh
-        pass
+    await repo.update_settings(active_rpc_provider="quicknode")
+    await session.commit()
+    await bs.force_refresh_settings()
 
-    elif action == "blockchain_set_quicknode":
-        await repo.update_settings(active_rpc_provider="quicknode")
-        await session.commit()
-        await bs.force_refresh_settings()
+    await message.answer("✅ Провайдер изменён на QuickNode")
+    await show_blockchain_menu(message, session)
 
-    elif action == "blockchain_set_nodereal":
-        await repo.update_settings(active_rpc_provider="nodereal")
-        await session.commit()
-        await bs.force_refresh_settings()
 
-    elif action == "blockchain_toggle_auto":
-        # First ensure we have latest settings
-        await bs.force_refresh_settings()
-        new_val = not bs.is_auto_switch_enabled
-        await repo.update_settings(is_auto_switch_enabled=new_val)
-        await session.commit()
-        await bs.force_refresh_settings()
+@router.message(F.text.in_({"NodeReal", "✅ NodeReal"}))
+async def handle_set_nodereal(
+    message: Message,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Set NodeReal as active provider."""
+    repo = GlobalSettingsRepository(session)
+    bs = get_blockchain_service()
 
-    # Update message
-    text = await get_status_text()
-    try:
-        await callback.message.edit_text(
-            text,
-            reply_markup=admin_blockchain_keyboard(
-                bs.active_provider_name, bs.is_auto_switch_enabled
-            ),
-            parse_mode="Markdown",
-        )
-    except Exception:
-        # Ignore "message is not modified"
-        pass
+    await repo.update_settings(active_rpc_provider="nodereal")
+    await session.commit()
+    await bs.force_refresh_settings()
 
-    await callback.answer()
+    await message.answer("✅ Провайдер изменён на NodeReal")
+    await show_blockchain_menu(message, session)
+
+
+@router.message(F.text.in_({"✅ Авто-смена ВКЛ", "❌ Авто-смена ВЫКЛ"}))
+async def handle_toggle_auto_switch(
+    message: Message,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Toggle auto-switch setting."""
+    repo = GlobalSettingsRepository(session)
+    bs = get_blockchain_service()
+
+    # First ensure we have latest settings
+    await bs.force_refresh_settings()
+    new_val = not bs.is_auto_switch_enabled
+    await repo.update_settings(is_auto_switch_enabled=new_val)
+    await session.commit()
+    await bs.force_refresh_settings()
+
+    status = "включена" if new_val else "выключена"
+    await message.answer(f"✅ Авто-смена провайдера {status}")
+    await show_blockchain_menu(message, session)
+
+
+@router.message(F.text == "🔄 Обновить статус")
+async def handle_refresh_status(
+    message: Message,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Refresh blockchain status."""
+    await show_blockchain_menu(message, session)
+
+
+@router.message(F.text == "◀️ Назад в админку")
+async def handle_back_to_admin(
+    message: Message,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Return to admin panel."""
+    await message.answer(
+        "👑 **Панель администратора**\n\nВыберите действие:",
+        parse_mode="Markdown",
+        reply_markup=get_admin_keyboard_from_data(data),
+    )

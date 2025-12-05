@@ -256,6 +256,24 @@ class WithdrawalService(BaseService):
             page, per_page
         )
 
+    async def search_withdrawals(
+        self, query: str, page: int = 1, per_page: int = 5
+    ) -> dict:
+        """
+        Search withdrawal transactions by username, telegram_id or tx_hash.
+
+        Args:
+            query: Search query (username, telegram_id, or tx_hash prefix)
+            page: Page number (1-based)
+            per_page: Items per page
+
+        Returns:
+            Dictionary with withdrawals list and pagination info
+        """
+        return await self.statistics_service.search_withdrawals(
+            query, page, per_page
+        )
+
     # ========================================================================
     # HELPER METHODS (delegates to WithdrawalHelpers)
     # ========================================================================

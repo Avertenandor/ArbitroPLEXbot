@@ -150,6 +150,7 @@ def admin_withdrawal_settings_keyboard(
 def admin_withdrawal_history_pagination_keyboard(
     page: int = 1,
     total_pages: int = 1,
+    is_search_mode: bool = False,
 ) -> ReplyKeyboardMarkup:
     """
     Admin withdrawal history pagination keyboard (Reply version).
@@ -157,11 +158,15 @@ def admin_withdrawal_history_pagination_keyboard(
     Args:
         page: Current page number
         total_pages: Total number of pages
+        is_search_mode: Whether we are in search results mode
 
     Returns:
-        ReplyKeyboardMarkup with pagination buttons
+        ReplyKeyboardMarkup with pagination and search buttons
     """
     builder = ReplyKeyboardBuilder()
+
+    # Search button
+    builder.row(KeyboardButton(text="🔍 Поиск по выводам"))
 
     # Navigation buttons
     nav_buttons = []
@@ -172,6 +177,10 @@ def admin_withdrawal_history_pagination_keyboard(
 
     if nav_buttons:
         builder.row(*nav_buttons)
+
+    # Clear search button if in search mode
+    if is_search_mode:
+        builder.row(KeyboardButton(text="🗑 Сбросить поиск"))
 
     builder.row(
         KeyboardButton(text="◀️ Назад"),
