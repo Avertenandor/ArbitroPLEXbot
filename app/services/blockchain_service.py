@@ -919,9 +919,10 @@ class BlockchainService:
         Verify if user paid PLEX tokens to system wallet.
 
         Algorithm:
-        1. Get all incoming PLEX transfers to system wallet (filter by 'to')
-        2. Check if any transfer is from the user's wallet (check 'from' in loop)
-        3. Verify amount >= required
+        1. Scan recent blocks in chunks (to avoid RPC limits)
+        2. Get incoming PLEX transfers to system wallet
+        3. Check if any transfer is from the user's wallet
+        4. Verify amount >= required
         """
         if not self.settings.auth_plex_token_address:
             return {"success": False, "error": "PLEX token address not configured"}
@@ -945,25 +946,49 @@ class BlockchainService:
 
         def _scan(w3: Web3):
             latest = w3.eth.block_number
-            from_block = max(0, latest - lookback_blocks)
-
-            logger.info(f"[PLEX Verify] Scanning blocks {from_block} to {latest}")
-
             contract = w3.eth.contract(address=token_address, abi=USDT_ABI)
 
-            # Filter ONLY by receiver - simpler and more reliable
-            logs = contract.events.Transfer.get_logs(
-                fromBlock=from_block,
-                toBlock='latest',
-                argument_filters={'to': receiver}
+            # Scan in chunks to avoid RPC rate limits
+            # BSC public RPCs limit to ~100-500 blocks per request
+            chunk_size = 100
+            total_blocks = lookback_blocks
+            all_logs = []
+
+            logger.info(
+                f"[PLEX Verify] Scanning {total_blocks} blocks in chunks of {chunk_size}"
             )
 
-            logs = list(logs)
-            logger.info(f"[PLEX Verify] Found {len(logs)} incoming transfers")
+            for offset in range(0, total_blocks, chunk_size):
+                from_blk = max(0, latest - offset - chunk_size)
+                to_blk = latest - offset
 
-            logs.sort(key=lambda x: x.get('blockNumber', 0), reverse=True)
+                if from_blk >= to_blk:
+                    continue
 
-            for log in logs:
+                try:
+                    logs = contract.events.Transfer.get_logs(
+                        fromBlock=from_blk,
+                        toBlock=to_blk,
+                        argument_filters={'to': receiver}
+                    )
+                    chunk_logs = list(logs)
+                    all_logs.extend(chunk_logs)
+                    logger.debug(
+                        f"[PLEX Verify] Chunk {from_blk}-{to_blk}: {len(chunk_logs)} logs"
+                    )
+                except Exception as chunk_err:
+                    # Log error but continue with other chunks
+                    logger.warning(
+                        f"[PLEX Verify] Chunk {from_blk}-{to_blk} failed: {chunk_err}"
+                    )
+                    continue
+
+            logger.info(f"[PLEX Verify] Total found: {len(all_logs)} incoming transfers")
+
+            # Sort by block number (newest first)
+            all_logs.sort(key=lambda x: x.get('blockNumber', 0), reverse=True)
+
+            for log in all_logs:
                 args = log.get('args', {})
                 tx_from = str(args.get('from', ''))
                 value = args.get('value', 0)
@@ -1007,6 +1032,7 @@ class BlockchainService:
     ) -> dict:
         """
         Scan all USDT Transfer events from user wallet to system wallet.
+
 
         Used to detect user's total deposit amount from blockchain history.
 

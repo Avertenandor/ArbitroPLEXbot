@@ -1432,18 +1432,19 @@ async def _check_payment_logic(
             await event.message.answer(text, **kwargs)
 
     if isinstance(event, CallbackQuery):
-        await event.answer("вЏі РџСЂРѕРІРµСЂСЏРµРј...", show_alert=False)
+        await event.answer("⏳ Проверяем...", show_alert=False)
     else:
-        await event.answer("вЏі РџСЂРѕРІРµСЂСЏРµРј С‚СЂР°РЅР·Р°РєС†РёРё...")
+        await event.answer("⏳ Проверяем транзакции...")
 
     try:
         bs = get_blockchain_service()
-        # Scan blocks: 2000 blocks lookback (~1.5 hours) to catch slightly o...
-        logger.info(f"Verifying PLEX payment for {mask_address(wallet_address)} with lookback=2000")
+        # Scan blocks: 1000 blocks lookback (~50 min) in chunks of 100
+        # to avoid RPC rate limits on public BSC nodes
+        logger.info(f"Verifying PLEX payment for {mask_address(wallet_address)} with lookback=1000")
         result = await bs.verify_plex_payment(
             sender_address=wallet_address,
             amount_plex=settings.auth_price_plex,
-            lookback_blocks=2000
+            lookback_blocks=1000
         )
 
         logger.info(f"Payment verification result: {result}")
