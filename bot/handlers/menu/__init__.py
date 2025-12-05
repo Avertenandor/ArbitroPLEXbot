@@ -49,6 +49,7 @@ from bot.handlers.menu import (
     settings,
     update,
     wallet,
+    wallet_balance,
     withdrawal_menu,
 )
 
@@ -67,6 +68,7 @@ router.include_router(withdrawal_menu.router)
 # User profile and data
 router.include_router(profile.router)
 router.include_router(wallet.router)
+router.include_router(wallet_balance.router)
 router.include_router(deposits.router)
 
 # Referral system

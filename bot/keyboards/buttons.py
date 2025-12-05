@@ -16,6 +16,7 @@ class MainMenuButtons:
 
     # Balance & Transactions
     BALANCE = "📊 Баланс"
+    WALLET_BALANCE = "💰 Баланс кошелька"
     DEPOSIT = "💰 Депозит"
     WITHDRAWAL = "💸 Вывод"
     MY_DEPOSITS = "📦 Мои депозиты"
