@@ -617,7 +617,7 @@ def update_env_variable(key: str, value: str) -> None:
         logger.info("Private key encrypted successfully before saving to .env")
 
     try:
-        with open(env_file) as f:
+        with open(env_file, encoding="utf-8") as f:
             lines = f.readlines()
     except FileNotFoundError:
         lines = []
@@ -638,7 +638,7 @@ def update_env_variable(key: str, value: str) -> None:
         new_lines.append(f"{key}={value}\n")
 
     # Write directly to file to avoid "Device or resource busy" with Docker bind mounts
-    with open(env_file, "w") as f:
+    with open(env_file, "w", encoding="utf-8") as f:
         f.writelines(new_lines)
 
 

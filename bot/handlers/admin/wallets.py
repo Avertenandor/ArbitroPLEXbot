@@ -106,7 +106,7 @@ async def show_wallet_requests(
     )
 
 
-@router.message(F.text.regexp(r"^одобрить кошелек\s+(\d+)$", flags=0))
+@router.message(F.text.regexp(r"^одобрить кошелек\s+(\d+)$", flags=re.IGNORECASE | re.UNICODE))
 async def approve_wallet_change(
     message: Message,
     session: AsyncSession,
@@ -120,7 +120,7 @@ async def approve_wallet_change(
 
     # Extract request ID from message text
     match = re.match(
-        r"^одобрить кошелек\s+(\d+)$", message.text.strip(), re.IGNORECASE
+        r"^одобрить кошелек\s+(\d+)$", message.text.strip(), re.IGNORECASE | re.UNICODE
     )
     if not match:
         await message.answer(
@@ -171,7 +171,7 @@ async def approve_wallet_change(
         )
 
 
-@router.message(F.text.regexp(r"^отклонить кошелек\s+(\d+)$", flags=0))
+@router.message(F.text.regexp(r"^отклонить кошелек\s+(\d+)$", flags=re.IGNORECASE | re.UNICODE))
 async def reject_wallet_change(
     message: Message,
     session: AsyncSession,
@@ -185,7 +185,7 @@ async def reject_wallet_change(
 
     # Extract request ID from message text
     match = re.match(
-        r"^отклонить кошелек\s+(\d+)$", message.text.strip(), re.IGNORECASE
+        r"^отклонить кошелек\s+(\d+)$", message.text.strip(), re.IGNORECASE | re.UNICODE
     )
     if not match:
         await message.answer(

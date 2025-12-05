@@ -240,7 +240,7 @@ class AdminEventMonitor:
                     timeout=TELEGRAM_TIMEOUT,
                 )
                 return True
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 logger.warning(f"Таймаут отправки админу {admin_id}")
                 return False
             except Exception as e:

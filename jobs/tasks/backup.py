@@ -74,7 +74,7 @@ async def backup_database() -> None:
         _stdout, stderr = await process.communicate()
 
         if process.returncode != 0:
-            logger.error(f"Backup failed: {stderr.decode()}")
+            logger.error(f"Backup failed: {stderr.decode('utf-8', errors='replace')}")
             return
 
         logger.success(f"Database backup completed: {backup_file}")

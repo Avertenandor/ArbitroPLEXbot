@@ -75,7 +75,7 @@ async def show_deposit_settings(
     )
 
 
-@router.message(F.text.regexp(r"^уровень\s+(\d+)$", flags=0))
+@router.message(F.text.regexp(r"^уровень\s+(\d+)$", flags=re.IGNORECASE | re.UNICODE))
 async def set_max_deposit_level(
     message: Message,
     session: AsyncSession,
@@ -88,7 +88,7 @@ async def set_max_deposit_level(
         return
 
     # Extract level from message text
-    match = re.match(r"^уровень\s+(\d+)$", message.text.strip(), re.IGNORECASE)
+    match = re.match(r"^уровень\s+(\d+)$", message.text.strip(), re.IGNORECASE | re.UNICODE)
     if not match:
         await message.answer(
             "❌ Неверный формат. Используйте: `уровень <номер>` (1-5)",
@@ -131,7 +131,7 @@ async def set_max_deposit_level(
     await show_deposit_settings(message, session, **data)
 
 
-@router.message(F.text.regexp(r"^(включить|отключить)\s+(\d+)$", flags=0))
+@router.message(F.text.regexp(r"^(включить|отключить)\s+(\d+)$", flags=re.IGNORECASE | re.UNICODE))
 async def toggle_level_availability(
     message: Message,
     session: AsyncSession,
@@ -144,7 +144,8 @@ async def toggle_level_availability(
         return
 
     # Extract action and level
-    match = re.match(r"^(включить|отключить)\s+(\d+)$", message.text.strip(), re.IGNORECASE)
+    pattern = r"^(включить|отключить)\s+(\d+)$"
+    match = re.match(pattern, message.text.strip(), re.IGNORECASE | re.UNICODE)
     if not match:
         await message.answer(
             "❌ Неверный формат. Используйте: `включить <номер>` или `отключить <номер>`",

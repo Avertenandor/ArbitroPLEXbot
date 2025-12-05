@@ -3,6 +3,7 @@ Admin Users Handler
 Handles user management (search, list, profile, block/unblock, balance)
 """
 
+import re
 from decimal import Decimal
 from typing import Any
 
@@ -210,7 +211,7 @@ async def handle_list_users(
     )
 
 
-@router.message(F.text.regexp(r"^профиль\s+(\d+)$", flags=0))
+@router.message(F.text.regexp(r"^профиль\s+(\d+)$", flags=re.IGNORECASE | re.UNICODE))
 async def handle_profile_by_id_command(
     message: Message,
     session: AsyncSession,
@@ -226,7 +227,7 @@ async def handle_profile_by_id_command(
         return
 
     import re
-    match = re.match(r"^профиль\s+(\d+)$", message.text.strip(), re.IGNORECASE)
+    match = re.match(r"^профиль\s+(\d+)$", message.text.strip(), re.IGNORECASE | re.UNICODE)
     if not match:
         await message.answer(
             "❌ Неверный формат. Используйте: `профиль <User ID>`",

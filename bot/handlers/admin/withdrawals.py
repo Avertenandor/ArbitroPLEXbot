@@ -150,7 +150,7 @@ async def handle_withdrawal_selection(
     text = message.text or ""
 
     # Extract withdrawal ID from button text: "💸 #123 | 100.00 | @user"
-    match = re.match(r"^💸 #(\d+) \|", text)
+    match = re.match(r"^💸 #(\d+) \|", text, re.UNICODE)
     if not match:
         await message.answer(
             "❌ Не удалось определить заявку. Попробуйте снова.",

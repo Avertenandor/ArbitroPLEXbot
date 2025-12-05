@@ -404,7 +404,7 @@ class ReconciliationService:
             existing.discrepancy = discrepancy
             existing.discrepancy_percent = discrepancy_percent
             existing.reconciliation_status = status
-            existing.reconciliation_report = json.dumps(report, indent=2)
+            existing.reconciliation_report = json.dumps(report, indent=2, ensure_ascii=False)
 
             logger.info(f"Updated snapshot for {snapshot_date}")
             return existing
@@ -431,7 +431,7 @@ class ReconciliationService:
                 discrepancy=discrepancy,
                 discrepancy_percent=discrepancy_percent,
                 reconciliation_status=status,
-                reconciliation_report=json.dumps(report, indent=2),
+                reconciliation_report=json.dumps(report, indent=2, ensure_ascii=False),
             )
 
             self.session.add(snapshot)

@@ -160,7 +160,7 @@ async def _warmup_redis_cache_async() -> None:
                 }
 
                 await redis_client.set(
-                    "global_settings", json.dumps(settings_dict), ex=1800
+                    "global_settings", json.dumps(settings_dict, ensure_ascii=False), ex=1800
                 )  # 30 min TTL
                 logger.info("R11-3: Cached global settings")
             except Exception as e:
