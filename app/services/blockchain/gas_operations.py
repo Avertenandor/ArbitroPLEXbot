@@ -8,6 +8,7 @@ This module handles:
 """
 
 from decimal import Decimal
+from typing import Any
 
 from eth_utils import to_checksum_address
 from loguru import logger
