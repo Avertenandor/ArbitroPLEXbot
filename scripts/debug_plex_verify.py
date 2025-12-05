@@ -15,13 +15,12 @@ logger.add(sys.stderr, level="DEBUG")
 
 async def main():
     """Test PLEX verification."""
-    from app.services.blockchain_service import get_blockchain_service
     from app.config.settings import settings
-    
+
     print("=" * 60)
     print("PLEX Payment Verification Debug")
     print("=" * 60)
-    
+
     print(f"\nPLEX Token Address: {settings.auth_plex_token_address}")
     print(f"System Wallet Address: {settings.auth_system_wallet_address}")
     print(f"Auth Price PLEX: {settings.auth_price_plex}")
@@ -84,58 +83,43 @@ async def main():
         print(f"Error getting balance: {e}")
     
     latest = w3.eth.block_number
-    
-    # Check recent transfers TO system wallet
-    print(f"\n--- Scanning for transfers to system wallet ---")
-    print(f"Scanning blocks {latest-2000} to {latest}")
-    
-    try:
-        logs = contract.events.Transfer.get_logs(
-            fromBlock=latest-2000,
-            toBlock='latest',
-            argument_filters={'to': SYSTEM}
-        )
-        logs_list = list(logs)
-        print(f"Found {len(logs_list)} transfers TO system wallet (last 2000 blocks)")
-        
-        if logs_list:
-            for log in logs_list[:5]:
-                args = log.get('args', {})
-                from_addr = args.get('from', '')
-                value = args.get('value', 0)
-                tx_hash = log.get('transactionHash', b'').hex()
-                amount = value / (10 ** decimals)
-                print(f"  - From: {from_addr[:10]}... Amount: {amount} PLEX TX: {tx_hash[:16]}...")
-    except Exception as e:
-        print(f"Error getting logs: {e}")
-    
-    # Check ALL recent transfers
-    print(f"\n--- Recent transfers on PLEX token (any direction) ---")
-    try:
-        all_logs = contract.events.Transfer.get_logs(
-            fromBlock=latest-100,
-            toBlock='latest'
-        )
-        all_list = list(all_logs)
-        print(f"Total transfers (last 100 blocks): {len(all_list)}")
-    except Exception as e:
-        print(f"Error: {e}")
-    
-    # Test through blockchain service
-    print("\n--- Testing via BlockchainService ---")
-    bs = get_blockchain_service()
-    
-    # Test with a sample address
-    test_wallet = "0x399B2217B6e33d8b7c22de9f0F5F9fFCD17FfFCD"  # From logs
-    
-    result = await bs.verify_plex_payment(
-        sender_address=test_wallet,
-        amount_plex=10.0,
-        lookback_blocks=2000
-    )
-    
-    print(f"Verification result: {result}")
-    
+
+    # Check recent transfers TO system wallet - scan in chunks
+    print("\n--- Scanning for transfers to system wallet (in chunks) ---")
+    chunk_size = 100
+    total_blocks = 1000
+
+    all_logs = []
+    for offset in range(0, total_blocks, chunk_size):
+        from_blk = max(0, latest - offset - chunk_size)
+        to_blk = latest - offset
+        if from_blk >= to_blk:
+            continue
+        try:
+            logs = contract.events.Transfer.get_logs(
+                fromBlock=from_blk,
+                toBlock=to_blk,
+                argument_filters={'to': SYSTEM}
+            )
+            chunk_logs = list(logs)
+            all_logs.extend(chunk_logs)
+            print(f"  Blocks {from_blk}-{to_blk}: {len(chunk_logs)} logs")
+        except Exception as e:
+            print(f"  Blocks {from_blk}-{to_blk}: Error - {e}")
+
+    print(f"\nTotal found: {len(all_logs)} transfers TO system wallet")
+
+    if all_logs:
+        print("\nRecent transfers:")
+        for log in all_logs[:5]:
+            args = log.get('args', {})
+            from_addr = args.get('from', '')
+            value = args.get('value', 0)
+            tx_hash = log.get('transactionHash', b'').hex()
+            amount = value / (10 ** decimals)
+            print(f"  - From: {from_addr[:10]}... Amount: {amount} PLEX")
+            print(f"    TX: {tx_hash}")
+
     print("\n" + "=" * 60)
     print("Debug complete")
     print("=" * 60)
