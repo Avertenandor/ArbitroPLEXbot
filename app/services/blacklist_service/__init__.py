@@ -22,6 +22,9 @@ Features:
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+# Re-export for backward compatibility
+from app.models.blacklist import BlacklistActionType
+
 from .core import BlacklistCore
 from .user_blocking import UserBlockingManager
 from .user_termination import UserTerminationManager
@@ -89,5 +92,4 @@ class BlacklistService:
         )
 
 
-# Re-export for backward compatibility
-__all__ = ['BlacklistService']
+__all__ = ['BlacklistService', 'BlacklistActionType']
