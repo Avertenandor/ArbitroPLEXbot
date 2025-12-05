@@ -159,7 +159,7 @@ async def handle_referral_level_selection(
     user: User,
 ) -> None:
     """Handle referral level selection button."""
-    match = re.match(r"^📊 Уровень (\d+)$", message.text)
+    match = re.match(r"^📊 Уровень (\d+)$", message.text, re.UNICODE)
     if not match:
         return
 

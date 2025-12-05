@@ -199,4 +199,3 @@ def format_admin_alert(
     lines.append(f"🕐 {datetime.now(UTC).strftime('%d.%m.%Y %H:%M:%S')} UTC")
 
     return "\n".join(lines)
-

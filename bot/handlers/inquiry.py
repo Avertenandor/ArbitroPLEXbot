@@ -595,4 +595,3 @@ async def notify_admins_new_inquiry(
 
     except Exception as e:
         logger.error(f"Ошибка уведомления админов о вопросе: {e}")
-

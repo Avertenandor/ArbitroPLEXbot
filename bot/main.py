@@ -83,6 +83,7 @@ async def main() -> None:  # noqa: C901
         rotation="1 day",
         retention="7 days",
         level="INFO",
+        encoding="utf-8",
     )
 
     logger.info("Starting ArbitroPLEXbot Bot...")

@@ -4,6 +4,7 @@ Blacklist management handler.
 Allows admins to manage user blacklist.
 """
 
+import re
 from typing import Any
 
 from aiogram import F, Router
@@ -392,7 +393,7 @@ async def handle_view_blacklist_entry(
         return
 
     import re
-    match = re.match(r'^Просмотр #(\d+)$', message.text)
+    match = re.match(r'^Просмотр #(\d+)$', message.text, re.UNICODE)
     if not match:
         await message.answer("❌ Неверный формат. Используйте: `Просмотр #ID`")
         return
@@ -459,7 +460,7 @@ async def handle_view_blacklist_entry(
     )
 
 
-@router.message(F.text.regexp(r'^Разблокировать #(\d+)$'))
+@router.message(F.text.regexp(r'^Разблокировать #(\d+)$', flags=re.UNICODE))
 async def handle_unban_user(
     message: Message,
     session: AsyncSession,
@@ -472,7 +473,7 @@ async def handle_unban_user(
         return
 
     import re
-    match = re.match(r'^Разблокировать #(\d+)$', message.text)
+    match = re.match(r'^Разблокировать #(\d+)$', message.text, re.UNICODE)
     if not match:
         await message.answer("❌ Неверный формат. Используйте: `Разблокировать #ID`")
         return

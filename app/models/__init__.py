@@ -45,6 +45,13 @@ from app.models.referral_earning import ReferralEarning
 
 # Reward Models
 from app.models.reward_session import RewardSession
+
+# Sponsor Inquiry Models
+from app.models.sponsor_inquiry import (
+    SponsorInquiry,
+    SponsorInquiryMessage,
+    SponsorInquiryStatus,
+)
 from app.models.support_message import SupportMessage
 
 # Support Models
@@ -58,14 +65,6 @@ from app.models.user_fsm_state import UserFsmState
 
 # User Inquiry Models
 from app.models.user_inquiry import InquiryMessage, InquiryStatus, UserInquiry
-
-# Sponsor Inquiry Models
-from app.models.sponsor_inquiry import (
-    SponsorInquiry,
-    SponsorInquiryMessage,
-    SponsorInquiryStatus,
-)
-
 from app.models.user_message_log import UserMessageLog
 from app.models.user_notification_settings import UserNotificationSettings
 from app.models.user_wallet_history import UserWalletHistory

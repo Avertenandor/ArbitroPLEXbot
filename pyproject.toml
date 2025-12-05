@@ -11,12 +11,6 @@ ignore = ["E402"]
 max-complexity = 15
 
 [tool.ruff.lint.per-file-ignores]
-"jobs/scheduler.py" = ["E402"]
-"jobs/worker.py" = ["E402"]
-"bot/main.py" = ["E402"]
-"tests/*" = ["E501", "E402"]
-
-[tool.ruff.lint.per-file-ignores]
 # Module level imports not at top - intentional for lazy loading/sys.path modification
 "app/services/blockchain_service.py" = ["E402"]
 "bot/main.py" = ["E402"]
@@ -24,6 +18,7 @@ max-complexity = 15
 "bot/handlers/start.py" = ["E402"]
 "jobs/scheduler.py" = ["E402"]
 "jobs/worker.py" = ["E402"]
+"tests/*" = ["E501", "E402"]
 "tests/conftest.py" = ["E402"]
 "scripts/*.py" = ["E402"]
 

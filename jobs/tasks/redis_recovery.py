@@ -89,7 +89,7 @@ async def _migrate_single_notification(notification, redis_client):
         "payload": notification.payload,
         "created_at": notification.created_at.isoformat(),
     }
-    await redis_client.lpush(queue_key, json.dumps(notification_data))
+    await redis_client.lpush(queue_key, json.dumps(notification_data, ensure_ascii=False))
 
     # Mark as processed
     notification.processed_at = datetime.now(UTC)

@@ -32,7 +32,7 @@ from bot.constants.rules import (
 from bot.utils.formatters import escape_md
 
 if TYPE_CHECKING:
-    from aiogram import Bot
+    pass
 
 
 class IncomingDepositService:

@@ -3,10 +3,11 @@
 
 import asyncio
 import sys
+
 sys.path.insert(0, '/app')
 
-from web3 import Web3
 from loguru import logger
+from web3 import Web3
 
 # Configure logger
 logger.remove()
@@ -24,17 +25,17 @@ async def main():
     print(f"\nPLEX Token Address: {settings.auth_plex_token_address}")
     print(f"System Wallet Address: {settings.auth_system_wallet_address}")
     print(f"Auth Price PLEX: {settings.auth_price_plex}")
-    
+
     # Direct Web3 test
     print("\n--- Direct Web3 Test ---")
     w3 = Web3(Web3.HTTPProvider('https://bsc-dataseed1.binance.org'))
     print(f"Connected: {w3.is_connected()}")
     print(f"Latest block: {w3.eth.block_number}")
-    
+
     # Check PLEX token contract
     PLEX = w3.to_checksum_address(settings.auth_plex_token_address)
     SYSTEM = w3.to_checksum_address(settings.auth_system_wallet_address)
-    
+
     ABI = [
         {
             "anonymous": False,
@@ -63,9 +64,9 @@ async def main():
             "type": "function",
         },
     ]
-    
+
     contract = w3.eth.contract(address=PLEX, abi=ABI)
-    
+
     # Check decimals
     try:
         decimals = contract.functions.decimals().call()
@@ -73,7 +74,7 @@ async def main():
     except Exception as e:
         print(f"Error getting decimals: {e}")
         decimals = 9
-    
+
     # Check system wallet balance
     try:
         balance = contract.functions.balanceOf(SYSTEM).call()
@@ -81,7 +82,7 @@ async def main():
         print(f"System Wallet PLEX Balance: {balance_formatted}")
     except Exception as e:
         print(f"Error getting balance: {e}")
-    
+
     latest = w3.eth.block_number
 
     # Check recent transfers TO system wallet - scan in chunks
