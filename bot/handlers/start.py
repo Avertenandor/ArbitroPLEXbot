@@ -42,345 +42,6 @@ from bot.states.registration import RegistrationStates
 router = Router()
 
 
-async def _handle_pay_to_use_auth(
-    message: Message,
-    state: FSMContext,
-    redis_client: Any,
-) -> bool:
-    """
-    Handle pay-to-use authorization check.
-
-    Returns:
-        True if user needs to authenticate (no session), False otherwise
-    """
-    if not redis_client:
-        return False
-
-    session_key = f"{SESSION_KEY_PREFIX}{message.from_user.id}"
-    if await redis_client.exists(session_key):
-        return False
-
-    # Session expired or new user
-    # Save referrer if present
-    if message.text and len(message.text.split()) > 1:
-        ref_arg = message.text.split()[1].strip()
-        await state.update_data(pending_referrer_arg=ref_arg)
-
-    from bot.constants.rules import LEVELS_TABLE, RULES_SHORT_TEXT
-
-    # Get translator for unregistered user (default language)
-    _ = get_translator("ru")
-
-    # Step 1: Ask for wallet first
-    await message.answer(
-        _('auth.welcome_unregistered',
-          levels_table=f"```\n{LEVELS_TABLE}```",
-          rules_short=RULES_SHORT_TEXT),
-        reply_markup=auth_wallet_input_keyboard(),
-        parse_mode="Markdown",
-        disable_web_page_preview=True
-    )
-    await state.set_state(AuthStates.waiting_for_wallet)
-    return True
-
-
-async def _parse_referral_code(
-    ref_arg: str,
-    session: AsyncSession,
-) -> int | None:
-    """
-    Parse referral code and return referrer telegram_id.
-
-    Returns:
-        Referrer telegram_id if valid, None otherwise
-    """
-    if not ref_arg.startswith("ref"):
-        return None
-
-    try:
-        clean_arg = ref_arg[3:]  # Remove 'ref'
-        if clean_arg.startswith("_") or clean_arg.startswith("-"):
-            clean_arg = clean_arg[1:]
-
-        if clean_arg.isdigit():
-            # Legacy ID
-            referrer_telegram_id = int(clean_arg)
-            logger.info(
-                "Legacy referral ID detected",
-                extra={
-                    "ref_arg": ref_arg,
-                    "referrer_telegram_id": referrer_telegram_id,
-                },
-            )
-            return referrer_telegram_id
-        else:
-            # New Referral Code
-            user_service = UserService(session)
-            referrer = await user_service.get_by_referral_code(clean_arg)
-
-            if referrer:
-                logger.info(
-                    "Referral code detected",
-                    extra={
-                        "ref_code": clean_arg,
-                        "referrer_telegram_id": referrer.telegram_id,
-                    },
-                )
-                return referrer.telegram_id
-            else:
-                logger.warning(
-                    "Referral code not found",
-                    extra={"ref_code": clean_arg},
-                )
-                return None
-    except (ValueError, AttributeError) as e:
-        logger.warning(
-            f"Invalid referral code format: {e}",
-            extra={"ref_code": ref_arg},
-        )
-        return None
-
-
-async def _reset_bot_blocked_flag(user: User, session: AsyncSession) -> None:
-    """Reset bot_blocked flag if user unblocked the bot."""
-    if not (hasattr(user, 'bot_blocked') and user.bot_blocked):
-        return
-
-    try:
-        from app.repositories.user_repository import UserRepository
-        user_repo = UserRepository(session)
-        await user_repo.update(user.id, bot_blocked=False)
-        await session.commit()
-        logger.info(
-            f"User {user.telegram_id} unblocked bot, flag reset in /start"
-        )
-    except Exception as reset_error:
-        logger.warning(f"Failed to reset bot_blocked flag: {reset_error}")
-
-
-async def _get_blacklist_entry(
-    telegram_id: int,
-    session: AsyncSession,
-    blacklist_entry: Any = None,
-) -> Any:
-    """Get blacklist entry for user."""
-    if blacklist_entry is not None:
-        return blacklist_entry
-
-    from app.repositories.blacklist_repository import BlacklistRepository
-    blacklist_repo = BlacklistRepository(session)
-    return await blacklist_repo.find_by_telegram_id(telegram_id)
-
-
-async def _handle_registered_user(
-    message: Message,
-    state: FSMContext,
-    user: User,
-    session: AsyncSession,
-    data: dict[str, Any],
-) -> None:
-    """Handle flow for registered user."""
-    logger.info(
-        f"cmd_start: registered user {user.telegram_id}, clearing FSM state"
-    )
-    await state.clear()
-
-    # Reset bot_blocked flag if user successfully sent /start
-    await _reset_bot_blocked_flag(user, session)
-
-    # Get user language for i18n
-    user_language = await get_user_language(session, user.id)
-    _ = get_translator(user_language)
-
-    # Format balance properly
-    balance_str = f"{user.balance:.8f}".rstrip('0').rstrip('.')
-    if balance_str == '':
-        balance_str = '0'
-
-    # Escape username for Markdown
-    raw_username = user.username or _('common.user')
-    safe_username = (
-        raw_username.replace("_", "\\_")
-        .replace("*", "\\*")
-        .replace("`", "\\`")
-        .replace("[", "\\[")
-    )
-
-    welcome_text = (
-        f"{_('common.welcome_back', username=safe_username)}\n\n"
-        f"{_('common.your_balance', balance=balance_str)}\n"
-        f"{_('common.use_menu')}"
-    )
-    logger.debug("cmd_start: sending welcome with ReplyKeyboardRemove")
-
-    await message.answer(
-        welcome_text,
-        parse_mode="Markdown",
-        disable_web_page_preview=False,
-        reply_markup=ReplyKeyboardRemove(),
-    )
-    logger.debug("cmd_start: sending main menu keyboard")
-
-    is_admin = data.get("is_admin", False)
-    logger.info(
-        f"[START] cmd_start for registered user {user.telegram_id}: "
-        f"is_admin={is_admin}, data keys: {list(data.keys())}"
-    )
-
-    # Get blacklist status
-    blacklist_entry = data.get("blacklist_entry")
-    try:
-        blacklist_entry = await _get_blacklist_entry(
-            user.telegram_id, session, blacklist_entry
-        )
-    except (OperationalError, InterfaceError, DatabaseError):
-        await message.answer(
-            "⚠️ Системная ошибка. Попробуйте позже"
-            "или обратитесь в поддержку."
-        )
-        return
-
-    logger.info(
-        f"[START] Creating keyboard for user {user.telegram_id} with "
-        f"is_admin={is_admin}, blacklist_entry={blacklist_entry is not None}"
-    )
-
-    await message.answer(
-        _("common.choose_action"),
-        reply_markup=main_menu_reply_keyboard(
-            user=user,
-            blacklist_entry=blacklist_entry,
-            is_admin=is_admin,
-        ),
-    )
-    logger.info(
-        f"[START] Main menu keyboard sent successfully to user {user.telegram_id}"
-    )
-
-
-async def _check_blacklist_registration_denied(
-    message: Message,
-    state: FSMContext,
-    session: AsyncSession,
-    blacklist_entry: Any = None,
-) -> bool:
-    """
-    Check if user is blacklisted for registration.
-
-    Returns:
-        True if user is denied, False otherwise
-    """
-    try:
-        blacklist_entry = await _get_blacklist_entry(
-            message.from_user.id, session, blacklist_entry
-        )
-
-        if not (blacklist_entry and blacklist_entry.is_active):
-            return False
-
-        from app.models.blacklist import BlacklistActionType
-
-        action = BlacklistActionType.REGISTRATION_DENIED
-        if blacklist_entry.action_type != action:
-            return False
-
-        logger.info(
-            f"[START] Registration denied for telegram_id {message.from_user.id}"
-        )
-        await message.answer(
-            "❌ Регистрация недоступна.\n\n"
-            "Обратитесь в поддержку для получения"
-            "дополнительной информации."
-        )
-        await state.clear()
-        return True
-
-    except (OperationalError, InterfaceError, DatabaseError):
-        await message.answer(
-            "⚠️ Системная ошибка. Попробуйте позже"
-            "или обратитесь в поддержку."
-        )
-        return True
-
-
-async def _show_welcome_to_unregistered(
-    message: Message,
-    state: FSMContext,
-    user: User | None,
-    session: AsyncSession,
-    referrer_telegram_id: int | None,
-    is_admin: bool,
-) -> None:
-    """Show welcome message to unregistered user and start registration."""
-    welcome_text = (
-        "🚀 **Добро пожаловать в ArbitroPLEXbot!**\n\n"
-        "Мы строим **крипто-фиатную экосистему** на"
-        "базе монеты "
-        "**PLEX** и высокодоходных торговых роботов.\n\n"
-        "📊 **Доход:** от **30% до 70%** в день!\n\n"
-        "⚠️ **ОБЯЗАТЕЛЬНЫЕ УСЛОВИЯ:**\n"
-        "1️⃣ Каждый доллар депозита = **10 PLEX**\n"
-        "2️⃣ Владение минимум **1 кроликом** на"
-        "[DEXRabbit](https://xn--80apagbbfxgmuj4j.site/)\n\n"
-        "━━━━━━━━━━━━━━━━━━━━━━\n"
-        "**Важно:**\n"
-        "• Работа ведется только с сетью **BSC (BEP-20)**\n"
-        "• Базовая валюта депозитов – **USDT BEP-20**\n\n"
-        "🌐 **Официальный сайт:**\n"
-        "[arbitrage-bot.com](https://arbitrage-bot.com/)\n\n"
-        "🐰 **Наш партнер DEXRabbit:**\n"
-        "Для работы в ArbitroPLEXbot необходимо купить"
-        "минимум одного кролика "
-        "на сайте нашего партнера:"
-        "[dexrabbit.site](https://xn--80apagbbfxgmuj4j.site/)\n\n"
-        "Для начала работы необходимо пройти"
-        "регистрацию.\n\n"
-        "📝 **Шаг 1:** Введите ваш BSC (BEP-20) адрес кошелька\n"
-        "Формат: `0x...` (42 символа)\n\n"
-        "⚠️ **КРИТИЧНО:** Указывайте только **ЛИЧНЫЙ**"
-        "кошелек (Trust Wallet, MetaMask, SafePal или "
-        "любой холодный кошелек).\n"
-        "🚫 **НЕ указывайте** адрес биржи (Binance, Bybit),"
-        "иначе выплаты могут быть утеряны!"
-    )
-
-    if referrer_telegram_id:
-        await state.update_data(referrer_telegram_id=referrer_telegram_id)
-        welcome_text += (
-            "\n\n✅ Реферальный код принят! "
-            "После регистрации вы будете привязаны к"
-            "пригласившему."
-        )
-
-    await message.answer(
-        welcome_text,
-        parse_mode="Markdown",
-        disable_web_page_preview=False,
-        reply_markup=ReplyKeyboardRemove(),
-    )
-
-    # Get user language for i18n
-    user_language = "ru"
-    if user:
-        try:
-            user_language = await get_user_language(session, user.id)
-        except Exception as e:
-            logger.warning(f"Failed to get user language, using default: {e}")
-    _ = get_translator(user_language)
-
-    await message.answer(
-        _("common.choose_action"),
-        reply_markup=main_menu_reply_keyboard(
-            user=user, blacklist_entry=None, is_admin=is_admin
-        ),
-    )
-
-    await state.set_state(RegistrationStates.waiting_for_wallet)
-
-
-
-
-
 @router.message(CommandStart())
 async def cmd_start(
     message: Message,
@@ -403,7 +64,7 @@ async def cmd_start(
     )
     logger.info(f"Message text: {message.text}")
 
-    # Always clear FSM state at start
+    # CRITICAL: Always clear state on /start
     current_state = await state.get_state()
     if current_state:
         logger.info(f"Clearing FSM state: {current_state}")
@@ -411,320 +72,306 @@ async def cmd_start(
 
     # --- PAY-TO-USE AUTHORIZATION ---
     redis_client = data.get("redis_client")
-    if await _handle_pay_to_use_auth(message, state, redis_client):
-        return
+    if redis_client:
+        session_key = f"{SESSION_KEY_PREFIX}{message.from_user.id}"
+        if not await redis_client.exists(session_key):
+            # Session expired or new user
+
+            # Save referrer if present
+            if message.text and len(message.text.split()) > 1:
+                ref_arg = message.text.split()[1].strip()
+                await state.update_data(pending_referrer_arg=ref_arg)
+
+            from bot.constants.rules import LEVELS_TABLE, RULES_SHORT_TEXT
+
+            # Get translator for unregistered user (default language)
+            _ = get_translator("ru")
+
+            # Step 1: Ask for wallet first
+            await message.answer(
+                _('auth.welcome_unregistered',
+                  levels_table=f"```\n{LEVELS_TABLE}```",
+                  rules_short=RULES_SHORT_TEXT),
+                reply_markup=auth_wallet_input_keyboard(),
+                parse_mode="Markdown",
+                disable_web_page_preview=True
+            )
+            await state.set_state(AuthStates.waiting_for_wallet)
+            return
     # --------------------------------
 
     user: User | None = data.get("user")
-
     # Extract referral code from command args
+    # Format: /start ref123456 or /start ref_123456 or /start ref_CODE
     referrer_telegram_id = None
     if message.text and len(message.text.split()) > 1:
         ref_arg = message.text.split()[1].strip()
-        referrer_telegram_id = await _parse_referral_code(ref_arg, session)
+        # Support formats: ref123456, ref_123456, ref-123456
+        if ref_arg.startswith("ref"):
+            try:
+                # Extract value from ref code
+                # Note: We remove 'ref', '_', '-' prefix/separators.
+                # If the code itself contains '_' or '-',
+                # this might be an issue if we strip them globally.
+                # But legacy IDs were digits.
+                # New codes are urlsafe base64, which can contain '-' and '_'.
+                # So we should be careful about stripping.
+
+                # Better parsing strategy:
+                # 1. Remove 'ref' prefix (case insensitive?)
+                # 2. If starts with '_' or '-', remove ONE leading separator.
+
+                clean_arg = ref_arg[3:]  # Remove 'ref'
+                if clean_arg.startswith("_") or clean_arg.startswith("-"):
+                    clean_arg = clean_arg[1:]
+
+                if clean_arg.isdigit():
+                    # Legacy ID
+                    referrer_telegram_id = int(clean_arg)
+                    logger.info(
+                        "Legacy referral ID detected",
+                        extra={
+                            "ref_arg": ref_arg,
+                            "referrer_telegram_id": referrer_telegram_id,
+                        },
+                    )
+                else:
+                    # New Referral Code
+                    # We need UserService here.
+                    # Note: Creating service inside handler is fine.
+                    user_service = UserService(session)
+                    referrer = await user_service.get_by_referral_code(
+                        clean_arg
+                    )
+
+                    if referrer:
+                        referrer_telegram_id = referrer.telegram_id
+                        logger.info(
+                            "Referral code detected",
+                            extra={
+                                "ref_code": clean_arg,
+                                "referrer_telegram_id": referrer_telegram_id,
+                            },
+                        )
+                    else:
+                        logger.warning(
+                            "Referral code not found",
+                            extra={"ref_code": clean_arg},
+                        )
+
+            except (ValueError, AttributeError) as e:
+                logger.warning(
+                    f"Invalid referral code format: {e}",
+                    extra={"ref_code": ref_arg},
+                )
 
     # Check if already registered
     if user:
-        await _handle_registered_user(message, state, user, session, data)
-        return
+        logger.info(
+            f"cmd_start: registered user {user.telegram_id}, "
+            f"clearing FSM state"
+        )
+        # CRITICAL: clear FSM state for /start to work
+        await state.clear()
 
-    # Check blacklist for non-registered users (REGISTRATION_DENIED)
-    blacklist_entry = data.get("blacklist_entry")
-    if await _check_blacklist_registration_denied(
-        message, state, session, blacklist_entry
-    ):
-        return
-
-    # Show welcome to unregistered user
-    is_admin = data.get("is_admin", False)
-    await _show_welcome_to_unregistered(
-        message, state, user, session, referrer_telegram_id, is_admin
-    )
-
-
-
-
-async def _handle_start_in_registration(
-    message: Message,
-    state: FSMContext,
-    data: dict[str, Any],
-) -> bool:
-    """
-    Handle /start command during registration.
-
-    Returns:
-        True if /start was handled, False otherwise
-    """
-    if not (message.text and message.text.startswith("/start")):
-        return False
-
-    logger.info(
-        "process_wallet: /start caught, clearing state, showing main menu"
-    )
-    await state.clear()
-
-    user: User | None = data.get("user")
-    is_admin = data.get("is_admin", False)
-    session = data.get("session")
-    blacklist_entry = data.get("blacklist_entry")
-
-    if blacklist_entry is None and user and session:
+        # R8-2: Reset bot_blocked flag if user successfully sent /start
+        # (means user unblocked the bot)
         try:
+            if hasattr(user, 'bot_blocked') and user.bot_blocked:
+                from app.repositories.user_repository import UserRepository
+                user_repo = UserRepository(session)
+                await user_repo.update(user.id, bot_blocked=False)
+                await session.commit()
+                logger.info(
+                    f"User {user.telegram_id} unblocked bot, "
+                    f"flag reset in /start"
+                )
+        except Exception as reset_error:
+            # Don't fail /start if flag reset fails
+            logger.warning(f"Failed to reset bot_blocked flag: {reset_error}")
+
+        # R13-3: Get user language for i18n
+        user_language = await get_user_language(session, user.id)
+        _ = get_translator(user_language)
+
+        # Format balance properly (avoid scientific notation)
+        balance_str = f"{user.balance:.8f}".rstrip('0').rstrip('.')
+        if balance_str == '':
+            balance_str = '0'
+
+        # Escape username for Markdown to prevent TelegramBadRequest
+        raw_username = user.username or _('common.user')
+        safe_username = (
+            raw_username.replace("_", "\\_")
+            .replace("*", "\\*")
+            .replace("`", "\\`")
+            .replace("[", "\\[")
+        )
+
+        welcome_text = (
+            f"{_('common.welcome_back', username=safe_username)}\n\n"
+            f"{_('common.your_balance', balance=balance_str)}\n"
+            f"{_('common.use_menu')}"
+        )
+        logger.debug("cmd_start: sending welcome with ReplyKeyboardRemove")
+        # 1) РћС‡РёСЃС‚РёРј СЃС‚Р°СЂСѓСЋ РєР»Р°РІРёР°С‚СѓСЂСѓ
+        await message.answer(
+            welcome_text,
+            parse_mode="Markdown",
+            disable_web_page_preview=False,
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        logger.debug("cmd_start: sending main menu keyboard")
+        # 2) Send main menu as separate message
+        # Get is_admin from middleware data
+        is_admin = data.get("is_admin", False)
+        logger.info(
+            f"[START] cmd_start for registered user {user.telegram_id}: "
+            f"is_admin={is_admin}, data keys: {list(data.keys())}"
+        )
+        # Get blacklist status if needed (try to get from middleware first)
+        blacklist_entry = data.get("blacklist_entry")
+        try:
+            if blacklist_entry is None:
+                from app.repositories.blacklist_repository import BlacklistRepository
+                blacklist_repo = BlacklistRepository(session)
+                blacklist_entry = await blacklist_repo.find_by_telegram_id(
+                    user.telegram_id
+                )
+        except (OperationalError, InterfaceError, DatabaseError) as e:
+            logger.error(
+                f"Database error in /start while checking blacklist "
+                f"for user {user.telegram_id}: {e}",
+                exc_info=True,
+            )
+            await message.answer(
+                "⚠️ Системная ошибка. Попробуйте позже."
+            )
+            return
+        logger.info(
+            f"[START] Creating keyboard for user {user.telegram_id} with "
+            f"is_admin={is_admin}, "
+            f"blacklist_entry={blacklist_entry is not None}"
+        )
+        # R13-3: Use i18n (already loaded above)
+        await message.answer(
+            _("common.choose_action"),
+            reply_markup=main_menu_reply_keyboard(
+                user=user,
+                blacklist_entry=blacklist_entry,
+                is_admin=is_admin,
+            ),
+        )
+        logger.info(
+            f"[START] Main menu keyboard sent successfully to user "
+            f"{user.telegram_id}"
+        )
+        return
+
+    # R1-3: Check blacklist for non-registered users (REGISTRATION_DENIED)
+    # This check must happen BEFORE showing welcome message
+    blacklist_entry = data.get("blacklist_entry")
+    try:
+        if blacklist_entry is None:
             from app.repositories.blacklist_repository import BlacklistRepository
             blacklist_repo = BlacklistRepository(session)
             blacklist_entry = await blacklist_repo.find_by_telegram_id(
-                user.telegram_id
+                message.from_user.id
             )
-        except Exception as e:
-            logger.warning(
-                f"Failed to get blacklist entry for user {user.telegram_id}: {e}"
-            )
-            blacklist_entry = None
 
-    # Get user language for i18n
-    user_language = "ru"
-    if user and session:
+        if blacklist_entry and blacklist_entry.is_active:
+            from app.models.blacklist import BlacklistActionType
+
+            action = BlacklistActionType.REGISTRATION_DENIED
+            if blacklist_entry.action_type == action:
+                logger.info(
+                    f"[START] Registration denied for "
+                    f"telegram_id {message.from_user.id}"
+                )
+                await message.answer(
+                    "❌ Регистрация недоступна.\n"
+                    "Обратитесь в поддержку."
+                )
+                await state.clear()
+                return
+    except (OperationalError, InterfaceError, DatabaseError) as e:
+        logger.error(
+            f"Database error in /start while checking blacklist "
+            f"for non-registered user {message.from_user.id}: {e}",
+            exc_info=True,
+        )
+        await message.answer(
+            "⚠️ Системная ошибка. Попробуйте позже."
+        )
+        return
+
+    # Not registered: show welcome and menu
+    welcome_text = (
+        "🚀 **Добро пожаловать в ArbitroPLEXbot!**\n\n"
+        "Мы строим **крипто-фиатную экосистему** "
+        "на базе монеты **PLEX** и "
+        "высокодоходных торговых роботов.\n\n"
+        "📊 **Доход:** от **30% до 70%** в день!\n\n"
+        "⚠️ **ОБЯЗАТЕЛЬНЫЕ УСЛОВИЯ:**\n"
+        "1️⃣ Каждый доллар депозита = **10 PLEX**\n"
+        "2️⃣ Владение минимум **1 кроликом** на "
+        "[DEXRabbit](https://xn--80apagbbfxgmuj4j.site/)\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        "**Важно:**\n"
+        "• Работа только с сетью **BSC (BEP-20)**\n"
+        "• Базовая валюта депозитов — **USDT BEP-20**\n\n"
+        "🌐 **Официальный сайт:**\n"
+        "[arbitrage-bot.com](https://arbitrage-bot.com/)\n\n"
+        "🐰 **Наш партнёр DEXRabbit:**\n"
+        "Для работы в ArbitroPLEXbot купите минимум "
+        "одного кролика на сайте партнёра: "
+        "[dexrabbit.site](https://xn--80apagbbfxgmuj4j.site/)\n\n"
+        "Для начала работы пройдите регистрацию.\n\n"
+        "📝 **Шаг 1:** Введите BSC (BEP-20) кошелёк\n"
+        "Формат: `0x...` (42 символа)\n\n"
+        "⚠️ **КРИТИЧНО:** Указывайте только "
+        "**ЛИЧНЫЙ** кошелёк (Trust Wallet, MetaMask, "
+        "SafePal или холодный кошелёк).\n"
+        "🚫 **НЕ указывайте** адрес биржи "
+        "(Binance, Bybit), иначе выплаты утеряны!"
+    )
+
+    if referrer_telegram_id:
+        # Save referrer to state for later use
+        await state.update_data(referrer_telegram_id=referrer_telegram_id)
+        welcome_text += (
+            "\n\n✅ Реферальный код принят! "
+            "После регистрации вы будете привязаны."
+        )
+
+    # 1) Clear keyboard in welcome
+    await message.answer(
+        welcome_text,
+        parse_mode="Markdown",
+        disable_web_page_preview=False,
+        reply_markup=ReplyKeyboardRemove(),
+    )
+    # 2) Р”РѕР±Р°РІРёРј Р±РѕР»СЊС€РѕРµ РіР»Р°РІРЅРѕРµ РјРµРЅСЋ РѕС‚РґРµР»СЊРЅРѕ
+    # R13-3: Get user language for i18n (if user exists)
+    user_language = "ru"  # Default
+    if user:
         try:
             user_language = await get_user_language(session, user.id)
         except Exception as e:
             logger.warning(f"Failed to get user language, using default: {e}")
+            pass
     _ = get_translator(user_language)
 
-    await message.answer(
-        _("common.welcome"),
-        reply_markup=ReplyKeyboardRemove(),
-    )
+    # For unregistered users, is_admin will be False
+    is_admin = data.get("is_admin", False)
     await message.answer(
         _("common.choose_action"),
         reply_markup=main_menu_reply_keyboard(
-            user=user,
-            blacklist_entry=blacklist_entry,
-            is_admin=is_admin,
+            user=user, blacklist_entry=None, is_admin=is_admin
         ),
     )
-    return True
 
-
-async def _handle_registration_button(message: Message) -> bool:
-    """
-    Handle "Registration" button during wallet input.
-
-    Returns:
-        True if registration button was handled, False otherwise
-    """
-    if message.text != "📝 Регистрация":
-        return False
-
-    await message.answer(
-        "📝 **Регистрация**\n\n"
-        "Введите ваш BSC (BEP-20) адрес кошелька:\n"
-        "Формат: `0x...` (42 символа)\n\n"
-        "⚠️ Указывайте только **ЛИЧНЫЙ** кошелек"
-        "(Trust Wallet, MetaMask, SafePal или холодный кошелек).\n"
-        "🚫 **НЕ указывайте** адрес биржи!",
-        parse_mode="Markdown",
-    )
-    return True
-
-
-async def _handle_menu_button_in_registration(
-    message: Message,
-    state: FSMContext,
-    data: dict[str, Any],
-) -> bool:
-    """
-    Handle menu button during registration.
-
-    Returns:
-        True if menu button was handled, False otherwise
-    """
-    from bot.utils.menu_buttons import is_menu_button
-
-    if not is_menu_button(message.text):
-        return False
-
-    logger.debug(
-        f"process_wallet: menu button {message.text}, showing main menu"
-    )
-    await state.clear()
-
-    user: User | None = data.get("user")
-    is_admin = data.get("is_admin", False)
-    session = data.get("session")
-    blacklist_entry = None
-
-    if user and session:
-        try:
-            from app.repositories.blacklist_repository import BlacklistRepository
-            blacklist_repo = BlacklistRepository(session)
-            blacklist_entry = await blacklist_repo.find_by_telegram_id(
-                user.telegram_id
-            )
-        except Exception as e:
-            logger.warning(
-                f"Failed to get blacklist entry for user {user.telegram_id}: {e}"
-            )
-            blacklist_entry = None
-
-    await message.answer(
-        "📊 Главное меню",
-        reply_markup=main_menu_reply_keyboard(
-            user=user,
-            blacklist_entry=blacklist_entry,
-            is_admin=is_admin,
-        ),
-    )
-    return True
-
-
-async def _check_wallet_rate_limit(
-    message: Message,
-    data: dict[str, Any],
-) -> bool:
-    """
-    Check registration rate limit.
-
-    Returns:
-        True if rate limit exceeded, False otherwise
-    """
-    telegram_id = message.from_user.id if message.from_user else None
-    if not telegram_id:
-        return False
-
-    from bot.utils.operation_rate_limit import OperationRateLimiter
-
-    redis_client = data.get("redis_client")
-    rate_limiter = OperationRateLimiter(redis_client=redis_client)
-    allowed, error_msg = await rate_limiter.check_registration_limit(
-        telegram_id
-    )
-
-    if not allowed:
-        await message.answer(
-            error_msg or "Слишком много попыток регистрации"
-        )
-        return True
-
-    return False
-
-
-async def _validate_wallet_format(message: Message, wallet_address: str) -> bool:
-    """
-    Validate wallet format.
-
-    Returns:
-        True if valid, False otherwise
-    """
-    from app.utils.validation import validate_bsc_address
-
-    if validate_bsc_address(wallet_address, checksum=False):
-        return True
-
-    await message.answer(
-        "❌ Неверный формат адреса!\n\n"
-        "BSC адрес должен начинаться с '0x' и"
-        "содержать 42 символа "
-        "(0x + 40 hex символов).\n"
-        "Попробуйте еще раз:"
-    )
-    return False
-
-
-async def _check_wallet_blacklist(
-    message: Message,
-    state: FSMContext,
-    wallet_address: str,
-    session_factory: Any,
-) -> bool:
-    """
-    Check if wallet is blacklisted.
-
-    Returns:
-        True if blacklisted, False otherwise
-    """
-    if not session_factory:
-        return False
-
-    try:
-        async with session_factory() as session:
-            async with session.begin():
-                from app.services.blacklist_service import BlacklistService
-                blacklist_service = BlacklistService(session)
-                if await blacklist_service.is_blacklisted(
-                    wallet_address=wallet_address.lower()
-                ):
-                    await message.answer(
-                        "❌ Регистрация запрещена."
-                        "Обращайтесь в поддержку."
-                    )
-                    await state.clear()
-                    return True
-    except (OperationalError, InterfaceError, DatabaseError) as e:
-        logger.error(
-            f"Database error checking wallet blacklist: {e}", exc_info=True
-        )
-        await message.answer(
-            "⚠️ Системная ошибка. Попробуйте позже"
-            "или обратитесь в поддержку."
-        )
-        return True
-
-    return False
-
-
-async def _check_existing_wallet(
-    message: Message,
-    state: FSMContext,
-    wallet_address: str,
-    session_factory: Any,
-    session: Any,
-) -> bool:
-    """
-    Check if wallet is already registered.
-
-    Returns:
-        True if wallet already exists (error shown), False otherwise
-    """
-    if not session_factory:
-        # Fallback to old session
-        if not session:
-            await message.answer(
-                "❌ Системная ошибка. Отправьте /start или "
-                "обратитесь в поддержку."
-            )
-            return True
-
-        user_service = UserService(session)
-        existing = await user_service.get_by_wallet(wallet_address)
-    else:
-        # NEW pattern: short transaction
-        async with session_factory() as session:
-            async with session.begin():
-                user_service = UserService(session)
-                existing = await user_service.get_by_wallet(wallet_address)
-
-    if not existing:
-        return False
-
-    telegram_id = message.from_user.id if message.from_user else None
-
-    if telegram_id and existing.telegram_id == telegram_id:
-        await message.answer(
-            "ℹ️ Этот кошелек уже привязан к вашему"
-            "аккаунту.\n\n"
-            "Используйте команду /start для входа в систему."
-        )
-        await state.clear()
-        return True
-    else:
-        await message.answer(
-            "❌ Этот кошелек уже зарегистрирован"
-            "другим пользователем!\n\n"
-            "Используйте другой адрес:"
-        )
-        return True
-
-
+    await state.set_state(RegistrationStates.waiting_for_wallet)
 
 
 @router.message(RegistrationStates.waiting_for_wallet)
@@ -736,61 +383,253 @@ async def process_wallet(
     """
     Process wallet address.
 
-    Uses session_factory to ensure transaction is closed before FSM state change.
+    Uses session_factory to ensure transaction is closed before FSM "
+        "state change.
 
     Args:
         message: Telegram message
         state: FSM state
         data: Additional data including session_factory
     """
-    # Handle /start command
-    if await _handle_start_in_registration(message, state, data):
+    # CRITICAL: handle /start here, not dispatcher
+    if message.text and message.text.startswith("/start"):
+        logger.info(
+            "process_wallet: /start caught, clearing state, showing main menu"
+        )
+        await state.clear()
+        # Show main menu immediately
+        user: User | None = data.get("user")
+        is_admin = data.get("is_admin", False)
+        # РџРѕР»СѓС‡Р°РµРј session РёР· data
+        session = data.get("session")
+        # Try to get from middleware first
+        blacklist_entry = data.get("blacklist_entry")
+        # CRITICAL: check session before use
+        if blacklist_entry is None and user and session:
+            try:
+                from app.repositories.blacklist_repository import (
+                    BlacklistRepository,
+                )
+                blacklist_repo = BlacklistRepository(session)
+                blacklist_entry = await blacklist_repo.find_by_telegram_id(
+                    user.telegram_id
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to get blacklist entry "
+                    f"for user {user.telegram_id}: {e}"
+                )
+                blacklist_entry = None
+        # R13-3: Get user language for i18n
+        user_language = "ru"  # Default
+        if user:
+            try:
+                user_language = await get_user_language(session, user.id)
+            except Exception as e:
+                logger.warning(
+                    f"Failed to get user language, using default: {e}"
+                )
+        _ = get_translator(user_language)
+
+        await message.answer(
+            _("common.welcome"),
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        await message.answer(
+            _("common.choose_action"),
+            reply_markup=main_menu_reply_keyboard(
+                user=user,
+                blacklist_entry=blacklist_entry,
+                is_admin=is_admin,
+            ),
+        )
         return
 
-    # Handle "Registration" button
-    if await _handle_registration_button(message):
+    # Check if message is a menu button - if so, clear state and ignore
+    from bot.utils.menu_buttons import is_menu_button
+
+    # Handle Registration button in waiting_for_wallet
+    # This prevents the loop where clicking "Registration" clears state and ...
+    if message.text == "рџ“ќ Р РµРіРёСЃС‚СЂР°С†РёСЏ":
+        await message.answer(
+            "рџ“ќ **Р РµРіРёСЃС‚СЂР°С†РёСЏ**\n\n"
+            "Р’РІРµРґРёС‚Рµ РІР°С€ BSC (BEP-20) Р°РґСЂРµСЃ РєРѕС€РµР»СЊРєР°:\n"
+            "Р¤РѕСЂРјР°С‚: `0x...` (42 СЃРёРјРІРѕР»Р°)\n\n"
+            "вљ пёЏ РЈРєР°Р·С‹РІР°Р№С‚Рµ С‚РѕР»СЊРєРѕ **Р›РР§РќР«Р™** РєРѕС€РµР»РµРє (Trust Wallet, MetaMask, SafePal РёР»Рё С…РѕР»РѕРґРЅС‹Р№ РєРѕС€РµР»РµРє).\n"
+            "рџљ« **РќР• СѓРєР°Р·С‹РІР°Р№С‚Рµ** Р°РґСЂРµСЃ Р±РёСЂР¶Рё!",
+            parse_mode="Markdown",
+        )
         return
 
-    # Handle menu button
-    if await _handle_menu_button_in_registration(message, state, data):
+    if is_menu_button(message.text):
+        logger.debug(
+            f"process_wallet: menu button {message.text}, showing main menu"
+        )
+        await state.clear()
+        # Show main menu, don't rely on dispatcher
+        user: User | None = data.get("user")
+        is_admin = data.get("is_admin", False)
+        # РџРѕР»СѓС‡Р°РµРј session РёР· data
+        session = data.get("session")
+        blacklist_entry = None
+        # CRITICAL: check session before use
+        if user and session:
+            try:
+                from app.repositories.blacklist_repository import (
+                    BlacklistRepository,
+                )
+                blacklist_repo = BlacklistRepository(session)
+                blacklist_entry = await blacklist_repo.find_by_telegram_id(
+                    user.telegram_id
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to get blacklist entry for user {user.telegram_id}: {e}"
+                )
+                blacklist_entry = None
+        await message.answer(
+            "рџ“Љ Р“Р»Р°РІРЅРѕРµ РјРµРЅСЋ",
+            reply_markup=main_menu_reply_keyboard(
+                user=user,
+                blacklist_entry=blacklist_entry,
+                is_admin=is_admin,
+            ),
+        )
         return
 
     wallet_address = message.text.strip()
 
     # Check registration rate limit
-    if await _check_wallet_rate_limit(message, data):
+    telegram_id = message.from_user.id if message.from_user else None
+    if telegram_id:
+        from bot.utils.operation_rate_limit import OperationRateLimiter
+
+        redis_client = data.get("redis_client")
+        rate_limiter = OperationRateLimiter(redis_client=redis_client)
+        allowed, error_msg = await rate_limiter.check_registration_limit(
+            telegram_id
+        )
+        if not allowed:
+            await message.answer(error_msg or "Много попыток")
+            return
+
+    # Validate wallet format using proper validation
+    from app.utils.validation import validate_bsc_address
+
+    if not validate_bsc_address(wallet_address, checksum=False):
+        await message.answer(
+            "вќЊ РќРµРІРµСЂРЅС‹Р№ С„РѕСЂРјР°С‚ Р°РґСЂРµСЃР°!\n\n"
+            "BSC Р°РґСЂРµСЃ РґРѕР»Р¶РµРЅ РЅР°С‡РёРЅР°С‚СЊСЃСЏ СЃ '0x' Рё СЃРѕРґРµСЂР¶Р°С‚СЊ 42 СЃРёРјРІРѕР»Р° "
+            "(0x + 40 hex СЃРёРјРІРѕР»РѕРІ).\n"
+            "РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰Рµ СЂР°Р·:"
+        )
         return
 
-    # Validate wallet format
-    if not await _validate_wallet_format(message, wallet_address):
-        return
-
+    # R1-13: Check wallet blacklist
     session_factory = data.get("session_factory")
+    if session_factory:
+        try:
+            async with session_factory() as session:
+                async with session.begin():
+                    from app.services.blacklist_service import BlacklistService
+                    blacklist_service = BlacklistService(session)
+                    if await blacklist_service.is_blacklisted(
+                        wallet_address=wallet_address.lower()
+                    ):
+                        await message.answer(
+                            "вќЊ Р РµРіРёСЃС‚СЂР°С†РёСЏ Р·Р°РїСЂРµС‰РµРЅР°. РћР±СЂР°С‰Р°Р№С‚РµСЃСЊ РІ РїРѕРґРґРµСЂР¶РєСѓ."
+                        )
+                        await state.clear()
+                        return
 
-    # Check wallet blacklist
-    if await _check_wallet_blacklist(message, state, wallet_address, session_factory):
-        return
+                    # Check if wallet is already used by another user
+                    # (Unique constraint)
+                    from app.services.user_service import UserService
+                    user_service = UserService(session)
+                    existing_user = await user_service.get_by_wallet(
+                        wallet_address
+                    )
+                    if existing_user:
+                        tg_id = (
+                            message.from_user.id if message.from_user else None
+                        )
+                        if existing_user.telegram_id != tg_id:
+                            await message.answer(
+                                "вќЊ Р­С‚РѕС‚ РєРѕС€РµР»РµРє СѓР¶Рµ РїСЂРёРІСЏР·Р°РЅ Рє РґСЂСѓРіРѕРјСѓ РїРѕР»СЊР·РѕРІР°С‚РµР»СЋ!\n"
+                                "РџРѕР¶Р°Р»СѓР№СЃС‚Р°, РёСЃРїРѕР»СЊР·СѓР№С‚Рµ РґСЂСѓРіРѕР№ РєРѕС€РµР»РµРє."
+                            )
+                            return
+                        else:
+                            await message.answer(
+                                "в„№пёЏ Р­С‚РѕС‚ РєРѕС€РµР»РµРє СѓР¶Рµ РїСЂРёРІСЏР·Р°РЅ Рє РІР°С€РµРјСѓ Р°РєРєР°СѓРЅС‚Сѓ.\n"
+                                "РСЃРїРѕР»СЊР·СѓР№С‚Рµ /start РґР»СЏ РІС…РѕРґР°."
+                            )
+                            await state.clear()
+                            return
 
-    # Check if wallet is already used by another user
-    session = data.get("session")
-    if await _check_existing_wallet(
-        message, state, wallet_address, session_factory, session
-    ):
-        return
+        except (OperationalError, InterfaceError, DatabaseError) as e:
+            logger.error(
+                f"Database error checking wallet blacklist: {e}", exc_info=True
+            )
+            await message.answer(
+                "вљ пёЏ РЎРёСЃС‚РµРјРЅР°СЏ РѕС€РёР±РєР°. РџРѕРїСЂРѕР±СѓР№С‚Рµ РїРѕР·Р¶Рµ РёР»Рё РѕР±СЂР°С‚РёС‚РµСЃСЊ РІ РїРѕРґРґРµСЂР¶РєСѓ."
+            )
+            return
+
+    # SHORT transaction scope - check wallet and close BEFORE FSM state change
+    if not session_factory:
+        # Fallback to old session for backward compatibility
+        session = data.get("session")
+        if not session:
+            await message.answer(
+                "вќЊ РЎРёСЃС‚РµРјРЅР°СЏ РѕС€РёР±РєР°. РћС‚РїСЂР°РІСЊС‚Рµ /start РёР»Рё "
+                "РѕР±СЂР°С‚РёС‚РµСЃСЊ РІ РїРѕРґРґРµСЂР¶РєСѓ."
+            )
+            return
+
+        user_service = UserService(session)
+
+        # Check if wallet is already used
+        existing = await user_service.get_by_wallet(wallet_address)
+    else:
+        # NEW pattern: short transaction
+        async with session_factory() as session:
+            async with session.begin():
+                user_service = UserService(session)
+                existing = await user_service.get_by_wallet(wallet_address)
+        # Transaction closed here, before FSM state change
+
+    # R1-12: Wallet already linked to existing user
+    if existing:
+        telegram_id = message.from_user.id if message.from_user else None
+        # If same telegram_id - suggest /start
+        if telegram_id and existing.telegram_id == telegram_id:
+            await message.answer(
+                "ℹ️ Кошелёк уже привязан к аккаунту.\n\n"
+                "Используйте /start для входа."
+            )
+            await state.clear()
+            return
+        # If different telegram_id - wallet taken
+        else:
+            await message.answer(
+                "❌ Кошелёк уже зарегистрирован!\n\n"
+                "Используйте другой адрес:"
+            )
+            return
 
     # Save wallet to state
     await state.update_data(wallet_address=wallet_address)
 
     # Ask for financial password
     await message.answer(
-        "✅ Адрес кошелька принят!\n\n"
-        "📝 Шаг 2: Создайте финансовый пароль\n"
-        "Этот пароль будет использоваться для"
-        "подтверждения выводов.\n\n"
-        "Требования:\n"
-        "• Минимум 6 символов\n"
-        "• Не используйте простые пароли\n\n"
-        "Введите пароль:"
+        "вњ… РђРґСЂРµСЃ РєРѕС€РµР»СЊРєР° РїСЂРёРЅСЏС‚!\n\n"
+        "рџ“ќ РЁР°Рі 2: РЎРѕР·РґР°Р№С‚Рµ С„РёРЅР°РЅСЃРѕРІС‹Р№ РїР°СЂРѕР»СЊ\n"
+        "Р­С‚РѕС‚ РїР°СЂРѕР»СЊ Р±СѓРґРµС‚ РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊСЃСЏ РґР»СЏ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёСЏ РІС‹РІРѕРґРѕРІ.\n\n"
+        "РўСЂРµР±РѕРІР°РЅРёСЏ:\n"
+        "вЂў РњРёРЅРёРјСѓРј 6 СЃРёРјРІРѕР»РѕРІ\n"
+        "вЂў РќРµ РёСЃРїРѕР»СЊР·СѓР№С‚Рµ РїСЂРѕСЃС‚С‹Рµ РїР°СЂРѕР»Рё\n\n"
+        "Р’РІРµРґРёС‚Рµ РїР°СЂРѕР»СЊ:"
     )
 
     await state.set_state(RegistrationStates.waiting_for_financial_password)
@@ -812,7 +651,7 @@ async def process_financial_password(
         session: Database session (optional, can be from data)
         data: Additional data from middlewares
     """
-    # РљР РРўРР§РќРћ: РїСЂРѕРїСѓСЃРєР°РµРј /start Рє РѕСЃРЅРѕРІРЅРѕРјСѓ Рѕ...
+    # CRITICAL: pass /start to main handler
     if message.text and message.text.startswith("/start"):
         await state.clear()
         return  # РџРѕР·РІРѕР»СЏРµРј CommandStart() РѕР±СЂР°Р±РѕС‚Р°С‚СЊ СЌС‚Рѕ
@@ -883,280 +722,6 @@ async def process_financial_password(
     await state.set_state(RegistrationStates.waiting_for_password_confirmation)
 
 
-
-
-async def _handle_menu_button_in_password_confirmation(
-    message: Message,
-    state: FSMContext,
-    data: dict[str, Any],
-) -> bool:
-    """
-    Handle menu button during password confirmation.
-
-    Returns:
-        True if menu button was handled, False otherwise
-    """
-    from bot.utils.menu_buttons import is_menu_button
-
-    if not is_menu_button(message.text):
-        return False
-
-    await state.clear()
-    user: User | None = data.get("user")
-    is_admin = data.get("is_admin", False)
-    session = data.get("session")
-    blacklist_entry = None
-
-    if user and session:
-        try:
-            from app.repositories.blacklist_repository import BlacklistRepository
-            blacklist_repo = BlacklistRepository(session)
-            blacklist_entry = await blacklist_repo.find_by_telegram_id(
-                user.telegram_id
-            )
-        except Exception as e:
-            logger.warning(
-                f"Failed to get blacklist entry for user {user.telegram_id}: {e}"
-            )
-            blacklist_entry = None
-
-    await message.answer(
-        "📊 Главное меню",
-        reply_markup=main_menu_reply_keyboard(
-            user=user,
-            blacklist_entry=blacklist_entry,
-            is_admin=is_admin,
-        ),
-    )
-    return True
-
-
-async def _handle_blacklist_error(
-    message: Message,
-    state: FSMContext,
-    error_msg: str,
-) -> None:
-    """Handle blacklist error during registration."""
-    action_type = error_msg.split(":")[1]
-    from app.models.blacklist import BlacklistActionType
-
-    if action_type == BlacklistActionType.REGISTRATION_DENIED:
-        await message.answer(
-            "Здравствуйте, по решению"
-            "участников нашего "
-            "сообщества вам отказано в"
-            "регистрации в нашем "
-            "боте и других инструментах нашего"
-            "сообщества."
-        )
-    else:
-        await message.answer(
-            "❌ Ошибка регистрации. Обратитесь в"
-            "поддержку."
-        )
-    await state.clear()
-
-
-async def _register_user_old_pattern(
-    message: Message,
-    state: FSMContext,
-    session: Any,
-    wallet_address: str,
-    password: str,
-    referrer_telegram_id: int | None,
-) -> User | None:
-    """Register user using old pattern (direct session)."""
-    try:
-        user_service = UserService(session)
-        user = await user_service.register_user(
-            telegram_id=message.from_user.id,
-            username=message.from_user.username,
-            wallet_address=wallet_address,
-            financial_password=password,
-            referrer_telegram_id=referrer_telegram_id,
-        )
-        return user
-    except ValueError as e:
-        error_msg = str(e)
-        if error_msg.startswith("BLACKLISTED:"):
-            await _handle_blacklist_error(message, state, error_msg)
-        else:
-            await message.answer(
-                f"❌ Ошибка регистрации:\\n{error_msg}\\n\\n"
-                "Попробуйте начать заново: /start"
-            )
-        await state.clear()
-        return None
-
-
-async def _register_user_new_pattern(
-    message: Message,
-    state: FSMContext,
-    session_factory: Any,
-    wallet_address: str,
-    password: str,
-    referrer_telegram_id: int | None,
-) -> User | None:
-    """Register user using new pattern (session factory)."""
-    user = None
-    try:
-        async with session_factory() as session:
-            async with session.begin():
-                user_service = UserService(session)
-                user = await user_service.register_user(
-                    telegram_id=message.from_user.id,
-                    username=message.from_user.username,
-                    wallet_address=wallet_address,
-                    financial_password=password,
-                    referrer_telegram_id=referrer_telegram_id,
-                )
-        return user
-    except ValueError as e:
-        error_msg = str(e)
-
-        # Handle "User already registered" as success (Double Submit issue)
-        if error_msg == "User already registered":
-            logger.info(
-                f"Double registration attempt caught for user {message.from_user.id}"
-            )
-            async with session_factory() as session:
-                user_service = UserService(session)
-                user = await user_service.get_by_telegram_id(message.from_user.id)
-
-            if user:
-                logger.info(
-                    f"User {user.id} found, treating double registration as success"
-                )
-                return user
-            else:
-                await message.answer(
-                    "❌ Ошибка: Пользователь уже"
-                    "зарегистрирован, но данные не найдены. "
-                    "Обратитесь в поддержку."
-                )
-                await state.clear()
-                return None
-
-        # Check if it's a blacklist error
-        elif error_msg.startswith("BLACKLISTED:"):
-            await _handle_blacklist_error(message, state, error_msg)
-            return None
-        else:
-            await message.answer(
-                f"❌ Ошибка регистрации:\\n{error_msg}\\n\\n"
-                "Попробуйте начать заново: /start"
-            )
-            await state.clear()
-            return None
-
-
-async def _store_password_in_redis(
-    user: User,
-    password: str,
-    redis_client: Any,
-) -> None:
-    """Store encrypted password in Redis for 1 hour."""
-    if not (redis_client and password):
-        return
-
-    try:
-        password_key = f"password:plain:{user.id}"
-        from bot.utils.secure_storage import SecureRedisStorage
-
-        secure_storage = SecureRedisStorage(redis_client)
-        success = await secure_storage.set_secret(password_key, password, ttl=3600)
-        if success:
-            logger.info(
-                f"Encrypted password stored in Redis for user {user.id} (1 hour TTL)"
-            )
-        else:
-            logger.warning(
-                f"Failed to encrypt and store password in Redis for user {user.id}"
-            )
-    except Exception as e:
-        logger.warning(
-            f"Failed to store encrypted password in Redis for user {user.id}: {e}"
-        )
-
-
-async def _send_registration_success_messages(
-    message: Message,
-    state: FSMContext,
-    user: User,
-    session: Any,
-    is_admin: bool,
-    blacklist_entry: Any,
-) -> None:
-    """Send registration success messages and set up user."""
-    # Save user.id in FSM for "Show password again" button
-    await state.update_data(show_password_user_id=user.id)
-
-    await message.answer(
-        "🎉 Регистрация завершена!\\n\\n"
-        f"Ваш ID: {user.id}\\n"
-        f"Кошелек: {user.masked_wallet}\\n\\n"
-        "Добро пожаловать в ArbitroPLEXbot! 🚀\\n\\n"
-        "⚠️ **Важно:** Сохраните ваш финансовый"
-        "пароль в безопасном месте!\\n"
-        "Он понадобится для подтверждения финансовых операций.",
-        reply_markup=show_password_keyboard(),
-    )
-
-    # Get user language for i18n
-    user_language = await get_user_language(session, user.id)
-    _ = get_translator(user_language)
-
-    # Send main menu
-    await message.answer(
-        _("common.choose_action"),
-        reply_markup=main_menu_reply_keyboard(
-            user=user, blacklist_entry=blacklist_entry, is_admin=is_admin
-        ),
-    )
-
-    # Ask if user wants to provide contacts (optional but recommended)
-    from bot.keyboards.reply import contacts_choice_keyboard
-
-    await message.answer(
-        "📝 **Рекомендуем оставить контакты!**\\n\\n"
-        "🔒 **Зачем это нужно?**\\n"
-        "Если ваш Telegram-аккаунт будет угнан или"
-        "заблокирован, "
-        "мы сможем связаться с вами и помочь"
-        "восстановить доступ к средствам.\\n\\n"
-        "⚠️ **Важно:** Указывайте *реальные* данные!\\n"
-        "• Телефон: ваш действующий номер\\n"
-        "• Email: почта, к которой у вас есть доступ\\n\\n"
-        "Хотите оставить контакты?",
-        parse_mode="Markdown",
-        reply_markup=contacts_choice_keyboard(),
-    )
-
-    await state.set_state(RegistrationStates.waiting_for_contacts_choice)
-
-
-async def _notify_referrer_async(
-    referrer_telegram_id: int,
-    new_user_username: str,
-    new_user_telegram_id: int,
-    bot: Any,
-) -> None:
-    """Notify referrer about new referral (non-blocking)."""
-    try:
-        from app.services.referral.referral_notifications import notify_new_referral
-
-        await notify_new_referral(
-            bot=bot,
-            referrer_telegram_id=referrer_telegram_id,
-            new_user_username=new_user_username,
-            new_user_telegram_id=new_user_telegram_id,
-        )
-    except Exception as e:
-        logger.warning(f"Failed to notify referrer: {e}")
-
-
-
-
 @router.message(RegistrationStates.waiting_for_password_confirmation)
 async def process_password_confirmation(
     message: Message,
@@ -1173,13 +738,44 @@ async def process_password_confirmation(
         state: FSM state
         data: Additional data including session_factory
     """
-    # Handle /start command
+    # CRITICAL: pass /start to main handler
     if message.text and message.text.startswith("/start"):
         await state.clear()
-        return  # Let CommandStart() handle it
+        return  # РџРѕР·РІРѕР»СЏРµРј CommandStart() РѕР±СЂР°Р±РѕС‚Р°С‚СЊ СЌС‚Рѕ
 
-    # Handle menu button
-    if await _handle_menu_button_in_password_confirmation(message, state, data):
+    # Check if message is a menu button - if so, clear state and ignore
+    from bot.utils.menu_buttons import is_menu_button
+
+    if is_menu_button(message.text):
+        await state.clear()
+        user: User | None = data.get("user")
+        is_admin = data.get("is_admin", False)
+        # РџРѕР»СѓС‡Р°РµРј session РёР· data
+        session = data.get("session")
+        blacklist_entry = None
+        # CRITICAL: check session before use
+        if user and session:
+            try:
+                from app.repositories.blacklist_repository import (
+                    BlacklistRepository,
+                )
+                blacklist_repo = BlacklistRepository(session)
+                blacklist_entry = await blacklist_repo.find_by_telegram_id(
+                    user.telegram_id
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Failed to get blacklist entry for user {user.telegram_id}: {e}"
+                )
+                blacklist_entry = None
+        await message.answer(
+            "рџ“Љ Р“Р»Р°РІРЅРѕРµ РјРµРЅСЋ",
+            reply_markup=main_menu_reply_keyboard(
+                user=user,
+                blacklist_entry=blacklist_entry,
+                is_admin=is_admin,
+            ),
+        )
         return
 
     confirmation = message.text.strip()
@@ -1197,53 +793,144 @@ async def process_password_confirmation(
     # Check if passwords match
     if confirmation != password:
         await message.answer(
-            "❌ Пароли не совпадают!\n\nВведите пароль"
-            "еще раз:"
+            "вќЊ РџР°СЂРѕР»Рё РЅРµ СЃРѕРІРїР°РґР°СЋС‚!\n\nР’РІРµРґРёС‚Рµ РїР°СЂРѕР»СЊ РµС‰Рµ СЂР°Р·:"
         )
-        await state.set_state(RegistrationStates.waiting_for_financial_password)
+        await state.set_state(
+            RegistrationStates.waiting_for_financial_password
+        )
         return
 
-    # Normalize wallet address to checksum format
+    # SHORT transaction for user registration
     wallet_address = state_data.get("wallet_address")
     referrer_telegram_id = state_data.get("referrer_telegram_id")
 
+    # Normalize wallet address to checksum format
     from app.utils.validation import normalize_bsc_address
     try:
         wallet_address = normalize_bsc_address(wallet_address)
     except ValueError as e:
         await message.answer(
-            f"❌ Ошибка валидации адреса кошелька:\n{str(e)}\n\n"
-            "Попробуйте начать заново: /start"
+            f"вќЊ РћС€РёР±РєР° РІР°Р»РёРґР°С†РёРё Р°РґСЂРµСЃР° РєРѕС€РµР»СЊРєР°:\n{str(e)}\n\n"
+            "РџРѕРїСЂРѕР±СѓР№С‚Рµ РЅР°С‡Р°С‚СЊ Р·Р°РЅРѕРІРѕ: /start"
         )
         await state.clear()
         return
 
-    # Register user (short transaction)
     session_factory = data.get("session_factory")
-    session = data.get("session")
-
     if not session_factory:
-        # Fallback to old session
+        # Fallback to old session for backward compatibility
+        session = data.get("session")
         if not session:
             await message.answer(
-                "❌ Системная ошибка. Отправьте /start или "
-                "обратитесь в поддержку."
+                "вќЊ РЎРёСЃС‚РµРјРЅР°СЏ РѕС€РёР±РєР°. РћС‚РїСЂР°РІСЊС‚Рµ /start РёР»Рё "
+                "РѕР±СЂР°С‚РёС‚РµСЃСЊ РІ РїРѕРґРґРµСЂР¶РєСѓ."
             )
             await state.clear()
             return
-        user = await _register_user_old_pattern(
-            message, state, session, wallet_address, password, referrer_telegram_id
-        )
-    else:
-        # NEW pattern: short transaction
-        user = await _register_user_new_pattern(
-            message, state, session_factory,
-            wallet_address, password, referrer_telegram_id
-        )
+        user_service = UserService(session)
+        try:
+            user = await user_service.register_user(
+                telegram_id=message.from_user.id,
+                username=message.from_user.username,
+                wallet_address=wallet_address,
+                financial_password=password,
+                referrer_telegram_id=referrer_telegram_id,
+            )
+        except ValueError as e:
+            error_msg = str(e)
+            # Check if it's a blacklist error
+            if error_msg.startswith("BLACKLISTED:"):
+                action_type = error_msg.split(":")[1]
+                from app.models.blacklist import BlacklistActionType
 
-    # Check if registration was successful
+                if action_type == BlacklistActionType.REGISTRATION_DENIED:
+                    await message.answer(
+                        "Р—РґСЂР°РІСЃС‚РІСѓР№С‚Рµ, РїРѕ СЂРµС€РµРЅРёСЋ СѓС‡Р°СЃС‚РЅРёРєРѕРІ РЅР°С€РµРіРѕ "
+                        "СЃРѕРѕР±С‰РµСЃС‚РІР° РІР°Рј РѕС‚РєР°Р·Р°РЅРѕ РІ СЂРµРіРёСЃС‚СЂР°С†РёРё РІ РЅР°С€РµРј "
+                        "Р±РѕС‚Рµ Рё РґСЂСѓРіРёС… РёРЅСЃС‚СЂСѓРјРµРЅС‚Р°С… РЅР°С€РµРіРѕ СЃРѕРѕР±С‰РµСЃС‚РІР°."
+                    )
+                else:
+                    await message.answer(
+                        "вќЊ РћС€РёР±РєР° СЂРµРіРёСЃС‚СЂР°С†РёРё. РћР±СЂР°С‚РёС‚РµСЃСЊ РІ РїРѕРґРґРµСЂР¶РєСѓ."
+                    )
+            else:
+                await message.answer(
+                    f"вќЊ РћС€РёР±РєР° СЂРµРіРёСЃС‚СЂР°С†РёРё:\n{error_msg}\n\n"
+                    "РџРѕРїСЂРѕР±СѓР№С‚Рµ РЅР°С‡Р°С‚СЊ Р·Р°РЅРѕРІРѕ: /start"
+                )
+            await state.clear()
+            return
+    else:
+        # NEW pattern: short transaction for registration
+        user = None
+        try:
+            async with session_factory() as session:
+                async with session.begin():
+                    user_service = UserService(session)
+                    user = await user_service.register_user(
+                        telegram_id=message.from_user.id,
+                        username=message.from_user.username,
+                        wallet_address=wallet_address,
+                        financial_password=password,
+                        referrer_telegram_id=referrer_telegram_id,
+                    )
+            # Transaction closed here
+        except ValueError as e:
+            error_msg = str(e)
+
+            # FIX: Handle "User already registered" as success (Double Submi...
+            if error_msg == "User already registered":
+                logger.info(
+                    f"Double registration attempt caught for user {message.from_user.id} - checking existing user"
+                )
+                # Try to fetch existing user to confirm it's really them
+                async with session_factory() as session:
+                    user_service = UserService(session)
+                    user = await user_service.get_by_telegram_id(message.from_user.id)
+
+                if user:
+                    logger.info(
+                        f"User {user.id} found, treating double registration error as success"
+                    )
+                    # Proceed to success flow below
+                else:
+                    # User not found but error says registered? Weird race o...
+                    await message.answer(
+                        "вќЊ РћС€РёР±РєР°: РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ СѓР¶Рµ Р·Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°РЅ, РЅРѕ РґР°РЅРЅС‹Рµ РЅРµ РЅР°Р№РґРµРЅС‹. РћР±СЂР°С‚РёС‚РµСЃСЊ РІ РїРѕРґРґРµСЂР¶РєСѓ."
+                    )
+                    await state.clear()
+                    return
+
+            # Check if it's a blacklist error
+            elif error_msg.startswith("BLACKLISTED:"):
+                action_type = error_msg.split(":")[1]
+                from app.models.blacklist import BlacklistActionType
+
+                if action_type == BlacklistActionType.REGISTRATION_DENIED:
+                    await message.answer(
+                        "Р—РґСЂР°РІСЃС‚РІСѓР№С‚Рµ, РїРѕ СЂРµС€РµРЅРёСЋ СѓС‡Р°СЃС‚РЅРёРєРѕРІ РЅР°С€РµРіРѕ "
+                        "СЃРѕРѕР±С‰РµСЃС‚РІР° РІР°Рј РѕС‚РєР°Р·Р°РЅРѕ РІ СЂРµРіРёСЃС‚СЂР°С†РёРё РІ РЅР°С€РµРј "
+                        "Р±РѕС‚Рµ Рё РґСЂСѓРіРёС… РёРЅСЃС‚СЂСѓРјРµРЅС‚Р°С… РЅР°С€РµРіРѕ СЃРѕРѕР±С‰РµСЃС‚РІР°."
+                    )
+                else:
+                    await message.answer(
+                        "вќЊ РћС€РёР±РєР° СЂРµРіРёСЃС‚СЂР°С†РёРё. РћР±СЂР°С‚РёС‚РµСЃСЊ РІ РїРѕРґРґРµСЂР¶РєСѓ."
+                    )
+                await state.clear()
+                return
+            else:
+                await message.answer(
+                    f"вќЊ РћС€РёР±РєР° СЂРµРіРёСЃС‚СЂР°С†РёРё:\n{error_msg}\n\n"
+                    "РџРѕРїСЂРѕР±СѓР№С‚Рµ РЅР°С‡Р°С‚СЊ Р·Р°РЅРѕРІРѕ: /start"
+                )
+                await state.clear()
+                return
+
+    # Registration successful
     if not user:
-        # Error was already handled in helper functions
+        # Should not happen if logic above is correct
+        await message.answer("вќЊ РќРµРёР·РІРµСЃС‚РЅР°СЏ РѕС€РёР±РєР° СЂРµРіРёСЃС‚СЂР°С†РёРё.")
+        await state.clear()
         return
 
     logger.info(
@@ -1254,33 +941,102 @@ async def process_password_confirmation(
         },
     )
 
-    # Store plain password in Redis for 1 hour
+    # R1-19: РЎРѕС…СЂР°РЅСЏРµРј plain password РІ Redis РЅР° 1 С‡Р°СЃ РґР»СЏ...
     redis_client = data.get("redis_client")
-    await _store_password_in_redis(user, password, redis_client)
+    if redis_client and password:
+        try:
+            password_key = f"password:plain:{user.id}"
+            # РЎРѕС…СЂР°РЅСЏРµРј РїР°СЂРѕР»СЊ РЅР° 1 С‡Р°СЃ (3600 СЃРµРєСѓРЅРґ)
+            from bot.utils.secure_storage import SecureRedisStorage
 
-    # Get blacklist entry for user
+            secure_storage = SecureRedisStorage(redis_client)
+            success = await secure_storage.set_secret(password_key, password, ttl=3600)
+            if success:
+                logger.info(
+                    f"Encrypted password stored in Redis for user {user.id} (1 hour TTL)"
+                )
+            else:
+                logger.warning(
+                    f"Failed to encrypt and store password in Redis for user {user.id}"
+                )
+        except Exception as e:
+            logger.warning(
+                f"Failed to store encrypted password in Redis for user {user.id}: {e}"
+            )
+
+    # Get is_admin from middleware data
     is_admin = data.get("is_admin", False)
+    # РџРѕР»СѓС‡Р°РµРј session РёР· data РґР»СЏ РїРѕР»СѓС‡РµРЅРёСЏ blacklist...
+    session = data.get("session")
     blacklist_entry = None
     if session:
         from app.repositories.blacklist_repository import BlacklistRepository
         blacklist_repo = BlacklistRepository(session)
-        blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
+        blacklist_entry = await blacklist_repo.find_by_telegram_id(
+                user.telegram_id
+            )
 
-    # Send registration success messages
-    await _send_registration_success_messages(
-        message, state, user, session, is_admin, blacklist_entry
+    # R1-19: РљРЅРѕРїРєР° РґР»СЏ РїРѕРІС‚РѕСЂРЅРѕРіРѕ РїРѕРєР°Р·Р° РїР°СЂРѕР...
+    # РЎРѕС…СЂР°РЅСЏРµРј user.id РІ FSM РґР»СЏ РѕР±СЂР°Р±РѕС‚С‡РёРєР° "РџРѕР...
+    await state.update_data(show_password_user_id=user.id)
+
+    await message.answer(
+        "рџЋ‰ Р РµРіРёСЃС‚СЂР°С†РёСЏ Р·Р°РІРµСЂС€РµРЅР°!\n\n"
+        f"Р’Р°С€ ID: {user.id}\n"
+        f"РљРѕС€РµР»РµРє: {user.masked_wallet}\n\n"
+        "Р”РѕР±СЂРѕ РїРѕР¶Р°Р»РѕРІР°С‚СЊ РІ ArbitroPLEXbot! рџљЂ\n\n"
+        "вљ пёЏ **Р’Р°Р¶РЅРѕ:** РЎРѕС…СЂР°РЅРёС‚Рµ РІР°С€ С„РёРЅР°РЅСЃРѕРІС‹Р№ РїР°СЂРѕР»СЊ РІ Р±РµР·РѕРїР°СЃРЅРѕРј РјРµСЃС‚Рµ!\n"
+        "РћРЅ РїРѕРЅР°РґРѕР±РёС‚СЃСЏ РґР»СЏ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёСЏ С„РёРЅР°РЅСЃРѕРІС‹С… РѕРїРµСЂР°С†РёР№.",
+        reply_markup=show_password_keyboard(),
     )
 
+    # R13-3: Get user language for i18n
+    user_language = await get_user_language(session, user.id)
+    _ = get_translator(user_language)
+
+    # РћС‚РїСЂР°РІР»СЏРµРј РіР»Р°РІРЅРѕРµ РјРµРЅСЋ РѕС‚РґРµР»СЊРЅС‹Рј СЃРѕРѕ...
+    await message.answer(
+        _("common.choose_action"),
+        reply_markup=main_menu_reply_keyboard(
+            user=user, blacklist_entry=blacklist_entry, is_admin=is_admin
+        ),
+    )
+
+    # Ask if user wants to provide contacts (optional but recommended)
+    from bot.keyboards.reply import contacts_choice_keyboard
+
+    await message.answer(
+        "рџ“ќ **Р РµРєРѕРјРµРЅРґСѓРµРј РѕСЃС‚Р°РІРёС‚СЊ РєРѕРЅС‚Р°РєС‚С‹!**\n\n"
+        "рџ”’ **Р—Р°С‡РµРј СЌС‚Рѕ РЅСѓР¶РЅРѕ?**\n"
+        "Р•СЃР»Рё РІР°С€ Telegram-Р°РєРєР°СѓРЅС‚ Р±СѓРґРµС‚ СѓРіРЅР°РЅ РёР»Рё Р·Р°Р±Р»РѕРєРёСЂРѕРІР°РЅ, "
+        "РјС‹ СЃРјРѕР¶РµРј СЃРІСЏР·Р°С‚СЊСЃСЏ СЃ РІР°РјРё Рё РїРѕРјРѕС‡СЊ РІРѕСЃСЃС‚Р°РЅРѕРІРёС‚СЊ РґРѕСЃС‚СѓРї Рє СЃСЂРµРґСЃС‚РІР°Рј.\n\n"
+        "вљ пёЏ **Р’Р°Р¶РЅРѕ:** РЈРєР°Р·С‹РІР°Р№С‚Рµ *СЂРµР°Р»СЊРЅС‹Рµ* РґР°РЅРЅС‹Рµ!\n"
+        "вЂў РўРµР»РµС„РѕРЅ: РІР°С€ РґРµР№СЃС‚РІСѓСЋС‰РёР№ РЅРѕРјРµСЂ\n"
+        "вЂў Email: РїРѕС‡С‚Р°, Рє РєРѕС‚РѕСЂРѕР№ Сѓ РІР°СЃ РµСЃС‚СЊ РґРѕСЃС‚СѓРї\n\n"
+        "РҐРѕС‚РёС‚Рµ РѕСЃС‚Р°РІРёС‚СЊ РєРѕРЅС‚Р°РєС‚С‹?",
+        parse_mode="Markdown",
+        reply_markup=contacts_choice_keyboard(),
+    )
+
+    await state.set_state(RegistrationStates.waiting_for_contacts_choice)
+
     # Notify referrer about new referral (non-blocking)
+    referrer_telegram_id = state_data.get("referrer_telegram_id")
     if referrer_telegram_id:
-        bot = data.get("bot")
-        if bot:
-            await _notify_referrer_async(
-                referrer_telegram_id,
-                message.from_user.username,
-                message.from_user.id,
-                bot,
+        try:
+            from app.services.referral.referral_notifications import (
+                notify_new_referral,
             )
+            bot = data.get("bot")
+            if bot:
+                await notify_new_referral(
+                    bot=bot,
+                    referrer_telegram_id=referrer_telegram_id,
+                    new_user_username=message.from_user.username,
+                    new_user_telegram_id=message.from_user.id,
+                )
+        except Exception as e:
+            logger.warning(f"Failed to notify referrer: {e}")
 
 
 @router.message(RegistrationStates.waiting_for_contacts_choice)
@@ -1313,8 +1069,7 @@ async def handle_contacts_choice(
     ):
         await message.answer(
             "вњ… РљРѕРЅС‚Р°РєС‚С‹ РїСЂРѕРїСѓС‰РµРЅС‹.\n\n"
-            "вљ пёЏ Р РµРєРѕРјРµРЅРґСѓРµРј РґРѕР±Р°РІРёС‚СЊ РёС… РїРѕР·Р¶Рµ РІ"
-            "РЅР°СЃС‚СЂРѕР№РєР°С… РїСЂРѕС„РёР»СЏ "
+            "вљ пёЏ Р РµРєРѕРјРµРЅРґСѓРµРј РґРѕР±Р°РІРёС‚СЊ РёС… РїРѕР·Р¶Рµ РІ РЅР°СЃС‚СЂРѕР№РєР°С… РїСЂРѕС„РёР»СЏ "
             "РґР»СЏ Р·Р°С‰РёС‚С‹ РІР°С€РµРіРѕ Р°РєРєР°СѓРЅС‚Р°.",
         )
         await state.clear()
@@ -1368,8 +1123,7 @@ async def process_phone(
         await state.update_data(phone=None)
         await state.set_state(RegistrationStates.waiting_for_email)
         await message.answer(
-            "📧 Введите email "
-            "(или отправьте /skip чтобы пропустить):"
+            "рџ“§ Р’РІРµРґРёС‚Рµ email (РёР»Рё РѕС‚РїСЂР°РІСЊС‚Рµ /skip С‡С‚РѕР±С‹ РїСЂРѕРїСѓСЃС‚РёС‚СЊ):",
         )
         return
 
@@ -1432,11 +1186,7 @@ async def process_email(
 
     if is_menu_button(message.text):
         await state.clear()
-        contacts_text = (
-            "вњ… Р РµРіРёСЃС‚СЂР°С†РёСЏ Р·Р°РІРµСЂС€РµРЅР° "
-            "Р±РµР· РєРѕРЅС‚Р°РєС‚РѕРІ.\n\n"
-        )
-        user = data.get("user")
+        user: User | None = data.get("user")
         is_admin = data.get("is_admin", False)
         from app.repositories.blacklist_repository import BlacklistRepository
         blacklist_repo = BlacklistRepository(session)
@@ -1446,7 +1196,7 @@ async def process_email(
                 user.telegram_id
             )
         await message.answer(
-            "📊 Главное меню",
+            "рџ“Љ Р“Р»Р°РІРЅРѕРµ РјРµРЅСЋ",
             reply_markup=main_menu_reply_keyboard(
                 user=user,
                 blacklist_entry=blacklist_entry,
@@ -1487,8 +1237,7 @@ async def process_email(
     if not current_user:
         logger.error("process_email: user missing in middleware data")
         await message.answer(
-            "вќЊ РћС€РёР±РєР° РєРѕРЅС‚РµРєСЃС‚Р° РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ."
-            "РџРѕРІС‚РѕСЂРёС‚Рµ /start"
+            "вќЊ РћС€РёР±РєР° РєРѕРЅС‚РµРєСЃС‚Р° РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ. РџРѕРІС‚РѕСЂРёС‚Рµ /start"
         )
         return
     await user_service.update_profile(
@@ -1504,19 +1253,10 @@ async def process_email(
         contacts_text += f"рџ“§ Email: {email}\n"
 
     if not phone and not email:
-        contacts_text = (
-            "вњ… Р РµРіРёСЃС‚СЂР°С†РёСЏ Р·Р°РІРµСЂС€РµРЅР° "
-            "Р±РµР· РєРѕРЅС‚Р°РєС‚РѕРІ.\n\n"
-        )
-        contacts_text += (
-            "Р'С‹ РјРѕР¶РµС‚Рµ РґРѕР±Р°РІРёС‚СЊ РёС… РїРѕР·Р¶Рµ "
-            "РІ РЅР°СЃС‚СЂРѕР№РєР°С… РїСЂРѕС„РёР»СЏ."
-        )
+        contacts_text = "вњ… Р РµРіРёСЃС‚СЂР°С†РёСЏ Р·Р°РІРµСЂС€РµРЅР° Р±РµР· РєРѕРЅС‚Р°РєС‚РѕРІ.\n\n"
+        contacts_text += "Р’С‹ РјРѕР¶РµС‚Рµ РґРѕР±Р°РІРёС‚СЊ РёС… РїРѕР·Р¶Рµ РІ РЅР°СЃС‚СЂРѕР№РєР°С… РїСЂРѕС„РёР»СЏ."
     else:
-        contacts_text += (
-            "\nР'С‹ РјРѕР¶РµС‚Рµ РёР·РјРµРЅРёС‚СЊ РёС… РїРѕР·Р¶Рµ "
-            "РІ РЅР°СЃС‚СЂРѕР№РєР°С… РїСЂРѕС„РёР»СЏ."
-        )
+        contacts_text += "\nР’С‹ РјРѕР¶РµС‚Рµ РёР·РјРµРЅРёС‚СЊ РёС… РїРѕР·Р¶Рµ РІ РЅР°СЃС‚СЂРѕР№РєР°С… РїСЂРѕС„РёР»СЏ."
 
     # Get is_admin from middleware data
     is_admin = data.get("is_admin", False)
@@ -1544,8 +1284,7 @@ async def handle_show_password_again(
     **data: Any,
 ) -> None:
     """
-    R1-19: РџРѕРєР°Р·Р°С‚СЊ С„РёРЅР°РЅСЃРѕРІС‹Р№ РїР°СЂРѕР»СЊ РµС‰С' СЂР°Р·
-    (РІ С‚РµС‡РµРЅРёРµ С‡Р°СЃР° РїРѕСЃР»Рµ СЂРµРіРёСЃС‚СЂР°С†РёРё).
+    R1-19: РџРѕРєР°Р·Р°С‚СЊ С„РёРЅР°РЅСЃРѕРІС‹Р№ РїР°СЂРѕР»СЊ РµС‰С‘ СЂР°Р· (РІ С‚РµС‡РµРЅРёРµ С‡Р°СЃР° РїРѕСЃР»Рµ СЂРµРіРёСЃС‚СЂР°С†РёРё).
 
     Args:
         callback: Callback query
@@ -1556,9 +1295,8 @@ async def handle_show_password_again(
     try:
         user_id = int(user_id_str)
     except ValueError:
-        await callback.answer(
-            "вќЊ РћС€РёР±РєР°: РЅРµРІРµСЂРЅС‹Р№ С„РѕСЂРјР°С‚ Р·Р°РїСЂРѕСЃР°", show_alert=True
-        )
+        await callback.answer("вќЊ РћС€РёР±РєР°: РЅРµРІРµСЂРЅС‹Р№ С„РѕСЂРјР°С‚ Р·Р°РїСЂРѕСЃР°", show_alert=True)
+        return
 
     # РџСЂРѕРІРµСЂСЏРµРј, С‡С‚Рѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЊ СЃСѓС‰РµСЃС‚РІСѓРµ...
     user: User | None = data.get("user")
@@ -1573,10 +1311,8 @@ async def handle_show_password_again(
     redis_client = data.get("redis_client")
     if not redis_client:
         await callback.answer(
-            "вљ пёЏ РџР°СЂРѕР»СЊ Р±РѕР»СЊС€Рµ РЅРµРґРѕСЃС‚СѓРїРµРЅ (РїСЂРѕС€Р»Рѕ"
-            "Р±РѕР»РµРµ 1 С‡Р°СЃР° СЃ РјРѕРјРµРЅС‚Р° СЂРµРіРёСЃС‚СЂР°С†РёРё).\n\n"
-            "РСЃРїРѕР»СЊР·СѓР№С‚Рµ С„СѓРЅРєС†РёСЋ РІРѕСЃСЃС‚Р°РЅРѕРІР»РµРЅРёСЏ РїР°СЂРѕР»СЏ "
-            "РІ РЅР°СЃС‚СЂРѕР№РєР°С….",
+            "вљ пёЏ РџР°СЂРѕР»СЊ Р±РѕР»СЊС€Рµ РЅРµРґРѕСЃС‚СѓРїРµРЅ (РїСЂРѕС€Р»Рѕ Р±РѕР»РµРµ 1 С‡Р°СЃР° СЃ РјРѕРјРµРЅС‚Р° СЂРµРіРёСЃС‚СЂР°С†РёРё).\n\n"
+            "РСЃРїРѕР»СЊР·СѓР№С‚Рµ С„СѓРЅРєС†РёСЋ РІРѕСЃСЃС‚Р°РЅРѕРІР»РµРЅРёСЏ РїР°СЂРѕР»СЏ РІ РЅР°СЃС‚СЂРѕР№РєР°С….",
             show_alert=True
         )
         return
@@ -1590,21 +1326,16 @@ async def handle_show_password_again(
 
         if not plain_password:
             await callback.answer(
-                "вљ пёЏ РџР°СЂРѕР»СЊ Р±РѕР»СЊС€Рµ РЅРµРґРѕСЃС‚СѓРїРµРЅ (РїСЂРѕС€Р»Рѕ"
-                "Р±РѕР»РµРµ 1 С‡Р°СЃР° СЃ РјРѕРјРµРЅС‚Р° СЂРµРіРёСЃС‚СЂР°С†РёРё).\n\n"
-                "РСЃРїРѕР»СЊР·СѓР№С‚Рµ С„СѓРЅРєС†РёСЋ РІРѕСЃСЃС‚Р°РЅРѕРІР»РµРЅРёСЏ РїР°СЂРѕР»СЏ "
-                "РІ РЅР°СЃС‚СЂРѕР№РєР°С….",
+                "вљ пёЏ РџР°СЂРѕР»СЊ Р±РѕР»СЊС€Рµ РЅРµРґРѕСЃС‚СѓРїРµРЅ (РїСЂРѕС€Р»Рѕ Р±РѕР»РµРµ 1 С‡Р°СЃР° СЃ РјРѕРјРµРЅС‚Р° СЂРµРіРёСЃС‚СЂР°С†РёРё).\n\n"
+                "РСЃРїРѕР»СЊР·СѓР№С‚Рµ С„СѓРЅРєС†РёСЋ РІРѕСЃСЃС‚Р°РЅРѕРІР»РµРЅРёСЏ РїР°СЂРѕР»СЏ РІ РЅР°СЃС‚СЂРѕР№РєР°С….",
                 show_alert=True
             )
             return
 
         # РџРѕРєР°Р·С‹РІР°РµРј РїР°СЂРѕР»СЊ РІ alert
         await callback.answer(
-            (
-                f"рџ”‘ Р’Р°С€ С„РёРЅР°РЅСЃРѕРІС‹Р№ РїР°СЂРѕР»СЊ:\n\n{plain_password}\n\n"
-                "вљ пёЏ РЎРѕС…СЂР°РЅРёС‚Рµ РµРіРѕ СЃРµР№С‡Р°СЃ! "
-                "РћРЅ Р±РѕР»СЊС€Рµ РЅРµ Р±СѓРґРµС‚ РїРѕРєР°Р·Р°РЅ."
-            ),
+            f"рџ”‘ Р’Р°С€ С„РёРЅР°РЅСЃРѕРІС‹Р№ РїР°СЂРѕР»СЊ:\n\n{plain_password}\n\n"
+            "вљ пёЏ РЎРѕС…СЂР°РЅРёС‚Рµ РµРіРѕ СЃРµР№С‡Р°СЃ! РћРЅ Р±РѕР»СЊС€Рµ РЅРµ Р±СѓРґРµС‚ РїРѕРєР°Р·Р°РЅ.",
             show_alert=True
         )
 
@@ -1617,10 +1348,7 @@ async def handle_show_password_again(
             exc_info=True
         )
         await callback.answer(
-            (
-                "вќЊ РћС€РёР±РєР° РїСЂРё РїРѕР»СѓС‡РµРЅРёРё РїР°СЂРѕР»СЏ. "
-                "РћР±СЂР°С‚РёС‚РµСЃСЊ РІ РїРѕРґРґРµСЂР¶РєСѓ."
-            ),
+            "вќЊ РћС€РёР±РєР° РїСЂРё РїРѕР»СѓС‡РµРЅРёРё РїР°СЂРѕР»СЏ. РћР±СЂР°С‚РёС‚РµСЃСЊ РІ РїРѕРґРґРµСЂР¶РєСѓ.",
             show_alert=True
         )
 
@@ -1635,16 +1363,14 @@ from bot.constants.rules import (
 
 ECOSYSTEM_INFO = (
     "рџљЂ **Р”РѕР±СЂРѕ РїРѕР¶Р°Р»РѕРІР°С‚СЊ РІ ArbitroPLEXbot!**\n\n"
-    "РњС‹ СЃС‚СЂРѕРёРј **РєСЂРёРїС‚Рѕ-С„РёР°С‚РЅСѓСЋ СЌРєРѕСЃРёСЃС‚РµРјСѓ** РЅР° Р±Р°Р·Рµ"
-    "РјРѕРЅРµС‚С‹ "
+    "РњС‹ СЃС‚СЂРѕРёРј **РєСЂРёРїС‚Рѕ-С„РёР°С‚РЅСѓСЋ СЌРєРѕСЃРёСЃС‚РµРјСѓ** РЅР° Р±Р°Р·Рµ РјРѕРЅРµС‚С‹ "
     "**PLEX** Рё РІС‹СЃРѕРєРѕРґРѕС…РѕРґРЅС‹С… С‚РѕСЂРіРѕРІС‹С… СЂРѕР±РѕС‚РѕРІ.\n\n"
     "рџ“Љ **Р’Р°С€ РїРѕС‚РµРЅС†РёР°Р»СЊРЅС‹Р№ РґРѕС…РѕРґ:** РѕС‚ **30% РґРѕ 70%** РІ РґРµРЅСЊ!\n\n"
     f"рџ“‹ **РЈР РћР’РќР Р”РћРЎРўРЈРџРђ:**\n"
     f"```\n{LEVELS_TABLE}```\n"
     f"{RULES_SHORT_TEXT}\n\n"
     "в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ\n"
-    "**Р’СЃРµ СѓСЃР»РѕРІРёСЏ СЏРІР»СЏСЋС‚СЃСЏ РћР‘РЇР—РђРўР•Р›Р¬РќР«РњР РґР»СЏ"
-    "РєР°Р¶РґРѕРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ!**"
+    "**Р’СЃРµ СѓСЃР»РѕРІРёСЏ СЏРІР»СЏСЋС‚СЃСЏ РћР‘РЇР—РђРўР•Р›Р¬РќР«РњР РґР»СЏ РєР°Р¶РґРѕРіРѕ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ!**"
 )
 
 
@@ -1663,8 +1389,7 @@ async def handle_check_payment(
     else:
         # User unknown, ask for wallet
         await callback.message.answer(
-            "рџ“ќ Р’РІРµРґРёС‚Рµ Р°РґСЂРµСЃ РєРѕС€РµР»СЊРєР°, СЃ РєРѕС‚РѕСЂРѕРіРѕ Р±С‹Р»"
-            "СЃРѕРІРµСЂС€РµРЅ РїРµСЂРµРІРѕРґ:\n"
+            "рџ“ќ Р’РІРµРґРёС‚Рµ Р°РґСЂРµСЃ РєРѕС€РµР»СЊРєР°, СЃ РєРѕС‚РѕСЂРѕРіРѕ Р±С‹Р» СЃРѕРІРµСЂС€РµРЅ РїРµСЂРµРІРѕРґ:\n"
             "Р¤РѕСЂРјР°С‚: `0x...`",
             parse_mode="Markdown"
         )
@@ -1683,9 +1408,7 @@ async def process_payment_wallet(
 
     # Simple validation
     if not wallet.startswith("0x") or len(wallet) != 42:
-        await message.answer(
-            "вќЊ РќРµРІРµСЂРЅС‹Р№ С„РѕСЂРјР°С‚ Р°РґСЂРµСЃР°. РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰Рµ СЂР°Р·:"
-        )
+        await message.answer("вќЊ РќРµРІРµСЂРЅС‹Р№ С„РѕСЂРјР°С‚ Р°РґСЂРµСЃР°. РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰Рµ СЂР°Р·:")
         return
 
     # Check payment
@@ -1757,10 +1480,9 @@ async def _check_payment_logic(
                     if is_valid:
                         # Deposit is sufficient (>= 30 USDT)
                         await send(
-                            f"💰 **Ваш депозит:** {total_deposit:.2f} USDT\n"
-                            f"📊 **Требуется PLEX в сутки:** "
-                            f"{int(required_plex):,} PLEX\n\n"
-                            f"━━━━━━━━━━━━━━━━━━━━━━\n\n"
+                            f"рџ’° **Р’Р°С€ РґРµРїРѕР·РёС‚:** {total_deposit:.2f} USDT\n"
+                            f"рџ“Љ **РўСЂРµР±СѓРµС‚СЃСЏ PLEX РІ СЃСѓС‚РєРё:** {int(required_plex):,} PLEX\n\n"
+                            f"в”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓв”Ѓ\n\n"
                             f"{ECOSYSTEM_INFO}",
                             parse_mode="Markdown",
                             disable_web_page_preview=True
@@ -1779,10 +1501,7 @@ async def _check_payment_logic(
                             await send(message, parse_mode="Markdown")
 
                         await send(
-                            (
-                                "РџРѕСЃР»Рµ РїРѕРїРѕР»РЅРµРЅРёСЏ РЅР°Р¶РјРёС‚Рµ "
-                                "В«РћР±РЅРѕРІРёС‚СЊ РґРµРїРѕР·РёС‚В»:"
-                            ),
+                            "РџРѕСЃР»Рµ РїРѕРїРѕР»РЅРµРЅРёСЏ РЅР°Р¶РјРёС‚Рµ В«РћР±РЅРѕРІРёС‚СЊ РґРµРїРѕР·РёС‚В»:",
                             reply_markup=auth_rescan_keyboard()
                         )
                 else:
@@ -1802,11 +1521,7 @@ async def _check_payment_logic(
                 await db_session.commit()
             else:
                 # No DB user context, just let them in
-                await send(
-                    f"{ECOSYSTEM_INFO}",
-                    parse_mode="Markdown",
-                    disable_web_page_preview=True
-                )
+                await send(f"{ECOSYSTEM_INFO}", parse_mode="Markdown", disable_web_page_preview=True)
                 await state.clear()
                 await send(
                     "РќР°Р¶РјРёС‚Рµ РєРЅРѕРїРєСѓ РґР»СЏ РЅР°С‡Р°Р»Р° СЂР°Р±РѕС‚С‹:",
@@ -1816,11 +1531,9 @@ async def _check_payment_logic(
         else:
             await send(
                 "вќЊ **РћРїР»Р°С‚Р° РЅРµ РЅР°Р№РґРµРЅР°**\n\n"
-                "РњС‹ РїСЂРѕРІРµСЂРёР»Рё РїРѕСЃР»РµРґРЅРёРµ С‚СЂР°РЅР·Р°РєС†РёРё, РЅРѕ"
-                "РЅРµ РЅР°С€Р»Рё РїРѕСЃС‚СѓРїР»РµРЅРёСЏ.\n"
+                "РњС‹ РїСЂРѕРІРµСЂРёР»Рё РїРѕСЃР»РµРґРЅРёРµ С‚СЂР°РЅР·Р°РєС†РёРё, РЅРѕ РЅРµ РЅР°С€Р»Рё РїРѕСЃС‚СѓРїР»РµРЅРёСЏ.\n"
                 "вЂў РЈР±РµРґРёС‚РµСЃСЊ, С‡С‚Рѕ РѕС‚РїСЂР°РІРёР»Рё 10 PLEX\n"
-                "вЂў РџРѕРґРѕР¶РґРёС‚Рµ 1-2 РјРёРЅСѓС‚С‹, РµСЃР»Рё С‚СЂР°РЅР·Р°РєС†РёСЏ"
-                "РµС‰Рµ РІ РїСѓС‚Рё\n\n"
+                "вЂў РџРѕРґРѕР¶РґРёС‚Рµ 1-2 РјРёРЅСѓС‚С‹, РµСЃР»Рё С‚СЂР°РЅР·Р°РєС†РёСЏ РµС‰Рµ РІ РїСѓС‚Рё\n\n"
                 "РџРѕРїСЂРѕР±СѓР№С‚Рµ РµС‰Рµ СЂР°Р·:",
                 reply_markup=auth_retry_keyboard(),
                 parse_mode="Markdown"
@@ -1856,9 +1569,8 @@ async def handle_rescan_deposits(
     scan_result = await deposit_service.scan_and_validate(user.id)
 
     if not scan_result.get("success"):
-        error_msg = scan_result.get('error', 'РќРµРёР·РІРµСЃС‚РЅР°СЏ РѕС€РёР±РєР°')
         await callback.message.answer(
-            f"вљ пёЏ РћС€РёР±РєР° СЃРєР°РЅРёСЂРѕРІР°РЅРёСЏ: {error_msg}"
+            f"вљ пёЏ РћС€РёР±РєР° СЃРєР°РЅРёСЂРѕРІР°РЅРёСЏ: {scan_result.get('error', 'РќРµРёР·РІРµСЃС‚РЅР°СЏ РѕС€РёР±РєР°')}"
         )
         return
 
@@ -2030,8 +1742,7 @@ async def handle_payment_confirmed_reply(
             # No wallet known - ask for it
             logger.warning("No wallet found - asking user")
             await message.answer(
-                "рџ“ќ Р’РІРµРґРёС‚Рµ Р°РґСЂРµСЃ РєРѕС€РµР»СЊРєР°, СЃ РєРѕС‚РѕСЂРѕРіРѕ"
-                "Р±С‹Р» СЃРѕРІРµСЂС€РµРЅ РїРµСЂРµРІРѕРґ:\n"
+                "рџ“ќ Р’РІРµРґРёС‚Рµ Р°РґСЂРµСЃ РєРѕС€РµР»СЊРєР°, СЃ РєРѕС‚РѕСЂРѕРіРѕ Р±С‹Р» СЃРѕРІРµСЂС€РµРЅ РїРµСЂРµРІРѕРґ:\n"
                 "Р¤РѕСЂРјР°С‚: `0x...`",
                 parse_mode="Markdown"
             )
@@ -2137,8 +1848,7 @@ async def handle_retry_payment_reply(
             wallet = user.wallet_address
         else:
             await message.answer(
-                "рџ“ќ Р’РІРµРґРёС‚Рµ Р°РґСЂРµСЃ РєРѕС€РµР»СЊРєР°, СЃ РєРѕС‚РѕСЂРѕРіРѕ"
-                "Р±С‹Р» СЃРѕРІРµСЂС€РµРЅ РїРµСЂРµРІРѕРґ:\n"
+                "рџ“ќ Р’РІРµРґРёС‚Рµ Р°РґСЂРµСЃ РєРѕС€РµР»СЊРєР°, СЃ РєРѕС‚РѕСЂРѕРіРѕ Р±С‹Р» СЃРѕРІРµСЂС€РµРЅ РїРµСЂРµРІРѕРґ:\n"
                 "Р¤РѕСЂРјР°С‚: `0x...`",
                 parse_mode="Markdown"
             )
@@ -2164,10 +1874,8 @@ async def handle_show_password_reply(
     redis_client = data.get("redis_client")
     if not redis_client:
         await message.answer(
-            "вљ пёЏ РџР°СЂРѕР»СЊ Р±РѕР»СЊС€Рµ РЅРµРґРѕСЃС‚СѓРїРµРЅ (РїСЂРѕС€Р»Рѕ"
-            "Р±РѕР»РµРµ 1 С‡Р°СЃР° СЃ РјРѕРјРµРЅС‚Р° СЂРµРіРёСЃС‚СЂР°С†РёРё).\n\n"
-            "РСЃРїРѕР»СЊР·СѓР№С‚Рµ С„СѓРЅРєС†РёСЋ РІРѕСЃСЃС‚Р°РЅРѕРІР»РµРЅРёСЏ"
-            "РїР°СЂРѕР»СЏ РІ РЅР°СЃС‚СЂРѕР№РєР°С…."
+            "вљ пёЏ РџР°СЂРѕР»СЊ Р±РѕР»СЊС€Рµ РЅРµРґРѕСЃС‚СѓРїРµРЅ (РїСЂРѕС€Р»Рѕ Р±РѕР»РµРµ 1 С‡Р°СЃР° СЃ РјРѕРјРµРЅС‚Р° СЂРµРіРёСЃС‚СЂР°С†РёРё).\n\n"
+            "РСЃРїРѕР»СЊР·СѓР№С‚Рµ С„СѓРЅРєС†РёСЋ РІРѕСЃСЃС‚Р°РЅРѕРІР»РµРЅРёСЏ РїР°СЂРѕР»СЏ РІ РЅР°СЃС‚СЂРѕР№РєР°С…."
         )
         return
 
@@ -2180,21 +1888,16 @@ async def handle_show_password_reply(
 
         if not plain_password:
             await message.answer(
-                "вљ пёЏ РџР°СЂРѕР»СЊ Р±РѕР»СЊС€Рµ РЅРµРґРѕСЃС‚СѓРїРµРЅ (РїСЂРѕС€Р»Рѕ"
-                "Р±РѕР»РµРµ 1 С‡Р°СЃР° СЃ РјРѕРјРµРЅС‚Р° СЂРµРіРёСЃС‚СЂР°С†РёРё).\n\n"
-                "РСЃРїРѕР»СЊР·СѓР№С‚Рµ С„СѓРЅРєС†РёСЋ РІРѕСЃСЃС‚Р°РЅРѕРІР»РµРЅРёСЏ"
-                "РїР°СЂРѕР»СЏ РІ РЅР°СЃС‚СЂРѕР№РєР°С…."
+                "вљ пёЏ РџР°СЂРѕР»СЊ Р±РѕР»СЊС€Рµ РЅРµРґРѕСЃС‚СѓРїРµРЅ (РїСЂРѕС€Р»Рѕ Р±РѕР»РµРµ 1 С‡Р°СЃР° СЃ РјРѕРјРµРЅС‚Р° СЂРµРіРёСЃС‚СЂР°С†РёРё).\n\n"
+                "РСЃРїРѕР»СЊР·СѓР№С‚Рµ С„СѓРЅРєС†РёСЋ РІРѕСЃСЃС‚Р°РЅРѕРІР»РµРЅРёСЏ РїР°СЂРѕР»СЏ РІ РЅР°СЃС‚СЂРѕР№РєР°С…."
             )
             return
 
         # Show password
         await message.answer(
-            (
             f"рџ”‘ **Р’Р°С€ С„РёРЅР°РЅСЃРѕРІС‹Р№ РїР°СЂРѕР»СЊ:**\n\n"
             f"`{plain_password}`\n\n"
-                f"вљ пёЏ РЎРѕС…СЂР°РЅРёС‚Рµ РµРіРѕ СЃРµР№С‡Р°СЃ! "
-                f"РћРЅ Р±РѕР»СЊС€Рµ РЅРµ Р±СѓРґРµС‚ РїРѕРєР°Р·Р°РЅ."
-            ),
+            f"вљ пёЏ РЎРѕС…СЂР°РЅРёС‚Рµ РµРіРѕ СЃРµР№С‡Р°СЃ! РћРЅ Р±РѕР»СЊС€Рµ РЅРµ Р±СѓРґРµС‚ РїРѕРєР°Р·Р°РЅ.",
             parse_mode="Markdown"
         )
 
@@ -2206,9 +1909,4 @@ async def handle_show_password_reply(
             f"Error retrieving encrypted password from Redis for user {user.id}: {e}",
             exc_info=True
         )
-        await message.answer(
-            (
-                "вќЌ РћС€РёР±РєР° РїСЂРё РїРѕР»СѓС‡РµРЅРёРё РїР°СЂРѕР»СЏ. "
-                "РћР±СЂР°С‚РёС‚РµСЃСЊ РІ РїРѕРґРґРµСЂР¶РєСѓ."
-            )
-        )
+        await message.answer("вќЊ РћС€РёР±РєР° РїСЂРё РїРѕР»СѓС‡РµРЅРёРё РїР°СЂРѕР»СЏ. РћР±СЂР°С‚РёС‚РµСЃСЊ РІ РїРѕРґРґРµСЂР¶РєСѓ.")

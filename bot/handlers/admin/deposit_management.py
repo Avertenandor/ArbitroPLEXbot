@@ -92,6 +92,8 @@ async def show_deposit_statistics(
     if not admin:
         return
 
+    DepositRepository(session)
+
     # Get total statistics
     stmt = select(
         func.count(Deposit.id).label("total"),
@@ -557,9 +559,7 @@ async def process_level_action(
         level = state_data.get("managing_level")
         if level:
             await clear_state_preserve_admin_token(state)
-            await show_level_roi_config(
-                message, session, state, level, from_level_management=True, **data
-            )
+            await show_level_roi_config(message, session, state, level, from_level_management=True, **data)
         return
 
     # Get level from state
@@ -621,65 +621,6 @@ async def process_level_action(
     )
 
 
-def _is_confirmation_text(text: str | None) -> bool:
-    """Check if text is a confirmation."""
-    if not text:
-        return False
-    normalized = text.strip().lower()
-    return normalized in ("да", "yes", "✅ да")
-
-
-def _get_status_messages(action: str, level: int) -> tuple[str, str]:
-    """
-    Get status message and notify action for level change.
-
-    Returns:
-        Tuple of (status_msg, notify_action)
-    """
-    if action == "enable":
-        return f"✅ Уровень {level} включён!", "включён"
-    return f"❌ Уровень {level} отключён!", "отключён"
-
-
-async def _notify_admins_about_level_change(
-    session: AsyncSession,
-    admin_id: int | None,
-    level: int,
-    notify_action: str,
-) -> None:
-    """Notify other admins about level status change."""
-    try:
-        from app.repositories.admin_repository import AdminRepository
-        from bot.utils.notification import send_telegram_message
-
-        admin_repo = AdminRepository(session)
-        all_admins = await admin_repo.get_extended_admins()
-
-        notification_text = (
-            "🔔 **Изменён статус уровня депозитов**\n\n"
-            f"**Уровень:** {level}\n"
-            f"**Статус:** {notify_action}\n"
-        )
-        if admin_id:
-            notification_text += f"**Изменил:** Admin ID {admin_id}"
-
-        for other_admin in all_admins:
-            if admin_id and other_admin.id == admin_id:
-                continue
-            try:
-                await send_telegram_message(other_admin.telegram_id, notification_text)
-            except Exception as e:
-                logger.error(
-                    "Failed to notify admin about level status change",
-                    extra={"admin_id": other_admin.id, "error": str(e)},
-                )
-    except Exception as e:
-        logger.error(
-            "Failed to notify admins about level status change",
-            extra={"error": str(e)},
-        )
-
-
 @router.message(AdminDepositManagementStates.confirming_level_status)
 async def confirm_level_status_change(
     message: Message,
@@ -706,7 +647,9 @@ async def confirm_level_status_change(
         await show_levels_management(message, session, **data)
         return
 
-    if not _is_confirmation_text(message.text):
+    normalized = (message.text or "").strip().lower()
+    if normalized not in ("да", "yes", "✅ да"):
+        # Treat anything other than explicit "yes" as cancellation
         await clear_state_preserve_admin_token(state)
         await message.answer(
             "❌ Действие отменено.",
@@ -714,7 +657,6 @@ async def confirm_level_status_change(
         )
         return
 
-    # Get and validate state data
     state_data = await state.get_data()
     level = state_data.get("managing_level")
     action = state_data.get("level_action")
@@ -727,7 +669,6 @@ async def confirm_level_status_change(
         )
         return
 
-    # Get current version
     version_repo = DepositLevelVersionRepository(session)
     current_version = await version_repo.get_current_version(level)
 
@@ -740,18 +681,54 @@ async def confirm_level_status_change(
         return
 
     # Apply status change
-    current_version.is_active = (action == "enable")
+    if action == "enable":
+        current_version.is_active = True
+        status_msg = "✅ Уровень {level} включён!"
+        notify_action = "включён"
+    else:
+        current_version.is_active = False
+        status_msg = "❌ Уровень {level} отключён!"
+        notify_action = "отключён"
+
     await session.commit()
 
-    status_msg, notify_action = _get_status_messages(action, level)
     await message.answer(
-        status_msg,
+        status_msg.format(level=level),
         reply_markup=admin_deposit_levels_keyboard(),
     )
 
-    # Notify other admins
-    admin_id = admin.id if admin else None
-    await _notify_admins_about_level_change(session, admin_id, level, notify_action)
+    # Notify other admins about level status change
+    try:
+        from app.repositories.admin_repository import AdminRepository
+        from bot.utils.notification import send_telegram_message
+
+        admin_id = admin.id if admin else None
+        admin_repo = AdminRepository(session)
+        all_admins = await admin_repo.get_extended_admins()
+
+        notification_text = (
+            "🔔 **Изменён статус уровня депозитов**\n\n"
+            f"**Уровень:** {level}\n"
+            f"**Статус:** {notify_action}\n"
+        )
+        if admin_id:
+            notification_text += f"**Изменил:** Admin ID {admin_id}"
+
+        for other_admin in all_admins:
+            if admin_id and other_admin.id == admin_id:
+                continue
+            try:
+                await send_telegram_message(other_admin.telegram_id, notification_text)
+            except Exception as e:
+                logger.error(
+                    "Failed to notify admin about level status change",
+                    extra={"admin_id": other_admin.id, "error": str(e)},
+                )
+    except Exception as e:
+        logger.error(
+            "Failed to notify admins about level status change",
+            extra={"error": str(e)},
+        )
 
     await clear_state_preserve_admin_token(state)
 
@@ -834,6 +811,8 @@ async def show_roi_statistics(
     admin = await get_admin_or_deny(message, session, **data)
     if not admin:
         return
+
+    DepositRepository(session)
 
     text = "📈 **ROI Статистика**\n\n"
 

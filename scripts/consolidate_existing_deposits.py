@@ -53,7 +53,7 @@ async def consolidate_user_deposits(
         select(Deposit).where(
             Deposit.user_id == user.id,
             Deposit.status == "confirmed",
-            not Deposit.is_consolidated,
+            Deposit.is_consolidated is False,
         )
     )
     deposits = list(result.scalars().all())
@@ -174,8 +174,8 @@ async def run_consolidation() -> None:
             # Get all users who haven't been consolidated yet
             result = await session.execute(
                 select(User).where(
-                    not User.deposits_consolidated,
-                    User.is_active,
+                    User.deposits_consolidated is False,
+                    User.is_active is True,
                 )
             )
             users = list(result.scalars().all())

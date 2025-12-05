@@ -233,7 +233,7 @@ def format_usdt(amount: Decimal | float | int) -> str:
         >>> format_usdt(Decimal("1000.1"))
         '1000.10'
     """
-    if isinstance(amount, (Decimal, float, int)):
+    if isinstance(amount, Decimal | float | int):
         return f"{float(amount):.2f}"
     return "0.00"
 

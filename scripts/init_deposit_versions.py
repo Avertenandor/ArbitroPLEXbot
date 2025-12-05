@@ -70,7 +70,7 @@ async def init_deposit_versions(session: AsyncSession) -> None:
         conditions = DEFAULT_CONDITIONS[level]
 
         # Create initial version
-        _version = await version_repo.create(
+        await version_repo.create(
             level_number=level,
             amount=conditions["amount"],
             roi_percent=conditions["roi_percent"],

@@ -278,6 +278,10 @@ async def handle_referral_stats(
     # Get referral stats
     stats = await referral_service.get_referral_stats(user.id)
 
+    # Get today's earnings
+    daily_stats = await referral_service.get_daily_earnings_stats(user.id, days=1)
+    today_earned = daily_stats.get("today_earned", 0)
+
     # Get bot info for referral link
     from aiogram import Bot
 
@@ -308,6 +312,7 @@ async def handle_referral_stats(
         f"👥 Уровень 2: *{stats['level2_referrals']}*\n"
         f"👥 Уровень 3: *{stats['level3_referrals']}*\n\n"
         f"*Доходы:*\n"
+        f"🌟 *Сегодня: {format_usdt(today_earned)} USDT*\n"
         f"💵 Всего заработано: *{format_usdt(stats['total_earned'])} USDT*\n"
         f"⏳ Ожидает выплаты: "
         f"*{format_usdt(stats['pending_earnings'])} USDT*\n"
@@ -406,4 +411,458 @@ async def handle_copy_ref_link(
         f"`{referral_link}`\n\n"
         f"👆 Нажмите на ссылку чтобы скопировать",
         parse_mode="Markdown",
+    )
+
+
+@router.message(F.text == "📋 Скопировать ссылку")
+async def handle_copy_link_button(
+    message: Message,
+    session: AsyncSession,
+    user: User,
+    **data: Any,
+) -> None:
+    """Handle copy referral link reply button - instant copy."""
+    from aiogram import Bot
+
+    from app.config.settings import settings
+
+    user_service = UserService(session)
+
+    bot_username = settings.telegram_bot_username
+    if not bot_username:
+        bot: Bot = data.get("bot")
+        if bot:
+            bot_info = await bot.get_me()
+            bot_username = bot_info.username
+
+    referral_link = user_service.generate_referral_link(user, bot_username)
+
+    await message.answer(
+        f"📋 *Ваша реферальная ссылка:*\n\n"
+        f"`{referral_link}`\n\n"
+        f"👆 *Нажмите на ссылку чтобы скопировать*\n\n"
+        f"💡 Отправьте её друзьям и получайте *5%* с их депозитов и дохода!",
+        parse_mode="Markdown",
+        reply_markup=referral_keyboard(),
+    )
+
+
+@router.message(F.text == "👤 Кто меня пригласил")
+async def handle_who_invited_me(
+    message: Message,
+    session: AsyncSession,
+    user: User,
+) -> None:
+    """Show who invited this user (their referrer chain)."""
+    referral_service = ReferralService(session)
+
+    referrers_info = await referral_service.get_my_referrers(user.id)
+
+    if not referrers_info["has_referrer"]:
+        text = (
+            "👤 *Кто меня пригласил*\n\n"
+            "Вы зарегистрировались самостоятельно, без реферальной ссылки.\n\n"
+            "💡 Вы тоже можете приглашать друзей и получать бонусы!"
+        )
+    else:
+        text = "👤 *Ваша позиция в реферальной структуре*\n\n"
+
+        for ref in referrers_info["referrers"]:
+            level = ref["level"]
+            username = ref["username"] or "без username"
+            # Escape Markdown
+            username = (
+                username.replace("_", "\\_")
+                .replace("*", "\\*")
+                .replace("`", "\\`")
+            )
+            earned = ref["you_earned_them"]
+
+            level_desc = {
+                1: "Вас пригласил (прямой)",
+                2: "Пригласивший вашего пригласившего",
+                3: "Уровень 3",
+            }.get(level, f"Уровень {level}")
+
+            text += (
+                f"*Уровень {level}:* @{username}\n"
+                f"   └ {level_desc}\n"
+                f"   └ Вы принесли им: *{format_usdt(earned)} USDT*\n\n"
+            )
+
+        text += (
+            "💡 Чем больше вы зарабатываете и делаете депозитов, "
+            "тем больше получают ваши пригласившие!"
+        )
+
+    await message.answer(
+        text,
+        parse_mode="Markdown",
+        reply_markup=referral_keyboard(),
+    )
+
+
+@router.message(F.text == "📈 Аналитика")
+async def handle_referral_analytics(
+    message: Message,
+    session: AsyncSession,
+    user: User,
+) -> None:
+    """Show detailed referral analytics."""
+    referral_service = ReferralService(session)
+
+    # Get all analytics data
+    daily_stats = await referral_service.get_daily_earnings_stats(user.id, days=7)
+    conversion_stats = await referral_service.get_referral_conversion_stats(user.id)
+    activity_stats = await referral_service.get_referral_activity_stats(user.id)
+
+    # Build text
+    text = "📈 *Аналитика партнёрской программы*\n\n"
+
+    # === Daily earnings chart ===
+    text += "📊 *Заработок за последние 7 дней:*\n"
+
+    if daily_stats["daily_stats"]:
+        # Simple ASCII bar chart
+        max_amount = max(
+            (d["amount"] for d in daily_stats["daily_stats"]),
+            default=0
+        )
+
+        for day_stat in daily_stats["daily_stats"][:7]:
+            date_str = day_stat["date"].strftime("%d.%m")
+            amount = day_stat["amount"]
+            count = day_stat["count"]
+
+            # Create bar
+            if max_amount > 0:
+                bar_len = int((float(amount) / float(max_amount)) * 8)
+            else:
+                bar_len = 0
+            bar = "█" * bar_len + "░" * (8 - bar_len)
+
+            text += f"`{date_str}` {bar} *{format_usdt(amount)}* ({count})\n"
+
+        text += (
+            f"\n💰 Итого за период: *{format_usdt(daily_stats['total_period'])} USDT*\n"
+            f"📅 Сегодня: *{format_usdt(daily_stats['today_earned'])} USDT*\n"
+            f"📊 В среднем/день: *{format_usdt(daily_stats['average_daily'])} USDT*\n"
+        )
+    else:
+        text += "_Нет данных за этот период_\n"
+
+    text += "\n"
+
+    # === Conversion stats ===
+    text += "🎯 *Конверсия рефералов:*\n"
+    text += f"👥 Всего прямых рефералов: *{conversion_stats['total_referrals']}*\n"
+    text += (
+        f"✅ С депозитами: *{conversion_stats['referrals_with_deposits']}* "
+        f"({conversion_stats['conversion_rate']:.1f}%)\n"
+    )
+    if conversion_stats['deposit_count'] > 0:
+        total_dep = format_usdt(conversion_stats['total_deposits_amount'])
+        avg_dep = format_usdt(conversion_stats['average_deposit'])
+        text += (
+            f"💵 Общий объём депозитов: *{total_dep} USDT*\n"
+            f"📊 Средний депозит: *{avg_dep} USDT*\n"
+        )
+    text += "\n"
+
+    # === Activity stats ===
+    text += "🔥 *Активность рефералов (30 дней):*\n"
+    text += f"🟢 Активных: *{activity_stats['active_referrals']}*\n"
+    text += f"🔴 Неактивных: *{activity_stats['inactive_referrals']}*\n"
+    text += f"📊 Активность: *{activity_stats['activity_rate']:.1f}%*\n\n"
+
+    # By level breakdown
+    text += "*По уровням:*\n"
+    for level in [1, 2, 3]:
+        level_data = activity_stats["by_level"].get(level, {"total": 0, "active": 0})
+        total = level_data["total"]
+        active = level_data["active"]
+        text += f"   Ур.{level}: {active}/{total} активных\n"
+
+    text += (
+        "\n💡 *Совет:* Приглашайте активных пользователей - "
+        "они приносят больше дохода!"
+    )
+
+    await message.answer(
+        text,
+        parse_mode="Markdown",
+        reply_markup=referral_keyboard(),
+    )
+
+
+@router.message(F.text == "🌳 Моя структура")
+async def handle_my_structure(
+    message: Message,
+    session: AsyncSession,
+    user: User,
+) -> None:
+    """Show beautiful referral structure tree."""
+    referral_service = ReferralService(session)
+
+    # Get stats for all levels
+    stats = await referral_service.get_referral_stats(user.id)
+
+    # Build visual tree
+    text = "🌳 *Ваша реферальная структура*\n\n"
+
+    # Main user (root)
+    username = user.username or "Вы"
+    username_escaped = (
+        username.replace("_", "\\_")
+        .replace("*", "\\*")
+        .replace("`", "\\`")
+    )
+    text += f"👤 *@{username_escaped}* (Вы)\n"
+
+    # Level 1
+    l1_count = stats['direct_referrals']
+    text += "│\n"
+    text += f"├─── 1️⃣ *Уровень 1* ({l1_count} чел.)\n"
+
+    if l1_count > 0:
+        # Get top 5 direct referrals
+        result = await referral_service.get_referrals_by_level(
+            user.id, level=1, page=1, limit=5
+        )
+        for i, ref in enumerate(result["referrals"]):
+            ref_user = ref["user"]
+            earned = ref["earned"]
+            ref_name = ref_user.username or f"ID:{ref_user.telegram_id}"
+            ref_name = (
+                ref_name.replace("_", "\\_")
+                .replace("*", "\\*")
+            )
+            is_last = (i == len(result["referrals"]) - 1) and l1_count <= 5
+            prefix = "│   └──" if is_last else "│   ├──"
+            status = "🟢" if earned > 0 else "⚪"
+            text += f"{prefix} {status} @{ref_name} (+{format_usdt(earned)})\n"
+
+        if l1_count > 5:
+            text += f"│   └── _...и ещё {l1_count - 5} чел._\n"
+    else:
+        text += "│   └── _пока нет партнёров_\n"
+
+    # Level 2
+    l2_count = stats['level2_referrals']
+    text += "│\n"
+    text += f"├─── 2️⃣ *Уровень 2* ({l2_count} чел.)\n"
+
+    if l2_count > 0:
+        result = await referral_service.get_referrals_by_level(
+            user.id, level=2, page=1, limit=3
+        )
+        for i, ref in enumerate(result["referrals"]):
+            ref_user = ref["user"]
+            earned = ref["earned"]
+            ref_name = ref_user.username or f"ID:{ref_user.telegram_id}"
+            ref_name = ref_name.replace("_", "\\_").replace("*", "\\*")
+            is_last = (i == len(result["referrals"]) - 1) and l2_count <= 3
+            prefix = "│   └──" if is_last else "│   ├──"
+            status = "🟢" if earned > 0 else "⚪"
+            text += f"{prefix} {status} @{ref_name}\n"
+
+        if l2_count > 3:
+            text += f"│   └── _...и ещё {l2_count - 3} чел._\n"
+    else:
+        text += "│   └── _пока нет партнёров_\n"
+
+    # Level 3
+    l3_count = stats['level3_referrals']
+    text += "│\n"
+    text += f"└─── 3️⃣ *Уровень 3* ({l3_count} чел.)\n"
+
+    if l3_count > 0:
+        result = await referral_service.get_referrals_by_level(
+            user.id, level=3, page=1, limit=3
+        )
+        for i, ref in enumerate(result["referrals"]):
+            ref_user = ref["user"]
+            ref_name = ref_user.username or f"ID:{ref_user.telegram_id}"
+            ref_name = ref_name.replace("_", "\\_").replace("*", "\\*")
+            is_last = (i == len(result["referrals"]) - 1) and l3_count <= 3
+            prefix = "    └──" if is_last else "    ├──"
+            text += f"{prefix} ⚪ @{ref_name}\n"
+
+        if l3_count > 3:
+            text += f"    └── _...и ещё {l3_count - 3} чел._\n"
+    else:
+        text += "    └── _пока нет партнёров_\n"
+
+    # Summary
+    total = l1_count + l2_count + l3_count
+    text += "\n━━━━━━━━━━━━━━━━━━━━━━\n"
+    text += f"📊 *Итого:* {total} партнёров\n"
+    text += f"💰 *Заработано:* {format_usdt(stats['total_earned'])} USDT\n"
+    text += "\n🟢 = активный (есть доход)  ⚪ = новый"
+
+    await message.answer(
+        text,
+        parse_mode="Markdown",
+        reply_markup=referral_keyboard(),
+    )
+
+
+@router.message(F.text == "🏆 ТОП партнёров")
+async def handle_top_partners(
+    message: Message,
+    session: AsyncSession,
+    user: User,
+) -> None:
+    """Show public leaderboard of top partners."""
+    referral_service = ReferralService(session)
+
+    # Get leaderboard
+    leaderboard = await referral_service.get_referral_leaderboard(limit=10)
+
+    # Get platform stats
+    platform_stats = await referral_service.get_platform_referral_stats()
+
+    text = "🏆 *ТОП-10 партнёров ArbitroPLEX*\n\n"
+
+    # Platform stats header
+    total_earned = platform_stats.get('total_earnings', 0)
+    total_refs = platform_stats.get('total_referrals', 0)
+    text += f"📊 _Всего заработано партнёрами: {format_usdt(total_earned)} USDT_\n"
+    text += f"👥 _Всего реферальных связей: {total_refs}_\n\n"
+
+    # By referrals
+    text += "📈 *По количеству рефералов:*\n"
+    for entry in leaderboard["by_referrals"][:5]:
+        rank = entry["rank"]
+        medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, f"{rank}.")
+        username = entry["username"] or f"ID:{entry['telegram_id']}"
+        username = username.replace("_", "\\_").replace("*", "\\*")[:15]
+        count = entry["referral_count"]
+        text += f"{medal} @{username} — *{count}* реф.\n"
+
+    text += "\n💰 *По заработку:*\n"
+    for entry in leaderboard["by_earnings"][:5]:
+        rank = entry["rank"]
+        medal = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, f"{rank}.")
+        username = entry["username"] or f"ID:{entry['telegram_id']}"
+        username = username.replace("_", "\\_").replace("*", "\\*")[:15]
+        earned = entry["total_earnings"]
+        text += f"{medal} @{username} — *{format_usdt(earned)}* USDT\n"
+
+    # User's position
+    user_pos = await referral_service.get_user_leaderboard_position(user.id)
+    if user_pos.get("referral_rank"):
+        text += "\n━━━━━━━━━━━━━━━━━━━━━━\n"
+        text += "📍 *Ваша позиция:*\n"
+        text += f"По рефералам: #{user_pos['referral_rank']}\n"
+        text += f"По заработку: #{user_pos['earnings_rank']}\n"
+
+    text += "\n💡 _Приглашайте друзей и поднимайтесь в рейтинге!_"
+
+    await message.answer(
+        text,
+        parse_mode="Markdown",
+        reply_markup=referral_keyboard(),
+    )
+
+
+@router.message(F.text == "📢 Промо-материалы")
+async def handle_promo_materials(
+    message: Message,
+    session: AsyncSession,
+    user: User,
+    **data: Any,
+) -> None:
+    """Show promo materials including QR code and ready texts."""
+    from aiogram import Bot
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
+    from app.config.settings import settings
+
+    user_service = UserService(session)
+
+    bot_username = settings.telegram_bot_username
+    if not bot_username:
+        bot: Bot = data.get("bot")
+        if bot:
+            bot_info = await bot.get_me()
+            bot_username = bot_info.username
+
+    referral_link = user_service.generate_referral_link(user, bot_username)
+
+    text = (
+        "📢 *Промо-материалы*\n\n"
+        "Используйте готовые тексты для привлечения партнёров:\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+    )
+
+    # Ready-made texts
+    promo1 = (
+        "📱 *Для Telegram/WhatsApp:*\n"
+        "```\n"
+        "🚀 Зарабатывай с ArbitroPLEX!\n\n"
+        "💰 Доход 0.8-1.2% в ДЕНЬ\n"
+        "👥 3-уровневая партнёрка (5%+5%+5%)\n"
+        "🔒 Безопасно и прозрачно\n\n"
+        f"Регистрируйся: {referral_link}\n"
+        "```"
+    )
+
+    promo2 = (
+        "📸 *Для Instagram/Stories:*\n"
+        "```\n"
+        "💎 Пассивный доход каждый день!\n\n"
+        "Арбитраж криптовалют с ArbitroPLEX\n"
+        "До 36% в месяц 📈\n\n"
+        "Ссылка в профиле 👆\n"
+        "```"
+    )
+
+    promo3 = (
+        "🐦 *Короткий текст:*\n"
+        f"```\n"
+        f"ArbitroPLEX — зарабатывай на крипте!\n"
+        f"Регистрация: {referral_link}\n"
+        "```"
+    )
+
+    text += promo1 + "\n\n" + promo2 + "\n\n" + promo3 + "\n\n"
+
+    text += (
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"🔗 *Ваша ссылка:*\n`{referral_link}`\n\n"
+        "💡 _Нажмите на текст чтобы скопировать_"
+    )
+
+    # QR code button (generates QR via external service)
+    qr_url = (
+        f"https://api.qrserver.com/v1/create-qr-code/"
+        f"?size=300x300&data={referral_link}"
+    )
+
+    inline_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="📱 Получить QR-код",
+                url=qr_url,
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                text="📋 Копировать ссылку",
+                callback_data="copy_ref_link",
+            ),
+        ],
+    ])
+
+    await message.answer(
+        text,
+        parse_mode="Markdown",
+        reply_markup=referral_keyboard(),
+    )
+
+    await message.answer(
+        "⬇️ *Дополнительно:*",
+        parse_mode="Markdown",
+        reply_markup=inline_kb,
     )

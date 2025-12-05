@@ -11,7 +11,7 @@ After consolidation:
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 from sqlalchemy import func, select
@@ -30,6 +30,9 @@ from bot.constants.rules import (
     SYSTEM_WALLET,
 )
 from bot.utils.formatters import escape_md
+
+if TYPE_CHECKING:
+    from aiogram import Bot
 
 
 class IncomingDepositService:
@@ -313,7 +316,7 @@ class IncomingDepositService:
             select(func.count(Deposit.id)).where(
                 Deposit.user_id == user_id,
                 Deposit.status == "confirmed",
-                not Deposit.is_roi_completed,
+                Deposit.is_roi_completed is False,
             )
         )
         return result.scalar() or 0

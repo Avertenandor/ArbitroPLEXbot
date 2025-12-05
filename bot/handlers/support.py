@@ -45,6 +45,7 @@ async def handle_create_ticket(
 
     R1-7: Supports guest tickets (user_id=None, telegram_id required).
     """
+    data.get("user")
     telegram_id = message.from_user.id if message.from_user else None
 
     # R1-7: Разрешаем гостевые тикеты

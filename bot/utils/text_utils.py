@@ -12,10 +12,7 @@ def escape_markdown(text: str) -> str:
         Escaped text safe for Markdown parsing
     """
     # Escape special Markdown characters
-    special_chars = [
-        '*', '_', '[', ']', '(', ')', '~', '`', '>', '#',
-        '+', '-', '=', '|', '{', '}', '.', '!'
-    ]
+    special_chars = ['*', '_', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
 
     for char in special_chars:
         text = text.replace(char, f'\\{char}')

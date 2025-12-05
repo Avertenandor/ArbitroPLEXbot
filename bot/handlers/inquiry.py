@@ -563,13 +563,15 @@ async def notify_admins_new_inquiry(
     inquiry,
     session: AsyncSession,
 ) -> None:
-    """Notify admins about new inquiry."""
+    """Уведомить админов о новом обращении."""
     try:
-        from app.repositories.admin_repository import AdminRepository
-        admin_repo = AdminRepository(session)
-        admins = await admin_repo.get_all_active()
+        from app.services.admin_event_monitor import (
+            AdminEventMonitor,
+            EventCategory,
+            EventPriority,
+        )
 
-        username = "Unknown"
+        username = "нет"
         if inquiry.user:
             username = inquiry.user.username or f"ID:{inquiry.telegram_id}"
 
@@ -577,17 +579,20 @@ async def notify_admins_new_inquiry(
         if len(inquiry.initial_question) > 100:
             preview += "..."
 
-        for admin in admins:
-            try:
-                await bot.send_message(
-                    admin.telegram_id,
-                    f"📬 Новое обращение #{inquiry.id}\n"
-                    f"От: {username}\n\n"
-                    f"{preview}\n\n"
-                    "Откройте «📨 Обращения от пользователей» в админ-панели.",
-                )
-            except Exception as e:
-                logger.warning(f"Failed to notify admin {admin.id}: {e}")
+        monitor = AdminEventMonitor(bot, session)
+        await monitor.notify(
+            category=EventCategory.INQUIRY,
+            priority=EventPriority.MEDIUM,
+            title="Новый вопрос от пользователя",
+            details={
+                "ID обращения": inquiry.id,
+                "Пользователь": f"@{username}",
+                "Telegram ID": inquiry.telegram_id,
+                "Вопрос": preview,
+            },
+            footer="Откройте «📨 Обращения» в админ-панели",
+        )
 
     except Exception as e:
-        logger.error(f"Failed to notify admins about inquiry: {e}")
+        logger.error(f"Ошибка уведомления админов о вопросе: {e}")
+

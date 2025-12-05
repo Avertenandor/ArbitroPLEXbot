@@ -1,22 +1,22 @@
-[tool.ruff]
+# Ruff configuration
+# This file mirrors pyproject.toml settings for IDE compatibility
+
+target-version = "py311"
 line-length = 100
-target-version = "py312"
 exclude = ["alembic/versions"]
 
-[tool.ruff.lint]
-select = ["E", "F", "W", "I", "C901"]
-ignore = ["E402"]
+[lint]
+preview = true
+extend-select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "C90", # mccabe complexity
+    "I",   # isort
+    "UP",  # pyupgrade
+]
 
-[tool.ruff.lint.mccabe]
-max-complexity = 15
-
-[tool.ruff.lint.per-file-ignores]
-"jobs/scheduler.py" = ["E402"]
-"jobs/worker.py" = ["E402"]
-"bot/main.py" = ["E402"]
-"tests/*" = ["E501", "E402"]
-
-[tool.ruff.lint.per-file-ignores]
+[lint.per-file-ignores]
 # Module level imports not at top - intentional for lazy loading/sys.path modification
 "app/services/blockchain_service.py" = ["E402"]
 "bot/main.py" = ["E402"]
@@ -27,12 +27,7 @@ max-complexity = 15
 "tests/conftest.py" = ["E402"]
 "scripts/*.py" = ["E402"]
 
-[tool.ruff.format]
+[format]
 quote-style = "double"
 indent-style = "space"
 line-ending = "lf"
-
-[tool.pytest.ini_options]
-pythonpath = ["."]
-testpaths = ["tests"]
-asyncio_mode = "auto"

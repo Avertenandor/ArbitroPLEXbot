@@ -66,94 +66,6 @@ class BlacklistService:
 
         return False
 
-    def _calculate_appeal_deadline(self, action_type: str) -> datetime | None:
-        """Calculate appeal deadline for action type."""
-        if action_type == BlacklistActionType.BLOCKED:
-            return datetime.now(UTC) + timedelta(days=3)
-        return None
-
-    async def _find_existing_entry(
-        self,
-        telegram_id: int | None,
-        wallet_address: str | None,
-    ) -> Blacklist | None:
-        """Find existing blacklist entry by telegram_id or wallet."""
-        if telegram_id:
-            existing = await self.repository.find_by_telegram_id(telegram_id)
-            if existing:
-                return existing
-
-        if wallet_address:
-            return await self.repository.find_by_wallet(wallet_address)
-
-        return None
-
-    async def _reactivate_entry(
-        self,
-        existing: Blacklist,
-        reason: str,
-        added_by_admin_id: int | None,
-        action_type: str,
-        wallet_address: str | None,
-        telegram_id: int | None,
-    ) -> Blacklist:
-        """Reactivate inactive blacklist entry."""
-        appeal_deadline = self._calculate_appeal_deadline(action_type)
-
-        update_data = {
-            "action_type": action_type,
-            "created_at": datetime.now(UTC),
-            "appeal_deadline": appeal_deadline,
-            "is_active": True,
-            "reason": reason,
-            "created_by_admin_id": added_by_admin_id,
-        }
-        if wallet_address:
-            update_data["wallet_address"] = wallet_address
-
-        await self.repository.update(existing.id, **update_data)
-
-        logger.info(
-            f"Reactivated blacklist entry: "
-            f"telegram_id={telegram_id}, "
-            f"wallet={wallet_address}"
-        )
-
-        return existing
-
-    async def _create_new_entry(
-        self,
-        telegram_id: int | None,
-        wallet_address: str | None,
-        reason: str,
-        added_by_admin_id: int | None,
-        action_type: str,
-    ) -> Blacklist:
-        """Create new blacklist entry."""
-        appeal_deadline = self._calculate_appeal_deadline(action_type)
-
-        create_data = {
-            "telegram_id": telegram_id,
-            "reason": reason,
-            "created_by_admin_id": added_by_admin_id,
-            "action_type": action_type,
-            "appeal_deadline": appeal_deadline,
-            "is_active": True,
-        }
-        if wallet_address:
-            create_data["wallet_address"] = wallet_address
-
-        entry = await self.repository.create(**create_data)
-
-        logger.info(
-            f"Added to blacklist: "
-            f"telegram_id={telegram_id}, "
-            f"wallet={wallet_address}, "
-            f"reason={reason}"
-        )
-
-        return entry
-
     async def add_to_blacklist(
         self,
         telegram_id: int | None = None,
@@ -188,15 +100,51 @@ class BlacklistService:
             wallet_address = wallet_address.lower()
 
         # Check if already blacklisted
-        existing = await self._find_existing_entry(telegram_id, wallet_address)
+        existing = None
+
+        if telegram_id:
+            existing = await self.repository.find_by_telegram_id(telegram_id)
+
+        if not existing and wallet_address:
+            existing = await self.repository.find_by_wallet(wallet_address)
 
         if existing:
             # Reactivate if inactive
             if not existing.is_active:
-                return await self._reactivate_entry(
-                    existing, reason, added_by_admin_id, action_type,
-                    wallet_address, telegram_id
+                existing.is_active = True
+                existing.reason = reason
+                existing.created_by_admin_id = added_by_admin_id
+                existing.action_type = action_type
+                existing.created_at = datetime.now(UTC)
+
+                # Update appeal deadline for blocked users
+                if action_type == BlacklistActionType.BLOCKED:
+                    appeal_deadline = (
+                        datetime.now(UTC) + timedelta(days=3)
+                    )
+                else:
+                    appeal_deadline = None
+
+                update_data = {
+                    "action_type": action_type,
+                    "created_at": datetime.now(UTC),
+                    "appeal_deadline": appeal_deadline,
+                    "is_active": True,
+                }
+                if wallet_address:
+                    update_data["wallet_address"] = wallet_address
+                await self.repository.update(
+                    existing.id,
+                    **update_data
                 )
+
+                logger.info(
+                    f"Reactivated blacklist entry: "
+                    f"telegram_id={telegram_id}, "
+                    f"wallet={wallet_address}"
+                )
+
+                return existing
 
             # Already active
             logger.warning(
@@ -206,10 +154,35 @@ class BlacklistService:
             )
             return existing
 
+        # Calculate appeal deadline for blocked users (3 working days)
+        appeal_deadline = None
+        if action_type == BlacklistActionType.BLOCKED:
+            # 3 working days = 3 calendar days (simplified)
+            appeal_deadline = (
+                datetime.now(UTC) + timedelta(days=3)
+            )
+
         # Create new entry
-        return await self._create_new_entry(
-            telegram_id, wallet_address, reason, added_by_admin_id, action_type
+        create_data = {
+            "telegram_id": telegram_id,
+            "reason": reason,
+            "created_by_admin_id": added_by_admin_id,
+            "action_type": action_type,
+            "appeal_deadline": appeal_deadline,
+            "is_active": True,
+        }
+        if wallet_address:
+            create_data["wallet_address"] = wallet_address
+        entry = await self.repository.create(**create_data)
+
+        logger.info(
+            f"Added to blacklist: "
+            f"telegram_id={telegram_id}, "
+            f"wallet={wallet_address}, "
+            f"reason={reason}"
         )
+
+        return entry
 
     async def remove_from_blacklist(
         self,
@@ -505,6 +478,7 @@ class BlacklistService:
                 }
 
             from app.models.enums import TransactionStatus, TransactionType
+            from app.repositories.deposit_repository import DepositRepository
             from app.repositories.transaction_repository import (
                 TransactionRepository,
             )
@@ -512,6 +486,7 @@ class BlacklistService:
 
             user_repo = UserRepository(self.session)
             transaction_repo = TransactionRepository(self.session)
+            DepositRepository(self.session)
 
             user = await user_repo.get_by_id(user_id)
             if not user:

@@ -24,6 +24,7 @@ from app.config.constants import TELEGRAM_MESSAGE_DELAY
 from app.config.settings import settings
 from app.repositories.deposit_repository import DepositRepository
 from app.repositories.plex_payment_repository import PlexPaymentRepository
+from app.services.notification_service import NotificationService
 from bot.constants.rules import SYSTEM_WALLET
 from bot.utils.qr_generator import generate_payment_qr
 
@@ -71,6 +72,7 @@ async def _monitor_plex_payments_async() -> None:
             async with local_session_maker() as session:
                 plex_repo = PlexPaymentRepository(session)
                 deposit_repo = DepositRepository(session)
+                NotificationService(session)
 
                 # Step 1: Send reminders for pending first payments (inactive deposits)
                 pending_reminders = await _process_pending_activation_reminders(

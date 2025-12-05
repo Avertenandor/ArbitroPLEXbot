@@ -243,6 +243,7 @@ async def execute_broadcast(
     **data: Any,
 ) -> None:
     """Execute the broadcast."""
+    data.get("is_admin", False)
     admin_id = data.get("admin_id", 0)
 
     state_data = await state.get_data()
@@ -280,10 +281,7 @@ async def execute_broadcast(
     admin: Admin | None = data.get("admin")
     if admin:
         log_service = AdminLogService(session)
-        message_preview = (
-            broadcast_data.get("text") or broadcast_data.get("caption")
-            or f"{broadcast_data['type']} message"
-        )
+        message_preview = broadcast_data.get("text") or broadcast_data.get("caption") or f"{broadcast_data['type']} message"
         if button_data:
             message_preview += f" [Button: {button_data['text']}]"
 

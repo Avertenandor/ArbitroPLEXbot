@@ -80,11 +80,7 @@ async def recover_deposits():
                 # Verify recipient is system wallet
                 # Note: to_address from details is the USDT recipient
                 if tx_details['to_address'].lower() != settings.system_wallet_address.lower():
-                    logger.error(
-                        f"❌ Recipient mismatch! "
-                        f"Expected {mask_address(settings.system_wallet_address)}, "
-                        f"got {mask_address(tx_details['to_address'])}"
-                    )
+                    logger.error(f"❌ Recipient mismatch! Expected {mask_address(settings.system_wallet_address)}, got {mask_address(tx_details['to_address'])}")
                     continue
 
                 from_address = tx_details['from_address']
@@ -92,8 +88,7 @@ async def recover_deposits():
 
                 # 2. Find User by Wallet
                 # Note: Currently wallet_address is just a string in User model.
-                # Users might have entered it in different cases,
-                # so we should check case-insensitive.
+                # Users might have entered it in different cases, so we should check case-insensitive.
 
                 result = await session.execute(
                     select(User).where(User.wallet_address.ilike(from_address))
@@ -114,16 +109,11 @@ async def recover_deposits():
 
                 if existing_deposit:
                     if existing_deposit.status == TransactionStatus.CONFIRMED.value:
-                        logger.info(
-                            f"⚠️ Deposit {existing_deposit.id} already confirmed. Skipping."
-                        )
+                        logger.info(f"⚠️ Deposit {existing_deposit.id} already confirmed. Skipping.")
                         continue
 
-                    logger.info(
-                        f"🔄 Found pending/failed deposit {existing_deposit.id}. Confirming..."
-                    )
-                    # Block number 0 for manual
-                    await deposit_service.confirm_deposit(existing_deposit.id, 0)
+                    logger.info(f"🔄 Found pending/failed deposit {existing_deposit.id}. Confirming...")
+                    await deposit_service.confirm_deposit(existing_deposit.id, 0)  # Block number 0 for manual
                     logger.success(f"✅ Deposit {existing_deposit.id} confirmed!")
 
                 else:
@@ -144,17 +134,13 @@ async def recover_deposits():
                     if amount in amount_to_level:
                         level = amount_to_level[amount]
                     else:
-                        logger.warning(
-                            f"⚠️ Amount {amount} does not match standard levels. "
-                            "Defaulting to Level 1."
-                        )
+                        logger.warning(f"⚠️ Amount {amount} does not match standard levels. Defaulting to Level 1.")
                         # Logic decision: Do we want to force level 1? Or reject?
                         # Let's try to find closest level or just use 1.
                         level = 1
 
                     try:
-                        # We bypass redis lock here by not passing redis_client
-                        # (using DB lock fallback which works for single script)
+                        # We bypass redis lock here by not passing redis_client (using DB lock fallback which works for single script)
                         # Wait, create_deposit raises error if lock fails.
                         # Since this script is single threaded, DB lock should succeed.
 

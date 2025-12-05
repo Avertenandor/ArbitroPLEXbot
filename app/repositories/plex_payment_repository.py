@@ -344,7 +344,7 @@ class PlexPaymentRepository:
             select(PlexPaymentRequirement)
             .where(
                 and_(
-                    not PlexPaymentRequirement.is_work_active,
+                    PlexPaymentRequirement.is_work_active is False,
                     PlexPaymentRequirement.status.in_([
                         PlexPaymentStatus.ACTIVE,
                         PlexPaymentStatus.WARNING_SENT,
@@ -370,7 +370,7 @@ class PlexPaymentRepository:
             select(PlexPaymentRequirement)
             .where(
                 and_(
-                    PlexPaymentRequirement.is_work_active,
+                    PlexPaymentRequirement.is_work_active is True,
                     PlexPaymentRequirement.status.in_([
                         PlexPaymentStatus.ACTIVE,
                         PlexPaymentStatus.WARNING_SENT,

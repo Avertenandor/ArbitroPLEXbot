@@ -32,6 +32,9 @@ async def run_deposit_reminder_task() -> None:
                 from app.models.deposit import Deposit
                 from app.models.enums import DepositStatus
                 from app.models.user import User
+                from app.services.notification_service import NotificationService
+
+                NotificationService(session)
 
                 # Find pending deposits older than 24 hours
                 cutoff_24h = datetime.now(UTC) - timedelta(hours=24)

@@ -315,7 +315,6 @@ if __name__ == "__main__":
 
         # Health check server components
         health_runner = None
-        health_site = None
 
         try:
             # Start scheduler
@@ -326,7 +325,7 @@ if __name__ == "__main__":
             set_scheduler(scheduler)
 
             # Start health check server
-            health_runner, health_site = await start_health_server(
+            health_runner, _health_site = await start_health_server(
                 host="0.0.0.0",
                 port=8081,
             )

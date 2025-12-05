@@ -130,10 +130,7 @@ async def handle_main_menu(
 
     user: User | None = data.get("user")
     is_admin = data.get("is_admin")
-    logger.info(
-        f"[MENU] User from data: {user.id if user else None}, "
-        f"is_admin={is_admin}, data keys: {list(data.keys())}"
-    )
+    logger.info(f"[MENU] User from data: {user.id if user else None}, is_admin={is_admin}, data keys: {list(data.keys())}")
 
     if not user:
         # Если по какой-то причине DI не предоставил user, просто очистим
@@ -172,10 +169,7 @@ async def show_balance(
     telegram_id = message.from_user.id if message.from_user else None
     logger.info(f"[MENU] show_balance called for user {telegram_id}")
     user: User | None = data.get("user")
-    logger.info(
-        f"[MENU] User from data: {user.id if user else None}, "
-        f"data keys: {list(data.keys())}"
-    )
+    logger.info(f"[MENU] User from data: {user.id if user else None}, data keys: {list(data.keys())}")
     if not user and telegram_id:
         user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
     if not user:
@@ -221,10 +215,7 @@ async def show_deposit_menu(
     telegram_id = message.from_user.id if message.from_user else None
     logger.info(f"[MENU] show_deposit_menu called for user {telegram_id}")
     user: User | None = data.get("user")
-    logger.info(
-        f"[MENU] User from data: {user.id if user else None}, "
-        f"data keys: {list(data.keys())}"
-    )
+    logger.info(f"[MENU] User from data: {user.id if user else None}, data keys: {list(data.keys())}")
     if not user and telegram_id:
         user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
     if not user:
@@ -253,6 +244,7 @@ async def show_deposit_menu(
             level_info = levels_status[level]
             amount = level_info["amount"]
             status = level_info["status"]
+            level_info.get("status_text", "")
 
             if status == "active":
                 text += f"✅ Level {level}: `{amount} USDT` - Активен\n"
@@ -262,15 +254,9 @@ async def show_deposit_menu(
                 # Show reason for unavailability
                 error = level_info.get("error", "")
                 if "необходимо сначала купить" in error:
-                    text += (
-                        f"🔒 Level {level}: `{amount} USDT` - "
-                        f"Недоступен (нет предыдущего уровня)\n"
-                    )
+                    text += f"🔒 Level {level}: `{amount} USDT` - Недоступен (нет предыдущего уровня)\n"
                 elif "необходимо минимум" in error:
-                    text += (
-                        f"🔒 Level {level}: `{amount} USDT` - "
-                        f"Недоступен (не хватает партнёров)\n"
-                    )
+                    text += f"🔒 Level {level}: `{amount} USDT` - Недоступен (не хватает партнёров)\n"
                 else:
                     text += f"🔒 Level {level}: `{amount} USDT` - Недоступен\n"
         else:
@@ -306,10 +292,7 @@ async def show_withdrawal_menu(
     telegram_id = message.from_user.id if message.from_user else None
     logger.info(f"[MENU] show_withdrawal_menu called for user {telegram_id}")
     user: User | None = data.get("user")
-    logger.info(
-        f"[MENU] User from data: {user.id if user else None}, "
-        f"data keys: {list(data.keys())}"
-    )
+    logger.info(f"[MENU] User from data: {user.id if user else None}, data keys: {list(data.keys())}")
     if not user and telegram_id:
         user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
     if not user:
@@ -358,7 +341,11 @@ async def show_referral_menu(
     state: FSMContext,
     **data: Any,
 ) -> None:
-    """Show referral menu."""
+    """Show referral menu with quick stats and link."""
+    from urllib.parse import quote
+
+    from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+
     telegram_id = message.from_user.id if message.from_user else None
     user: User | None = data.get("user")
     if not user and telegram_id:
@@ -373,21 +360,69 @@ async def show_referral_menu(
     await state.clear()
 
     from app.config.settings import settings
+    from app.services.referral_service import ReferralService
     from app.services.user_service import UserService
+    from bot.utils.formatters import format_usdt
 
     user_service = UserService(session)
+    referral_service = ReferralService(session)
+
     bot_username = settings.telegram_bot_username
     referral_link = user_service.generate_referral_link(user, bot_username)
 
-    text = (
-        f"👥 *Реферальная программа*\n\n"
-        f"Ваша реферальная ссылка:\n"
-        f"`{referral_link}`\n\n"
-        f"Приглашайте друзей и получайте вознаграждение!"
+    # Get quick stats
+    stats = await referral_service.get_referral_stats(user.id)
+    daily = await referral_service.get_daily_earnings_stats(user.id, days=1)
+    today_earned = daily.get("today_earned", 0)
+
+    total_referrals = (
+        stats['direct_referrals'] +
+        stats['level2_referrals'] +
+        stats['level3_referrals']
     )
+
+    # Build welcome screen with stats
+    text = (
+        "👥 *Партнёрская программа ArbitroPLEX*\n\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n"
+        f"📋 *Ваша ссылка:*\n`{referral_link}`\n"
+        "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+        f"📊 *Ваша статистика:*\n"
+        f"👥 Всего партнёров: *{total_referrals}*\n"
+        f"💰 Заработано всего: *{format_usdt(stats['total_earned'])} USDT*\n"
+        f"🌟 Сегодня: *{format_usdt(today_earned)} USDT*\n\n"
+        "💎 *Комиссии:*\n"
+        "├ 1 уровень: *5%* от депозитов и дохода\n"
+        "├ 2 уровень: *5%* от депозитов и дохода\n"
+        "└ 3 уровень: *5%* от депозитов и дохода\n\n"
+        "💡 _Приглашайте друзей и получайте пассивный доход!_"
+    )
+
+    # Quick share button
+    share_text = (
+        "🚀 Присоединяйся к ArbitroPLEX!\n\n"
+        "💰 Зарабатывай от 0.8% до 1.2% в день\n"
+        "👥 3-уровневая реферальная программа (5%+5%+5%)\n\n"
+        f"Регистрируйся: {referral_link}"
+    )
+    share_url = f"https://t.me/share/url?url={quote(referral_link)}&text={quote(share_text)}"
+
+    inline_kb = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="📤 Поделиться", url=share_url),
+            InlineKeyboardButton(text="📋 Копировать", callback_data="copy_ref_link"),
+        ],
+    ])
 
     await message.answer(
         text, reply_markup=referral_keyboard(), parse_mode="Markdown"
+    )
+
+    # Send share buttons
+    await message.answer(
+        "⬇️ *Быстрые действия:*",
+        parse_mode="Markdown",
+        reply_markup=inline_kb,
     )
 
 
@@ -973,10 +1008,8 @@ async def start_registration(
         "Для начала работы необходимо пройти регистрацию.\n\n"
         "📝 **Шаг 1:** Введите ваш BSC (BEP-20) адрес кошелька\n"
         "Формат: `0x...` (42 символа)\n\n"
-        "⚠️ **КРИТИЧНО:** Указывайте только **ЛИЧНЫЙ** кошелек "
-        "(Trust Wallet, MetaMask, SafePal или любой холодный кошелек).\n"
-        "🚫 **НЕ указывайте** адрес биржи (Binance, Bybit), "
-        "иначе выплаты могут быть утеряны!"
+        "⚠️ **КРИТИЧНО:** Указывайте только **ЛИЧНЫЙ** кошелек (Trust Wallet, MetaMask, SafePal или любой холодный кошелек).\n"
+        "🚫 **НЕ указывайте** адрес биржи (Binance, Bybit), иначе выплаты могут быть утеряны!"
     )
 
     from aiogram.types import ReplyKeyboardRemove

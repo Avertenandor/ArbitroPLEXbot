@@ -54,114 +54,6 @@ class WithdrawalService(BaseService):
         settings = await self.settings_repo.get_settings()
         return settings.min_withdrawal_amount
 
-    async def _validate_withdrawal_request(
-        self,
-        user_id: int,
-        amount: Decimal,
-        available_balance: Decimal,
-        validator: WithdrawalValidator,
-    ) -> tuple[bool, str | None]:
-        """
-        Validate withdrawal request.
-
-        Returns:
-            Tuple of (is_valid, error_message)
-        """
-        validation_result = await validator.validate_withdrawal_request(
-            user_id, amount, available_balance
-        )
-
-        if not validation_result.is_valid:
-            # If finpass recovery is active, freeze pending withdrawals
-            if validation_result.error_code == "FINPASS_RECOVERY":
-                from app.services.finpass_recovery_service import (
-                    FinpassRecoveryService,
-                )
-                finpass_service = FinpassRecoveryService(self.session)
-                if await finpass_service.has_active_recovery(user_id):
-                    await self._freeze_pending_withdrawals(user_id)
-
-            return False, validation_result.error_message
-
-        return True, None
-
-    async def _create_withdrawal_transaction(
-        self,
-        user_id: int,
-        amount: Decimal,
-        validator: WithdrawalValidator,
-    ) -> tuple[Transaction | None, str | None, bool]:
-        """
-        Create withdrawal transaction with balance deduction.
-
-        Returns:
-            Tuple of (transaction, error_message, is_auto_approved)
-        """
-        # Get user with pessimistic lock (NOWAIT)
-        stmt = (
-            select(User)
-            .where(User.id == user_id)
-            .with_for_update(nowait=True)
-        )
-        result = await self.session.execute(stmt)
-        user = result.scalar_one_or_none()
-
-        if not user:
-            return None, "Пользователь не найден", False
-
-        # Calculate Fee using balance manager
-        fee_amount = await self.balance_manager.calculate_fee(amount)
-
-        # CRITICAL: Validate that fee is less than amount
-        if fee_amount >= amount:
-            return None, "Комиссия превышает или равна сумме вывода", False
-
-        # Deduct balance BEFORE creating transaction (Gross amount)
-        balance_before = user.balance
-        user.balance = user.balance - amount
-        balance_after = user.balance
-
-        # Check Auto-Withdrawal Eligibility
-        is_auto = await validator.check_auto_withdrawal_eligibility(
-            user_id, amount
-        )
-
-        status = (
-            TransactionStatus.PROCESSING.value
-            if is_auto
-            else TransactionStatus.PENDING.value
-        )
-
-        # Create withdrawal transaction
-        transaction = await self.transaction_repo.create(
-            user_id=user_id,
-            type=TransactionType.WITHDRAWAL.value,
-            amount=amount,  # Gross amount
-            fee=fee_amount,  # Service fee
-            balance_before=balance_before,
-            balance_after=balance_after,
-            to_address=user.wallet_address,
-            status=status,
-        )
-
-        logger.info(
-            "Withdrawal request created",
-            extra={
-                "transaction_id": transaction.id,
-                "user_id": user_id,
-                "amount": str(amount),
-                "status": status,
-                "is_auto": is_auto,
-            },
-        )
-
-        return transaction, None, is_auto
-
-    def _is_lock_error(self, error: Exception) -> bool:
-        """Check if error is a lock conflict."""
-        error_str = str(error).lower()
-        return "could not obtain lock" in error_str or "lock_not_available" in error_str
-
     async def request_withdrawal(
         self,
         user_id: int,
@@ -179,52 +71,116 @@ class WithdrawalService(BaseService):
         Returns:
             Tuple of (transaction, error_message, is_auto_approved)
         """
-        # Load global settings and create validator
+        # Load global settings
         global_settings = await self.settings_repo.get_settings()
+
+        # Create validator with global settings
         validator = WithdrawalValidator(self.session, global_settings)
 
         # Run all validations
-        is_valid, error_message = await self._validate_withdrawal_request(
-            user_id, amount, available_balance, validator
+        validation_result = await validator.validate_withdrawal_request(
+            user_id, amount, available_balance
         )
-        if not is_valid:
-            return None, error_message, False
+
+        if not validation_result.is_valid:
+            # If finpass recovery is active, freeze pending withdrawals
+            if validation_result.error_code == "FINPASS_RECOVERY":
+                from app.services.finpass_recovery_service import (
+                    FinpassRecoveryService,
+                )
+                finpass_service = FinpassRecoveryService(self.session)
+                if await finpass_service.has_active_recovery(user_id):
+                    await self._freeze_pending_withdrawals(user_id)
+
+            return None, validation_result.error_message, False
 
         # R9-2: Retry logic for race condition conflicts
         for attempt in range(MAX_RETRIES):
             try:
-                result = await self._create_withdrawal_transaction(
-                    user_id, amount, validator
+                # Get user with pessimistic lock (NOWAIT)
+                stmt = (
+                    select(User)
+                    .where(User.id == user_id)
+                    .with_for_update(nowait=True)
                 )
+                result = await self.session.execute(stmt)
+                user = result.scalar_one_or_none()
+
+                if not user:
+                    return None, "Пользователь не найден", False
+
+                # Calculate Fee using balance manager
+                fee_amount = await self.balance_manager.calculate_fee(amount)
+                amount - fee_amount
+
+                # CRITICAL: Validate that fee is less than amount
+                if fee_amount >= amount:
+                    return None, "Комиссия превышает или равна сумме вывода", False
+
+                # Deduct balance BEFORE creating transaction (Gross amount)
+                # User requests 'amount', we deduct 'amount', but send 'net_amount' to blockchain
+                balance_before = user.balance
+                user.balance = user.balance - amount
+                balance_after = user.balance
+
+                # Check Auto-Withdrawal Eligibility
+                is_auto = await validator.check_auto_withdrawal_eligibility(
+                    user_id, amount
+                )
+
+                status = TransactionStatus.PROCESSING.value if is_auto else TransactionStatus.PENDING.value
+
+                # Create withdrawal transaction
+                transaction = await self.transaction_repo.create(
+                    user_id=user_id,
+                    type=TransactionType.WITHDRAWAL.value,
+                    amount=amount,  # Gross amount
+                    fee=fee_amount,  # Service fee
+                    balance_before=balance_before,
+                    balance_after=balance_after,
+                    to_address=user.wallet_address,
+                    status=status,
+                )
+
                 await self.session.commit()
-                return result
+
+                logger.info(
+                    "Withdrawal request created",
+                    extra={
+                        "transaction_id": transaction.id,
+                        "user_id": user_id,
+                        "amount": str(amount),
+                        "status": status,
+                        "is_auto": is_auto,
+                    },
+                )
+
+                return transaction, None, is_auto
 
             except OperationalError as e:
                 # Handle lock conflict
-                if self._is_lock_error(e):
+                error_str = str(e).lower()
+                if "could not obtain lock" in error_str or "lock_not_available" in error_str:
                     if attempt < MAX_RETRIES - 1:
                         delay = RETRY_DELAY_BASE * (2 ** attempt) + random.uniform(0, 0.5)
                         await self.session.rollback()
                         await asyncio.sleep(delay)
                         continue
-
+                    else:
+                        await self.session.rollback()
+                        return None, (
+                            "Система временно занята. "
+                            "Попробуйте через несколько секунд."
+                        ), False
+                else:
                     await self.session.rollback()
-                    return None, (
-                        "Система временно занята. "
-                        "Попробуйте через несколько секунд."
-                    ), False
-
-                await self.session.rollback()
-                logger.error(f"Database error in withdrawal: {e}")
-                return None, "Ошибка базы данных. Попробуйте позже.", False
+                    logger.error(f"Database error in withdrawal: {e}")
+                    return None, "Ошибка базы данных. Попробуйте позже.", False
 
             except Exception as e:
                 await self.session.rollback()
                 logger.error(f"Failed to create withdrawal: {e}", exc_info=True)
                 return None, "Ошибка создания заявки на вывод", False
-
-        # Should never reach here
-        return None, "Превышено количество попыток", False
 
     async def get_pending_withdrawals(
         self,
@@ -377,15 +333,11 @@ class WithdrawalService(BaseService):
             Tuple of (success, error_message)
         """
         try:
-            # Can approve PENDING or PROCESSING (if auto-withdrawal failed or stuck)
-            allowed_statuses = [
-                TransactionStatus.PENDING.value,
-                TransactionStatus.PROCESSING.value
-            ]
             stmt = select(Transaction).where(
                 Transaction.id == transaction_id,
                 Transaction.type == TransactionType.WITHDRAWAL.value,
-                Transaction.status.in_(allowed_statuses),
+                # Can approve PENDING or PROCESSING (if auto-withdrawal failed or stuck)
+                Transaction.status.in_([TransactionStatus.PENDING.value, TransactionStatus.PROCESSING.value]),
             ).with_for_update()
 
             result = await self.session.execute(stmt)
@@ -397,11 +349,11 @@ class WithdrawalService(BaseService):
                     "Заявка на вывод не найдена или уже обработана",
                 )
 
-            # Update withdrawal status to PROCESSING
-            # (or COMPLETED? Logic says approve means we HAVE tx_hash)
+            # Update withdrawal status to PROCESSING (or COMPLETED? Logic says approve means we HAVE tx_hash)
             # If we pass tx_hash, it means it is DONE (or submitted).
-            # Usually approve_withdrawal marks it as PROCESSING, and blockchain
-            # callback marks as COMPLETED. But here we pass tx_hash, so it was sent.
+            # Usually approve_withdrawal marks it as PROCESSING, and blockchain callback marks as COMPLETED.
+            # But here we pass tx_hash, so it means it was sent.
+
             # Let's keep it PROCESSING for now, background job will check receipt.
             withdrawal.status = TransactionStatus.PROCESSING.value
             withdrawal.tx_hash = tx_hash
@@ -425,99 +377,6 @@ class WithdrawalService(BaseService):
             logger.error(f"Failed to approve withdrawal: {e}")
             return False, "Ошибка подтверждения заявки"
 
-    def _validate_escrow_basic(
-        self,
-        escrow: Any,
-        approver_admin_id: int,
-    ) -> tuple[bool, str | None]:
-        """
-        Validate basic escrow properties.
-
-        Returns:
-            (is_valid, error_message)
-        """
-        if not escrow:
-            return False, "Escrow не найден"
-
-        if escrow.status != "PENDING":
-            return False, f"Escrow уже обработан (статус: {escrow.status})"
-
-        if escrow.operation_type != "WITHDRAWAL_APPROVAL":
-            return False, "Неподдерживаемый тип операции"
-
-        if escrow.initiator_admin_id == approver_admin_id:
-            return False, "Нельзя одобрить собственную инициацию"
-
-        return True, None
-
-    def _extract_escrow_withdrawal_data(
-        self,
-        escrow: Any,
-    ) -> tuple[int | None, str | None, str | None]:
-        """
-        Extract withdrawal data from escrow.
-
-        Returns:
-            (transaction_id, to_address, error_message)
-        """
-        transaction_id = escrow.operation_data.get("transaction_id")
-        to_address = escrow.operation_data.get("to_address")
-
-        if not transaction_id or not to_address:
-            return None, None, "Неверные данные в escrow"
-
-        return transaction_id, to_address, None
-
-    async def _send_escrow_withdrawal_payment(
-        self,
-        withdrawal: Transaction,
-        to_address: str,
-        blockchain_service: Any,
-    ) -> tuple[bool, str | None, str | None]:
-        """
-        Send blockchain payment for escrow withdrawal.
-
-        Returns:
-            (success, tx_hash, error_message)
-        """
-        net_amount = withdrawal.amount - withdrawal.fee
-        payment_result = await blockchain_service.send_payment(to_address, net_amount)
-
-        if not payment_result["success"]:
-            error_msg = payment_result.get("error", "Неизвестная ошибка")
-            return False, None, f"Ошибка отправки в блокчейн: {error_msg}"
-
-        return True, payment_result["tx_hash"], None
-
-    async def _finalize_escrow_approval(
-        self,
-        escrow_repo: Any,
-        escrow_id: int,
-        approver_admin_id: int,
-        transaction_id: int,
-        tx_hash: str,
-    ) -> tuple[bool, str | None]:
-        """
-        Finalize escrow and withdrawal approval.
-
-        Returns:
-            (success, error_message)
-        """
-        approved_escrow = await escrow_repo.approve(escrow_id, approver_admin_id)
-
-        if not approved_escrow:
-            return False, "Ошибка при подтверждении escrow"
-
-        success, error_msg = await self.approve_withdrawal(
-            transaction_id, tx_hash, approver_admin_id
-        )
-
-        if not success:
-            await self.session.rollback()
-            return False, error_msg or "Ошибка при одобрении вывода"
-
-        return True, None
-
     async def approve_withdrawal_via_escrow(
         self,
         escrow_id: int,
@@ -531,40 +390,60 @@ class WithdrawalService(BaseService):
             escrow_repo = AdminActionEscrowRepository(self.session)
             escrow = await escrow_repo.get_by_id(escrow_id)
 
-            # Validate escrow
-            is_valid, error_msg = self._validate_escrow_basic(escrow, approver_admin_id)
-            if not is_valid:
-                return False, error_msg, None
+            if not escrow:
+                return False, "Escrow не найден", None
 
-            # Extract withdrawal data
-            transaction_id, to_address, error_msg = self._extract_escrow_withdrawal_data(escrow)
-            if error_msg:
-                return False, error_msg, None
+            if escrow.status != "PENDING":
+                return False, f"Escrow уже обработан (статус: {escrow.status})", None
 
-            # Check maintenance mode
+            if escrow.operation_type != "WITHDRAWAL_APPROVAL":
+                return False, "Неподдерживаемый тип операции", None
+
+            if escrow.initiator_admin_id == approver_admin_id:
+                return False, "Нельзя одобрить собственную инициацию", None
+
+            transaction_id = escrow.operation_data.get("transaction_id")
+            Decimal(str(escrow.operation_data.get("amount", 0)))
+            to_address = escrow.operation_data.get("to_address")
+
+            if not transaction_id or not to_address:
+                return False, "Неверные данные в escrow", None
+
             if settings.blockchain_maintenance_mode:
                 return False, "Blockchain в режиме обслуживания", None
 
-            # Get withdrawal transaction
+            # Get withdrawal transaction to retrieve fee
             withdrawal = await self.get_withdrawal_by_id(transaction_id)
             if not withdrawal:
                 return False, "Транзакция не найдена", None
 
-            # Send blockchain payment
-            success, tx_hash, error_msg = await self._send_escrow_withdrawal_payment(
-                withdrawal, to_address, blockchain_service
+            # CRITICAL: Send net_amount (amount - fee) to user, not gross amount
+            net_amount = withdrawal.amount - withdrawal.fee
+            payment_result = await blockchain_service.send_payment(
+                to_address, net_amount
             )
-            if not success:
-                return False, error_msg, None
 
-            # Finalize approval
-            success, error_msg = await self._finalize_escrow_approval(
-                escrow_repo, escrow_id, approver_admin_id, transaction_id, tx_hash
+            if not payment_result["success"]:
+                error_msg = payment_result.get("error", "Неизвестная ошибка")
+                return False, f"Ошибка отправки в блокчейн: {error_msg}", None
+
+            tx_hash = payment_result["tx_hash"]
+
+            approved_escrow = await escrow_repo.approve(escrow_id, approver_admin_id)
+
+            if not approved_escrow:
+                return False, "Ошибка при подтверждении escrow", None
+
+            success, error_msg = await self.approve_withdrawal(
+                transaction_id, tx_hash, approver_admin_id
             )
+
             if not success:
-                return False, error_msg, None
+                await self.session.rollback()
+                return False, error_msg or "Ошибка при одобрении вывода", None
 
             await self.session.commit()
+
             return True, None, tx_hash
 
         except Exception as e:

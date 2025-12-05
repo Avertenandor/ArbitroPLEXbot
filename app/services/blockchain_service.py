@@ -166,17 +166,12 @@ class BlockchainService:
         # Initialize Wallet
         self._init_wallet()
 
-        wallet_display = (
-            mask_address(self.wallet_address)
-            if self.wallet_address
-            else 'Not configured'
-        )
         logger.success(
             f"BlockchainService initialized successfully\n"
             f"  Active Provider: {self.active_provider_name}\n"
             f"  Providers: {list(self.providers.keys())}\n"
             f"  USDT Contract: {self.usdt_contract_address}\n"
-            f"  Wallet: {wallet_display}"
+            f"  Wallet: {mask_address(self.wallet_address) if self.wallet_address else 'Not configured'}"
         )
 
     def get_optimal_gas_price(self, w3: Web3) -> int:
@@ -411,10 +406,7 @@ class BlockchainService:
             # Fallback to any available
             if self.providers:
                 fallback_name = next(iter(self.providers))
-                logger.warning(
-                    f"Active provider '{self.active_provider_name}' not found, "
-                    f"falling back to '{fallback_name}'"
-                )
+                logger.warning(f"Active provider '{self.active_provider_name}' not found, falling back to '{fallback_name}'")
                 return self.providers[fallback_name]
             raise ConnectionError("No blockchain providers available")
         return provider
@@ -586,13 +578,8 @@ class BlockchainService:
                             timeout=BLOCKCHAIN_EXECUTOR_TIMEOUT,
                         )
                     except TimeoutError:
-                        logger.error(
-                            f"Timeout in blockchain operation on backup "
-                            f"provider '{backup_name}'"
-                        )
-                        raise TimeoutError(
-                            f"Blockchain operation timeout on backup {backup_name}"
-                        )
+                        logger.error(f"Timeout in blockchain operation on backup provider '{backup_name}'")
+                        raise TimeoutError(f"Blockchain operation timeout on backup {backup_name}")
 
                 # If success, switch permanent
                 self.active_provider_name = backup_name
@@ -625,10 +612,7 @@ class BlockchainService:
             to_address = to_checksum_address(to_address)
             # Convert Decimal to wei using proper precision handling
             from decimal import ROUND_DOWN
-            amount_wei = int(
-                (Decimal(str(amount)) * Decimal(10 ** USDT_DECIMALS))
-                .to_integral_value(ROUND_DOWN)
-            )
+            amount_wei = int((Decimal(str(amount)) * Decimal(10 ** USDT_DECIMALS)).to_integral_value(ROUND_DOWN))
 
             # Get nonce with async lock BEFORE entering executor
             # This prevents race conditions in parallel transactions
@@ -670,10 +654,7 @@ class BlockchainService:
                 # Execute with pre-acquired nonce
                 tx_hash_str = await self._run_async_failover(lambda w3: _send_tx(w3, nonce))
 
-            logger.info(
-                f"USDT payment sent: {amount} to {mask_address(to_address)}, "
-                f"hash: {mask_tx_hash(tx_hash_str)}"
-            )
+            logger.info(f"USDT payment sent: {amount} to {mask_address(to_address)}, hash: {mask_tx_hash(tx_hash_str)}")
             return {"success": True, "tx_hash": tx_hash_str, "error": None}
 
         except Exception as e:
@@ -701,10 +682,7 @@ class BlockchainService:
             to_address = to_checksum_address(to_address)
             # Convert Decimal to wei using proper precision handling
             from decimal import ROUND_DOWN
-            amount_wei = int(
-                (Decimal(str(amount)) * Decimal(10 ** 18))
-                .to_integral_value(ROUND_DOWN)
-            )
+            amount_wei = int((Decimal(str(amount)) * Decimal(10 ** 18)).to_integral_value(ROUND_DOWN))
 
             # Get nonce with async lock BEFORE entering executor
             # This prevents race conditions in parallel transactions
@@ -738,10 +716,7 @@ class BlockchainService:
                 # Execute with pre-acquired nonce
                 tx_hash_str = await self._run_async_failover(lambda w3: _send_native(w3, nonce))
 
-            logger.info(
-                f"BNB payment sent: {amount} to {mask_address(to_address)}, "
-                f"hash: {mask_tx_hash(tx_hash_str)}"
-            )
+            logger.info(f"BNB payment sent: {amount} to {mask_address(to_address)}, hash: {mask_tx_hash(tx_hash_str)}")
             return {"success": True, "tx_hash": tx_hash_str, "error": None}
 
         except Exception as e:
@@ -793,9 +768,7 @@ class BlockchainService:
     async def get_transaction_details(self, tx_hash: str) -> dict[str, Any] | None:
         try:
             # Just execute directly via failover helper, encapsulating logic
-            return await self._run_async_failover(
-                lambda w3: self._fetch_tx_details_sync(w3, tx_hash)
-            )
+            return await self._run_async_failover(lambda w3: self._fetch_tx_details_sync(w3, tx_hash))
         except (TimeoutError, Web3Exception) as e:
             logger.warning(f"Failed to get transaction details: {e}")
             return None
@@ -900,10 +873,7 @@ class BlockchainService:
             to_address = to_checksum_address(to_address)
             # Convert Decimal to wei using proper precision handling
             from decimal import ROUND_DOWN
-            amount_wei = int(
-                (Decimal(str(amount)) * Decimal(10 ** USDT_DECIMALS))
-                .to_integral_value(ROUND_DOWN)
-            )
+            amount_wei = int((Decimal(str(amount)) * Decimal(10 ** USDT_DECIMALS)).to_integral_value(ROUND_DOWN))
 
             def _est_gas(w3: Web3):
                 contract = w3.eth.contract(address=self.usdt_contract_address, abi=USDT_ABI)
@@ -931,23 +901,12 @@ class BlockchainService:
                         ),
                         timeout=BLOCKCHAIN_EXECUTOR_TIMEOUT,
                     )
-                    is_active = name == self.active_provider_name
-                    status[name] = {"connected": True, "block": bn, "active": is_active}
+                    status[name] = {"connected": True, "block": bn, "active": name == self.active_provider_name}
                 except TimeoutError:
                     logger.warning(f"Timeout checking provider '{name}' status")
-                    is_active = name == self.active_provider_name
-                    status[name] = {
-                        "connected": False,
-                        "error": "Timeout",
-                        "active": is_active
-                    }
+                    status[name] = {"connected": False, "error": "Timeout", "active": name == self.active_provider_name}
             except Exception as e:
-                is_active = name == self.active_provider_name
-                status[name] = {
-                    "connected": False,
-                    "error": str(e),
-                    "active": is_active
-                }
+                status[name] = {"connected": False, "error": str(e), "active": name == self.active_provider_name}
         return status
 
     async def verify_plex_payment(

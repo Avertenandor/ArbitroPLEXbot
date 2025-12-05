@@ -332,6 +332,11 @@ async def main() -> None:  # noqa: C901
     from bot.handlers import inquiry
     dp.include_router(inquiry.router)
 
+    # Sponsor inquiry handlers (referral-to-sponsor communication)
+    from bot.handlers import sponsor_inquiry_referral, sponsor_inquiry_sponsor
+    dp.include_router(sponsor_inquiry_referral.router)
+    dp.include_router(sponsor_inquiry_sponsor.router)
+
     # Admin handlers (wallet_key_setup must be first for security)
     # Apply AdminAuthMiddleware to all admin routers
     admin_auth_middleware = AdminAuthMiddleware()

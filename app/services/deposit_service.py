@@ -63,8 +63,7 @@ class DepositService:
         async with lock.lock(lock_key, timeout=30, blocking=True, blocking_timeout=5.0) as acquired:
             if not acquired:
                 logger.warning(
-                    f"Could not acquire lock for creating deposit for user {user_id} "
-                    f"(key: {lock_key})"
+                    f"Could not acquire lock for creating deposit for user {user_id} (key: {lock_key})"
                 )
                 raise ValueError(
                     "Операция уже выполняется. Пожалуйста, подождите."
@@ -206,9 +205,9 @@ class DepositService:
 
             # Start cycle immediately or after period?
             # "Установить next_accrual_at = datetime.now(UTC) ... чтобы запустить цикл"
-            # Usually accrual happens after period. But if we want "immediate" effect
-            # for new users, we might set it to now + period. The previous fix set it
-            # to NOW because they were already waiting. Standard logic: Accrue after X hours.
+            # Usually accrual happens after period. But if we want "immediate" effect for new users,
+            # we might set it to now + period. The previous fix set it to NOW because they were already waiting.
+            # Standard logic: Accrue after X hours.
             now = datetime.now(UTC)
             next_accrual = now + timedelta(hours=accrual_period_hours)
 
@@ -401,7 +400,7 @@ class DepositService:
             .join(User, Deposit.user_id == User.id)
             .where(
                 Deposit.status == TransactionStatus.CONFIRMED.value,
-                not Deposit.is_roi_completed  # Active deposits only
+                Deposit.is_roi_completed is False  # Active deposits only
             )
             .order_by(Deposit.created_at.desc())
         )

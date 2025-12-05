@@ -78,11 +78,7 @@ class ReportService:
         return result.scalar_one()
 
     async def _get_transactions(self, user_id: int) -> list[Transaction]:
-        stmt = (
-            select(Transaction)
-            .where(Transaction.user_id == user_id)
-            .order_by(Transaction.created_at.desc())
-        )
+        stmt = select(Transaction).where(Transaction.user_id == user_id).order_by(Transaction.created_at.desc())
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
@@ -108,11 +104,7 @@ class ReportService:
 
     async def _get_wallet_history(self, user_id: int) -> list:
         from app.models.user_wallet_history import UserWalletHistory
-        stmt = (
-            select(UserWalletHistory)
-            .where(UserWalletHistory.user_id == user_id)
-            .order_by(UserWalletHistory.changed_at.desc())
-        )
+        stmt = select(UserWalletHistory).where(UserWalletHistory.user_id == user_id).order_by(UserWalletHistory.changed_at.desc())
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
@@ -179,14 +171,7 @@ class ReportService:
             ("", ""),
             ("📊 Статистика депозитов", ""),
             ("Всего депозитов", len(deposits)),
-            (
-                "Активных депозитов",
-                len([
-                    d for d in deposits
-                    if d.status == TransactionStatus.CONFIRMED.value
-                    and not d.is_roi_completed
-                ])
-            ),
+            ("Активных депозитов", len([d for d in deposits if d.status == TransactionStatus.CONFIRMED.value and not d.is_roi_completed])),
             ("Общая сумма депозитов", float(sum(d.amount for d in deposits))),
             ("", ""),
             ("🎁 Реферальная статистика", ""),
@@ -209,10 +194,7 @@ class ReportService:
     def _create_transactions_sheet(self, wb, transactions: list[Transaction]):
         ws = wb.create_sheet("История транзакций")
 
-        headers = [
-            "ID", "Дата", "Тип", "Сумма (USDT)", "Статус",
-            "Описание", "TX Hash", "Баланс до", "Баланс после"
-        ]
+        headers = ["ID", "Дата", "Тип", "Сумма (USDT)", "Статус", "Описание", "TX Hash", "Баланс до", "Баланс после"]
         ws.append(headers)
 
         for tx in transactions:
@@ -235,10 +217,7 @@ class ReportService:
     def _create_deposits_sheet(self, wb, deposits: list[Deposit]):
         ws = wb.create_sheet("Депозиты")
 
-        headers = [
-            "ID", "Дата", "Уровень", "Сумма (USDT)", "Статус",
-            "ROI Cap", "Выплачено", "Завершено", "Процент дохода", "TX Hash"
-        ]
+        headers = ["ID", "Дата", "Уровень", "Сумма (USDT)", "Статус", "ROI Cap", "Выплачено", "Завершено", "Процент дохода", "TX Hash"]
         ws.append(headers)
 
         for dep in deposits:
@@ -266,11 +245,7 @@ class ReportService:
     def _create_referrals_sheet(self, wb, referrals: list[Referral]):
         ws = wb.create_sheet("Рефералы")
 
-        headers = [
-            "ID", "Дата регистрации", "Уровень",
-            "Пользователь (Username)", "Пользователь (ID)",
-            "Заработано с него (USDT)"
-        ]
+        headers = ["ID", "Дата регистрации", "Уровень", "Пользователь (Username)", "Пользователь (ID)", "Заработано с него (USDT)"]
         ws.append(headers)
 
         for ref in referrals:

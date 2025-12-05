@@ -58,6 +58,14 @@ from app.models.user_fsm_state import UserFsmState
 
 # User Inquiry Models
 from app.models.user_inquiry import InquiryMessage, InquiryStatus, UserInquiry
+
+# Sponsor Inquiry Models
+from app.models.sponsor_inquiry import (
+    SponsorInquiry,
+    SponsorInquiryMessage,
+    SponsorInquiryStatus,
+)
+
 from app.models.user_message_log import UserMessageLog
 from app.models.user_notification_settings import UserNotificationSettings
 from app.models.user_wallet_history import UserWalletHistory
@@ -111,6 +119,10 @@ __all__ = [
     "UserInquiry",
     "InquiryMessage",
     "InquiryStatus",
+    # Sponsor Inquiry Models
+    "SponsorInquiry",
+    "SponsorInquiryMessage",
+    "SponsorInquiryStatus",
     # System Models
     "GlobalSettings",
     "UserAction",

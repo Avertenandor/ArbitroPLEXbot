@@ -1,6 +1,6 @@
 import asyncio
 import sys
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 # Add project root to path
@@ -23,7 +23,7 @@ logger.add(sys.stderr, level="INFO")
 
 
 # Define Enum locally if not available in model
-class DepositStatus(str, Enum):
+class DepositStatus(StrEnum):
     PENDING = "pending"
     CONFIRMED = "confirmed"
     FAILED = "failed"
@@ -66,23 +66,15 @@ async def audit_deposits():
                 user = deposit.user
 
                 # Fetch rewards manually since relationship might be missing
-                r_stmt = (
-                    select(DepositReward)
-                    .where(DepositReward.deposit_id == deposit.id)
-                    .order_by(DepositReward.calculated_at)
-                )
+                r_stmt = select(DepositReward).where(DepositReward.deposit_id == deposit.id).order_by(DepositReward.calculated_at)
                 r_result = await session.execute(r_stmt)
                 rewards = r_result.scalars().all()
 
-                # Note: reward_amount, not amount
-                total_rewards = sum(r.reward_amount for r in rewards)
+                total_rewards = sum(r.reward_amount for r in rewards)  # Note: reward_amount, not amount
                 last_reward = rewards[-1] if rewards else None
 
                 logger.info(f"\n--- Deposit ID: {deposit.id} ---")
-                logger.info(
-                    f"User: {user.id} (ID: {user.telegram_id}, "
-                    f"Username: @{user.username or 'NoUsername'})"
-                )
+                logger.info(f"User: {user.id} (ID: {user.telegram_id}, Username: @{user.username or 'NoUsername'})")
                 logger.info(f"Amount: {deposit.amount} USDT")
                 logger.info(f"Level: {deposit.level}")
                 logger.info(f"Created At: {deposit.created_at}")
@@ -93,10 +85,7 @@ async def audit_deposits():
                 logger.info(f"Is Completed: {deposit.is_roi_completed}")
 
                 if last_reward:
-                    logger.info(
-                        f"Last Reward: {last_reward.reward_amount} "
-                        f"at {last_reward.calculated_at}"
-                    )
+                    logger.info(f"Last Reward: {last_reward.reward_amount} at {last_reward.calculated_at}")
                 else:
                     logger.info("No rewards yet.")
 
@@ -105,15 +94,9 @@ async def audit_deposits():
                     now = utc_now()
 
                     if deposit.next_accrual_at < now:
-                        logger.warning(
-                            f"ALERT: Next accrual was due at {deposit.next_accrual_at} "
-                            "(Past due!)"
-                        )
+                        logger.warning(f"ALERT: Next accrual was due at {deposit.next_accrual_at} (Past due!)")
 
-                if (
-                    deposit.roi_paid_amount >= deposit.roi_cap_amount
-                    and not deposit.is_roi_completed
-                ):
+                if deposit.roi_paid_amount >= deposit.roi_cap_amount and not deposit.is_roi_completed:
                     logger.warning("ALERT: ROI Cap reached but not marked completed!")
 
     except Exception as e:

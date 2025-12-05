@@ -42,7 +42,7 @@ async def notify_security_event(
             cmd.append("--critical")
 
         # Run in subprocess (non-blocking)
-        _process = await asyncio.create_subprocess_exec(
+        await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,

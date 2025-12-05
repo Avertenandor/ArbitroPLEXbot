@@ -1,6 +1,6 @@
 """Blockchain constants and ABIs."""
 
-# USDT BEP-20 Contract ABI (TÂ¦-¦¬TÌ¦¦¦- ¦-¦¦¦-¦-TÅ¦-¦+¦¬¦-TË¦¦ TÄTÃ¦-¦¦TÆ¦¬¦¬)
+# USDT BEP-20 Contract ABI (minimal required functions)
 USDT_ABI = [
     # Transfer event
     {
@@ -57,7 +57,7 @@ USDT_ABI = [
     },
 ]
 
-# USDT ¦¬¦-¦¦¦¦TÂ 18 decimals ¦-¦- BSC
+# USDT uses 18 decimals on BSC
 USDT_DECIMALS = 18
 
 # Gas limits

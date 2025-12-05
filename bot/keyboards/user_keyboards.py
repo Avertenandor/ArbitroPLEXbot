@@ -24,8 +24,7 @@ def main_menu_reply_keyboard(
     Conditionally shows buttons based on user status (e.g., blocked, admin, unregistered).
 
     Args:
-        user: The current user object (optional). If None, shows reduced menu
-            for unregistered users.
+        user: The current user object (optional). If None, shows reduced menu for unregistered users.
         blacklist_entry: The user's blacklist entry, if any (optional).
         is_admin: Whether the user is an admin (optional).
 
@@ -154,10 +153,7 @@ def main_menu_reply_keyboard(
         # Log for non-admin case is handled by the if block above
 
     keyboard = builder.as_markup(resize_keyboard=True)
-    logger.info(
-        f"[KEYBOARD] Keyboard created for user {telegram_id}, "
-        f"buttons count: {len(keyboard.keyboard)}"
-    )
+    logger.info(f"[KEYBOARD] Keyboard created for user {telegram_id}, buttons count: {len(keyboard.keyboard)}")
     return keyboard
 
 
@@ -190,8 +186,7 @@ def deposit_menu_keyboard(
     Deposit menu reply keyboard with status indicators.
 
     Args:
-        levels_status: Optional dict with level statuses from
-            DepositValidationService.get_available_levels()
+        levels_status: Optional dict with level statuses from DepositValidationService.get_available_levels()
 
     Returns:
         ReplyKeyboardMarkup with deposit options
@@ -206,6 +201,7 @@ def deposit_menu_keyboard(
             level_info = levels_status[level]
             amount = level_info["amount"]
             status = level_info["status"]
+            level_info.get("status_text", "")
 
             # Build button text with status indicator
             if status == "active":
@@ -270,13 +266,24 @@ def referral_menu_keyboard() -> ReplyKeyboardMarkup:
     builder = ReplyKeyboardBuilder()
 
     builder.row(
-        KeyboardButton(text="👥 Мои рефералы"),
-    )
-    builder.row(
+        KeyboardButton(text="🌳 Моя структура"),
         KeyboardButton(text="💰 Мой заработок"),
     )
     builder.row(
         KeyboardButton(text="📊 Статистика рефералов"),
+        KeyboardButton(text="📈 Аналитика"),
+    )
+    builder.row(
+        KeyboardButton(text="🏆 ТОП партнёров"),
+        KeyboardButton(text="📢 Промо-материалы"),
+    )
+    builder.row(
+        KeyboardButton(text="💬 Написать спонсору"),
+        KeyboardButton(text="📬 Входящие от рефералов"),
+    )
+    builder.row(
+        KeyboardButton(text="👤 Кто меня пригласил"),
+        KeyboardButton(text="📋 Скопировать ссылку"),
     )
     builder.row(
         KeyboardButton(text="📊 Главное меню"),

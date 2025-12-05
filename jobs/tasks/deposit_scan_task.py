@@ -61,8 +61,8 @@ async def _scan_all_deposits_async() -> None:
             stmt = select(User).where(
                 User.wallet_address.isnot(None),
                 User.wallet_address != "",
-                User.is_active,
-                not User.is_banned,
+                User.is_active is True,
+                User.is_banned is False,
             ).where(
                 # Scan if never scanned or last scan > 1 hour ago
                 (User.last_deposit_scan_at.is_(None)) |

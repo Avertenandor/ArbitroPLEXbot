@@ -76,10 +76,10 @@ async def _monitor_plex_balances_async() -> None:
                 # Get all active depositors
                 result = await session.execute(
                     select(User).where(
-                        User.is_active,
-                        not User.is_banned,
-                        User.is_active_depositor,
-                        not User.bot_blocked,
+                        User.is_active is True,
+                        User.is_banned is False,
+                        User.is_active_depositor is True,
+                        User.bot_blocked is False,
                     )
                 )
                 users = list(result.scalars().all())
@@ -199,6 +199,9 @@ async def _check_user_plex_balance(
             )
 
         shortage = MINIMUM_PLEX_BALANCE - balance_int
+
+        # Generate QR code for PLEX purchase/top-up
+        # QR will contain wallet address for PLEX transfer
 
         # Send warning notification
         message = (

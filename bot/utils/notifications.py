@@ -2,14 +2,21 @@
 Notification utilities.
 
 Helper functions for sending notifications.
+Включает интеграцию с AdminEventMonitor для структурированных уведомлений.
 """
 
 import asyncio
+from datetime import UTC, datetime
+from decimal import Decimal
+from typing import TYPE_CHECKING, Any
 
 from aiogram import Bot
 from loguru import logger
 
 from app.config.constants import TELEGRAM_TIMEOUT
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def notify_admins(
@@ -17,22 +24,25 @@ async def notify_admins(
     admin_ids: list[int],
     message: str,
     parse_mode: str = "Markdown",
-) -> None:
+) -> int:
     """
-    Send notification to all admins in parallel using asyncio.gather.
+    Отправить уведомление всем админам параллельно.
 
     Args:
-        bot: Bot instance
-        admin_ids: List of admin Telegram IDs
-        message: Message to send
-        parse_mode: Parse mode (Markdown, HTML)
+        bot: Экземпляр бота
+        admin_ids: Список Telegram ID админов
+        message: Текст сообщения
+        parse_mode: Режим парсинга (Markdown, HTML)
+
+    Returns:
+        Количество успешно уведомлённых админов
     """
     if not admin_ids:
-        logger.warning("No admin IDs provided for notification")
-        return
+        logger.warning("Не указаны ID админов для уведомления")
+        return 0
 
     async def send_to_admin(admin_id: int) -> tuple[int, bool]:
-        """Send message to single admin."""
+        """Отправить сообщение одному админу."""
         try:
             await asyncio.wait_for(
                 bot.send_message(
@@ -44,28 +54,149 @@ async def notify_admins(
             )
             return admin_id, True
         except TimeoutError:
-            logger.error(f"Timeout notifying admin {admin_id}")
+            logger.error(f"Таймаут уведомления админа {admin_id}")
             return admin_id, False
         except Exception as e:
-            logger.error(f"Failed to notify admin {admin_id}: {e}")
+            logger.error(f"Ошибка уведомления админа {admin_id}: {e}")
             return admin_id, False
 
-    # Send to all admins in parallel
+    # Параллельная отправка
     tasks = [send_to_admin(admin_id) for admin_id in admin_ids]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    # Count failures
-    failed = 0
+    # Подсчёт неудач
+    success_count = 0
     for result in results:
         if isinstance(result, Exception):
-            failed += 1
-            logger.error(f"Admin notification task failed: {result}")
+            logger.error(f"Задача уведомления завершилась с ошибкой: {result}")
         else:
             _, success = result
-            if not success:
-                failed += 1
+            if success:
+                success_count += 1
 
-    if failed > 0:
-        logger.warning(f"Failed to notify {failed}/{len(admin_ids)} admins")
+    if success_count < len(admin_ids):
+        logger.warning(
+            f"Уведомлено {success_count}/{len(admin_ids)} админов"
+        )
     else:
-        logger.debug(f"Successfully notified all {len(admin_ids)} admins")
+        logger.debug(f"Все {len(admin_ids)} админов успешно уведомлены")
+
+    return success_count
+
+
+async def notify_admins_formatted(
+    bot: Bot,
+    session: "AsyncSession",
+    title: str,
+    details: dict[str, Any],
+    category: str = "system",
+    priority: str = "medium",
+    footer: str | None = None,
+) -> int:
+    """
+    Отправить форматированное уведомление через AdminEventMonitor.
+
+    Args:
+        bot: Экземпляр бота
+        session: Сессия БД
+        title: Заголовок
+        details: Детали события
+        category: Категория (deposit, withdrawal, security, etc.)
+        priority: Приоритет (critical, high, medium, low)
+        footer: Дополнительный текст
+
+    Returns:
+        Количество уведомлённых админов
+    """
+    from app.services.admin_event_monitor import (
+        AdminEventMonitor,
+        EventCategory,
+        EventPriority,
+    )
+
+    # Преобразование строк в enum
+    try:
+        cat = EventCategory(category)
+    except ValueError:
+        cat = EventCategory.SYSTEM
+
+    try:
+        prio = EventPriority(priority)
+    except ValueError:
+        prio = EventPriority.MEDIUM
+
+    monitor = AdminEventMonitor(bot, session)
+    return await monitor.notify(
+        category=cat,
+        priority=prio,
+        title=title,
+        details=details,
+        footer=footer,
+    )
+
+
+def format_admin_alert(
+    title: str,
+    details: dict[str, Any],
+    priority: str = "medium",
+    category: str | None = None,
+) -> str:
+    """
+    Форматировать сообщение для админов в едином стиле.
+
+    Args:
+        title: Заголовок
+        details: Детали (ключ-значение)
+        priority: Приоритет (critical, high, medium, low)
+        category: Категория события
+
+    Returns:
+        Отформатированное сообщение
+    """
+    # Эмодзи приоритетов
+    priority_emoji = {
+        "critical": "🔴",
+        "high": "🟠",
+        "medium": "🟡",
+        "low": "🟢",
+    }
+
+    priority_names = {
+        "critical": "КРИТИЧЕСКИЙ",
+        "high": "Высокий",
+        "medium": "Средний",
+        "low": "Низкий",
+    }
+
+    prio_emoji = priority_emoji.get(priority, "⚪")
+    prio_name = priority_names.get(priority, priority)
+
+    lines = [
+        f"*{title}*",
+        f"{prio_emoji} Приоритет: {prio_name}",
+    ]
+
+    if category:
+        lines.append(f"📂 Категория: {category}")
+
+    lines.append("")
+
+    # Детали
+    for key, value in details.items():
+        if value is not None:
+            # Форматирование
+            if isinstance(value, Decimal):
+                value = f"{value:,.4f}".rstrip("0").rstrip(".")
+            elif isinstance(value, datetime):
+                value = value.strftime("%d.%m.%Y %H:%M:%S")
+            elif isinstance(value, bool):
+                value = "Да" if value else "Нет"
+
+            lines.append(f"• {key}: `{value}`")
+
+    # Время
+    lines.append("")
+    lines.append(f"🕐 {datetime.now(UTC).strftime('%d.%m.%Y %H:%M:%S')} UTC")
+
+    return "\n".join(lines)
+

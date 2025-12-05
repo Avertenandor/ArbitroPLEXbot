@@ -18,6 +18,7 @@ except ImportError:
 
 from app.config.database import async_session_maker
 from app.config.settings import settings
+from app.services.notification_service import NotificationService
 from app.services.reconciliation_service import ReconciliationService
 from app.utils.distributed_lock import DistributedLock
 
@@ -80,7 +81,7 @@ async def _perform_reconciliation_async() -> dict:
     async with lock.lock("financial_reconciliation", timeout=600):
         try:
             # FIXED: Use context manager for Bot to prevent session leak
-            async with Bot(token=settings.telegram_bot_token) as _bot:
+            async with Bot(token=settings.telegram_bot_token):
                 async with async_session_maker() as session:
                     reconciliation_service = ReconciliationService(session)
 
@@ -90,6 +91,8 @@ async def _perform_reconciliation_async() -> dict:
                     # If critical discrepancy, notify admins
                     if result.get("critical"):
                         try:
+                            NotificationService(session)
+
                             # Get admin telegram IDs (would need admin service)
                             # For now, just log it
                             logger.critical(

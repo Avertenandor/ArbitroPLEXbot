@@ -5,7 +5,7 @@ Consolidated processor for handling referral rewards from both deposits and ROI.
 Eliminates duplication between deposit and ROI reward processing.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Literal
 
@@ -34,6 +34,18 @@ RewardType = Literal["deposit", "roi"]
 
 
 @dataclass
+class RewardNotification:
+    """Data for sending reward notification."""
+
+    referrer_telegram_id: int
+    reward_amount: Decimal
+    level: int
+    source_username: str | None
+    source_telegram_id: int
+    reward_type: str
+
+
+@dataclass
 class ProcessResult:
     """Result of reward processing."""
 
@@ -41,6 +53,7 @@ class ProcessResult:
     total_rewards: Decimal
     error_message: str | None = None
     rewards_count: int = 0
+    notifications: list[RewardNotification] = field(default_factory=list)
 
 
 class ReferralRewardProcessor:
@@ -102,8 +115,14 @@ class ReferralRewardProcessor:
                 rewards_count=0,
             )
 
+        # Get source user info for notifications
+        source_user = await self.user_repo.get_by_id(user_id)
+        source_username = source_user.username if source_user else None
+        source_telegram_id = source_user.telegram_id if source_user else 0
+
         total_rewards = Decimal("0")
         rewards_count = 0
+        notifications: list[RewardNotification] = []
 
         # Determine tx_hash based on reward type
         if tx_hash is None:
@@ -117,8 +136,8 @@ class ReferralRewardProcessor:
             if reward_amount <= 0:
                 continue
 
-            # Create the reward record
-            created = await self._create_reward_record(
+            # Create the reward record and get referrer info
+            referrer_info = await self._create_reward_record(
                 relationship=relationship,
                 reward_amount=reward_amount,
                 tx_hash=tx_hash,
@@ -127,9 +146,19 @@ class ReferralRewardProcessor:
                 reward_type=reward_type,
             )
 
-            if created:
+            if referrer_info:
                 total_rewards += reward_amount
                 rewards_count += 1
+
+                # Add notification data
+                notifications.append(RewardNotification(
+                    referrer_telegram_id=referrer_info["telegram_id"],
+                    reward_amount=reward_amount,
+                    level=level,
+                    source_username=source_username,
+                    source_telegram_id=source_telegram_id,
+                    reward_type=reward_type,
+                ))
 
         # Commit all changes
         await self.session.commit()
@@ -149,6 +178,7 @@ class ReferralRewardProcessor:
             total_rewards=total_rewards,
             error_message=None,
             rewards_count=rewards_count,
+            notifications=notifications,
         )
 
     async def _get_referral_chain(
@@ -203,7 +233,7 @@ class ReferralRewardProcessor:
         source_id: int | None,
         user_id: int,
         reward_type: RewardType,
-    ) -> bool:
+    ) -> dict | None:
         """
         Create a reward record and update referrer balance.
 
@@ -216,8 +246,21 @@ class ReferralRewardProcessor:
             reward_type: Type of reward ("deposit" or "roi")
 
         Returns:
-            True if reward was created, False otherwise
+            Dict with referrer info if created, None otherwise
         """
+        # Get referrer info for notifications
+        referrer = await self.user_repo.get_by_id(relationship.referrer_id)
+        if not referrer:
+            logger.warning(
+                "Referrer not found for reward",
+                extra={
+                    "referrer_id": relationship.referrer_id,
+                    "referral_id": relationship.id,
+                    "reward_type": reward_type,
+                },
+            )
+            return None
+
         # R9-2: Atomic update to prevent race conditions
         stmt = (
             update(User)
@@ -230,15 +273,7 @@ class ReferralRewardProcessor:
         result = await self.session.execute(stmt)
 
         if result.rowcount == 0:
-            logger.warning(
-                "Referrer not found for reward",
-                extra={
-                    "referrer_id": relationship.referrer_id,
-                    "referral_id": relationship.id,
-                    "reward_type": reward_type,
-                },
-            )
-            return False
+            return None
 
         # Create earning record
         await self.earning_repo.create(
@@ -267,4 +302,4 @@ class ReferralRewardProcessor:
             },
         )
 
-        return True
+        return {"telegram_id": referrer.telegram_id}

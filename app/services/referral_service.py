@@ -4,7 +4,9 @@ Referral service.
 Manages referral chains, relationships, and reward processing.
 """
 
+from datetime import UTC, datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from sqlalchemy import func, select, text
@@ -22,6 +24,9 @@ from app.services.base_service import BaseService
 from app.services.referral.referral_reward_processor import (
     ReferralRewardProcessor,
 )
+
+if TYPE_CHECKING:
+    from aiogram import Bot
 
 # Referral system configuration (from PART2 docs)
 # 3-level referral program: 5% from deposits AND earnings at each level
@@ -224,7 +229,7 @@ class ReferralService(BaseService):
         return True, None
 
     async def process_referral_rewards(
-        self, user_id: int, deposit_amount: Decimal
+        self, user_id: int, deposit_amount: Decimal, bot: "Bot | None" = None
     ) -> tuple[bool, Decimal, str | None]:
         """
         Process referral rewards for a deposit.
@@ -234,6 +239,7 @@ class ReferralService(BaseService):
         Args:
             user_id: User who made deposit
             deposit_amount: Deposit amount
+            bot: Optional bot instance for sending notifications
 
         Returns:
             Tuple of (success, total_rewards, error_message)
@@ -244,10 +250,14 @@ class ReferralService(BaseService):
             reward_type="deposit",
         )
 
+        # Send notifications if bot provided
+        if bot and result.notifications:
+            await self._send_reward_notifications(bot, result.notifications)
+
         return result.success, result.total_rewards, result.error_message
 
     async def process_roi_referral_rewards(
-        self, user_id: int, roi_amount: Decimal
+        self, user_id: int, roi_amount: Decimal, bot: "Bot | None" = None
     ) -> tuple[bool, Decimal, str | None]:
         """
         Process referral rewards for ROI accrual.
@@ -255,6 +265,7 @@ class ReferralService(BaseService):
         Args:
             user_id: User who received ROI
             roi_amount: ROI amount
+            bot: Optional bot instance for sending notifications
 
         Returns:
             Tuple of (success, total_rewards, error_message)
@@ -265,7 +276,36 @@ class ReferralService(BaseService):
             reward_type="roi",
         )
 
+        # Send notifications if bot provided (only for significant amounts)
+        if bot and result.notifications:
+            # Filter small ROI notifications to avoid spam
+            significant = [n for n in result.notifications if n.reward_amount >= 0.01]
+            if significant:
+                await self._send_reward_notifications(bot, significant)
+
         return result.success, result.total_rewards, result.error_message
+
+    async def _send_reward_notifications(
+        self, bot: "Bot", notifications: list
+    ) -> None:
+        """Send reward notifications to referrers."""
+        from app.services.referral.referral_notifications import (
+            notify_referral_reward,
+        )
+
+        for notif in notifications:
+            try:
+                await notify_referral_reward(
+                    bot=bot,
+                    referrer_telegram_id=notif.referrer_telegram_id,
+                    reward_amount=notif.reward_amount,
+                    level=notif.level,
+                    source_username=notif.source_username,
+                    source_telegram_id=notif.source_telegram_id,
+                    reward_type=notif.reward_type,
+                )
+            except Exception as e:
+                logger.warning(f"Failed to send reward notification: {e}")
 
     async def get_referrals_by_level(
         self, user_id: int, level: int, page: int = 1, limit: int = 10
@@ -649,4 +689,277 @@ class ReferralService(BaseService):
             "paid_earnings": earning_stats.paid_earnings or Decimal("0"),
             "pending_earnings": earning_stats.pending_earnings or Decimal("0"),
             "by_level": by_level,
+        }
+
+    async def get_daily_earnings_stats(
+        self, user_id: int, days: int = 7
+    ) -> dict:
+        """
+        Get daily earnings statistics for user.
+
+        Args:
+            user_id: User ID
+            days: Number of days to retrieve (default 7)
+
+        Returns:
+            Dict with daily earnings breakdown
+        """
+        from datetime import timedelta
+
+        # Get user's referral relationships
+        relationships = await self.referral_repo.find_by(referrer_id=user_id)
+        relationship_ids = [r.id for r in relationships]
+
+        if not relationship_ids:
+            return {
+                "daily_stats": [],
+                "total_period": Decimal("0"),
+                "today_earned": Decimal("0"),
+                "average_daily": Decimal("0"),
+            }
+
+        # Calculate date range
+        now = datetime.now(UTC)
+        start_date = now - timedelta(days=days)
+
+        # Get daily aggregated earnings
+        stmt = text("""
+            SELECT
+                DATE(re.created_at AT TIME ZONE 'UTC') as earn_date,
+                SUM(re.amount) as daily_amount,
+                COUNT(*) as transactions_count
+            FROM referral_earnings re
+            WHERE re.referral_id = ANY(:ref_ids)
+              AND re.created_at >= :start_date
+            GROUP BY DATE(re.created_at AT TIME ZONE 'UTC')
+            ORDER BY earn_date DESC
+        """)
+
+        result = await self.session.execute(
+            stmt,
+            {"ref_ids": relationship_ids, "start_date": start_date}
+        )
+        rows = result.all()
+
+        daily_stats = []
+        total_period = Decimal("0")
+        today_earned = Decimal("0")
+        today = now.date()
+
+        for row in rows:
+            amount = Decimal(str(row.daily_amount)) if row.daily_amount else Decimal("0")
+            daily_stats.append({
+                "date": row.earn_date,
+                "amount": amount,
+                "count": row.transactions_count or 0,
+            })
+            total_period += amount
+            if row.earn_date == today:
+                today_earned = amount
+
+        average_daily = total_period / Decimal(days) if days > 0 else Decimal("0")
+
+        return {
+            "daily_stats": daily_stats,
+            "total_period": total_period,
+            "today_earned": today_earned,
+            "average_daily": average_daily,
+            "days": days,
+        }
+
+    async def get_referral_conversion_stats(self, user_id: int) -> dict:
+        """
+        Get referral conversion statistics.
+
+        Shows how many referrals made deposits and average deposit amount.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Dict with conversion stats
+        """
+        from app.models.deposit import Deposit
+
+        # Get direct referrals (level 1)
+        direct_referrals = await self.referral_repo.find_by(
+            referrer_id=user_id, level=1
+        )
+
+        if not direct_referrals:
+            return {
+                "total_referrals": 0,
+                "referrals_with_deposits": 0,
+                "conversion_rate": Decimal("0"),
+                "total_deposits_amount": Decimal("0"),
+                "average_deposit": Decimal("0"),
+            }
+
+        referral_user_ids = [r.referral_id for r in direct_referrals]
+
+        # Count referrals with deposits
+        deposit_stats_stmt = select(
+            func.count(func.distinct(Deposit.user_id)).label('users_with_deposits'),
+            func.sum(Deposit.amount).label('total_deposits'),
+            func.count(Deposit.id).label('total_deposit_count')
+        ).where(
+            Deposit.user_id.in_(referral_user_ids),
+            Deposit.status == 'confirmed'
+        )
+
+        result = await self.session.execute(deposit_stats_stmt)
+        stats = result.one()
+
+        total_referrals = len(direct_referrals)
+        referrals_with_deposits = stats.users_with_deposits or 0
+        total_deposits = stats.total_deposits or Decimal("0")
+        deposit_count = stats.total_deposit_count or 0
+
+        conversion_rate = (
+            Decimal(referrals_with_deposits) / Decimal(total_referrals) * 100
+            if total_referrals > 0 else Decimal("0")
+        )
+        average_deposit = (
+            total_deposits / Decimal(deposit_count)
+            if deposit_count > 0 else Decimal("0")
+        )
+
+        return {
+            "total_referrals": total_referrals,
+            "referrals_with_deposits": referrals_with_deposits,
+            "conversion_rate": conversion_rate,
+            "total_deposits_amount": total_deposits,
+            "average_deposit": average_deposit,
+            "deposit_count": deposit_count,
+        }
+
+    async def get_referral_activity_stats(self, user_id: int) -> dict:
+        """
+        Get referral activity statistics.
+
+        Shows active vs inactive referrals.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Dict with activity stats
+        """
+        from datetime import timedelta
+
+        from app.models.deposit import Deposit
+
+        now = datetime.now(UTC)
+        thirty_days_ago = now - timedelta(days=30)
+
+        # Get all referrals (all levels)
+        all_referrals = await self.referral_repo.find_by(referrer_id=user_id)
+
+        if not all_referrals:
+            return {
+                "total_referrals": 0,
+                "active_referrals": 0,
+                "inactive_referrals": 0,
+                "activity_rate": Decimal("0"),
+                "by_level": {
+                    1: {"total": 0, "active": 0},
+                    2: {"total": 0, "active": 0},
+                    3: {"total": 0, "active": 0},
+                },
+            }
+
+        referral_user_ids = [r.referral_id for r in all_referrals]
+
+        # Get users with recent deposits (active)
+        active_stmt = select(
+            func.distinct(Deposit.user_id)
+        ).where(
+            Deposit.user_id.in_(referral_user_ids),
+            Deposit.created_at >= thirty_days_ago,
+            Deposit.status == 'confirmed'
+        )
+
+        result = await self.session.execute(active_stmt)
+        active_user_ids = set(row[0] for row in result.all())
+
+        # Calculate stats by level
+        by_level = {
+            1: {"total": 0, "active": 0},
+            2: {"total": 0, "active": 0},
+            3: {"total": 0, "active": 0},
+        }
+        for ref in all_referrals:
+            if ref.level in by_level:
+                by_level[ref.level]["total"] += 1
+                if ref.referral_id in active_user_ids:
+                    by_level[ref.level]["active"] += 1
+
+        total_referrals = len(all_referrals)
+        active_referrals = len(active_user_ids)
+        inactive_referrals = total_referrals - active_referrals
+        activity_rate = (
+            Decimal(active_referrals) / Decimal(total_referrals) * 100
+            if total_referrals > 0 else Decimal("0")
+        )
+
+        return {
+            "total_referrals": total_referrals,
+            "active_referrals": active_referrals,
+            "inactive_referrals": inactive_referrals,
+            "activity_rate": activity_rate,
+            "by_level": by_level,
+        }
+
+    async def get_my_referrers(self, user_id: int) -> dict:
+        """
+        Get who invited this user (their referrer chain).
+
+        Shows the user's position in the referral structure.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Dict with referrer info
+        """
+        # Get all relationships where this user is the referral
+        stmt = (
+            select(Referral)
+            .options(selectinload(Referral.referrer))
+            .where(Referral.referral_id == user_id)
+            .order_by(Referral.level)
+        )
+
+        result = await self.session.execute(stmt)
+        relationships = list(result.scalars().all())
+
+        if not relationships:
+            return {
+                "has_referrer": False,
+                "referrers": [],
+                "direct_referrer": None,
+            }
+
+        referrers = []
+        direct_referrer = None
+
+        for rel in relationships:
+            referrer_user = rel.referrer
+            if referrer_user:
+                referrer_info = {
+                    "level": rel.level,
+                    "user_id": referrer_user.id,
+                    "telegram_id": referrer_user.telegram_id,
+                    "username": referrer_user.username,
+                    "you_earned_them": rel.total_earned,
+                }
+                referrers.append(referrer_info)
+
+                if rel.level == 1:
+                    direct_referrer = referrer_info
+
+        return {
+            "has_referrer": bool(direct_referrer),
+            "referrers": referrers,
+            "direct_referrer": direct_referrer,
         }
