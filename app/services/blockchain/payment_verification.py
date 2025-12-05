@@ -1,0 +1,252 @@
+"""
+Payment verification operations for blockchain service.
+
+This module handles:
+- PLEX token payment verification
+- USDT deposit scanning
+- Event log parsing and filtering
+"""
+
+from decimal import Decimal
+from typing import Any
+
+from eth_utils import to_checksum_address
+from loguru import logger
+from web3 import Web3
+
+from app.utils.security import mask_address
+
+from .core_constants import PLEX_DECIMALS, USDT_ABI, USDT_DECIMALS
+
+
+class PaymentVerifier:
+    """
+    Manages payment verification and deposit scanning operations.
+    """
+
+    def __init__(
+        self,
+        usdt_contract_address: str,
+        plex_token_address: str | None,
+        system_wallet_address: str,
+    ) -> None:
+        """
+        Initialize payment verifier.
+
+        Args:
+            usdt_contract_address: USDT contract address
+            plex_token_address: PLEX token contract address
+            system_wallet_address: System wallet address for receiving payments
+        """
+        self.usdt_contract_address = to_checksum_address(usdt_contract_address)
+        self.plex_token_address = (
+            to_checksum_address(plex_token_address) if plex_token_address else None
+        )
+        self.system_wallet_address = to_checksum_address(system_wallet_address)
+
+    def verify_plex_payment_sync(
+        self,
+        w3: Web3,
+        sender_address: str,
+        amount_plex: float,
+        lookback_blocks: int = 200,  # ~10 minutes on BSC (3 sec/block)
+    ) -> dict[str, Any]:
+        """
+        Verify if user paid PLEX tokens to system wallet.
+
+        Algorithm:
+        1. Scan recent blocks in chunks (to avoid RPC limits)
+        2. Get incoming PLEX transfers to system wallet
+        3. Check if any transfer is from the user's wallet
+        4. Verify amount >= required
+
+        Args:
+            w3: Web3 instance
+            sender_address: User's wallet address
+            amount_plex: Required PLEX amount
+            lookback_blocks: Number of blocks to scan back
+
+        Returns:
+            Dict with success, tx_hash, amount, block, or error
+        """
+        if not self.plex_token_address:
+            return {"success": False, "error": "PLEX token address not configured"}
+
+        try:
+            sender = to_checksum_address(sender_address)
+            receiver = self.system_wallet_address
+            token_address = self.plex_token_address
+        except ValueError as e:
+            return {"success": False, "error": f"Invalid address format: {e}"}
+
+        # PLEX uses 9 decimals
+        decimals = PLEX_DECIMALS
+        target_wei = int(amount_plex * (10 ** decimals))
+
+        logger.info(
+            f"[PLEX Verify] Searching: sender={mask_address(sender)}, "
+            f"receiver={mask_address(receiver)}, required={amount_plex} PLEX"
+        )
+
+        latest = w3.eth.block_number
+        contract = w3.eth.contract(address=token_address, abi=USDT_ABI)
+
+        # Scan in chunks to avoid RPC rate limits
+        # BSC public RPCs limit to ~100-500 blocks per request
+        chunk_size = 100
+        total_blocks = lookback_blocks
+        all_logs = []
+
+        logger.info(
+            f"[PLEX Verify] Scanning {total_blocks} blocks in chunks of {chunk_size}"
+        )
+
+        for offset in range(0, total_blocks, chunk_size):
+            from_blk = max(0, latest - offset - chunk_size)
+            to_blk = latest - offset
+
+            if from_blk >= to_blk:
+                continue
+
+            try:
+                logs = contract.events.Transfer.get_logs(
+                    fromBlock=from_blk,
+                    toBlock=to_blk,
+                    argument_filters={'to': receiver}
+                )
+                chunk_logs = list(logs)
+                all_logs.extend(chunk_logs)
+                logger.debug(
+                    f"[PLEX Verify] Chunk {from_blk}-{to_blk}: {len(chunk_logs)} logs"
+                )
+            except Exception as chunk_err:
+                # Log error but continue with other chunks
+                logger.warning(
+                    f"[PLEX Verify] Chunk {from_blk}-{to_blk} failed: {chunk_err}"
+                )
+                continue
+
+        logger.info(f"[PLEX Verify] Total found: {len(all_logs)} incoming transfers")
+
+        # Sort by block number (newest first)
+        all_logs.sort(key=lambda x: x.get('blockNumber', 0), reverse=True)
+
+        for log in all_logs:
+            args = log.get('args', {})
+            tx_from = str(args.get('from', ''))
+            value = args.get('value', 0)
+            tx_hash = log.get('transactionHash', b'').hex()
+            block_num = log.get('blockNumber', 0)
+
+            # Compare addresses case-insensitive
+            if tx_from.lower() == sender.lower():
+                logger.info(f"[PLEX Verify] Found TX from user: {tx_hash}")
+
+                if value >= target_wei:
+                    amount_found = Decimal(value) / Decimal(10**decimals)
+                    logger.success(
+                        f"[PLEX Verify] VERIFIED! TX={tx_hash}, "
+                        f"amount={amount_found} PLEX"
+                    )
+                    return {
+                        "success": True,
+                        "tx_hash": tx_hash,
+                        "amount": amount_found,
+                        "block": block_num
+                    }
+                else:
+                    logger.warning(
+                        f"[PLEX Verify] Amount insufficient: {value} < {target_wei}"
+                    )
+
+        logger.warning(f"[PLEX Verify] No payment found from {sender[:10]}...")
+        return {"success": False, "error": "Transaction not found"}
+
+    def scan_usdt_deposits_sync(
+        self,
+        w3: Web3,
+        user_wallet: str,
+        max_blocks: int = 100000,
+    ) -> dict[str, Any]:
+        """
+        Scan all USDT Transfer events from user wallet to system wallet.
+
+        Used to detect user's total deposit amount from blockchain history.
+
+        Args:
+            w3: Web3 instance
+            user_wallet: User's wallet address
+            max_blocks: Maximum number of blocks to scan back
+
+        Returns:
+            Dict with:
+            - total_amount: Decimal - sum of all USDT transfers
+            - tx_count: int - number of transactions found
+            - transactions: list - list of transaction details
+            - from_block: int - starting block
+            - to_block: int - ending block
+            - success: bool
+            - error: str (if failed)
+        """
+        try:
+            sender = to_checksum_address(user_wallet)
+            receiver = self.system_wallet_address
+            usdt_address = self.usdt_contract_address
+
+            latest = w3.eth.block_number
+            from_block = max(0, latest - max_blocks)
+
+            contract = w3.eth.contract(address=usdt_address, abi=USDT_ABI)
+
+            # Get all Transfer events from user to system wallet
+            logs = contract.events.Transfer.get_logs(
+                fromBlock=from_block,
+                toBlock='latest',
+                argument_filters={
+                    'from': sender,
+                    'to': receiver
+                }
+            )
+
+            transactions = []
+            total_wei = 0
+
+            for log in logs:
+                args = log.get('args', {})
+                value = args.get('value', 0)
+                total_wei += value
+
+                transactions.append({
+                    'tx_hash': log['transactionHash'].hex(),
+                    'amount': Decimal(value) / Decimal(10 ** USDT_DECIMALS),
+                    'block': log['blockNumber'],
+                })
+
+            # Sort by block number (oldest first)
+            transactions.sort(key=lambda x: x['block'])
+
+            result = {
+                'total_amount': Decimal(total_wei) / Decimal(10 ** USDT_DECIMALS),
+                'tx_count': len(transactions),
+                'transactions': transactions,
+                'from_block': from_block,
+                'to_block': latest,
+                'success': True,
+            }
+
+            logger.info(
+                f"Deposit scan for {mask_address(user_wallet)}: "
+                f"found {result['tx_count']} txs, total {result['total_amount']} USDT"
+            )
+
+            return result
+
+        except Exception as e:
+            logger.error(f"Deposit scan failed for {mask_address(user_wallet)}: {e}")
+            return {
+                'success': False,
+                'error': str(e),
+                'total_amount': Decimal("0"),
+                'tx_count': 0,
+                'transactions': [],
+            }

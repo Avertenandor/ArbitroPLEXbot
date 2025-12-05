@@ -74,8 +74,8 @@ from bot.keyboards.auth_keyboards import (
 # ============================================================================
 # IMPORTS FROM MODULAR KEYBOARDS
 # ============================================================================
-# User keyboards
-from bot.keyboards.user_keyboards import (
+# User keyboards - Import from new modular structure
+from bot.keyboards.user import (
     balance_menu_keyboard,
     cancel_keyboard,
     confirmation_keyboard,

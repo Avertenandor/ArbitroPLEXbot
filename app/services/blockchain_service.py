@@ -1,18 +1,24 @@
-﻿"""
-Blockchain service.
+"""
+Blockchain service - Main coordinator.
+
+This module provides the main BlockchainService class that coordinates
+all blockchain operations by delegating to specialized managers:
+- SyncProviderManager: RPC provider management with failover
+- WalletManager: Wallet initialization and validation
+- GasManager: Gas price optimization
+- BalanceManager: Token balance checking
+- TransactionManager: Transaction sending and monitoring
+- PaymentVerifier: Payment verification and deposit scanning
 
 Full Web3.py implementation for BSC blockchain operations
 (USDT transfers, monitoring) with Dual-Core engine (QuickNode + NodeReal).
 """
 
 import asyncio
-import ctypes
-import time
 import warnings
-from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
-from typing import Any, TypeVar
+from typing import Any
 
 # Suppress eth_utils network warnings about invalid ChainId
 warnings.filterwarnings(
@@ -27,85 +33,23 @@ warnings.filterwarnings(
     category=UserWarning,
 )
 
-from eth_account import Account
-from eth_utils import is_address, to_checksum_address
+from eth_utils import to_checksum_address
 from loguru import logger
 from web3 import Web3
-from web3.exceptions import ContractLogicError, Web3Exception
-from web3.middleware import geth_poa_middleware
+from web3.exceptions import Web3Exception
 
 from app.config.constants import BLOCKCHAIN_EXECUTOR_TIMEOUT
 from app.config.settings import Settings
-from app.repositories.global_settings_repository import GlobalSettingsRepository
-from app.utils.encryption import get_encryption_service
-from app.utils.exceptions import SecurityError
-from app.utils.security import mask_address, mask_tx_hash
+from app.utils.security import mask_address
 
-# USDT contract ABI (ERC-20 standard functions)
-USDT_ABI = [
-    {
-        "constant": True,
-        "inputs": [{"name": "_owner", "type": "address"}],
-        "name": "balanceOf",
-        "outputs": [{"name": "balance", "type": "uint256"}],
-        "type": "function",
-    },
-    {
-        "constant": False,
-        "inputs": [
-            {"name": "_to", "type": "address"},
-            {"name": "_value", "type": "uint256"},
-        ],
-        "name": "transfer",
-        "outputs": [{"name": "", "type": "bool"}],
-        "type": "function",
-    },
-    {
-        "anonymous": False,
-        "inputs": [
-            {"indexed": True, "name": "from", "type": "address"},
-            {"indexed": True, "name": "to", "type": "address"},
-            {"indexed": False, "name": "value", "type": "uint256"},
-        ],
-        "name": "Transfer",
-        "type": "event",
-    },
-]
-
-# USDT decimals (BEP-20 USDT uses 18 decimals)
-USDT_DECIMALS = 18
-
-# Gas settings for BSC
-# 0.1 Gwei = 100_000_000 Wei (1 Gwei = 10^9 Wei)
-# User requirement: Max 0.1 Gwei, try lower if possible
-MIN_GAS_PRICE_GWEI = Decimal("0.01")
-MAX_GAS_PRICE_GWEI = Decimal("0.1")
-MIN_GAS_PRICE_WEI = int(MIN_GAS_PRICE_GWEI * 10**9)
-MAX_GAS_PRICE_WEI = int(MAX_GAS_PRICE_GWEI * 10**9)
-
-T = TypeVar("T")
-
-
-def secure_zero_memory(secret: str) -> None:
-    """
-    Securely overwrite memory containing secret data.
-
-    NOTE: This provides best-effort memory clearing in Python.
-    Python's memory management makes true secure erasure impossible,
-    but this reduces the window of exposure.
-    """
-    if not secret:
-        return
-
-    try:
-        # Convert to bytes if string
-        secret_bytes = secret.encode() if isinstance(secret, str) else secret
-        # Overwrite with zeros
-        # This is a best-effort approach - Python's GC may have copies
-        ctypes.memset(id(secret_bytes) + 32, 0, len(secret_bytes))
-    except Exception:
-        # Fail silently - this is best-effort security
-        pass
+# Import specialized managers from blockchain subdirectory
+from app.services.blockchain.balance_operations import BalanceManager
+from app.services.blockchain.core_constants import USDT_ABI
+from app.services.blockchain.gas_operations import GasManager
+from app.services.blockchain.payment_verification import PaymentVerifier
+from app.services.blockchain.sync_provider_management import SyncProviderManager
+from app.services.blockchain.transaction_operations import TransactionManager
+from app.services.blockchain.wallet_operations import WalletManager
 
 
 class BlockchainService:
@@ -120,6 +64,8 @@ class BlockchainService:
     - Transaction sending
     - Balance checking
     - Event monitoring
+
+    This class acts as a coordinator, delegating operations to specialized managers.
     """
 
     def __init__(
@@ -138,7 +84,6 @@ class BlockchainService:
         self.session_factory = session_factory
 
         self.usdt_contract_address = to_checksum_address(settings.usdt_contract_address)
-        self.wallet_private_key = settings.wallet_private_key
         self.system_wallet_address = settings.system_wallet_address
 
         # Initialize RPC rate limiter
@@ -150,266 +95,81 @@ class BlockchainService:
             max_workers=4, thread_name_prefix="web3"
         )
 
-        # Nonce lock for preventing race conditions in parallel transactions
-        self._nonce_lock = asyncio.Lock()
+        # Initialize Provider Manager
+        self.provider_manager = SyncProviderManager(settings, session_factory)
 
-        # Providers storage
-        self.providers: dict[str, Web3] = {}
-        self.active_provider_name = "quicknode"
-        self.is_auto_switch_enabled = True
-        self._last_settings_update = 0.0
-        self._settings_cache_ttl = 30.0  # Check DB every 30 seconds
+        # Initialize Wallet Manager
+        self.wallet_manager = WalletManager(settings)
 
-        # Initialize Providers
-        self._init_providers()
+        # Initialize Gas Manager
+        self.gas_manager = GasManager(self.usdt_contract_address)
 
-        # Initialize Wallet
-        self._init_wallet()
+        # Initialize Balance Manager
+        self.balance_manager = BalanceManager(
+            self.usdt_contract_address,
+            settings.auth_plex_token_address,
+        )
+
+        # Initialize Transaction Manager
+        self.transaction_manager = TransactionManager(
+            self.usdt_contract_address,
+            self.wallet_manager.wallet_account,
+            self.wallet_manager.wallet_address,
+            self.gas_manager,
+            session_factory,
+        )
+
+        # Initialize Payment Verifier
+        self.payment_verifier = PaymentVerifier(
+            self.usdt_contract_address,
+            settings.auth_plex_token_address,
+            settings.auth_system_wallet_address,
+        )
 
         logger.success(
             f"BlockchainService initialized successfully\n"
-            f"  Active Provider: {self.active_provider_name}\n"
-            f"  Providers: {list(self.providers.keys())}\n"
+            f"  Active Provider: {self.provider_manager.active_provider_name}\n"
+            f"  Providers: {list(self.provider_manager.providers.keys())}\n"
             f"  USDT Contract: {self.usdt_contract_address}\n"
             f"  Wallet: {mask_address(self.wallet_address) if self.wallet_address else 'Not configured'}"
         )
 
-    def get_optimal_gas_price(self, w3: Web3) -> int:
-        """
-        Calculate optimal gas price with Smart Gas strategy.
+    # ========== Properties for backward compatibility ==========
 
-        Logic:
-        1. Get current RPC gas price.
-        2. Clamp between MIN (0.1 Gwei) and MAX (5.0 Gwei).
+    @property
+    def wallet_address(self) -> str | None:
+        """Get wallet address."""
+        return self.wallet_manager.wallet_address
 
-        Args:
-            w3: Web3 instance
+    @property
+    def wallet_account(self):
+        """Get wallet account."""
+        return self.wallet_manager.wallet_account
 
-        Returns:
-            Gas price in Wei
-        """
-        try:
-            rpc_gas = w3.eth.gas_price
+    @property
+    def wallet_private_key(self) -> str:
+        """Get wallet private key."""
+        return self.wallet_manager.wallet_private_key
 
-            # Clamp logic
-            final_gas = max(MIN_GAS_PRICE_WEI, min(MAX_GAS_PRICE_WEI, rpc_gas))
+    @property
+    def providers(self) -> dict[str, Web3]:
+        """Get providers dict."""
+        return self.provider_manager.providers
 
-            # Log if capped
-            if rpc_gas > MAX_GAS_PRICE_WEI:
-                logger.warning(
-                    f"Gas price capped! RPC: {rpc_gas / 1e9:.2f} Gwei, "
-                    f"Used: {final_gas / 1e9:.2f} Gwei"
-                )
+    @property
+    def active_provider_name(self) -> str:
+        """Get active provider name."""
+        return self.provider_manager.active_provider_name
 
-            return int(final_gas)
-        except Exception as e:
-            logger.warning(f"Failed to get gas price, using MIN: {e}")
-            return int(MIN_GAS_PRICE_WEI)
+    @active_provider_name.setter
+    def active_provider_name(self, value: str) -> None:
+        """Set active provider name."""
+        self.provider_manager.active_provider_name = value
 
-    def _init_providers(self) -> None:
-        """Initialize Web3 providers based on settings."""
-        # RPC timeout in seconds
-        rpc_timeout = 30
-
-        # 1. QuickNode
-        qn_url = self.settings.rpc_quicknode_http or self.settings.rpc_url
-        if qn_url:
-            try:
-                w3_qn = Web3(Web3.HTTPProvider(
-                    qn_url,
-                    request_kwargs={'timeout': rpc_timeout}
-                ))
-                w3_qn.middleware_onion.inject(geth_poa_middleware, layer=0)
-                if w3_qn.is_connected():
-                    self.providers["quicknode"] = w3_qn
-                    logger.info("вњ… QuickNode provider connected (timeout=30s)")
-                else:
-                    logger.warning("вќЊ QuickNode provider failed to connect")
-            except Exception as e:
-                logger.error(f"Failed to init QuickNode: {e}")
-
-        # 2. NodeReal
-        nr_url = self.settings.rpc_nodereal_http
-        if nr_url:
-            try:
-                w3_nr = Web3(Web3.HTTPProvider(
-                    nr_url,
-                    request_kwargs={'timeout': rpc_timeout}
-                ))
-                w3_nr.middleware_onion.inject(geth_poa_middleware, layer=0)
-                if w3_nr.is_connected():
-                    self.providers["nodereal"] = w3_nr
-                    logger.info("вњ… NodeReal provider connected (timeout=30s)")
-                else:
-                    logger.warning("вќЊ NodeReal provider failed to connect")
-            except Exception as e:
-                logger.error(f"Failed to init NodeReal: {e}")
-
-        if not self.providers:
-            logger.error("рџ”Ґ NO BLOCKCHAIN PROVIDERS AVAILABLE! Service will fail.")
-
-    def _init_wallet(self) -> None:
-        """
-        Initialize wallet account.
-
-        SECURITY: Automatically decrypts private key if it was encrypted.
-        Private key is kept in memory only for signing - cleared immediately after use.
-        """
-        if self.wallet_private_key:
-            private_key = None
-            try:
-                # CRITICAL: Decrypt private key if it's encrypted
-                private_key = self.wallet_private_key
-                encryption_service = get_encryption_service()
-
-                if not encryption_service or not encryption_service.enabled:
-                    raise SecurityError(
-                        "EncryptionService not available or disabled. "
-                        "Cannot decrypt private key without encryption. "
-                        "Ensure ENCRYPTION_KEY is set correctly."
-                    )
-
-                # Try to decrypt - raises SecurityError on failure
-                decrypted = encryption_service.decrypt(private_key)
-                if not decrypted:
-                    raise SecurityError(
-                        "Failed to decrypt private key. "
-                        "Ensure ENCRYPTION_KEY is set correctly and key is encrypted."
-                    )
-
-                private_key = decrypted
-                logger.info("Private key decrypted successfully")
-
-                # Initialize wallet account with decrypted key
-                self.wallet_account = Account.from_key(private_key)
-                self.wallet_address = to_checksum_address(self.wallet_account.address)
-
-            except SecurityError:
-                # Re-raise security errors without catching
-                raise
-            except Exception as e:
-                logger.error(f"Failed to init wallet: {e}")
-                self.wallet_account = None
-                self.wallet_address = None
-            finally:
-                # SECURITY: Clear decrypted private key from memory
-                if private_key and private_key != self.wallet_private_key:
-                    secure_zero_memory(private_key)
-                    del private_key
-        else:
-            self.wallet_account = None
-            self.wallet_address = None
-
-    def _get_safe_nonce(self, w3: Web3, address: str) -> int:
-        """
-        Get nonce with stuck transaction detection.
-
-        SYNC method - runs in executor.
-
-        Args:
-            w3: Web3 instance
-            address: Wallet address
-
-        Returns:
-            Safe nonce to use
-        """
-        # Get pending nonce (includes pending transactions)
-        pending_nonce = w3.eth.get_transaction_count(address, 'pending')
-        # Get confirmed nonce (only confirmed transactions)
-        confirmed_nonce = w3.eth.get_transaction_count(address, 'latest')
-
-        # If there are too many stuck transactions (pending > confirmed + threshold)
-        stuck_threshold = 5
-        if pending_nonce > confirmed_nonce + stuck_threshold:
-            logger.warning(
-                f"Possible stuck transactions detected: "
-                f"pending={pending_nonce}, confirmed={confirmed_nonce}, "
-                f"stuck={pending_nonce - confirmed_nonce}"
-            )
-
-        return pending_nonce
-
-    async def _get_nonce_with_distributed_lock(self, address: str) -> int:
-        """
-        Get nonce with distributed lock for multi-instance protection.
-
-        Uses Redis-based distributed lock to prevent nonce conflicts
-        when multiple bot instances are running.
-
-        Args:
-            address: Wallet address
-
-        Returns:
-            Safe nonce to use
-        """
-        from app.utils.distributed_lock import get_distributed_lock
-
-        # Create lock key specific to this address
-        lock_key = f"nonce_lock:{address}"
-
-        # Get Web3 instance
-        w3 = self.get_active_web3()
-
-        # Try to get distributed lock with Redis
-        # If Redis is unavailable, fallback to PostgreSQL or local lock
-        if self.session_factory:
-            async with self.session_factory() as session:
-                distributed_lock = get_distributed_lock(session=session)
-
-                # Acquire distributed lock with timeout
-                async with distributed_lock.lock(
-                    key=lock_key,
-                    timeout=30,  # Lock expires after 30 seconds
-                    blocking=True,
-                    blocking_timeout=10.0  # Wait max 10 seconds for lock
-                ):
-                    # Get nonce inside the lock
-                    loop = asyncio.get_event_loop()
-                    nonce = await loop.run_in_executor(
-                        self._executor,
-                        lambda: self._get_safe_nonce(w3, address)
-                    )
-                    return nonce
-        else:
-            # Fallback to local lock if no session factory
-            logger.warning("No session factory available, using local lock only")
-            loop = asyncio.get_event_loop()
-            nonce = await loop.run_in_executor(
-                self._executor,
-                lambda: self._get_safe_nonce(w3, address)
-            )
-            return nonce
-
-    async def _update_settings_from_db(self) -> None:
-        """Update active provider and auto-switch settings from DB."""
-        if not self.session_factory:
-            return
-
-        now = time.time()
-        if now - self._last_settings_update < self._settings_cache_ttl:
-            return
-
-        try:
-            async with self.session_factory() as session:
-                repo = GlobalSettingsRepository(session)
-                settings = await repo.get_settings()
-                self.active_provider_name = settings.active_rpc_provider
-                self.is_auto_switch_enabled = settings.is_auto_switch_enabled
-                self._last_settings_update = now
-        except Exception as e:
-            logger.warning(f"Failed to update blockchain settings from DB: {e}")
-
-    def get_active_web3(self) -> Web3:
-        """Get the currently active Web3 instance."""
-        provider = self.providers.get(self.active_provider_name)
-        if not provider:
-            # Fallback to any available
-            if self.providers:
-                fallback_name = next(iter(self.providers))
-                logger.warning(f"Active provider '{self.active_provider_name}' not found, falling back to '{fallback_name}'")
-                return self.providers[fallback_name]
-            raise ConnectionError("No blockchain providers available")
-        return provider
+    @property
+    def is_auto_switch_enabled(self) -> bool:
+        """Get auto-switch enabled status."""
+        return self.provider_manager.is_auto_switch_enabled
 
     @property
     def web3(self) -> Web3:
@@ -422,123 +182,50 @@ class BlockchainService:
         w3 = self.get_active_web3()
         return w3.eth.contract(address=self.usdt_contract_address, abi=USDT_ABI)
 
-    async def _execute_with_failover(self, func: Callable[[Web3], Any]) -> Any:
+    # ========== Core Methods ==========
+
+    def get_active_web3(self) -> Web3:
+        """Get the currently active Web3 instance."""
+        return self.provider_manager.get_active_web3()
+
+    def get_optimal_gas_price(self, w3: Web3) -> int:
         """
-        Execute a function with automatic failover to the backup provider.
+        Calculate optimal gas price with Smart Gas strategy.
+
+        Args:
+            w3: Web3 instance
+
+        Returns:
+            Gas price in Wei
         """
-        await self._update_settings_from_db()
+        return self.gas_manager.get_optimal_gas_price(w3)
 
-        current_name = self.active_provider_name
-        providers_list = list(self.providers.keys())
-
-        # Try current provider first
-        try:
-            w3 = self.get_active_web3()
-            return func(w3)
-        except Exception as e:
-            if not self.is_auto_switch_enabled:
-                raise e
-
-            logger.warning(f"Provider '{current_name}' failed: {e}. Attempting failover...")
-
-            # Find backup provider
-            backup_name = None
-            for name in providers_list:
-                if name != current_name:
-                    backup_name = name
-                    break
-
-            if not backup_name:
-                logger.error("No backup provider available.")
-                raise e
-
-            logger.info(f"Switching to backup provider: {backup_name}")
-            try:
-                self.active_provider_name = backup_name
-                w3_backup = self.providers[backup_name]
-                result = func(w3_backup)
-
-                # If successful, persist the switch asynchronously with error handling
-                if self.session_factory:
-                    asyncio.create_task(self._safe_persist_provider_switch(backup_name))
-
-                return result
-            except Exception as e2:
-                logger.error(f"Backup provider '{backup_name}' also failed: {e2}")
-                raise e2
-
-    async def _safe_persist_provider_switch(self, new_provider: str) -> None:
-        """Wrapper for safe provider switch persistence."""
-        try:
-            await self._persist_provider_switch(new_provider)
-        except Exception as e:
-            logger.error(f"Background task failed to persist provider switch: {e}", exc_info=True)
-
-    async def _persist_provider_switch(self, new_provider: str):
-        """Persist the provider switch to DB."""
-        if not self.session_factory:
-            return
-        try:
-            async with self.session_factory() as session:
-                repo = GlobalSettingsRepository(session)
-                await repo.update_settings(active_rpc_provider=new_provider)
-                await session.commit()
-            logger.success(f"Persisted active provider switch to: {new_provider}")
-        except Exception as e:
-            await session.rollback()
-            logger.error(f"Failed to persist provider switch: {e}", exc_info=True)
-            raise
-
-    async def force_refresh_settings(self):
-        """Force update settings from DB."""
-        self._last_settings_update = 0
-        await self._update_settings_from_db()
-
-    def get_rpc_stats(self) -> dict[str, Any]:
-        return self.rpc_limiter.get_stats()
-
-    def close(self) -> None:
-        """Clean up resources and clear sensitive data."""
-        if hasattr(self, '_executor') and self._executor:
-            self._executor.shutdown(wait=True)
-
-        # SECURITY: Clear sensitive data on shutdown
-        if hasattr(self, 'wallet_private_key') and self.wallet_private_key:
-            secure_zero_memory(self.wallet_private_key)
-        if hasattr(self, 'wallet_account'):
-            self.wallet_account = None
-
-    async def get_block_number(self) -> int:
-        loop = asyncio.get_event_loop()
-        async with self.rpc_limiter:
-            return await loop.run_in_executor(
-                self._executor,
-                lambda: asyncio.run(self._execute_with_failover(
-                    lambda w3: w3.eth.block_number
-                ))
-            )
-
-    async def _run_async_failover(self, sync_func: Callable[[Web3], Any]) -> Any:
+    async def _run_async_failover(self, sync_func: Any) -> Any:
         """
         Runs a synchronous Web3 function in the thread pool,
         with failover logic handled in the main async loop.
+
+        Args:
+            sync_func: Synchronous function to execute
+
+        Returns:
+            Result from the function
         """
-        await self._update_settings_from_db()
+        await self.provider_manager._update_settings_from_db()
         loop = asyncio.get_event_loop()
 
-        current_name = self.active_provider_name
+        current_name = self.provider_manager.active_provider_name
 
         # Try primary
         try:
-            # Check primary provider exists logic handled by get_active_web3 inside executor or here
-            # Actually better to get w3 instance here
-            if current_name not in self.providers and self.providers:
-                current_name = next(iter(self.providers))
+            # Check primary provider exists
+            if current_name not in self.provider_manager.providers and self.provider_manager.providers:
+                current_name = next(iter(self.provider_manager.providers))
 
-            if current_name not in self.providers:
+            if current_name not in self.provider_manager.providers:
                 raise ConnectionError("No providers available")
 
-            w3 = self.providers[current_name]
+            w3 = self.provider_manager.providers[current_name]
 
             async with self.rpc_limiter:
                 try:
@@ -553,20 +240,22 @@ class BlockchainService:
                     logger.error(f"Timeout in blockchain operation on provider '{current_name}'")
                     raise TimeoutError(f"Blockchain operation timeout on {current_name}")
         except Exception as e:
-            if not self.is_auto_switch_enabled:
+            if not self.provider_manager.is_auto_switch_enabled:
                 raise e
 
             logger.warning(f"Primary provider '{current_name}' failed: {e}. Trying failover...")
 
             # Find backup
-            backup_name = next((n for n in self.providers if n != current_name), None)
+            backup_name = next(
+                (n for n in self.provider_manager.providers if n != current_name), None
+            )
             if not backup_name:
                 raise e
 
             # Try backup
             try:
                 logger.info(f"Switching to backup: {backup_name}")
-                w3_backup = self.providers[backup_name]
+                w3_backup = self.provider_manager.providers[backup_name]
 
                 async with self.rpc_limiter:
                     try:
@@ -578,18 +267,142 @@ class BlockchainService:
                             timeout=BLOCKCHAIN_EXECUTOR_TIMEOUT,
                         )
                     except TimeoutError:
-                        logger.error(f"Timeout in blockchain operation on backup provider '{backup_name}'")
+                        logger.error(
+                            f"Timeout in blockchain operation on backup provider '{backup_name}'"
+                        )
                         raise TimeoutError(f"Blockchain operation timeout on backup {backup_name}")
 
                 # If success, switch permanent
-                self.active_provider_name = backup_name
+                self.provider_manager.active_provider_name = backup_name
                 if self.session_factory:
-                    asyncio.create_task(self._safe_persist_provider_switch(backup_name))
+                    asyncio.create_task(
+                        self.provider_manager._safe_persist_provider_switch(backup_name)
+                    )
 
                 return result
             except Exception as e2:
                 logger.error(f"Backup provider failed: {e2}")
                 raise e
+
+    # ========== Provider Management Methods ==========
+
+    async def force_refresh_settings(self) -> None:
+        """Force update settings from DB."""
+        await self.provider_manager.force_refresh_settings()
+
+    async def get_providers_status(self) -> dict[str, Any]:
+        """Get status of all providers."""
+        return await self.provider_manager.get_providers_status()
+
+    def get_rpc_stats(self) -> dict[str, Any]:
+        """Get RPC rate limiter statistics."""
+        return self.rpc_limiter.get_stats()
+
+    # ========== Wallet Methods ==========
+
+    async def validate_wallet_address(self, address: str) -> bool:
+        """
+        Validate wallet address format.
+
+        Args:
+            address: Wallet address to validate
+
+        Returns:
+            True if address is valid
+        """
+        return await self.wallet_manager.validate_wallet_address(address)
+
+    # ========== Balance Methods ==========
+
+    async def get_usdt_balance(self, address: str) -> Decimal | None:
+        """
+        Get USDT balance for address.
+
+        Args:
+            address: Wallet address
+
+        Returns:
+            USDT balance or None on error
+        """
+        try:
+            def _get_bal(w3: Web3):
+                return asyncio.run(
+                    self.balance_manager.get_usdt_balance(w3, address)
+                )
+
+            return await self._run_async_failover(_get_bal)
+        except Exception as e:
+            logger.error(f"Get USDT balance failed: {e}")
+            return None
+
+    async def get_plex_balance(self, address: str) -> Decimal | None:
+        """
+        Get PLEX token balance for address.
+
+        Args:
+            address: Wallet address
+
+        Returns:
+            PLEX balance or None on error
+        """
+        try:
+            def _get_bal(w3: Web3):
+                return asyncio.run(
+                    self.balance_manager.get_plex_balance(w3, address)
+                )
+
+            return await self._run_async_failover(_get_bal)
+        except Exception as e:
+            logger.error(f"Get PLEX balance failed: {e}")
+            return None
+
+    async def get_native_balance(self, address: str) -> Decimal | None:
+        """
+        Get Native Token (BNB) balance.
+
+        Args:
+            address: Wallet address
+
+        Returns:
+            BNB balance or None on error
+        """
+        try:
+            def _get_bal(w3: Web3):
+                return asyncio.run(
+                    self.balance_manager.get_native_balance(w3, address)
+                )
+
+            return await self._run_async_failover(_get_bal)
+        except Exception as e:
+            logger.error(f"Get BNB balance failed: {e}")
+            return None
+
+    # ========== Gas Methods ==========
+
+    async def estimate_gas_fee(self, to_address: str, amount: Decimal) -> Decimal | None:
+        """
+        Estimate gas fee for USDT transfer.
+
+        Args:
+            to_address: Recipient wallet address
+            amount: Amount in USDT (Decimal)
+
+        Returns:
+            Estimated gas fee in BNB or None
+        """
+        try:
+            def _est_gas(w3: Web3):
+                return asyncio.run(
+                    self.gas_manager.estimate_gas_fee(
+                        w3, to_address, amount, self.wallet_address
+                    )
+                )
+
+            return await self._run_async_failover(_est_gas)
+        except Exception:
+            return None
+
+    # ========== Transaction Methods ==========
 
     async def send_payment(self, to_address: str, amount: Decimal) -> dict[str, Any]:
         """
@@ -602,61 +415,18 @@ class BlockchainService:
         Returns:
             Dict with success, tx_hash, error
         """
+        if not await self.validate_wallet_address(to_address):
+            return {"success": False, "error": f"Invalid address: {to_address}"}
+
+        def _send(w3: Web3):
+            return asyncio.run(
+                self.transaction_manager.send_usdt_payment(
+                    w3, to_address, amount, self._executor
+                )
+            )
+
         try:
-            if not self.wallet_account:
-                return {"success": False, "error": "Wallet not configured"}
-
-            if not await self.validate_wallet_address(to_address):
-                return {"success": False, "error": f"Invalid address: {to_address}"}
-
-            to_address = to_checksum_address(to_address)
-            # Convert Decimal to wei using proper precision handling
-            from decimal import ROUND_DOWN
-            amount_wei = int((Decimal(str(amount)) * Decimal(10 ** USDT_DECIMALS)).to_integral_value(ROUND_DOWN))
-
-            # Get nonce with async lock BEFORE entering executor
-            # This prevents race conditions in parallel transactions
-            async with self._nonce_lock:
-                nonce = await self._get_nonce_with_distributed_lock(self.wallet_address)
-
-                # Now execute transaction with pre-acquired nonce
-                def _send_tx(w3: Web3, nonce: int):
-                    contract = w3.eth.contract(address=self.usdt_contract_address, abi=USDT_ABI)
-                    func = contract.functions.transfer(to_address, amount_wei)
-
-                    # Use Smart Gas
-                    gas_price = self.get_optimal_gas_price(w3)
-
-                    try:
-                        gas_est = func.estimate_gas({"from": self.wallet_address})
-                    except (Web3Exception, ContractLogicError) as e:
-                        logger.warning(f"Gas estimation failed: {e}")
-                        gas_est = 100000  # Fallback for USDT transfer
-
-                    txn = func.build_transaction({
-                        "from": self.wallet_address,
-                        "gas": int(gas_est * 1.2),
-                        "gasPrice": gas_price,
-                        "nonce": nonce,
-                        "chainId": w3.eth.chain_id,
-                    })
-
-                    logger.info(
-                        f"Sending USDT tx: to={mask_address(to_address)}, amount={amount}, "
-                        f"nonce={nonce}, gas_price={gas_price} wei ({gas_price / 10**9} Gwei), "
-                        f"gas_limit={int(gas_est * 1.2)}"
-                    )
-
-                    signed = self.wallet_account.sign_transaction(txn)
-                    tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
-                    return tx_hash.hex()
-
-                # Execute with pre-acquired nonce
-                tx_hash_str = await self._run_async_failover(lambda w3: _send_tx(w3, nonce))
-
-            logger.info(f"USDT payment sent: {amount} to {mask_address(to_address)}, hash: {mask_tx_hash(tx_hash_str)}")
-            return {"success": True, "tx_hash": tx_hash_str, "error": None}
-
+            return await self._run_async_failover(_send)
         except Exception as e:
             logger.error(f"Failed to send payment: {e}")
             return {"success": False, "error": str(e)}
@@ -672,355 +442,88 @@ class BlockchainService:
         Returns:
             Dict with success, tx_hash, error
         """
+        if not await self.validate_wallet_address(to_address):
+            return {"success": False, "error": f"Invalid address: {to_address}"}
+
+        def _send(w3: Web3):
+            return asyncio.run(
+                self.transaction_manager.send_native_token(
+                    w3, to_address, amount, self._executor
+                )
+            )
+
         try:
-            if not self.wallet_account:
-                return {"success": False, "error": "Wallet not configured"}
-
-            if not await self.validate_wallet_address(to_address):
-                return {"success": False, "error": f"Invalid address: {to_address}"}
-
-            to_address = to_checksum_address(to_address)
-            # Convert Decimal to wei using proper precision handling
-            from decimal import ROUND_DOWN
-            amount_wei = int((Decimal(str(amount)) * Decimal(10 ** 18)).to_integral_value(ROUND_DOWN))
-
-            # Get nonce with async lock BEFORE entering executor
-            # This prevents race conditions in parallel transactions
-            async with self._nonce_lock:
-                nonce = await self._get_nonce_with_distributed_lock(self.wallet_address)
-
-                # Now execute transaction with pre-acquired nonce
-                def _send_native(w3: Web3, nonce: int):
-                    # Use Smart Gas
-                    gas_price = self.get_optimal_gas_price(w3)
-                    gas_limit = 21000  # Standard native transfer gas
-
-                    txn = {
-                        "to": to_address,
-                        "value": amount_wei,
-                        "gas": gas_limit,
-                        "gasPrice": gas_price,
-                        "nonce": nonce,
-                        "chainId": w3.eth.chain_id,
-                    }
-
-                    logger.info(
-                        f"Sending BNB tx: to={mask_address(to_address)}, amount={amount}, "
-                        f"nonce={nonce}, gas_price={gas_price} wei ({gas_price / 10**9} Gwei)"
-                    )
-
-                    signed = self.wallet_account.sign_transaction(txn)
-                    tx_hash = w3.eth.send_raw_transaction(signed.rawTransaction)
-                    return tx_hash.hex()
-
-                # Execute with pre-acquired nonce
-                tx_hash_str = await self._run_async_failover(lambda w3: _send_native(w3, nonce))
-
-            logger.info(f"BNB payment sent: {amount} to {mask_address(to_address)}, hash: {mask_tx_hash(tx_hash_str)}")
-            return {"success": True, "tx_hash": tx_hash_str, "error": None}
-
+            return await self._run_async_failover(_send)
         except Exception as e:
             logger.error(f"Failed to send BNB: {e}")
             return {"success": False, "error": str(e)}
 
-    async def get_native_balance(self, address: str) -> Decimal | None:
-        """Get Native Token (BNB) balance."""
-        try:
-            address = to_checksum_address(address)
-
-            def _get_bal(w3: Web3):
-                return w3.eth.get_balance(address)
-
-            wei = await self._run_async_failover(_get_bal)
-            return Decimal(wei) / Decimal(10 ** 18)
-        except Exception as e:
-            logger.error(f"Get BNB balance failed: {e}")
-            return None
-
     async def check_transaction_status(self, tx_hash: str) -> dict[str, Any]:
+        """
+        Check transaction status.
+
+        Args:
+            tx_hash: Transaction hash
+
+        Returns:
+            Dict with status, confirmations, block_number
+        """
         try:
             def _check(w3: Web3):
-                try:
-                    receipt = w3.eth.get_transaction_receipt(tx_hash)
-                    current = w3.eth.block_number
-                    return receipt, current
-                except Web3Exception as e:
-                    logger.debug(f"Could not get transaction receipt: {e}")
-                    return None, None
+                return self.transaction_manager.check_transaction_status_sync(w3, tx_hash)
 
-            receipt, current_block = await self._run_async_failover(_check)
-
-            if not receipt:
-                return {"status": "pending", "confirmations": 0}
-
-            confirmations = max(0, current_block - receipt.blockNumber)
-            status = "confirmed" if receipt.status == 1 else "failed"
-
-            return {
-                "status": status,
-                "confirmations": confirmations,
-                "block_number": receipt.blockNumber
-            }
+            return await self._run_async_failover(_check)
         except (TimeoutError, Web3Exception) as e:
             logger.warning(f"Failed to check transaction status: {e}")
             return {"status": "unknown", "confirmations": 0}
 
     async def get_transaction_details(self, tx_hash: str) -> dict[str, Any] | None:
+        """
+        Get transaction details.
+
+        Args:
+            tx_hash: Transaction hash
+
+        Returns:
+            Dict with transaction details or None on error
+        """
         try:
-            # Just execute directly via failover helper, encapsulating logic
-            return await self._run_async_failover(lambda w3: self._fetch_tx_details_sync(w3, tx_hash))
+            def _fetch(w3: Web3):
+                return self.transaction_manager.fetch_transaction_details_sync(w3, tx_hash)
+
+            return await self._run_async_failover(_fetch)
         except (TimeoutError, Web3Exception) as e:
             logger.warning(f"Failed to get transaction details: {e}")
             return None
 
-    def _fetch_tx_details_sync(self, w3: Web3, tx_hash: str):
-        try:
-            tx = w3.eth.get_transaction(tx_hash)
-            try:
-                receipt = w3.eth.get_transaction_receipt(tx_hash)
-            except Web3Exception as e:
-                logger.debug(f"Could not get transaction receipt: {e}")
-                receipt = None
-
-            # Parse logic...
-            contract = w3.eth.contract(address=self.usdt_contract_address, abi=USDT_ABI)
-
-            from_address = to_checksum_address(tx["from"])
-            to_address = to_checksum_address(tx["to"]) if tx["to"] else None
-            value = Decimal(0)
-
-            if to_address and to_address.lower() == self.usdt_contract_address.lower():
-                try:
-                    decoded = contract.decode_function_input(tx["input"])
-                    if decoded[0].fn_name == "transfer":
-                        amount_wei = decoded[1]["_value"]
-                        value = Decimal(amount_wei) / Decimal(10 ** USDT_DECIMALS)
-                        to_address = to_checksum_address(decoded[1]["_to"])
-                except Exception:
-                    pass
-
-            return {
-                "from_address": from_address,
-                "to_address": to_address,
-                "value": value,
-                "status": "confirmed" if receipt and receipt.status == 1 else "pending",
-            }
-        except (Web3Exception, ValueError) as e:
-            logger.debug(f"Could not fetch transaction details: {e}")
-            return None
-
-    async def validate_wallet_address(self, address: str) -> bool:
-        try:
-            return is_address(address)
-        except (ValueError, TypeError) as e:
-            logger.debug(f"Invalid wallet address format: {e}")
-            return False
-
-    async def get_usdt_balance(self, address: str) -> Decimal | None:
-        try:
-            address = to_checksum_address(address)
-
-            def _get_bal(w3: Web3):
-                contract = w3.eth.contract(address=self.usdt_contract_address, abi=USDT_ABI)
-                return contract.functions.balanceOf(address).call()
-
-            wei = await self._run_async_failover(_get_bal)
-            return Decimal(wei) / Decimal(10 ** USDT_DECIMALS)
-        except Exception as e:
-            logger.error(f"Get balance failed: {e}")
-            return None
-
-    async def get_plex_balance(self, address: str) -> Decimal | None:
-        """
-        Get PLEX token balance for address.
-
-        PLEX token uses 9 decimals (per business rules).
-
-        Args:
-            address: Wallet address to check
-
-        Returns:
-            PLEX balance in tokens or None on error
-        """
-        try:
-            address = to_checksum_address(address)
-            plex_address = to_checksum_address(self.settings.auth_plex_token_address)
-
-            # PLEX uses standard ERC-20 ABI (same as USDT_ABI)
-            def _get_bal(w3: Web3):
-                contract = w3.eth.contract(address=plex_address, abi=USDT_ABI)
-                return contract.functions.balanceOf(address).call()
-
-            raw = await self._run_async_failover(_get_bal)
-            # PLEX has 9 decimals
-            return Decimal(raw) / Decimal(10**9)
-        except Exception as e:
-            logger.error(f"Get PLEX balance failed for {mask_address(address)}: {e}")
-            return None
-
-    async def estimate_gas_fee(self, to_address: str, amount: Decimal) -> Decimal | None:
-        """
-        Estimate gas fee for USDT transfer.
-
-        Args:
-            to_address: Recipient wallet address
-            amount: Amount in USDT (Decimal)
-
-        Returns:
-            Estimated gas fee in BNB or None
-        """
-        try:
-            to_address = to_checksum_address(to_address)
-            # Convert Decimal to wei using proper precision handling
-            from decimal import ROUND_DOWN
-            amount_wei = int((Decimal(str(amount)) * Decimal(10 ** USDT_DECIMALS)).to_integral_value(ROUND_DOWN))
-
-            def _est_gas(w3: Web3):
-                contract = w3.eth.contract(address=self.usdt_contract_address, abi=USDT_ABI)
-                func = contract.functions.transfer(to_address, amount_wei)
-                func_gas = func.estimate_gas({"from": self.wallet_address})
-                price = self.get_optimal_gas_price(w3)
-                return func_gas * price
-
-            total_wei = await self._run_async_failover(_est_gas)
-            return Decimal(total_wei) / Decimal(10 ** 18)
-        except Exception:
-            return None
-
-    async def get_providers_status(self) -> dict[str, Any]:
-        """Get status of all providers."""
-        status = {}
-        for name, w3 in self.providers.items():
-            try:
-                loop = asyncio.get_event_loop()
-                # Run ping in executor with timeout
-                try:
-                    bn = await asyncio.wait_for(
-                        loop.run_in_executor(
-                            self._executor, lambda: w3.eth.block_number
-                        ),
-                        timeout=BLOCKCHAIN_EXECUTOR_TIMEOUT,
-                    )
-                    status[name] = {"connected": True, "block": bn, "active": name == self.active_provider_name}
-                except TimeoutError:
-                    logger.warning(f"Timeout checking provider '{name}' status")
-                    status[name] = {"connected": False, "error": "Timeout", "active": name == self.active_provider_name}
-            except Exception as e:
-                status[name] = {"connected": False, "error": str(e), "active": name == self.active_provider_name}
-        return status
+    # ========== Payment Verification Methods ==========
 
     async def verify_plex_payment(
         self,
         sender_address: str,
         amount_plex: float | None = None,
-        lookback_blocks: int = 200  # ~10 minutes on BSC (3 sec/block)
+        lookback_blocks: int = 200,  # ~10 minutes on BSC (3 sec/block)
     ) -> dict[str, Any]:
         """
         Verify if user paid PLEX tokens to system wallet.
 
-        Algorithm:
-        1. Scan recent blocks in chunks (to avoid RPC limits)
-        2. Get incoming PLEX transfers to system wallet
-        3. Check if any transfer is from the user's wallet
-        4. Verify amount >= required
+        Args:
+            sender_address: User's wallet address
+            amount_plex: Required PLEX amount (uses default from settings if None)
+            lookback_blocks: Number of blocks to scan back
+
+        Returns:
+            Dict with success, tx_hash, amount, block, or error
         """
-        if not self.settings.auth_plex_token_address:
-            return {"success": False, "error": "PLEX token address not configured"}
-
         target_amount = amount_plex or self.settings.auth_price_plex
-        try:
-            sender = to_checksum_address(sender_address)
-            receiver = to_checksum_address(self.settings.auth_system_wallet_address)
-            token_address = to_checksum_address(self.settings.auth_plex_token_address)
-        except ValueError as e:
-            return {"success": False, "error": f"Invalid address format: {e}"}
 
-        # PLEX uses 9 decimals
-        decimals = 9
-        target_wei = int(target_amount * (10 ** decimals))
-
-        logger.info(
-            f"[PLEX Verify] Searching: sender={mask_address(sender)}, "
-            f"receiver={mask_address(receiver)}, required={target_amount} PLEX"
-        )
-
-        def _scan(w3: Web3):
-            latest = w3.eth.block_number
-            contract = w3.eth.contract(address=token_address, abi=USDT_ABI)
-
-            # Scan in chunks to avoid RPC rate limits
-            # BSC public RPCs limit to ~100-500 blocks per request
-            chunk_size = 100
-            total_blocks = lookback_blocks
-            all_logs = []
-
-            logger.info(
-                f"[PLEX Verify] Scanning {total_blocks} blocks in chunks of {chunk_size}"
+        def _verify(w3: Web3):
+            return self.payment_verifier.verify_plex_payment_sync(
+                w3, sender_address, target_amount, lookback_blocks
             )
 
-            for offset in range(0, total_blocks, chunk_size):
-                from_blk = max(0, latest - offset - chunk_size)
-                to_blk = latest - offset
-
-                if from_blk >= to_blk:
-                    continue
-
-                try:
-                    logs = contract.events.Transfer.get_logs(
-                        fromBlock=from_blk,
-                        toBlock=to_blk,
-                        argument_filters={'to': receiver}
-                    )
-                    chunk_logs = list(logs)
-                    all_logs.extend(chunk_logs)
-                    logger.debug(
-                        f"[PLEX Verify] Chunk {from_blk}-{to_blk}: {len(chunk_logs)} logs"
-                    )
-                except Exception as chunk_err:
-                    # Log error but continue with other chunks
-                    logger.warning(
-                        f"[PLEX Verify] Chunk {from_blk}-{to_blk} failed: {chunk_err}"
-                    )
-                    continue
-
-            logger.info(f"[PLEX Verify] Total found: {len(all_logs)} incoming transfers")
-
-            # Sort by block number (newest first)
-            all_logs.sort(key=lambda x: x.get('blockNumber', 0), reverse=True)
-
-            for log in all_logs:
-                args = log.get('args', {})
-                tx_from = str(args.get('from', ''))
-                value = args.get('value', 0)
-                tx_hash = log.get('transactionHash', b'').hex()
-                block_num = log.get('blockNumber', 0)
-
-                # Compare addresses case-insensitive
-                if tx_from.lower() == sender.lower():
-                    logger.info(f"[PLEX Verify] Found TX from user: {tx_hash}")
-
-                    if value >= target_wei:
-                        amount_found = Decimal(value) / Decimal(10**decimals)
-                        logger.success(
-                            f"[PLEX Verify] VERIFIED! TX={tx_hash}, "
-                            f"amount={amount_found} PLEX"
-                        )
-                        return {
-                            "success": True,
-                            "tx_hash": tx_hash,
-                            "amount": amount_found,
-                            "block": block_num
-                        }
-                    else:
-                        logger.warning(
-                            f"[PLEX Verify] Amount insufficient: {value} < {target_wei}"
-                        )
-
-            logger.warning(f"[PLEX Verify] No payment found from {sender[:10]}...")
-            return {"success": False, "error": "Transaction not found"}
-
         try:
-            return await self._run_async_failover(_scan)
+            return await self._run_async_failover(_verify)
         except Exception as e:
             logger.error(f"[PLEX Verify] Error: {e}")
             return {"success": False, "error": str(e)}
@@ -1033,7 +536,6 @@ class BlockchainService:
         """
         Scan all USDT Transfer events from user wallet to system wallet.
 
-
         Used to detect user's total deposit amount from blockchain history.
 
         Args:
@@ -1041,71 +543,17 @@ class BlockchainService:
             max_blocks: Maximum number of blocks to scan back
 
         Returns:
-            Dict with:
-            - total_amount: Decimal - sum of all USDT transfers
-            - tx_count: int - number of transactions found
-            - transactions: list - list of transaction details
-            - success: bool
-            - error: str (if failed)
+            Dict with total_amount, tx_count, transactions, success, error
         """
-        try:
-            sender = to_checksum_address(user_wallet)
-            receiver = to_checksum_address(self.system_wallet_address)
-            usdt_address = to_checksum_address(self.usdt_contract_address)
-
-            def _scan_all(w3: Web3):
-                latest = w3.eth.block_number
-                from_block = max(0, latest - max_blocks)
-
-                contract = w3.eth.contract(address=usdt_address, abi=USDT_ABI)
-
-                # Get all Transfer events from user to system wallet
-                logs = contract.events.Transfer.get_logs(
-                    fromBlock=from_block,
-                    toBlock='latest',
-                    argument_filters={
-                        'from': sender,
-                        'to': receiver
-                    }
-                )
-
-                transactions = []
-                total_wei = 0
-
-                for log in logs:
-                    args = log.get('args', {})
-                    value = args.get('value', 0)
-                    total_wei += value
-
-                    transactions.append({
-                        'tx_hash': log['transactionHash'].hex(),
-                        'amount': Decimal(value) / Decimal(10 ** USDT_DECIMALS),
-                        'block': log['blockNumber'],
-                    })
-
-                # Sort by block number (oldest first)
-                transactions.sort(key=lambda x: x['block'])
-
-                return {
-                    'total_amount': Decimal(total_wei) / Decimal(10 ** USDT_DECIMALS),
-                    'tx_count': len(transactions),
-                    'transactions': transactions,
-                    'from_block': from_block,
-                    'to_block': latest,
-                }
-
-            result = await self._run_async_failover(_scan_all)
-            result['success'] = True
-
-            logger.info(
-                f"Deposit scan for {mask_address(user_wallet)}: "
-                f"found {result['tx_count']} txs, total {result['total_amount']} USDT"
+        def _scan(w3: Web3):
+            return self.payment_verifier.scan_usdt_deposits_sync(
+                w3, user_wallet, max_blocks
             )
 
-            return result
-
+        try:
+            return await self._run_async_failover(_scan)
         except Exception as e:
-            logger.error(f"Deposit scan failed for {mask_address(user_wallet)}: {e}")
+            logger.error(f"Deposit scan failed: {e}")
             return {
                 'success': False,
                 'error': str(e),
@@ -1114,12 +562,53 @@ class BlockchainService:
                 'transactions': [],
             }
 
+    # ========== Block Operations ==========
 
-# Singleton initialization
+    async def get_block_number(self) -> int:
+        """
+        Get current block number.
+
+        Returns:
+            Current block number
+        """
+        loop = asyncio.get_event_loop()
+        async with self.rpc_limiter:
+            return await loop.run_in_executor(
+                self._executor,
+                lambda: asyncio.run(
+                    self.provider_manager._execute_with_failover(
+                        lambda w3: w3.eth.block_number
+                    )
+                )
+            )
+
+    # ========== Cleanup Methods ==========
+
+    def close(self) -> None:
+        """Clean up resources and clear sensitive data."""
+        if hasattr(self, '_executor') and self._executor:
+            self._executor.shutdown(wait=True)
+
+        # Clean up wallet manager
+        if hasattr(self, 'wallet_manager'):
+            self.wallet_manager.cleanup()
+
+
+# ========== Singleton pattern ==========
+
 _blockchain_service: BlockchainService | None = None
 
 
 def get_blockchain_service() -> BlockchainService:
+    """
+    Get the singleton blockchain service instance.
+
+    Returns:
+        BlockchainService instance
+
+    Raises:
+        RuntimeError: If service not initialized
+    """
     global _blockchain_service
     if _blockchain_service is None:
         raise RuntimeError("BlockchainService not initialized")
@@ -1127,5 +616,12 @@ def get_blockchain_service() -> BlockchainService:
 
 
 def init_blockchain_service(settings: Settings, session_factory: Any = None) -> None:
+    """
+    Initialize the singleton blockchain service instance.
+
+    Args:
+        settings: Application settings
+        session_factory: Optional async session factory for DB access
+    """
     global _blockchain_service
     _blockchain_service = BlockchainService(settings, session_factory)

@@ -1,0 +1,122 @@
+"""
+Admin Panel Main Handlers
+
+Main entry points for accessing the admin panel:
+- /admin command
+- Admin panel button handler
+- Back to main menu handler
+"""
+
+from typing import Any
+
+from aiogram import F, Router
+from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.types import Message
+from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.user import User
+from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
+from bot.keyboards.reply import admin_keyboard, get_admin_keyboard_from_data
+
+router = Router(name="admin_panel_main")
+
+
+@router.message(Command("admin"))
+async def cmd_admin_panel(
+    message: Message,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """
+    Вход в админ-панель по команде /admin.
+    Работает только для админов (is_admin=True из middleware).
+    """
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
+        return
+
+    user: User | None = data.get("user")
+    from app.repositories.blacklist_repository import BlacklistRepository
+    blacklist_repo = BlacklistRepository(session)
+    if user:
+        await blacklist_repo.find_by_telegram_id(user.telegram_id)
+
+    text = """
+👑 **Панель администратора**
+
+Добро пожаловать в панель управления ArbitroPLEXbot Bot.
+
+Выберите действие:
+    """.strip()
+
+    await message.answer(
+        text,
+        parse_mode="Markdown",
+        reply_markup=admin_keyboard(
+            is_super_admin=admin.is_super_admin,
+            is_extended_admin=admin.is_extended_admin
+        ),
+    )
+
+
+@router.message(F.text == "👑 Админ-панель")
+async def handle_admin_panel_button(
+    message: Message,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """
+    Вход в админ-панель по кнопке в reply keyboard.
+    Работает только для админов (is_admin=True из middleware).
+    """
+    telegram_id = message.from_user.id if message.from_user else None
+    logger.info(f"[ADMIN] handle_admin_panel_button called for user {telegram_id}")
+
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
+        logger.warning(f"[ADMIN] User {telegram_id} tried to access admin panel but was denied")
+        return
+
+    text = """
+👑 **Панель администратора**
+
+Добро пожаловать в панель управления ArbitroPLEXbot Bot.
+
+Выберите действие:
+    """.strip()
+
+    user: User | None = data.get("user")
+    from app.repositories.blacklist_repository import BlacklistRepository
+    blacklist_repo = BlacklistRepository(session)
+    if user:
+        await blacklist_repo.find_by_telegram_id(user.telegram_id)
+
+    # AdminAuthMiddleware already populates is_extended_admin / is_super_admin in data
+    await message.answer(
+        text,
+        parse_mode="Markdown",
+        reply_markup=get_admin_keyboard_from_data(data),
+    )
+
+
+@router.message(F.text == "◀️ Главное меню")
+async def handle_back_to_main_menu(
+    message: Message,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Return to main menu from admin panel"""
+    from bot.handlers.menu import show_main_menu
+
+    state: FSMContext = data.get("state")
+    user: User | None = data.get("user")
+
+    if state:
+        # Force clear state AND session token to require master key on next entry
+        await state.clear()
+
+    # Remove 'user' and 'state' from data to avoid duplicate arguments
+    safe_data = {k: v for k, v in data.items() if k not in ('user', 'state')}
+    await show_main_menu(message, session, user, state, **safe_data)
