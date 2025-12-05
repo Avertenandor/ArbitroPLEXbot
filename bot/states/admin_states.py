@@ -38,3 +38,6 @@ class AdminStates(StatesGroup):
     selecting_withdrawal = State()  # Selecting withdrawal ID to manage
     viewing_withdrawal = State()    # Viewing details (Approve/Reject options)
     confirming_withdrawal_action = State()  # Confirming approve/reject
+
+    # Withdrawal history search
+    searching_withdrawal_history = State()  # Waiting for search query
