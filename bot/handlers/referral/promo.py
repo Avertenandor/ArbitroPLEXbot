@@ -10,7 +10,7 @@ This module contains:
 from typing import Any
 
 from aiogram import F, Router
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import Message, URLInputFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
@@ -98,39 +98,31 @@ async def handle_promo_materials(
 
     text += (
         "━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"🔗 *Ваша ссылка:*\n`{referral_link}`\n\n"
         "💡 _Нажмите на текст чтобы скопировать_"
     )
 
-    # QR code button (generates QR via external service)
+    # QR code URL (generates QR via external service)
     qr_url = (
         f"https://api.qrserver.com/v1/create-qr-code/"
         f"?size=300x300&data={referral_link}"
     )
 
-    inline_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="📱 Получить QR-код",
-                url=qr_url,
-            ),
-        ],
-        [
-            InlineKeyboardButton(
-                text="📋 Копировать ссылку",
-                callback_data="copy_ref_link",
-            ),
-        ],
-    ])
-
+    # Send promo texts first
     await message.answer(
         text,
         parse_mode="Markdown",
         reply_markup=referral_keyboard(),
     )
 
-    await message.answer(
-        "⬇️ *Дополнительно:*",
+    # Send QR code as photo with clickable link below
+    qr_caption = (
+        f"📱 *Ваш QR-код для приглашения*\n\n"
+        f"🔗 Ссылка: {referral_link}\n\n"
+        f"_Нажмите на ссылку чтобы скопировать_"
+    )
+
+    await message.answer_photo(
+        photo=URLInputFile(qr_url, filename="qr_code.png"),
+        caption=qr_caption,
         parse_mode="Markdown",
-        reply_markup=inline_kb,
     )
