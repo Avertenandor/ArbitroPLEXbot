@@ -95,6 +95,9 @@ def main_menu_reply_keyboard(
             KeyboardButton(text="📊 Баланс"),
         )
         builder.row(
+            KeyboardButton(text="💰 Баланс кошелька"),
+        )
+        builder.row(
             KeyboardButton(text="💬 Поддержка"),
             KeyboardButton(text="❓ Задать вопрос"),
         )
