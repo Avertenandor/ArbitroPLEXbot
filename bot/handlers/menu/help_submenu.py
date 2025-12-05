@@ -6,6 +6,7 @@ This module contains handlers for the help submenu, which includes:
 - Instructions
 - Rules
 - Support contact
+- Back navigation to main menu
 """
 
 from typing import Any

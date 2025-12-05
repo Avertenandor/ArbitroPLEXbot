@@ -535,6 +535,7 @@ def help_submenu_keyboard() -> ReplyKeyboardMarkup:
     - Instructions
     - Rules
     - Support contact
+    - Back to main menu
 
     Returns:
         ReplyKeyboardMarkup with help options
@@ -548,14 +549,11 @@ def help_submenu_keyboard() -> ReplyKeyboardMarkup:
 
     builder.row(
         KeyboardButton(text="📋 Правила"),
-    )
-
-    builder.row(
         KeyboardButton(text="✉️ Написать в поддержку"),
     )
 
     builder.row(
-        KeyboardButton(text="◀️ Назад"),
+        KeyboardButton(text="📊 Главное меню"),
     )
 
     return builder.as_markup(resize_keyboard=True)

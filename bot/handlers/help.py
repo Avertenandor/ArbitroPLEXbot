@@ -83,23 +83,15 @@ async def cmd_help(
 
 
 @router.message(F.text == "ℹ️ Помощь")
-async def handle_help_button(
+async def handle_help_button_old(
     message: Message,
     session: AsyncSession,
     state: FSMContext,
     **data: Any,
 ) -> None:
     """
-    Handle "ℹ️ Помощь" button press.
-
-    This is an alternative way to access help via reply keyboard button.
-    Calls the same help handler as /help command.
-
-    Args:
-        message: Telegram message
-        session: Database session
-        state: FSM state context
-        **data: Additional handler data (user, is_admin, etc.)
+    Handle old "ℹ️ Помощь" button press (backward compatibility).
+    Redirects to the main help submenu.
     """
-    # Reuse the same help handler
-    await cmd_help(message, session, state, **data)
+    from bot.handlers.menu.help_submenu import show_help_submenu
+    await show_help_submenu(message, session, state, **data)
