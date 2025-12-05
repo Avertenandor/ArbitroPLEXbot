@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.repositories.blacklist_repository import BlacklistRepository
-from bot.constants.rules import RULES_FULL_TEXT
+from bot.constants.rules import RULES_BRIEF_VERSION, RULES_FULL_TEXT
 from bot.keyboards.reply import main_menu_reply_keyboard
 
 router = Router()
@@ -36,15 +36,13 @@ async def show_rabbit_partner(
     await state.clear()
 
     text = (
-        "🐰 **Токенизированная ферма кроликов**\n\n"
-        "Для работы в ArbitroPLEXbot каждый пользователь должен быть "
-        "владельцем **минимум одного кролика** на ферме наших партнеров.\n\n"
-        "**DEXRabbit** — это:\n"
-        "• Покупка и удалённое содержание кроликов на ферме\n"
+        "🐰 **Ферма кроликов DEXRabbit**\n\n"
+        "Для работы в боте нужен **минимум 1 кролик**.\n\n"
+        "**Что это:**\n"
+        "• Покупка и содержание кроликов\n"
         "• Работа с USDT\n"
-        "• Маркетплейс перепродаж\n"
-        "• Реферальная программа 3×5%\n\n"
-        "⚠️ **Это обязательное условие для работы в нашей экосистеме!**"
+        "• Маркетплейс и реф. программа 3×5%\n\n"
+        "⚠️ **Обязательное условие для работы!**"
     )
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -83,14 +81,20 @@ async def show_rules(
     state: FSMContext,
     **data: Any,
 ) -> None:
-    """Show platform rules."""
+    """Show platform rules (brief version with 'Read more' button)."""
     user: User | None = data.get("user")
     is_admin = data.get("is_admin", False)
 
     await state.clear()
 
+    # Show brief version with "Read more" button
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📖 Подробнее", callback_data="rules:full")],
+    ])
+
     await message.answer(
-        RULES_FULL_TEXT,
+        RULES_BRIEF_VERSION,
+        reply_markup=kb,
         parse_mode="Markdown",
         disable_web_page_preview=True
     )
@@ -115,6 +119,47 @@ async def show_rules(
     )
 
 
+@router.callback_query(F.data == "rules:full")
+async def show_full_rules(
+    callback: Any,
+    **data: Any,
+) -> None:
+    """Show full platform rules."""
+    await callback.answer()
+
+    # Show full version with "Back to brief" button
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ Вернуться к краткой версии", callback_data="rules:brief")],
+    ])
+
+    await callback.message.edit_text(
+        RULES_FULL_TEXT,
+        reply_markup=kb,
+        parse_mode="Markdown",
+        disable_web_page_preview=True
+    )
+
+
+@router.callback_query(F.data == "rules:brief")
+async def show_brief_rules_callback(
+    callback: Any,
+    **data: Any,
+) -> None:
+    """Return to brief rules version."""
+    await callback.answer()
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="📖 Подробнее", callback_data="rules:full")],
+    ])
+
+    await callback.message.edit_text(
+        RULES_BRIEF_VERSION,
+        reply_markup=kb,
+        parse_mode="Markdown",
+        disable_web_page_preview=True
+    )
+
+
 @router.message(StateFilter('*'), F.text.in_({"🌐 Инструменты нашей экосистемы", "🌐 Экосистема"}))
 async def show_ecosystem_tools(
     message: Message,
@@ -129,10 +174,9 @@ async def show_ecosystem_tools(
     await state.clear()
 
     text = (
-        "🌐 **Инструменты нашей экосистемы**\n\n"
-        "Все проекты и сервисы нашей крипто-фиатной экосистемы "
-        "на базе монеты **PLEX**:\n\n"
-        "Нажмите на интересующий вас проект для перехода:"
+        "🌐 **Экосистема PLEX**\n\n"
+        "Проекты и сервисы на базе **PLEX**:\n\n"
+        "Выберите интересующий проект:"
     )
 
     kb = InlineKeyboardMarkup(inline_keyboard=[

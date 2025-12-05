@@ -120,11 +120,75 @@ async def show_instructions(
         )
         return
 
-    # For registered users: show deposit instructions
+    # For registered users: show short deposit instructions
+    short_instructions_text = (
+        "📖 *КАК СДЕЛАТЬ ДЕПОЗИТ*\n"
+        "━━━━━━━━━━━━━━━━━━━━\n\n"
+        "*1️⃣ Выберите уровень* (10-300 USDT)\n"
+        "*2️⃣ Скопируйте адрес кошелька*\n"
+        "*3️⃣ Отправьте ТОЧНУЮ сумму в USDT*\n"
+        "*4️⃣ Дождитесь 12 подтверждений* (~5 мин)\n\n"
+        "⚠️ *ВАЖНО:*\n"
+        "• Только сеть *BSC (BEP-20)*\n"
+        "• Только с *личного кошелька*\n"
+        "• Ровно указанная сумма\n\n"
+        f"*💳 Адрес для депозитов:*\n`{settings.system_wallet_address}`\n\n"
+        f"*💰 Уровни:*\n"
+        f"Level 1: {settings.deposit_level_1} USDT | "
+        f"Level 2: {settings.deposit_level_2} USDT | "
+        f"Level 3: {settings.deposit_level_3} USDT\n"
+        f"Level 4: {settings.deposit_level_4} USDT | "
+        f"Level 5: {settings.deposit_level_5} USDT"
+    )
+
+    # Get actual level statuses for deposit keyboard
+    from app.services.deposit_validation_service import DepositValidationService
+
+    validation_service = DepositValidationService(session)
+    levels_status = await validation_service.get_available_levels(user.id)
+
+    from bot.keyboards.reply import instructions_keyboard
+
+    await message.answer(
+        short_instructions_text,
+        parse_mode="Markdown",
+        reply_markup=instructions_keyboard(levels_status=levels_status),
+    )
+
+
+@router.message(F.text == "📖 Подробная инструкция")
+async def show_detailed_instructions(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """
+    Show detailed deposit instructions.
+
+    Args:
+        message: Telegram message
+        session: Database session
+        state: FSM state
+        data: Additional data from middlewares
+    """
+    from app.config.settings import settings
     from bot.constants.rules import LEVELS_TABLE, RULES_SHORT_TEXT
 
-    instructions_text = (
-        "📖 *Инструкция по пополнению депозита*\n\n"
+    user: User | None = data.get("user")
+
+    # Only for registered users
+    if not user:
+        await message.answer(
+            "Для просмотра подробных инструкций необходимо пройти регистрацию.",
+            reply_markup=main_menu_reply_keyboard(
+                user=None, blacklist_entry=None, is_admin=False
+            ),
+        )
+        return
+
+    detailed_instructions_text = (
+        "📖 *Подробная инструкция по пополнению депозита*\n\n"
         "*1️⃣ Откройте ваш BSC кошелек* (Trust Wallet, MetaMask, SafePal или холодный кошелек)\n\n"
         "*2️⃣ Отправьте USDT (BEP-20)* на следующий адрес:\n"
         f"`{settings.system_wallet_address}`\n\n"
@@ -177,7 +241,7 @@ async def show_instructions(
     levels_status = await validation_service.get_available_levels(user.id)
 
     await message.answer(
-        instructions_text,
+        detailed_instructions_text,
         parse_mode="Markdown",
         reply_markup=deposit_keyboard(levels_status=levels_status),
     )

@@ -24,6 +24,9 @@ MAIN_MENU_BUTTONS = [
     "👑 Админ-панель",
     "📊 Калькулятор",  # ROI Calculator
     "📋 Сравнить все уровни",  # Calculator comparison
+    "💰 Финансы",  # Finance submenu
+    "📊 Мой кабинет",  # My cabinet submenu
+    "💬 Помощь",  # Help submenu
 ]
 
 # Deposit menu buttons
@@ -61,6 +64,29 @@ SETTINGS_MENU_BUTTONS = [
 SUPPORT_MENU_BUTTONS = [
     "✉️ Создать обращение",
     "📋 Мои обращения",
+    "❓ FAQ",
+]
+
+# Finance submenu buttons
+FINANCE_MENU_BUTTONS = [
+    "💰 Депозит",
+    "💸 Вывод",
+    "📦 Мои депозиты",
+    "📜 История",
+]
+
+# My Cabinet submenu buttons
+MY_CABINET_MENU_BUTTONS = [
+    "📊 Мои средства",
+    "📈 Мой заработок",
+    "👥 Рефералы",
+    "📊 Баланс",
+]
+
+# Help submenu buttons
+HELP_MENU_BUTTONS = [
+    "💬 Поддержка",
+    "📖 Инструкции",
     "❓ FAQ",
 ]
 
@@ -130,6 +156,9 @@ ALL_MENU_BUTTONS = (
     + REFERRAL_MENU_BUTTONS
     + SETTINGS_MENU_BUTTONS
     + SUPPORT_MENU_BUTTONS
+    + FINANCE_MENU_BUTTONS
+    + MY_CABINET_MENU_BUTTONS
+    + HELP_MENU_BUTTONS
     + ADMIN_MENU_BUTTONS
     + ADMIN_USERS_MENU_BUTTONS
     + ADMIN_WITHDRAWALS_MENU_BUTTONS

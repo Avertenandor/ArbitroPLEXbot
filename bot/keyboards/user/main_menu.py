@@ -82,48 +82,26 @@ def main_menu_reply_keyboard(
     else:
         # Standard menu for registered users
         logger.debug(f"[KEYBOARD] Building standard menu for user {telegram_id}")
-        
-        # Финансовые операции
+
+        # Main menu with submenus - organized and simplified
         builder.row(
-            KeyboardButton(text="💰 Депозит"),
-            KeyboardButton(text="💸 Вывод"),
-            KeyboardButton(text="📊 Баланс"),
+            KeyboardButton(text="💰 Финансы"),
+            KeyboardButton(text="📊 Мой кабинет"),
         )
-        
-        # Управление депозитами
-        builder.row(
-            KeyboardButton(text="📦 Мои депозиты"),
-            KeyboardButton(text="📜 История операций"),
-        )
-        
-        # Рефералы и кошелёк
+
         builder.row(
             KeyboardButton(text="👥 Рефералы"),
-            KeyboardButton(text="💰 Баланс кошелька"),
+            KeyboardButton(text="💬 Помощь"),
         )
-        
-        # Поддержка
+
         builder.row(
-            KeyboardButton(text="💬 Поддержка"),
-            KeyboardButton(text="📖 Инструкции"),
-        )
-        
-        # Инструменты
-        builder.row(
-            KeyboardButton(text="📊 Калькулятор"),
             KeyboardButton(text="⚙️ Настройки"),
+            KeyboardButton(text="🌐 Экосистема"),
         )
-        
-        # Безопасность
+
+        # Security - финпароль остается в главном меню для быстрого доступа
         builder.row(
             KeyboardButton(text="🔐 Финпароль"),
-            KeyboardButton(text="📋 Правила"),
-        )
-        
-        # Экосистема
-        builder.row(
-            KeyboardButton(text="🐰 DEXRabbit"),
-            KeyboardButton(text="🌐 Экосистема"),
         )
 
         # Add admin panel button for admins

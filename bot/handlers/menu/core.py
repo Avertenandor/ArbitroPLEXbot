@@ -76,12 +76,24 @@ async def show_main_menu(
     balance = await user_service.get_user_balance(user.id)
     available = balance.get('available_balance', 0) if balance else 0
 
+    # Get PLEX balance and calculate days
+    from decimal import Decimal
+    plex_balance = user.last_plex_balance or Decimal("0")
+    required_daily = user.required_daily_plex
+
+    # Calculate days (~X дней)
+    if required_daily > 0:
+        days = int(plex_balance / required_daily)
+    else:
+        days = 0
+
     text = (
-        f"{_('menu.main')}\n\n"
-        f"{_('common.welcome_user', username=safe_username)}\n"
-        f"💰 Баланс: `{available:.2f} USDT`\n\n"
-        f"{_('common.choose_action')}\n\n"
-        f"🐰 Партнер: [DEXRabbit](https://xn--80apagbbfxgmuj4j.site/)"
+        f"📊 *ГЛАВНОЕ МЕНЮ*\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"Добро пожаловать, {safe_username}\\!\n\n"
+        f"💰 Баланс: `{available:.2f} USDT`\n"
+        f"⚡ PLEX: `{float(plex_balance):.0f}` монет \\(\\~{days} дней\\)\n\n"
+        f"Выберите раздел:"
     )
 
     logger.info(
@@ -130,7 +142,9 @@ async def handle_main_menu(
         is_admin = data.get("is_admin", False)
         logger.info(f"[MENU] Fallback menu with is_admin={is_admin}")
         await message.answer(
-            "📊 *Главное меню*\n\nВыберите действие:",
+            "📊 *ГЛАВНОЕ МЕНЮ*\n"
+            "━━━━━━━━━━━━━━━━━━\n\n"
+            "Выберите раздел:",
             reply_markup=main_menu_reply_keyboard(
                 user=None, blacklist_entry=None, is_admin=is_admin
             ),

@@ -22,6 +22,7 @@ def register_user_handlers(dp: Dispatcher) -> None:
         contact_update,
         deposit,
         finpass_recovery,
+        help,
         inquiry,
         instructions,
         language,
@@ -41,6 +42,9 @@ def register_user_handlers(dp: Dispatcher) -> None:
     # Core handlers - menu must be registered BEFORE deposit/withdrawal
     # to have priority over FSM state handlers
     dp.include_router(start.router)
+
+    # Help command - early to catch /help in any state
+    dp.include_router(help.router)
 
     # Common handlers (cancel button) - MUST be early to catch cancel in any state
     dp.include_router(common.router)

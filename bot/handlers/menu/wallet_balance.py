@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.services.blockchain_service import get_blockchain_service
+from app.services.plex_payment_service import PlexPaymentService
 from bot.i18n.loader import get_translator, get_user_language
 from bot.utils.user_loader import UserLoader
 
@@ -96,8 +97,9 @@ async def show_wallet_balance(
     )
 
     try:
-        # Get blockchain service
+        # Get blockchain service and PLEX payment service
         blockchain_service = get_blockchain_service()
+        plex_service = PlexPaymentService(session)
 
         # Fetch all balances in parallel for better performance
         async def safe_get_plex():
@@ -121,11 +123,19 @@ async def show_wallet_balance(
                 logger.error(f"[WALLET_BALANCE] Error getting BNB balance: {e}")
                 return None
 
-        # Execute all balance queries in parallel
-        plex_balance, usdt_balance, bnb_balance = await asyncio.gather(
+        async def safe_get_forecast():
+            try:
+                return await plex_service.calculate_plex_forecast(user.id)
+            except Exception as e:
+                logger.error(f"[WALLET_BALANCE] Error getting PLEX forecast: {e}")
+                return None
+
+        # Execute all balance queries and forecast in parallel
+        plex_balance, usdt_balance, bnb_balance, forecast = await asyncio.gather(
             safe_get_plex(),
             safe_get_usdt(),
             safe_get_bnb(),
+            safe_get_forecast(),
         )
 
         logger.info(
@@ -145,6 +155,40 @@ async def show_wallet_balance(
             f"🟣 *PLEX:* `{plex_display}` PLEX\n"
             f"💵 *USDT:* `{usdt_display}` USDT\n"
             f"🟡 *BNB:* `{bnb_display}` BNB\n\n"
+        )
+
+        # Add PLEX forecast if available
+        if forecast and not forecast.get("error"):
+            daily_plex = forecast["daily_plex"]
+            days_left = forecast["days_left"]
+            warning = forecast["warning"]
+            active_deposits_sum = forecast["active_deposits_sum"]
+
+            # Only show forecast if user has active deposits
+            if daily_plex > 0:
+                text += "━━━━━━━━━━━━━━━━━━━━━━\n"
+                text += "📊 *Прогноз расхода PLEX*\n\n"
+                text += f"📌 Активные депозиты: `{float(active_deposits_sum):,.2f}` USD\n"
+                text += f"⚡️ Дневной расход: `{float(daily_plex):,.0f}` PLEX/день\n"
+
+                # Format days left display
+                if days_left == float('inf'):
+                    days_display = "∞"
+                elif days_left >= 365:
+                    days_display = f"{days_left/365:.1f} лет"
+                elif days_left >= 30:
+                    days_display = f"{days_left/30:.1f} месяцев"
+                else:
+                    days_display = f"{days_left:.1f} дней"
+
+                text += f"⏰ Хватит на: `{days_display}`\n\n"
+
+                # Add warning if critically low
+                if warning:
+                    text += "⚠️ *ВНИМАНИЕ!* Баланс PLEX заканчивается!\n"
+                    text += "Пополните баланс для продолжения работы.\n\n"
+
+        text += (
             "━━━━━━━━━━━━━━━━━━━━━━\n"
             "📋 *Ваш кошелек (нажмите для копирования):*\n"
             f"`{wallet_address}`\n\n"
