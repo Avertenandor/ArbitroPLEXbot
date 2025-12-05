@@ -5,6 +5,7 @@ This module contains handlers for displaying user's blockchain wallet balance.
 Shows PLEX, USDT, and BNB balances by scanning the blockchain.
 """
 
+import asyncio
 from decimal import Decimal
 from typing import Any
 
@@ -98,31 +99,39 @@ async def show_wallet_balance(
         # Get blockchain service
         blockchain_service = get_blockchain_service()
 
-        # Fetch all balances in parallel
-        plex_balance: Decimal | None = None
-        usdt_balance: Decimal | None = None
-        bnb_balance: Decimal | None = None
+        # Fetch all balances in parallel for better performance
+        async def safe_get_plex():
+            try:
+                return await blockchain_service.get_plex_balance(wallet_address)
+            except Exception as e:
+                logger.error(f"[WALLET_BALANCE] Error getting PLEX balance: {e}")
+                return None
 
-        # Get PLEX balance
-        try:
-            plex_balance = await blockchain_service.get_plex_balance(wallet_address)
-            logger.info(f"[WALLET_BALANCE] PLEX balance for {telegram_id}: {plex_balance}")
-        except Exception as e:
-            logger.error(f"[WALLET_BALANCE] Error getting PLEX balance: {e}")
+        async def safe_get_usdt():
+            try:
+                return await blockchain_service.get_usdt_balance(wallet_address)
+            except Exception as e:
+                logger.error(f"[WALLET_BALANCE] Error getting USDT balance: {e}")
+                return None
 
-        # Get USDT balance
-        try:
-            usdt_balance = await blockchain_service.get_usdt_balance(wallet_address)
-            logger.info(f"[WALLET_BALANCE] USDT balance for {telegram_id}: {usdt_balance}")
-        except Exception as e:
-            logger.error(f"[WALLET_BALANCE] Error getting USDT balance: {e}")
+        async def safe_get_bnb():
+            try:
+                return await blockchain_service.get_native_balance(wallet_address)
+            except Exception as e:
+                logger.error(f"[WALLET_BALANCE] Error getting BNB balance: {e}")
+                return None
 
-        # Get BNB balance
-        try:
-            bnb_balance = await blockchain_service.get_native_balance(wallet_address)
-            logger.info(f"[WALLET_BALANCE] BNB balance for {telegram_id}: {bnb_balance}")
-        except Exception as e:
-            logger.error(f"[WALLET_BALANCE] Error getting BNB balance: {e}")
+        # Execute all balance queries in parallel
+        plex_balance, usdt_balance, bnb_balance = await asyncio.gather(
+            safe_get_plex(),
+            safe_get_usdt(),
+            safe_get_bnb(),
+        )
+
+        logger.info(
+            f"[WALLET_BALANCE] Balances for {telegram_id}: "
+            f"PLEX={plex_balance}, USDT={usdt_balance}, BNB={bnb_balance}"
+        )
 
         # Format balances for display
         plex_display = format_balance(plex_balance, 2)

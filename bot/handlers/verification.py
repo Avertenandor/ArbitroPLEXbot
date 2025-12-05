@@ -44,7 +44,7 @@ def generate_financial_password(length: int = 8) -> str:
     return password
 
 
-@router.message(F.text == "🔐 Получить финпароль")
+@router.message(F.text.in_({"🔐 Получить финпароль", "🔐 Финпароль"}))
 async def start_verification(
     message: Message,
     session: AsyncSession,

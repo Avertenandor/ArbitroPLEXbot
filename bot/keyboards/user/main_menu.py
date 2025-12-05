@@ -82,43 +82,48 @@ def main_menu_reply_keyboard(
     else:
         # Standard menu for registered users
         logger.debug(f"[KEYBOARD] Building standard menu for user {telegram_id}")
+        
+        # Финансовые операции
         builder.row(
             KeyboardButton(text="💰 Депозит"),
             KeyboardButton(text="💸 Вывод"),
-        )
-        builder.row(
-            KeyboardButton(text="📦 Мои депозиты"),
-            KeyboardButton(text="🔄 Обновить депозит"),
-        )
-        builder.row(
-            KeyboardButton(text="👥 Рефералы"),
             KeyboardButton(text="📊 Баланс"),
         )
+        
+        # Управление депозитами
         builder.row(
-            KeyboardButton(text="💰 Баланс кошелька"),
-        )
-        builder.row(
-            KeyboardButton(text="💬 Поддержка"),
-            KeyboardButton(text="❓ Задать вопрос"),
-        )
-        builder.row(
-            KeyboardButton(text="📖 Инструкции"),
+            KeyboardButton(text="📦 Мои депозиты"),
             KeyboardButton(text="📜 История операций"),
         )
+        
+        # Рефералы и кошелёк
+        builder.row(
+            KeyboardButton(text="👥 Рефералы"),
+            KeyboardButton(text="💰 Баланс кошелька"),
+        )
+        
+        # Поддержка
+        builder.row(
+            KeyboardButton(text="💬 Поддержка"),
+            KeyboardButton(text="📖 Инструкции"),
+        )
+        
+        # Инструменты
         builder.row(
             KeyboardButton(text="📊 Калькулятор"),
             KeyboardButton(text="⚙️ Настройки"),
         )
+        
+        # Безопасность
         builder.row(
-            KeyboardButton(text="🔐 Получить финпароль"),
-            KeyboardButton(text="🔑 Восстановить финпароль"),
-        )
-        builder.row(
-            KeyboardButton(text="🐰 Купить кролика"),
+            KeyboardButton(text="🔐 Финпароль"),
             KeyboardButton(text="📋 Правила"),
         )
+        
+        # Экосистема
         builder.row(
-            KeyboardButton(text="🌐 Инструменты нашей экосистемы"),
+            KeyboardButton(text="🐰 DEXRabbit"),
+            KeyboardButton(text="🌐 Экосистема"),
         )
 
         # Add admin panel button for admins

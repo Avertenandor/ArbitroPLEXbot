@@ -22,7 +22,7 @@ from bot.keyboards.reply import main_menu_reply_keyboard
 router = Router()
 
 
-@router.message(StateFilter('*'), F.text == "🐰 Купить кролика")
+@router.message(StateFilter('*'), F.text.in_({"🐰 Купить кролика", "🐰 DEXRabbit"}))
 async def show_rabbit_partner(
     message: Message,
     session: AsyncSession,
@@ -115,7 +115,7 @@ async def show_rules(
     )
 
 
-@router.message(StateFilter('*'), F.text == "🌐 Инструменты нашей экосистемы")
+@router.message(StateFilter('*'), F.text.in_({"🌐 Инструменты нашей экосистемы", "🌐 Экосистема"}))
 async def show_ecosystem_tools(
     message: Message,
     session: AsyncSession,
