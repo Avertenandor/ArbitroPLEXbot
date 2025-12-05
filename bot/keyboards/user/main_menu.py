@@ -128,29 +128,22 @@ def main_menu_reply_keyboard(
                 KeyboardButton(text="👑 Админ-панель"),
             )
 
-            # Add master key management button for super admin
+            # Add master key button for super admin
             from app.config.settings import settings
-            admin_ids = settings.get_admin_ids()
-            is_super_admin_id = telegram_id and admin_ids and telegram_id == admin_ids[0]
+            super_admin_id = settings.super_admin_telegram_id
+            is_super = telegram_id and telegram_id == super_admin_id
 
-            logger.info("[KEYBOARD] AFTER admin panel button, before master key check")
-            logger.info(
-                f"[KEYBOARD] Checking master key button: "
-                f"telegram_id={telegram_id}, type={type(telegram_id)}, "
-                f"is_super_admin_id={is_super_admin_id}"
+            logger.debug(
+                f"[KEYBOARD] Super admin check: telegram_id={telegram_id}, "
+                f"super_admin_id={super_admin_id}, is_super={is_super}"
             )
-            if is_super_admin_id:
+            
+            if is_super:
                 logger.info(
-                    f"[KEYBOARD] Adding master key management button "
-                    f"for super admin {telegram_id}"
+                    f"[KEYBOARD] Adding master key button for super admin {telegram_id}"
                 )
                 builder.row(
-                    KeyboardButton(text="🔑 Управление мастер-ключом"),
-                )
-            else:
-                logger.info(
-                    f"[KEYBOARD] NOT adding master key button: "
-                    f"telegram_id={telegram_id} != {admin_ids[0] if admin_ids else 'None'}"
+                    KeyboardButton(text="🔑 Мой мастер-ключ"),
                 )
 
         # Log for non-admin case is handled by the if block above

@@ -65,6 +65,17 @@ async def cmd_masterkey(
     state: FSMContext,
     **data: Any,
 ) -> None:
+    """Redirect command to button handler."""
+    await btn_my_master_key(message, session, state, **data)
+
+
+@router.message(F.text == "🔑 Мой мастер-ключ")
+async def btn_my_master_key(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
     """
     Quick command to get master key.
     
