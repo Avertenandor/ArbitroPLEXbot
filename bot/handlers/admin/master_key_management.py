@@ -17,6 +17,7 @@ import os
 from typing import Any
 
 from aiogram import F, Router
+from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from loguru import logger
@@ -55,6 +56,125 @@ def is_super_admin(telegram_id: int | None) -> bool:
         True if user is super admin
     """
     return telegram_id == SUPER_ADMIN_TELEGRAM_ID
+
+
+@router.message(Command("masterkey"))
+async def cmd_masterkey(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """
+    Quick command to get master key.
+    
+    Only works for SUPER_ADMIN_TELEGRAM_ID.
+    If key doesn't exist - generates new one immediately.
+    If key exists - shows it was already generated and offers to regenerate.
+    """
+    telegram_id = message.from_user.id if message.from_user else None
+    
+    # Security check
+    if not is_super_admin(telegram_id):
+        logger.warning(
+            f"[SECURITY] Unauthorized /masterkey command from user {telegram_id}"
+        )
+        await message.answer(
+            "❌ Эта команда доступна только главному администратору.\n\n"
+            f"Ваш ID: `{telegram_id}`",
+            parse_mode="Markdown"
+        )
+        return
+    
+    admin_service = AdminService(session)
+    admin = await admin_service.get_admin_by_telegram_id(telegram_id)
+    
+    if not admin:
+        await message.answer(
+            "❌ Вы не найдены в базе администраторов.\n\n"
+            f"Ваш Telegram ID: `{telegram_id}`\n"
+            "Обратитесь к разработчику для добавления.",
+            parse_mode="Markdown"
+        )
+        return
+    
+    if admin.role != "super_admin":
+        await message.answer(
+            f"❌ Требуется роль super_admin.\n"
+            f"Ваша роль: {admin.role}"
+        )
+        return
+    
+    # Check if master key already exists
+    has_key = admin.master_key is not None and admin.master_key != ""
+    
+    if has_key:
+        # Key already exists - offer to regenerate
+        await message.answer(
+            "🔑 **Мастер-ключ уже установлен**\n\n"
+            "Мастер-ключ хранится в зашифрованном виде и не может быть показан.\n\n"
+            "Если вы забыли ключ, вы можете сгенерировать новый:\n"
+            "• Перейдите в меню: `🔧 Админка` → `🔑 Управление мастер-ключом`\n"
+            "• Или нажмите кнопку ниже для быстрой генерации\n\n"
+            "⚠️ При генерации нового ключа старый перестанет работать!",
+            parse_mode="Markdown"
+        )
+        
+        # Generate new key immediately for convenience
+        await message.answer(
+            "🔄 **Генерирую новый мастер-ключ...**",
+            parse_mode="Markdown"
+        )
+        
+        # Generate new master key
+        plain_master_key = admin_service.generate_master_key()
+        hashed_master_key = admin_service.hash_master_key(plain_master_key)
+        
+        # Update admin with new master key
+        admin.master_key = hashed_master_key
+        await session.commit()
+        
+        logger.warning(
+            f"[SECURITY] MASTER_KEY_REGENERATED via /masterkey command "
+            f"for super admin {telegram_id} (admin_id: {admin.id})"
+        )
+        
+        await message.answer(
+            f"✅ **Новый мастер-ключ сгенерирован!**\n\n"
+            f"🔑 Ваш ключ:\n"
+            f"`{plain_master_key}`\n\n"
+            f"⚠️ **ВАЖНО:**\n"
+            f"• Сохраните ключ в надёжном месте\n"
+            f"• Это сообщение будет показано только один раз\n"
+            f"• Старый ключ больше не работает\n\n"
+            f"Используйте этот ключ для входа в админ-панель.",
+            parse_mode="Markdown"
+        )
+    else:
+        # No key - generate first one
+        plain_master_key = admin_service.generate_master_key()
+        hashed_master_key = admin_service.hash_master_key(plain_master_key)
+        
+        # Update admin with new master key
+        admin.master_key = hashed_master_key
+        await session.commit()
+        
+        logger.warning(
+            f"[SECURITY] MASTER_KEY_CREATED via /masterkey command "
+            f"for super admin {telegram_id} (admin_id: {admin.id})"
+        )
+        
+        await message.answer(
+            f"✅ **Мастер-ключ создан!**\n\n"
+            f"🔑 Ваш ключ:\n"
+            f"`{plain_master_key}`\n\n"
+            f"⚠️ **ВАЖНО:**\n"
+            f"• Сохраните ключ в надёжном месте!\n"
+            f"• Это сообщение будет показано только один раз\n"
+            f"• Ключ необходим для входа в админ-панель\n\n"
+            f"Для входа в админку нажмите `🔧 Админка` в главном меню.",
+            parse_mode="Markdown"
+        )
 
 
 @router.message(F.text == "🔑 Управление мастер-ключом")
