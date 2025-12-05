@@ -421,3 +421,68 @@ class DepositService:
             })
 
         return stats
+
+    async def get_deposit_status_with_confirmations(
+        self, deposit_id: int
+    ) -> dict[str, Any]:
+        """
+        Get deposit status with blockchain confirmations.
+
+        Args:
+            deposit_id: Deposit ID
+
+        Returns:
+            Dict with deposit info and confirmation count:
+            - deposit: Deposit object
+            - confirmations: Current confirmations count
+            - required_confirmations: Required confirmations (12)
+            - status: Transaction status
+            - estimated_time: Estimated time remaining
+        """
+        from app.services.blockchain_service import get_blockchain_service
+
+        deposit = await self.deposit_repo.find_by_id(deposit_id)
+
+        if not deposit:
+            return {
+                "success": False,
+                "error": "Депозит не найден"
+            }
+
+        result: dict[str, Any] = {
+            "success": True,
+            "deposit": deposit,
+            "confirmations": 0,
+            "required_confirmations": 12,
+            "status": deposit.status,
+            "estimated_time": "неизвестно"
+        }
+
+        # If deposit has tx_hash and is pending, check blockchain
+        if deposit.tx_hash and deposit.status == TransactionStatus.PENDING.value:
+            try:
+                blockchain_service = get_blockchain_service()
+                tx_status = await blockchain_service.check_transaction_status(
+                    deposit.tx_hash
+                )
+
+                confirmations = tx_status.get("confirmations", 0)
+                result["confirmations"] = confirmations
+
+                # Estimate time: BSC ~3 sec/block
+                remaining_blocks = max(0, 12 - confirmations)
+                estimated_seconds = remaining_blocks * 3
+
+                if estimated_seconds < 60:
+                    result["estimated_time"] = f"~{estimated_seconds} сек"
+                else:
+                    estimated_minutes = estimated_seconds // 60
+                    result["estimated_time"] = f"~{estimated_minutes} мин"
+
+            except Exception as e:
+                logger.error(
+                    f"Failed to check confirmations for deposit {deposit_id}: {e}"
+                )
+                result["estimated_time"] = "2-5 минут"
+
+        return result

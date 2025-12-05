@@ -378,3 +378,184 @@ def contacts_choice_keyboard() -> ReplyKeyboardMarkup:
     )
 
     return builder.as_markup(resize_keyboard=True)
+
+
+def instructions_keyboard(
+    levels_status: dict[int, dict] | None = None,
+) -> ReplyKeyboardMarkup:
+    """
+    Instructions keyboard with deposit levels and detail option.
+
+    Args:
+        levels_status: Optional dict with level statuses from DepositValidationService.get_available_levels()
+
+    Returns:
+        ReplyKeyboardMarkup with instructions options
+    """
+    builder = ReplyKeyboardBuilder()
+
+    builder.row(
+        KeyboardButton(text="📖 Подробная инструкция"),
+    )
+
+    # Default amounts if statuses not provided
+    default_amounts = {1: 10, 2: 50, 3: 100, 4: 150, 5: 300}
+
+    for level in [1, 2, 3, 4, 5]:
+        if levels_status and level in levels_status:
+            level_info = levels_status[level]
+            amount = level_info["amount"]
+            status = level_info["status"]
+
+            # Build button text with status indicator
+            if status == "active":
+                button_text = f"✅ Level {level} ({amount} USDT) - Активен"
+            elif status == "available":
+                button_text = f"💰 Пополнить Level {level} ({amount} USDT)"
+            else:
+                # unavailable - show reason in button
+                error = level_info.get("error", "")
+                if "необходимо сначала купить" in error:
+                    button_text = f"🔒 Level {level} ({amount} USDT) - Нет предыдущего"
+                elif "временно недоступен" in error:
+                    button_text = f"🔒 Level {level} ({amount} USDT) - Закрыт"
+                else:
+                    button_text = f"🔒 Level {level} ({amount} USDT) - Недоступен"
+        else:
+            # Fallback to default
+            amount = default_amounts[level]
+            button_text = f"💰 Пополнить Level {level} ({amount} USDT)"
+
+        builder.row(KeyboardButton(text=button_text))
+
+    builder.row(
+        KeyboardButton(text="📊 Главное меню"),
+    )
+
+    return builder.as_markup(resize_keyboard=True)
+
+
+def earnings_dashboard_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Earnings dashboard keyboard.
+
+    Returns:
+        ReplyKeyboardMarkup with earnings dashboard options
+    """
+    builder = ReplyKeyboardBuilder()
+
+    builder.row(
+        KeyboardButton(text="💸 Вывести средства"),
+    )
+    builder.row(
+        KeyboardButton(text="📜 История операций"),
+    )
+    builder.row(
+        KeyboardButton(text="📊 Главное меню"),
+    )
+
+    return builder.as_markup(resize_keyboard=True)
+
+
+# ============================================================================
+# SUBMENU KEYBOARDS (New organized structure)
+# ============================================================================
+
+
+def finances_submenu_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Finances submenu keyboard.
+
+    Contains all financial operations:
+    - Deposit
+    - Withdrawal
+    - Balance overview
+    - Earnings dashboard
+
+    Returns:
+        ReplyKeyboardMarkup with finances options
+    """
+    builder = ReplyKeyboardBuilder()
+
+    builder.row(
+        KeyboardButton(text="💰 Депозит"),
+        KeyboardButton(text="💸 Вывод"),
+    )
+
+    builder.row(
+        KeyboardButton(text="📈 Мой заработок"),
+        KeyboardButton(text="📊 Мои средства"),
+    )
+
+    builder.row(
+        KeyboardButton(text="◀️ Назад"),
+    )
+
+    return builder.as_markup(resize_keyboard=True)
+
+
+def cabinet_submenu_keyboard() -> ReplyKeyboardMarkup:
+    """
+    User cabinet submenu keyboard.
+
+    Contains user's portfolio and reports:
+    - Active deposits
+    - Transaction history
+    - Calculator
+    - Earnings dashboard
+
+    Returns:
+        ReplyKeyboardMarkup with cabinet options
+    """
+    builder = ReplyKeyboardBuilder()
+
+    builder.row(
+        KeyboardButton(text="📦 Мои депозиты"),
+        KeyboardButton(text="📜 История операций"),
+    )
+
+    builder.row(
+        KeyboardButton(text="📊 Калькулятор"),
+        KeyboardButton(text="💰 Мой заработок"),
+    )
+
+    builder.row(
+        KeyboardButton(text="◀️ Назад"),
+    )
+
+    return builder.as_markup(resize_keyboard=True)
+
+
+def help_submenu_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Help submenu keyboard.
+
+    Contains all help and support options:
+    - FAQ
+    - Instructions
+    - Rules
+    - Support contact
+
+    Returns:
+        ReplyKeyboardMarkup with help options
+    """
+    builder = ReplyKeyboardBuilder()
+
+    builder.row(
+        KeyboardButton(text="❓ FAQ"),
+        KeyboardButton(text="📖 Инструкции"),
+    )
+
+    builder.row(
+        KeyboardButton(text="📋 Правила"),
+    )
+
+    builder.row(
+        KeyboardButton(text="✉️ Написать в поддержку"),
+    )
+
+    builder.row(
+        KeyboardButton(text="◀️ Назад"),
+    )
+
+    return builder.as_markup(resize_keyboard=True)

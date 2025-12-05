@@ -91,3 +91,55 @@ def escape_md(text: str | None) -> str:
     if not text:
         return ""
     return str(text).replace("_", "\\_").replace("*", "\\*").replace("`", "\\`").replace("[", "\\[")
+
+
+def format_deposit_status(
+    amount: Decimal | float,
+    level: int,
+    confirmations: int,
+    required_confirmations: int = 12,
+    estimated_time: str | None = None
+) -> str:
+    """
+    Format deposit status with progress bar for pending deposits.
+
+    Args:
+        amount: Deposit amount
+        level: Deposit level
+        confirmations: Current confirmations count
+        required_confirmations: Required confirmations (default: 12)
+        estimated_time: Estimated time remaining
+
+    Returns:
+        Formatted status string with progress bar
+    """
+    # Create progress bar (12 chars for 12 confirmations)
+    filled = confirmations
+    empty = required_confirmations - confirmations
+    progress_bar = "█" * filled + "░" * empty
+
+    # Determine status text
+    if confirmations == 0:
+        status_text = "Ожидание подтверждений"
+    elif confirmations < required_confirmations:
+        status_text = f"Подтверждается ({confirmations}/{required_confirmations})"
+    else:
+        status_text = "Завершено"
+
+    # Format time estimate
+    time_info = ""
+    if estimated_time:
+        time_info = f"\n\n⏱ Ожидаемое время: {estimated_time}"
+
+    text = (
+        f"⏳ **ДЕПОЗИТ В ОБРАБОТКЕ**\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n"
+        f"💰 Сумма: {format_usdt(amount)} USDT (Level {level})\n"
+        f"📋 Статус: {status_text}\n\n"
+        f"🔄 Прогресс: `{progress_bar}` {confirmations}/{required_confirmations}\n"
+        f"   ({confirmations} из {required_confirmations} подтверждений блокчейна)"
+        f"{time_info}\n"
+        f"━━━━━━━━━━━━━━━━━━━━"
+    )
+
+    return text

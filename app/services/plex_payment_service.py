@@ -360,3 +360,75 @@ class PlexPaymentService:
             f"• Существующие депозиты могут быть возвращены\n\n"
             f"Пополните баланс PLEX на кошельке для продолжения работы."
         )
+
+    async def calculate_plex_forecast(self, user_id: int) -> dict:
+        """
+        Calculate PLEX consumption forecast for user.
+
+        Calculates daily PLEX cost based on active deposits and estimates
+        how many days the current PLEX balance will last.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Dict containing:
+                - daily_plex: Daily PLEX consumption (Decimal)
+                - plex_balance: Current PLEX balance (Decimal)
+                - days_left: Days until PLEX runs out (float)
+                - warning: True if balance is critically low (bool)
+                - active_deposits_sum: Total sum of active deposits in USD (Decimal)
+                - error: Error message if unable to calculate (str | None)
+        """
+        # Get user data
+        user = await self._user_repo.get_by_id(user_id)
+        if not user or not user.wallet_address:
+            return {
+                "daily_plex": Decimal("0"),
+                "plex_balance": Decimal("0"),
+                "days_left": 0.0,
+                "warning": True,
+                "active_deposits_sum": Decimal("0"),
+                "error": "User not found or no wallet",
+            }
+
+        # Get total daily PLEX required
+        daily_plex = await self._plex_repo.get_total_daily_plex_required(user_id)
+
+        # Get active deposits to calculate total deposit amount
+        active_deposits = await self._deposit_repo.get_active_deposits(user_id)
+        active_deposits_sum = sum((d.amount for d in active_deposits), Decimal("0"))
+
+        # Get current PLEX balance
+        blockchain = get_blockchain_service()
+        plex_balance = await blockchain.get_plex_balance(user.wallet_address)
+
+        if plex_balance is None:
+            logger.error(f"Failed to get PLEX balance for forecast for user {user_id}")
+            return {
+                "daily_plex": daily_plex,
+                "plex_balance": Decimal("0"),
+                "days_left": 0.0,
+                "warning": True,
+                "active_deposits_sum": active_deposits_sum,
+                "error": "Could not verify PLEX balance. Please try again later.",
+            }
+
+        # Calculate days left
+        if daily_plex > 0:
+            days_left = float(plex_balance / daily_plex)
+        else:
+            # No active deposits - no daily cost
+            days_left = float('inf')
+
+        # Warning if less than 3 days of PLEX left
+        warning = days_left < 3.0 and daily_plex > 0
+
+        return {
+            "daily_plex": daily_plex,
+            "plex_balance": plex_balance,
+            "days_left": days_left,
+            "warning": warning,
+            "active_deposits_sum": active_deposits_sum,
+            "error": None,
+        }

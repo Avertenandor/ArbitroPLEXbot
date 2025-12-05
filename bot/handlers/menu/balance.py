@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.services.user_service import UserService
 from bot.i18n.loader import get_translator, get_user_language
+from bot.keyboards.user.menus import balance_menu_keyboard
 from bot.utils.user_loader import UserLoader
 
 router = Router()
@@ -64,4 +65,4 @@ async def show_balance(
         f"Заработано: `{balance['total_earnings']:.2f} USDT`"
     )
 
-    await message.answer(text, parse_mode="Markdown")
+    await message.answer(text, parse_mode="Markdown", reply_markup=balance_menu_keyboard())

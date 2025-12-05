@@ -14,8 +14,10 @@ from loguru import logger
 
 from app.models.user import User
 from app.services.deposit_service import DepositService
+from bot.keyboards.inline import deposit_status_keyboard
 from bot.keyboards.reply import cancel_keyboard, deposit_keyboard, main_menu_reply_keyboard
 from bot.states.deposit import DepositStates
+from bot.utils.formatters import format_deposit_status
 from bot.utils.menu_buttons import is_menu_button
 
 router = Router()
@@ -349,8 +351,8 @@ async def process_tx_hash(
 
     system_wallet = settings.system_wallet_address
 
-    # Show deposit info with payment address
-    text = (
+    # Show deposit created confirmation
+    confirmation_text = (
         f"✅ **Депозит создан!**\n\n"
         f"📦 Уровень: {level}\n"
         f"💰 Сумма: {expected_amount} USDT\n"
@@ -360,20 +362,13 @@ async def process_tx_hash(
 
     if level == 1:
         roi_cap = expected_amount * Decimal("5.0")
-        text += f"💰 ROI Cap: {roi_cap} USDT (максимум можно заработать)\n\n"
+        confirmation_text += f"💰 ROI Cap: {roi_cap} USDT (максимум можно заработать)\n\n"
 
-    text += (
-        f"📝 **Следующий шаг:**\n"
-        f"Отправьте {expected_amount} USDT на адрес:\n"
-        f"`{system_wallet}`\n\n"
-        f"🌐 **Сеть:** BSC (BEP-20)\n"
-        f"⚠️ **ВАЖНО:**\n"
-        f"• Используйте личный кошелек (MetaMask, Trust Wallet, SafePal, Ledger)\n"
-        f"• 🚫 Не используйте внутренние переводы бирж\n\n"
-        f"⏱ После отправки депозит будет автоматически активирован "
-        f"после подтверждения транзакции (обычно 1-3 минуты).\n\n"
+    confirmation_text += (
         f"📊 **Проверить транзакцию:**\n"
-        f"https://bscscan.com/tx/{tx_hash}"
+        f"https://bscscan.com/tx/{tx_hash}\n\n"
+        f"⏱ Депозит будет автоматически активирован "
+        f"после подтверждения транзакции (обычно 2-5 минут)."
     )
 
     is_admin = data.get("is_admin", False)
@@ -392,10 +387,47 @@ async def process_tx_hash(
         blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
 
     await message.answer(
-        text,
+        confirmation_text,
         parse_mode="Markdown",
         reply_markup=main_menu_reply_keyboard(
             user=user, blacklist_entry=blacklist_entry, is_admin=is_admin
         ),
     )
+
+    # Get deposit status with confirmations
+    deposit_service_for_status = None
+    if session_factory:
+        async with session_factory() as fresh_session:
+            async with fresh_session.begin():
+                deposit_service_for_status = DepositService(fresh_session)
+                status_info = await deposit_service_for_status.get_deposit_status_with_confirmations(
+                    deposit.id
+                )
+    else:
+        session = data.get("session")
+        if session:
+            deposit_service_for_status = DepositService(session)
+            status_info = await deposit_service_for_status.get_deposit_status_with_confirmations(
+                deposit.id
+            )
+
+    # Show deposit status with progress bar
+    if status_info and status_info.get("success"):
+        confirmations = status_info.get("confirmations", 0)
+        estimated_time = status_info.get("estimated_time", "2-5 минут")
+
+        status_text = format_deposit_status(
+            amount=expected_amount,
+            level=level,
+            confirmations=confirmations,
+            required_confirmations=12,
+            estimated_time=estimated_time
+        )
+
+        await message.answer(
+            status_text,
+            parse_mode="Markdown",
+            reply_markup=deposit_status_keyboard(deposit.id)
+        )
+
     await state.clear()
