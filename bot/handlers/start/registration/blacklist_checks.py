@@ -8,7 +8,7 @@ from loguru import logger
 from sqlalchemy.exc import DatabaseError, InterfaceError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.blacklist import BlacklistActionType, BlacklistEntry
+from app.models.blacklist import Blacklist, BlacklistActionType
 from app.repositories.blacklist_repository import BlacklistRepository
 from app.services.blacklist_service import BlacklistService
 
@@ -83,7 +83,7 @@ async def check_wallet_blacklist(
 async def get_blacklist_entry(
     telegram_id: int,
     session: AsyncSession | None,
-) -> BlacklistEntry | None:
+) -> Blacklist | None:
     """
     Get blacklist entry for user.
 
@@ -92,7 +92,7 @@ async def get_blacklist_entry(
         session: Database session (optional)
 
     Returns:
-        BlacklistEntry if found, None otherwise
+        Blacklist entry if found, None otherwise
     """
     if not session:
         return None
