@@ -125,7 +125,7 @@ class SessionMiddleware(BaseMiddleware):
                 # Also allow registration states for new users completing registration
                 registration_state_names = {
                     RegistrationStates.waiting_for_financial_password.state,
-                    RegistrationStates.waiting_for_password_confirm.state,
+                    RegistrationStates.waiting_for_password_confirmation.state,
                 }
                 
                 if current_state in auth_state_names:
