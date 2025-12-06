@@ -205,13 +205,38 @@ async def _check_payment_logic(
 
                 await db_session.commit()
             else:
-                # No DB user context, just let them in
-                await send(f"{ECOSYSTEM_INFO}", parse_mode="Markdown", disable_web_page_preview=True)
-                await state.clear()
-                await send(
-                    "Нажмите кнопку для начала работы:",
-                    reply_markup=auth_continue_keyboard()
+                # No DB user - NEW USER! Need to complete registration
+                # Save wallet to state and redirect to financial password input
+                state_data = await state.get_data()
+                wallet = state_data.get("auth_wallet")
+                referrer_arg = state_data.get("pending_referrer_arg")
+                
+                logger.info(
+                    f"[AUTH] New user {event.from_user.id} paid PLEX successfully. "
+                    f"Redirecting to registration. Wallet: {mask_address(wallet)}"
                 )
+                
+                # Import registration states and messages
+                from bot.states.registration import RegistrationStates
+                from bot.handlers.start.registration import messages
+                
+                # Save wallet address for registration
+                await state.update_data(
+                    wallet_address=wallet,
+                    referrer_telegram_id=referrer_arg,
+                    plex_payment_verified=True,
+                    plex_tx_hash=result.get("tx_hash"),
+                )
+                
+                # Ask for financial password to complete registration
+                await send(
+                    "✅ **Оплата подтверждена!**\n\n"
+                    "Для завершения регистрации создайте финансовый пароль.\n\n"
+                    f"{messages.WALLET_ACCEPTED}",
+                    parse_mode="Markdown",
+                )
+                
+                await state.set_state(RegistrationStates.waiting_for_financial_password)
 
         else:
             await send(
