@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import (
     DECIMAL,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Integer,
@@ -36,6 +37,11 @@ class DepositLevelVersion(Base):
     """
 
     __tablename__ = "deposit_level_versions"
+
+    __table_args__ = (
+        CheckConstraint("level_number >= 0 AND level_number <= 5", name="ck_deposit_level_version_level_number"),
+        CheckConstraint("version >= 1", name="ck_deposit_level_version_version"),
+    )
 
     # Primary key
     id: Mapped[int] = mapped_column(

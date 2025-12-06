@@ -14,9 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from bot.keyboards.reply import (
-    deposit_keyboard,
     main_menu_reply_keyboard,
 )
+from bot.keyboards.user.menus.main_menu import help_submenu_keyboard
 
 router = Router()
 
@@ -141,18 +141,10 @@ async def show_instructions(
         f"Level 5: {settings.deposit_level_5} USDT"
     )
 
-    # Get actual level statuses for deposit keyboard
-    from app.services.deposit_validation_service import DepositValidationService
-
-    validation_service = DepositValidationService(session)
-    levels_status = await validation_service.get_available_levels(user.id)
-
-    from bot.keyboards.reply import instructions_keyboard
-
     await message.answer(
         short_instructions_text,
         parse_mode="Markdown",
-        reply_markup=instructions_keyboard(levels_status=levels_status),
+        reply_markup=help_submenu_keyboard(),
     )
 
 
@@ -234,14 +226,8 @@ async def show_detailed_instructions(
         f"BSCScan: https://bscscan.com/address/{settings.system_wallet_address}"
     )
 
-    # Get actual level statuses for deposit keyboard
-    from app.services.deposit_validation_service import DepositValidationService
-
-    validation_service = DepositValidationService(session)
-    levels_status = await validation_service.get_available_levels(user.id)
-
     await message.answer(
         detailed_instructions_text,
         parse_mode="Markdown",
-        reply_markup=deposit_keyboard(levels_status=levels_status),
+        reply_markup=help_submenu_keyboard(),
     )

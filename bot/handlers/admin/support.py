@@ -249,7 +249,6 @@ async def show_ticket_details(
     status_text = {
         SupportTicketStatus.OPEN.value: "🟡 Открыто",
         SupportTicketStatus.IN_PROGRESS.value: "🔵 В работе",
-        SupportTicketStatus.ANSWERED.value: "🟢 Отвечено",
         SupportTicketStatus.WAITING_USER.value: "⏳ Ожидает ответа",
         SupportTicketStatus.CLOSED.value: "⚫ Закрыто",
     }.get(ticket.status, ticket.status)

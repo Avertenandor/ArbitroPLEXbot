@@ -82,6 +82,7 @@ def register_user_handlers(dp: Dispatcher) -> None:
 def register_admin_handlers(dp: Dispatcher) -> None:
     """Register all admin handlers with authentication middleware."""
     from bot.handlers.admin import (
+        action_logs,
         admins,
         blacklist,
         blockchain_settings,
@@ -141,6 +142,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
         user_messages,
         emergency,
         inquiries,
+        action_logs,
     ])
 
     dp.include_router(wallet_key_setup.router)
@@ -165,6 +167,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
     dp.include_router(user_messages.router)
     dp.include_router(emergency.router)  # R17-3: Emergency stop controls
     dp.include_router(inquiries.router)
+    dp.include_router(action_logs.router)  # Admin action logs viewer
 
     # Admin referral stats handler
     referral_stats.router.message.middleware(admin_auth_middleware)

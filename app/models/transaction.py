@@ -107,17 +107,17 @@ class Transaction(Base):
         String(255), nullable=True
     )  # Recipient address (for withdrawals)
 
-    # Timestamps (stored as naive UTC in DB: TIMESTAMP WITHOUT TIME ZONE)
+    # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=lambda: datetime.now(UTC).replace(tzinfo=None),
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
         nullable=False,
         index=True,
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=lambda: datetime.now(UTC).replace(tzinfo=None),
-        onupdate=lambda: datetime.now(UTC).replace(tzinfo=None),
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 

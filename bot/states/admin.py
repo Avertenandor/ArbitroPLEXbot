@@ -78,9 +78,9 @@ class AdminSupportStates(StatesGroup):
 
     viewing_list = State()  # Viewing list of tickets
     viewing_ticket = State()  # Viewing specific ticket
-    answering_ticket = State()  # Answering a ticket
-    confirming_close = State()  # Confirming ticket closure
-    confirming_reopen = State()  # Confirming ticket reopen
+    answering_ticket = State()  # DEPRECATED - functionality moved to inline actions
+    confirming_close = State()  # DEPRECATED - functionality moved to inline actions
+    confirming_reopen = State()  # DEPRECATED - functionality moved to inline actions
 
 
 class AdminFinpassRecoveryStates(StatesGroup):

@@ -209,7 +209,7 @@ class User(Base):
         nullable=False
     )
     last_active: Mapped[datetime | None] = mapped_column(
-        DateTime, nullable=True
+        DateTime(timezone=True), nullable=True
     )
 
     # Relationships
