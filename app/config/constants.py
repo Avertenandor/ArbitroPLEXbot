@@ -14,6 +14,7 @@ BLOCKCHAIN_EXECUTOR_TIMEOUT = 60.0  # Timeout for run_in_executor operations
 
 # Telegram bot timeouts (in seconds)
 TELEGRAM_TIMEOUT = 10.0  # Telegram API operations timeout
+TELEGRAM_VIDEO_TIMEOUT = 60.0  # Video/document upload timeout (larger files)
 
 # Telegram rate limiting (in seconds)
 # Telegram has ~30 msg/sec limit, but we keep a safety buffer

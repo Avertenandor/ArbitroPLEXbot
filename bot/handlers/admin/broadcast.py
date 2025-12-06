@@ -137,10 +137,28 @@ async def handle_broadcast_message(
         broadcast_data["type"] = "audio"
         broadcast_data["file_id"] = message.audio.file_id
         broadcast_data["caption"] = message.caption
+    elif message.video:
+        broadcast_data["type"] = "video"
+        broadcast_data["file_id"] = message.video.file_id
+        broadcast_data["caption"] = message.caption
+    elif message.video_note:
+        broadcast_data["type"] = "video_note"
+        broadcast_data["file_id"] = message.video_note.file_id
+    elif message.document:
+        broadcast_data["type"] = "document"
+        broadcast_data["file_id"] = message.document.file_id
+        broadcast_data["caption"] = message.caption
+    elif message.animation:
+        broadcast_data["type"] = "animation"
+        broadcast_data["file_id"] = message.animation.file_id
+        broadcast_data["caption"] = message.caption
+    elif message.sticker:
+        broadcast_data["type"] = "sticker"
+        broadcast_data["file_id"] = message.sticker.file_id
     else:
         await message.reply(
             "❌ Неподдерживаемый тип сообщения. "
-            "Используйте текст, фото, голосовое или аудио."
+            "Используйте текст, фото, видео, голосовое, аудио, документ или стикер."
         )
         return
 

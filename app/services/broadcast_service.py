@@ -17,6 +17,7 @@ from app.config.constants import (
     TELEGRAM_BATCH_DELAY,
     TELEGRAM_BATCH_SIZE,
     TELEGRAM_TIMEOUT,
+    TELEGRAM_VIDEO_TIMEOUT,
 )
 from app.services.user_service import UserService
 from app.utils.datetime_utils import utc_now
@@ -273,6 +274,57 @@ class BroadcastService:
                         file_id,
                         caption=caption,
                         parse_mode="Markdown" if caption else None,
+                        reply_markup=reply_markup,
+                    ),
+                    timeout=TELEGRAM_TIMEOUT,
+                )
+            elif broadcast_type == "video":
+                await asyncio.wait_for(
+                    self.bot.send_video(
+                        telegram_id,
+                        file_id,
+                        caption=caption,
+                        parse_mode="Markdown" if caption else None,
+                        reply_markup=reply_markup,
+                    ),
+                    timeout=TELEGRAM_VIDEO_TIMEOUT,
+                )
+            elif broadcast_type == "video_note":
+                await asyncio.wait_for(
+                    self.bot.send_video_note(
+                        telegram_id,
+                        file_id,
+                        reply_markup=reply_markup,
+                    ),
+                    timeout=TELEGRAM_VIDEO_TIMEOUT,
+                )
+            elif broadcast_type == "document":
+                await asyncio.wait_for(
+                    self.bot.send_document(
+                        telegram_id,
+                        file_id,
+                        caption=caption,
+                        parse_mode="Markdown" if caption else None,
+                        reply_markup=reply_markup,
+                    ),
+                    timeout=TELEGRAM_VIDEO_TIMEOUT,
+                )
+            elif broadcast_type == "animation":
+                await asyncio.wait_for(
+                    self.bot.send_animation(
+                        telegram_id,
+                        file_id,
+                        caption=caption,
+                        parse_mode="Markdown" if caption else None,
+                        reply_markup=reply_markup,
+                    ),
+                    timeout=TELEGRAM_VIDEO_TIMEOUT,
+                )
+            elif broadcast_type == "sticker":
+                await asyncio.wait_for(
+                    self.bot.send_sticker(
+                        telegram_id,
+                        file_id,
                         reply_markup=reply_markup,
                     ),
                     timeout=TELEGRAM_TIMEOUT,
