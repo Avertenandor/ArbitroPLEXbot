@@ -48,6 +48,30 @@ class UserRepository(BaseRepository[User]):
         """
         return await self.get_by(wallet_address=wallet_address)
 
+    async def find_by_wallet_address(
+        self, wallet_address: str
+    ) -> User | None:
+        """
+        Find user by wallet address (case-insensitive).
+
+        Normalizes the address to lowercase before searching.
+
+        Args:
+            wallet_address: Wallet address (any case)
+
+        Returns:
+            User or None
+        """
+        if not wallet_address:
+            return None
+        # Try exact match first
+        normalized = wallet_address.lower()
+        result = await self.get_by(wallet_address=normalized)
+        if result:
+            return result
+        # Try original case
+        return await self.get_by(wallet_address=wallet_address)
+
     async def get_by_referral_code(
         self, referral_code: str
     ) -> User | None:

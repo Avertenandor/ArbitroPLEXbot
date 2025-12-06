@@ -14,6 +14,10 @@ from app.models.base import Base
 
 # Security Models
 from app.models.blacklist import Blacklist
+
+# Blockchain Cache
+from app.models.blockchain_tx_cache import BlockchainTxCache
+
 from app.models.deposit import Deposit
 from app.models.deposit_corridor_history import DepositCorridorHistory
 from app.models.deposit_level_config import DepositLevelConfig

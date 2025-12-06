@@ -2,7 +2,7 @@
 Deposit Scan Service.
 
 Scans blockchain for user deposits (USDT transfers to system wallet).
-Used for automatic deposit detection at authorization and periodic updates.
+Uses cached transactions first, then scans blockchain for new data.
 """
 
 from datetime import UTC, datetime
@@ -22,6 +22,10 @@ class DepositScanService:
     """
     Service for scanning and tracking user deposits from blockchain.
 
+    Uses a two-tier approach:
+    1. First check cached transactions in database
+    2. If insufficient, scan blockchain and cache new transactions
+
     Responsibilities:
     - Scan USDT transfers from user wallet to system wallet
     - Update user's total_deposited_usdt and is_active_depositor
@@ -36,9 +40,11 @@ class DepositScanService:
 
     async def scan_user_deposits(self, user_id: int) -> dict:
         """
-        Scan blockchain for user's USDT deposits to system wallet.
+        Scan for user's USDT deposits to system wallet.
 
-        Updates user's deposit tracking fields in database.
+        Uses cache-first strategy:
+        1. Check cached transactions in database
+        2. If needed, scan blockchain and update cache
 
         Args:
             user_id: User ID
@@ -50,6 +56,7 @@ class DepositScanService:
             - tx_count: int
             - is_active: bool (>= 30 USDT)
             - required_plex: Decimal
+            - from_cache: bool
             - error: str (if failed)
         """
         user = await self._user_repo.get_by_id(user_id)
@@ -65,12 +72,61 @@ class DepositScanService:
                 "error": "User has no wallet address",
             }
 
+        # Try cache first
+        try:
+            from app.services.blockchain_tx_cache_service import BlockchainTxCacheService
+
+            cache_service = BlockchainTxCacheService(self._session)
+            cached_result = await cache_service.get_cached_deposits(
+                user_wallet=user.wallet_address,
+                token_type="USDT",
+            )
+
+            if cached_result.get("success") and cached_result.get("tx_count", 0) > 0:
+                total_amount = cached_result.get("total_amount", Decimal("0"))
+
+                # If we have enough from cache, use it
+                if total_amount >= MINIMUM_DEPOSIT_USDT:
+                    tx_count = cached_result.get("tx_count", 0)
+                    is_active = True
+                    required_plex = total_amount * Decimal("10")
+
+                    # Update user in database
+                    now = datetime.now(UTC)
+                    user.total_deposited_usdt = total_amount
+                    user.is_active_depositor = is_active
+                    user.last_deposit_scan_at = now
+                    user.deposit_tx_count = tx_count
+
+                    await self._session.flush()
+
+                    logger.info(
+                        f"[CACHE HIT] Deposit data for user {user_id}: "
+                        f"total={total_amount} USDT, txs={tx_count}"
+                    )
+
+                    return {
+                        "success": True,
+                        "total_amount": total_amount,
+                        "tx_count": tx_count,
+                        "is_active": is_active,
+                        "required_plex": required_plex,
+                        "transactions": cached_result.get("transactions", []),
+                        "from_cache": True,
+                    }
+
+        except ImportError:
+            logger.debug("Cache service not available, falling back to blockchain")
+        except Exception as cache_error:
+            logger.warning(f"Cache lookup failed: {cache_error}, falling back to blockchain")
+
+        # Fall back to blockchain scan
         blockchain = get_blockchain_service()
 
-        # Scan blockchain for deposits
+        # Scan blockchain for deposits (with smaller block range)
         scan_result = await blockchain.get_user_usdt_deposits(
             user_wallet=user.wallet_address,
-            max_blocks=100000,  # ~3.5 days on BSC
+            max_blocks=50000,  # Reduced from 100000 to avoid RPC limits
         )
 
         if not scan_result.get("success"):
@@ -88,6 +144,33 @@ class DepositScanService:
         is_active = total_amount >= MINIMUM_DEPOSIT_USDT
         required_plex = total_amount * Decimal("10")  # 10 PLEX per dollar per day
 
+        # Cache the transactions we found
+        try:
+            from app.services.blockchain_tx_cache_service import BlockchainTxCacheService
+            from app.repositories.blockchain_tx_cache_repository import BlockchainTxCacheRepository
+            from app.config.settings import settings
+
+            cache_repo = BlockchainTxCacheRepository(self._session)
+
+            for tx in scan_result.get("transactions", []):
+                await cache_repo.cache_transaction(
+                    tx_hash=tx.get("tx_hash", ""),
+                    block_number=tx.get("block", 0),
+                    from_address=user.wallet_address,
+                    to_address=settings.system_wallet_address or "",
+                    token_type="USDT",
+                    token_address=settings.usdt_contract_address,
+                    amount=tx.get("amount", Decimal("0")),
+                    direction="incoming",
+                    user_id=user_id,
+                )
+
+            await self._session.commit()
+            logger.info(f"[CACHE UPDATE] Cached {tx_count} transactions for user {user_id}")
+
+        except Exception as cache_error:
+            logger.warning(f"Failed to cache transactions: {cache_error}")
+
         # Update user in database
         now = datetime.now(UTC)
         user.total_deposited_usdt = total_amount
@@ -98,7 +181,7 @@ class DepositScanService:
         await self._session.flush()
 
         logger.info(
-            f"Deposit scan completed for user {user_id}: "
+            f"[BLOCKCHAIN] Deposit scan for user {user_id}: "
             f"total={total_amount} USDT, txs={tx_count}, active={is_active}"
         )
 
@@ -109,6 +192,7 @@ class DepositScanService:
             "is_active": is_active,
             "required_plex": required_plex,
             "transactions": scan_result.get("transactions", []),
+            "from_cache": False,
         }
 
     async def check_minimum_deposit(self, user_id: int) -> dict:

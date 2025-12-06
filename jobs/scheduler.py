@@ -55,6 +55,9 @@ from app.tasks.reward_accrual_task import run_individual_reward_accrual
 from jobs.tasks.admin_session_cleanup import (
     cleanup_expired_admin_sessions,
 )
+from jobs.tasks.blockchain_tx_cache_scan import (
+    scan_and_cache_blockchain_transactions,
+)
 from jobs.tasks.daily_rewards import process_daily_rewards
 from jobs.tasks.deposit_monitoring import monitor_deposits
 from jobs.tasks.deposit_scan_task import scan_all_user_deposits
@@ -156,6 +159,16 @@ def create_scheduler() -> AsyncIOScheduler:
         trigger=IntervalTrigger(hours=1),
         id="balance_notifications",
         name="Hourly Balance Notifications",
+        replace_existing=True,
+    )
+
+    # Blockchain TX Cache scan - every 5 minutes
+    # Caches blockchain transactions to reduce RPC calls
+    scheduler.add_job(
+        scan_and_cache_blockchain_transactions,
+        trigger=IntervalTrigger(minutes=5),
+        id="blockchain_tx_cache_scan",
+        name="Blockchain Transaction Cache Scan",
         replace_existing=True,
     )
 
