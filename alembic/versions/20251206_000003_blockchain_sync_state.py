@@ -1,7 +1,7 @@
 """create blockchain_sync_state table
 
-Revision ID: 20251206_create_blockchain_sync_state
-Revises: 
+Revision ID: 20251206_000003
+Revises: 20251206_000002
 Create Date: 2025-12-06
 
 """
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = '20251206_create_blockchain_sync_state'
+revision: str = '20251206_000003'
 down_revision: Union[str, None] = '20251206_000002'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
