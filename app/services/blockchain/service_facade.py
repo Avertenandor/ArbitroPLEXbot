@@ -122,10 +122,13 @@ class BlockchainService:
         )
 
         # Initialize Payment Verifier
+        # NOTE: Using system_wallet_address for USDT deposits (not auth_system_wallet_address)
+        # auth_system_wallet_address is for PLEX authentication payments
+        # system_wallet_address is the address shown to users for USDT deposits
         self.payment_verifier = PaymentVerifier(
             self.usdt_contract_address,
             settings.auth_plex_token_address,
-            settings.auth_system_wallet_address,
+            settings.system_wallet_address,  # Fixed: use deposit wallet, not auth wallet
         )
 
         # Initialize Block Operations
@@ -135,12 +138,23 @@ class BlockchainService:
             self.async_executor._executor,
         )
 
+        # Log wallet configuration for diagnostics
+        if settings.system_wallet_address != settings.auth_system_wallet_address:
+            logger.warning(
+                f"⚠️ Different wallet addresses configured:\n"
+                f"  USDT Deposits (system_wallet): {settings.system_wallet_address}\n"
+                f"  PLEX Auth (auth_system_wallet): {settings.auth_system_wallet_address}\n"
+                f"  Make sure users are sending USDT to: {settings.system_wallet_address}"
+            )
+
         logger.success(
             f"BlockchainService initialized successfully\n"
             f"  Active Provider: {self.provider_manager.active_provider_name}\n"
             f"  Providers: {list(self.provider_manager.providers.keys())}\n"
             f"  USDT Contract: {self.usdt_contract_address}\n"
-            f"  Wallet: {mask_address(self.wallet_address) if self.wallet_address else 'Not configured'}"
+            f"  USDT Deposit Wallet: {settings.system_wallet_address}\n"
+            f"  PLEX Auth Wallet: {settings.auth_system_wallet_address}\n"
+            f"  Payout Wallet: {mask_address(self.wallet_address) if self.wallet_address else 'Not configured'}"
         )
 
     # ========== Properties for backward compatibility ==========

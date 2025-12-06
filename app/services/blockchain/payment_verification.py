@@ -203,9 +203,14 @@ class PaymentVerifier:
 
             contract = w3.eth.contract(address=usdt_address, abi=USDT_ABI)
 
+            # Detailed logging for diagnostics
             logger.info(
-                f"[USDT Scan] Scanning {max_blocks} blocks in chunks of {chunk_size} "
-                f"for {mask_address(user_wallet)}"
+                f"[USDT Scan] Starting deposit scan:\n"
+                f"  User wallet (sender): {sender}\n"
+                f"  System wallet (receiver): {receiver}\n"
+                f"  USDT contract: {usdt_address}\n"
+                f"  Block range: {from_block} - {latest} ({max_blocks} blocks)\n"
+                f"  Chunk size: {chunk_size}"
             )
 
             transactions = []
@@ -260,10 +265,26 @@ class PaymentVerifier:
                 'success': True,
             }
 
-            logger.info(
-                f"[USDT Scan] Complete for {mask_address(user_wallet)}: "
-                f"found {result['tx_count']} txs, total {result['total_amount']} USDT"
-            )
+            # Detailed result logging
+            if result['tx_count'] > 0:
+                logger.success(
+                    f"[USDT Scan] Found deposits for {mask_address(user_wallet)}:\n"
+                    f"  Total amount: {result['total_amount']} USDT\n"
+                    f"  Transactions: {result['tx_count']}\n"
+                    f"  Block range scanned: {from_block} - {latest}"
+                )
+                for tx in transactions:
+                    logger.info(
+                        f"  -> TX: {tx['tx_hash'][:16]}..., "
+                        f"Amount: {tx['amount']} USDT, Block: {tx['block']}"
+                    )
+            else:
+                logger.warning(
+                    f"[USDT Scan] No deposits found for {mask_address(user_wallet)}:\n"
+                    f"  Searched from={sender} to={receiver}\n"
+                    f"  Block range: {from_block} - {latest}\n"
+                    f"  Verify user sent USDT to correct address: {receiver}"
+                )
 
             return result
 

@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     rpc_nodereal_http: str | None = None
     rpc_nodereal_wss: str | None = None
 
+    # NodeReal2 Endpoints (Backup node)
+    rpc_nodereal2_http: str | None = None
+    rpc_nodereal2_wss: str | None = None
+
     # Pay-to-Use Authorization
     auth_plex_token_address: str
     auth_system_wallet_address: str
@@ -265,6 +269,24 @@ class Settings(BaseSettings):
                 raise ValueError(
                     'AUTH_SYSTEM_WALLET_ADDRESS is required in production. '
                     'Set the system wallet address in .env file.'
+                )
+
+            # Validate system_wallet_address for deposits is set
+            if not self.system_wallet_address:
+                raise ValueError(
+                    'SYSTEM_WALLET_ADDRESS is required in production. '
+                    'Set the deposit wallet address in .env file.'
+                )
+
+            # Warn if system_wallet_address differs from auth_system_wallet_address
+            if self.system_wallet_address.lower() != self.auth_system_wallet_address.lower():
+                # This is not an error - they can be different intentionally
+                # But we log it for awareness
+                import logging
+                logging.warning(
+                    f"SYSTEM_WALLET_ADDRESS ({self.system_wallet_address}) differs from "
+                    f"AUTH_SYSTEM_WALLET_ADDRESS ({self.auth_system_wallet_address}). "
+                    f"USDT deposits will be scanned to: {self.system_wallet_address}"
                 )
 
             # Validate PLEX token address is set

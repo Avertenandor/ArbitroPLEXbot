@@ -101,10 +101,10 @@ async def handle_rescan_deposits_reply(
     await message.answer(_('deposit.scanning'))
 
     scan_service = DepositScanService(session)
-    scan_result = await scan_service.scan_and_update_user_deposits(user.id)
+    scan_result = await scan_service.scan_and_validate(user.id)
 
     is_valid = scan_result.get("is_valid", False)
-    total_deposit = scan_result.get("total_deposit", 0)
+    total_deposit = scan_result.get("total_amount", 0)  # Fixed: correct key name
     required_plex = scan_result.get("required_plex", 0)
 
     if is_valid:

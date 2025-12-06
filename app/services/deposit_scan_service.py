@@ -61,16 +61,23 @@ class DepositScanService:
         """
         user = await self._user_repo.get_by_id(user_id)
         if not user:
+            logger.warning(f"[Deposit Scan] User {user_id} not found")
             return {
                 "success": False,
                 "error": "User not found",
             }
 
         if not user.wallet_address:
+            logger.warning(f"[Deposit Scan] User {user_id} has no wallet address")
             return {
                 "success": False,
                 "error": "User has no wallet address",
             }
+
+        logger.info(
+            f"[Deposit Scan] Starting scan for user {user_id}, "
+            f"wallet: {user.wallet_address}"
+        )
 
         # Try cache first
         try:
