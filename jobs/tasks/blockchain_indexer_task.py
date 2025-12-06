@@ -39,7 +39,7 @@ async def run_blockchain_indexer() -> dict:
             from app.services.blockchain_service import get_blockchain_service
 
             blockchain_service = get_blockchain_service()
-            w3 = blockchain_service.w3
+            w3 = blockchain_service.get_active_web3()
 
             if not w3:
                 logger.warning("[Indexer Task] Web3 not available")
@@ -117,7 +117,7 @@ async def index_user_on_registration(
             from app.services.blockchain_service import get_blockchain_service
 
             blockchain_service = get_blockchain_service()
-            w3 = blockchain_service.w3
+            w3 = blockchain_service.get_active_web3()
 
             if not w3:
                 return {"success": False, "error": "Web3 not available"}
@@ -147,7 +147,7 @@ async def get_indexer_statistics() -> dict:
             from app.services.blockchain_service import get_blockchain_service
 
             blockchain_service = get_blockchain_service()
-            w3 = blockchain_service.w3
+            w3 = blockchain_service.get_active_web3()
 
             if not w3:
                 return {"error": "Web3 not available"}

@@ -45,7 +45,7 @@ async def scan_and_cache_blockchain_transactions() -> dict:
             from app.services.blockchain_service import get_blockchain_service
 
             blockchain_service = get_blockchain_service()
-            w3 = blockchain_service.w3
+            w3 = blockchain_service.get_active_web3()
 
             if not w3:
                 logger.warning("[TX Cache Task] Web3 not available, skipping scan")
