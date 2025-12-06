@@ -28,7 +28,12 @@ def deposit_menu_keyboard(
     # Default amounts if statuses not provided
     default_amounts = {1: 10, 2: 50, 3: 100, 4: 150, 5: 300}
 
+    # Level emoji mapping
+    level_emojis = {1: "💰", 2: "💎", 3: "🏆", 4: "👑", 5: "🚀"}
+
     for level in [1, 2, 3, 4, 5]:
+        emoji = level_emojis[level]
+
         if levels_status and level in levels_status:
             level_info = levels_status[level]
             amount = level_info["amount"]
@@ -37,25 +42,28 @@ def deposit_menu_keyboard(
 
             # Build button text with status indicator
             if status == "active":
-                button_text = f"✅ Level {level} ({amount} USDT) - Активен"
+                button_text = f"✅ {emoji} Уровень {level} ({amount} USDT) - Активен"
             elif status == "available":
-                button_text = f"💰 Пополнить Level {level} ({amount} USDT)"
+                button_text = f"{emoji} Уровень {level} ({amount} USDT)"
             else:
                 # unavailable - show reason in button
                 error = level_info.get("error", "")
                 if "необходимо сначала купить" in error:
-                    button_text = f"🔒 Level {level} ({amount} USDT) - Нет предыдущего"
+                    button_text = f"🔒 {emoji} Уровень {level} ({amount} USDT) - Нет предыдущего"
                 elif "временно недоступен" in error:
-                    button_text = f"🔒 Level {level} ({amount} USDT) - Закрыт"
+                    button_text = f"🔒 {emoji} Уровень {level} ({amount} USDT) - Закрыт"
                 else:
-                    button_text = f"🔒 Level {level} ({amount} USDT) - Недоступен"
+                    button_text = f"🔒 {emoji} Уровень {level} ({amount} USDT) - Недоступен"
         else:
             # Fallback to default
             amount = default_amounts[level]
-            button_text = f"💰 Пополнить Level {level} ({amount} USDT)"
+            button_text = f"{emoji} Уровень {level} ({amount} USDT)"
 
         builder.row(KeyboardButton(text=button_text))
 
+    builder.row(
+        KeyboardButton(text="◀️ Назад"),
+    )
     builder.row(
         KeyboardButton(text="📊 Главное меню"),
     )
@@ -84,7 +92,12 @@ def instructions_keyboard(
     # Default amounts if statuses not provided
     default_amounts = {1: 10, 2: 50, 3: 100, 4: 150, 5: 300}
 
+    # Level emoji mapping
+    level_emojis = {1: "💰", 2: "💎", 3: "🏆", 4: "👑", 5: "🚀"}
+
     for level in [1, 2, 3, 4, 5]:
+        emoji = level_emojis[level]
+
         if levels_status and level in levels_status:
             level_info = levels_status[level]
             amount = level_info["amount"]
@@ -92,25 +105,28 @@ def instructions_keyboard(
 
             # Build button text with status indicator
             if status == "active":
-                button_text = f"✅ Level {level} ({amount} USDT) - Активен"
+                button_text = f"✅ {emoji} Уровень {level} ({amount} USDT) - Активен"
             elif status == "available":
-                button_text = f"💰 Пополнить Level {level} ({amount} USDT)"
+                button_text = f"{emoji} Уровень {level} ({amount} USDT)"
             else:
                 # unavailable - show reason in button
                 error = level_info.get("error", "")
                 if "необходимо сначала купить" in error:
-                    button_text = f"🔒 Level {level} ({amount} USDT) - Нет предыдущего"
+                    button_text = f"🔒 {emoji} Уровень {level} ({amount} USDT) - Нет предыдущего"
                 elif "временно недоступен" in error:
-                    button_text = f"🔒 Level {level} ({amount} USDT) - Закрыт"
+                    button_text = f"🔒 {emoji} Уровень {level} ({amount} USDT) - Закрыт"
                 else:
-                    button_text = f"🔒 Level {level} ({amount} USDT) - Недоступен"
+                    button_text = f"🔒 {emoji} Уровень {level} ({amount} USDT) - Недоступен"
         else:
             # Fallback to default
             amount = default_amounts[level]
-            button_text = f"💰 Пополнить Level {level} ({amount} USDT)"
+            button_text = f"{emoji} Уровень {level} ({amount} USDT)"
 
         builder.row(KeyboardButton(text=button_text))
 
+    builder.row(
+        KeyboardButton(text="◀️ Назад"),
+    )
     builder.row(
         KeyboardButton(text="📊 Главное меню"),
     )
@@ -163,5 +179,6 @@ def deposit_levels_keyboard(levels_status: dict | None = None) -> ReplyKeyboardM
 
         builder.row(KeyboardButton(text=text))
 
+    builder.row(KeyboardButton(text="◀️ Назад"))
     builder.row(KeyboardButton(text="📊 Главное меню"))
     return builder.as_markup(resize_keyboard=True)

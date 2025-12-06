@@ -21,7 +21,7 @@ def deposit_status_keyboard(deposit_id: int) -> InlineKeyboardMarkup:
     builder.row(
         InlineKeyboardButton(
             text="🔄 Обновить статус",
-            callback_data=f"deposit_refresh_{deposit_id}"
+            callback_data=f"refresh_deposit_{deposit_id}"
         )
     )
     

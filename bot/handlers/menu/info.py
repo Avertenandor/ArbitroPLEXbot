@@ -18,6 +18,7 @@ from app.models.user import User
 from app.repositories.blacklist_repository import BlacklistRepository
 from bot.constants.rules import RULES_BRIEF_VERSION, RULES_FULL_TEXT
 from bot.keyboards.reply import main_menu_reply_keyboard
+from bot.keyboards.user.menus.main_menu import help_submenu_keyboard
 
 router = Router()
 
@@ -112,10 +113,8 @@ async def show_rules(
 
     # Send back button with reply keyboard
     await message.answer(
-        "⬅️ Для возврата в главное меню:",
-        reply_markup=main_menu_reply_keyboard(
-            user=user, blacklist_entry=blacklist_entry, is_admin=is_admin
-        ),
+        "⬅️ Для возврата в меню помощи:",
+        reply_markup=help_submenu_keyboard(),
     )
 
 

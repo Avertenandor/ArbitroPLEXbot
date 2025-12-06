@@ -19,7 +19,7 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
 
     builder.row(
         KeyboardButton(text="💰 Финансы"),
-        KeyboardButton(text="🏦 Кабинет"),
+        KeyboardButton(text="📊 Мой кабинет"),
     )
 
     builder.row(

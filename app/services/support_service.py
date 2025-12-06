@@ -132,6 +132,9 @@ class SupportService:
         Returns:
             SupportMessage record
         """
+        # Get ticket to check current status
+        ticket = await self.ticket_repo.get_by_id(ticket_id)
+
         # Create message
         message = await self.message_repo.create(
             ticket_id=ticket_id,
@@ -140,11 +143,20 @@ class SupportService:
             attachments=attachments,
         )
 
-        # Update ticket timestamp and reset to open
+        # Determine new status based on ticket state
+        # If ticket was assigned to admin, return to IN_PROGRESS
+        # Otherwise, set to OPEN
+        new_status = (
+            SupportStatus.IN_PROGRESS.value
+            if ticket and ticket.assigned_admin_id
+            else SupportStatus.OPEN.value
+        )
+
+        # Update ticket timestamp and status
         await self.ticket_repo.update(
             ticket_id,
             last_user_message_at=datetime.now(UTC),
-            status=SupportStatus.OPEN.value,
+            status=new_status,
         )
 
         await self.session.flush()
@@ -179,11 +191,11 @@ class SupportService:
             attachments=attachments,
         )
 
-        # Update ticket timestamp and mark as answered
+        # Update ticket timestamp and mark as waiting for user response
         await self.ticket_repo.update(
             ticket_id,
             last_admin_message_at=datetime.now(UTC),
-            status=SupportStatus.ANSWERED.value,
+            status=SupportStatus.WAITING_USER.value,
         )
 
         await self.session.flush()
@@ -271,7 +283,7 @@ class SupportService:
         List all open tickets (for admin).
 
         Returns:
-            List of open/in_progress/answered tickets
+            List of open/in_progress/waiting_user tickets
         """
         stmt = (
             select(SupportTicket)
@@ -279,7 +291,7 @@ class SupportService:
                 or_(
                     SupportTicket.status == SupportStatus.OPEN.value,
                     SupportTicket.status == SupportStatus.IN_PROGRESS.value,
-                    SupportTicket.status == SupportStatus.ANSWERED.value,
+                    SupportTicket.status == SupportStatus.WAITING_USER.value,
                 )
             )
             .order_by(SupportTicket.created_at.desc())

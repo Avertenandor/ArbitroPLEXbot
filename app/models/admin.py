@@ -123,7 +123,7 @@ class Admin(Base):
     @property
     def is_extended_admin(self) -> bool:
         """Check if admin is extended admin or higher."""
-        return self.role in ("extended_admin", "super_admin", "moderator")
+        return self.role in ("extended_admin", "super_admin")
 
     @property
     def is_admin(self) -> bool:

@@ -415,3 +415,22 @@ async def handle_smart_withdrawal_amount(
         parse_mode="Markdown",
         reply_markup=finpass_input_keyboard(),
     )
+
+
+@router.message(F.text == "📊 Главное меню")
+async def back_to_main_from_withdrawal(
+    message: Message,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Handle 'Main Menu' button from withdrawal menu."""
+    user: User | None = data.get("user")
+    if not user:
+        await message.answer(get_text('errors.user_not_found'))
+        return
+
+    await state.clear()
+    await message.answer(
+        "📊 Главное меню",
+        reply_markup=main_menu_reply_keyboard(user=user)
+    )

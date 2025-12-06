@@ -14,12 +14,19 @@ from typing import Any
 from aiogram import F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+)
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
+from app.services.support_service import SupportService
 from bot.keyboards.user import help_submenu_keyboard
+from bot.states.support_states import SupportStates
 from bot.utils.user_loader import UserLoader
 
 router = Router()
@@ -191,3 +198,145 @@ async def show_support_contact(
         reply_markup=help_submenu_keyboard()
     )
     logger.info(f"[SUPPORT] Support contact shown to user {telegram_id}")
+
+
+@router.callback_query(F.data == "support:create_inquiry")
+async def callback_create_inquiry(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """
+    Handle callback for creating support inquiry.
+
+    Args:
+        callback: Callback query object
+        session: Database session
+        state: FSM state
+        **data: Handler data (includes user from AuthMiddleware)
+    """
+    telegram_id = callback.from_user.id if callback.from_user else None
+    logger.info(f"[SUPPORT] Create inquiry callback from user {telegram_id}")
+
+    if not telegram_id:
+        await callback.answer(
+            "❌ Системная ошибка. Отправьте /start или попробуйте позже.",
+            show_alert=True
+        )
+        return
+
+    # Answer callback to remove loading state
+    await callback.answer()
+
+    text = (
+        "✉️ *Создать обращение*\n\n"
+        "Опишите вашу проблему или вопрос.\n"
+        "Отправьте текстовое сообщение.\n\n"
+        "💡 **Совет:** Если вопрос касается финансов, укажите:\n"
+        "• ID транзакции (Hash)\n"
+        "• Сумму и дату\n\n"
+        "Для отмены нажмите '📊 Главное меню'"
+    )
+
+    await state.set_state(SupportStates.awaiting_input)
+
+    # Edit the message or send new one
+    if callback.message:
+        await callback.message.answer(text, parse_mode="Markdown")
+
+    logger.info(f"[SUPPORT] User {telegram_id} entered ticket creation state")
+
+
+@router.callback_query(F.data == "support:my_inquiries")
+async def callback_my_inquiries(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """
+    Handle callback for viewing user's support inquiries.
+
+    Args:
+        callback: Callback query object
+        session: Database session
+        state: FSM state
+        **data: Handler data (includes user from AuthMiddleware)
+    """
+    user: User | None = data.get("user")
+    telegram_id = callback.from_user.id if callback.from_user else None
+    logger.info(f"[SUPPORT] My inquiries callback from user {telegram_id}")
+
+    if not telegram_id:
+        await callback.answer(
+            "❌ Системная ошибка. Отправьте /start или попробуйте позже.",
+            show_alert=True
+        )
+        return
+
+    # Answer callback to remove loading state
+    await callback.answer()
+
+    session_factory = data.get("session_factory")
+
+    # Get tickets using appropriate method
+    if not session_factory:
+        # Fallback to old session
+        support_service = SupportService(session)
+        if user:
+            tickets = await support_service.get_user_tickets(user.id)
+        else:
+            # Guest tickets
+            tickets = await support_service.get_guest_tickets(telegram_id)
+    else:
+        # NEW pattern: short read transaction
+        async with session_factory() as session:
+            async with session.begin():
+                support_service = SupportService(session)
+                if user:
+                    tickets = await support_service.get_user_tickets(user.id)
+                else:
+                    # Guest tickets
+                    tickets = await support_service.get_guest_tickets(telegram_id)
+        # Transaction closed here
+
+    # Format response
+    if not tickets:
+        if user is None:
+            text = (
+                "📋 *Мои обращения*\n\n"
+                "У вас пока нет обращений.\n\n"
+                "Для создания обращения используйте кнопку '✉️ Создать обращение'."
+            )
+        else:
+            text = "📋 У вас пока нет обращений"
+    else:
+        text = "📋 *Ваши обращения:*\n\n"
+
+        for ticket in tickets[:10]:  # Show last 10
+            status_emoji = {
+                "open": "🔵",
+                "in_progress": "🟡",
+                "answered": "🟢",
+                "closed": "⚫",
+            }.get(ticket.status, "⚪")
+
+            created_date = ticket.created_at.strftime('%d.%m.%Y %H:%M')
+            subject = getattr(ticket, 'subject', 'Обращение')
+            # Add "(Гость)" marker for guest tickets
+            guest_marker = " (Гость)" if user is None else ""
+            text += (
+                f"{status_emoji} #{ticket.id} - {subject}{guest_marker}\n"
+                f"   Создано: {created_date}\n\n"
+            )
+
+    # Send response
+    if callback.message:
+        await callback.message.answer(
+            text,
+            parse_mode="Markdown",
+            reply_markup=help_submenu_keyboard()
+        )
+
+    logger.info(f"[SUPPORT] Showed {len(tickets) if tickets else 0} tickets to user {telegram_id}")
