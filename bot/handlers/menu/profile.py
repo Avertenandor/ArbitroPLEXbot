@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import settings
 from app.models.user import User
-from app.services.deposit_service import DepositService
+from app.services.deposit import DepositService
 from app.services.report_service import ReportService
 from app.services.user_service import UserService
 from bot.keyboards.reply import profile_keyboard

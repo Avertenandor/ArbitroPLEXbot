@@ -15,7 +15,7 @@ from web3 import Web3
 
 from app.utils.security import mask_address
 
-from .core_constants import PLEX_DECIMALS, USDT_ABI, USDT_DECIMALS
+from .core_constants import PLEX_ABI, PLEX_DECIMALS, USDT_ABI, USDT_DECIMALS
 
 
 class BalanceManager:
@@ -75,8 +75,8 @@ class BalanceManager:
 
         try:
             address = to_checksum_address(address)
-            # PLEX uses standard ERC-20 ABI (same as USDT_ABI)
-            contract = w3.eth.contract(address=self.plex_token_address, abi=USDT_ABI)
+            # PLEX uses standard ERC-20 ABI
+            contract = w3.eth.contract(address=self.plex_token_address, abi=PLEX_ABI)
             raw = contract.functions.balanceOf(address).call()
             # PLEX has 9 decimals
             return Decimal(raw) / Decimal(10**PLEX_DECIMALS)

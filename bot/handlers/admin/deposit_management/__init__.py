@@ -8,6 +8,7 @@ Submodules:
 - menu: Main deposit management menu and general statistics
 - search: User deposit search functionality
 - levels: Level management display and configuration
+- level_settings: Detailed level settings (ROI, corridors, history)
 - actions: Level enable/disable actions and max level management
 - reports: Pending deposits and ROI statistics
 - navigation: Back navigation to admin panel
@@ -38,6 +39,7 @@ from aiogram import Router
 # Import all submodule routers
 from bot.handlers.admin.deposit_management import (
     actions,
+    level_settings,
     levels,
     menu,
     navigation,
@@ -52,6 +54,7 @@ router = Router(name="admin_deposit_management")
 router.include_router(menu.router)
 router.include_router(search.router)
 router.include_router(levels.router)
+router.include_router(level_settings.router)
 router.include_router(actions.router)
 router.include_router(reports.router)
 router.include_router(navigation.router)

@@ -29,10 +29,11 @@ if TYPE_CHECKING:
 class PlexPaymentStatus:
     """PLEX payment status constants."""
 
-    ACTIVE = "active"           # Normal state, waiting for payment
-    WARNING_SENT = "warning"    # Warning sent after 25h without payment
-    BLOCKED = "blocked"         # Blocked after 49h without payment
-    PAID = "paid"               # Payment confirmed for current day
+    PENDING = "pending"         # Ожидает первого платежа
+    ACTIVE = "active"           # Активен, платежи регулярные
+    WARNING = "warning"         # Предупреждение (25+ часов)
+    OVERDUE = "overdue"         # Просрочен (49+ часов)
+    BLOCKED = "blocked"         # Заблокирован
 
 
 class PlexPaymentRequirement(Base):
@@ -104,9 +105,9 @@ class PlexPaymentRequirement(Base):
     status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
-        default=PlexPaymentStatus.ACTIVE,
+        default=PlexPaymentStatus.PENDING,
         index=True,
-        comment="active, warning, blocked, paid"
+        comment="pending, active, warning, overdue, blocked"
     )
 
     # Payment tracking
@@ -122,11 +123,17 @@ class PlexPaymentRequirement(Base):
         comment="Last payment transaction hash"
     )
 
-    total_paid_plex: Mapped[Decimal] = mapped_column(
+    last_check_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Когда последний раз проверяли платёж"
+    )
+
+    total_plex_paid: Mapped[Decimal] = mapped_column(
         DECIMAL(18, 8),
         nullable=False,
         default=Decimal("0"),
-        comment="Total PLEX paid for this deposit"
+        comment="Всего PLEX оплачено за всё время"
     )
 
     days_paid: Mapped[int] = mapped_column(
@@ -134,6 +141,13 @@ class PlexPaymentRequirement(Base):
         nullable=False,
         default=0,
         comment="Number of days paid for this deposit"
+    )
+
+    consecutive_days_paid: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        comment="Сколько дней подряд оплачено"
     )
 
     # Warning tracking
@@ -204,6 +218,19 @@ class PlexPaymentRequirement(Base):
         )
 
     @staticmethod
+    def calculate_daily_requirement(deposit_amount: Decimal) -> Decimal:
+        """
+        Рассчитать ежедневное требование PLEX.
+
+        Args:
+            deposit_amount: Сумма депозита
+
+        Returns:
+            Ежедневное требование PLEX (deposit_amount * 10)
+        """
+        return deposit_amount * Decimal("10")
+
+    @staticmethod
     def calculate_deadlines(
         deposit_created_at: datetime
     ) -> tuple[datetime, datetime, datetime]:
@@ -221,38 +248,70 @@ class PlexPaymentRequirement(Base):
         block_due = deposit_created_at + timedelta(hours=49)
         return next_payment_due, warning_due, block_due
 
-    def is_payment_overdue(self) -> bool:
-        """Check if payment is overdue."""
-        return datetime.now(UTC) > self.next_payment_due
-
-    def is_warning_due(self) -> bool:
-        """Check if warning should be sent."""
-        return (
-            datetime.now(UTC) > self.warning_due
-            and self.status == PlexPaymentStatus.ACTIVE
-        )
-
-    def is_block_due(self) -> bool:
-        """Check if deposit should be blocked."""
-        return (
-            datetime.now(UTC) > self.block_due
-            and self.status in (PlexPaymentStatus.ACTIVE, PlexPaymentStatus.WARNING_SENT)
-        )
-
-    def mark_paid(self, tx_hash: str, amount: Decimal) -> None:
+    def is_payment_due(self) -> bool:
         """
-        Mark payment as received and update deadlines.
+        Проверить, нужна ли оплата сегодня.
+
+        Returns:
+            True если оплата нужна
+        """
+        now = datetime.now(UTC)
+        return now >= self.next_payment_due
+
+    def get_next_payment_deadline(self) -> datetime:
+        """
+        Получить крайний срок следующего платежа.
+
+        Returns:
+            Datetime следующего крайнего срока
+        """
+        return self.next_payment_due
+
+    def get_payment_status_text(self) -> str:
+        """
+        Получить текстовое описание статуса платежа.
+
+        Returns:
+            Текстовое описание статуса
+        """
+        now = datetime.now(UTC)
+        hours_since_due = (now - self.next_payment_due).total_seconds() / 3600
+
+        if self.status == PlexPaymentStatus.PENDING:
+            return "⏳ Ожидает первого платежа"
+        elif self.status == PlexPaymentStatus.ACTIVE:
+            if hours_since_due < 0:
+                hours_left = abs(hours_since_due)
+                return f"✅ Активен (платёж через {hours_left:.1f}ч)"
+            elif hours_since_due < 1:
+                return "⏰ Платёж ожидается (до 1 часа)"
+            else:
+                return f"⏰ Ожидание платежа ({hours_since_due:.1f}ч)"
+        elif self.status == PlexPaymentStatus.WARNING:
+            return f"⚠️ Предупреждение (просрочка {hours_since_due:.1f}ч)"
+        elif self.status == PlexPaymentStatus.OVERDUE:
+            return f"❌ Просрочен (просрочка {hours_since_due:.1f}ч)"
+        elif self.status == PlexPaymentStatus.BLOCKED:
+            return "🚫 Заблокирован"
+        else:
+            return f"❓ Неизвестный статус: {self.status}"
+
+    def mark_daily_paid(self, tx_hash: str, amount: Decimal) -> None:
+        """
+        Отметить оплату за сегодня.
 
         Args:
-            tx_hash: Transaction hash
-            amount: Amount paid
+            tx_hash: Хеш транзакции
+            amount: Сумма оплаты
         """
         now = datetime.now(UTC)
         self.last_payment_at = now
         self.last_payment_tx_hash = tx_hash
-        self.total_paid_plex += amount
+        self.last_check_at = now
+        self.total_plex_paid += amount
         self.days_paid += 1
-        self.status = PlexPaymentStatus.PAID
+        self.consecutive_days_paid += 1
+        self.status = PlexPaymentStatus.ACTIVE
 
         # Activate work on first payment (pay first, work after)
         if not self.is_work_active:
@@ -264,12 +323,49 @@ class PlexPaymentRequirement(Base):
         self.warning_due = now + timedelta(hours=25)
         self.block_due = now + timedelta(hours=49)
 
+    def is_payment_overdue(self) -> bool:
+        """Check if payment is overdue."""
+        return datetime.now(UTC) > self.next_payment_due
+
+    def is_warning_due(self) -> bool:
+        """
+        Проверить, нужно ли отправить предупреждение.
+
+        Returns:
+            True если прошло 25+ часов без оплаты
+        """
+        now = datetime.now(UTC)
+        return (
+            now >= self.warning_due
+            and self.status in (PlexPaymentStatus.PENDING, PlexPaymentStatus.ACTIVE)
+        )
+
+    def is_block_due(self) -> bool:
+        """
+        Проверить, нужно ли заблокировать депозит.
+
+        Returns:
+            True если прошло 49+ часов без оплаты
+        """
+        now = datetime.now(UTC)
+        return (
+            now >= self.block_due
+            and self.status != PlexPaymentStatus.BLOCKED
+        )
+
     def mark_warning_sent(self) -> None:
-        """Mark warning as sent."""
+        """Отметить отправку предупреждения."""
         self.warning_sent_at = datetime.now(UTC)
         self.warning_count += 1
-        self.status = PlexPaymentStatus.WARNING_SENT
+        self.status = PlexPaymentStatus.WARNING
+        self.consecutive_days_paid = 0  # Сбросить последовательность
+
+    def mark_overdue(self) -> None:
+        """Отметить депозит как просроченный."""
+        self.status = PlexPaymentStatus.OVERDUE
+        self.consecutive_days_paid = 0  # Сбросить последовательность
 
     def mark_blocked(self) -> None:
-        """Mark deposit as blocked due to non-payment."""
+        """Отметить депозит как заблокированный."""
         self.status = PlexPaymentStatus.BLOCKED
+        self.consecutive_days_paid = 0  # Сбросить последовательность

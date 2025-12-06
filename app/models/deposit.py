@@ -15,6 +15,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
 )
@@ -53,6 +54,8 @@ class Deposit(Base):
             'roi_paid_amount <= roi_cap_amount',
             name='check_deposit_roi_paid_not_exceeds_cap'
         ),
+        Index('idx_deposit_type', 'deposit_type'),
+        Index('idx_deposit_usdt_confirmed', 'usdt_confirmed'),
     )
 
     # Primary key
@@ -71,6 +74,26 @@ class Deposit(Base):
     )  # 1-5
     amount: Mapped[Decimal] = mapped_column(
         DECIMAL(18, 8), nullable=False
+    )
+
+    # New corridor system fields
+    deposit_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="level_1"
+    )  # test, level_1, level_2, level_3, level_4, level_5
+    min_amount: Mapped[Decimal] = mapped_column(
+        DECIMAL(18, 8), nullable=False, default=Decimal("0")
+    )
+    max_amount: Mapped[Decimal] = mapped_column(
+        DECIMAL(18, 8), nullable=False, default=Decimal("0")
+    )
+    usdt_confirmed: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    usdt_confirmed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    plex_daily_required: Mapped[Decimal] = mapped_column(
+        DECIMAL(18, 8), nullable=False, default=Decimal("0")
     )
 
     # Blockchain data
@@ -171,3 +194,35 @@ class Deposit(Base):
             f"<Deposit(id={self.id}, user_id={self.user_id}, "
             f"level={self.level}, amount={self.amount}, status={self.status})>"
         )
+
+    @property
+    def level_name(self) -> str:
+        """Human-readable level name."""
+        level_names = {
+            "test": "Тестовый депозит",
+            "level_1": "Уровень 1",
+            "level_2": "Уровень 2",
+            "level_3": "Уровень 3",
+            "level_4": "Уровень 4",
+            "level_5": "Уровень 5",
+        }
+        return level_names.get(self.deposit_type, f"Уровень {self.level}")
+
+    @property
+    def is_test_deposit(self) -> bool:
+        """Check if this is a test deposit."""
+        return self.deposit_type == "test"
+
+    @property
+    def plex_status_text(self) -> str:
+        """Get PLEX payment status as text."""
+        if not self.plex_payment:
+            return "Нет данных"
+
+        if self.plex_payment.is_paid:
+            return "Оплачен"
+        elif self.plex_payment.is_overdue:
+            return "Просрочен"
+        elif self.plex_payment.payment_due_at:
+            return "Ожидает оплаты"
+        return "Не требуется"

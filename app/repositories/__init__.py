@@ -16,6 +16,9 @@ from app.repositories.base import BaseRepository
 from app.repositories.blacklist_repository import (
     BlacklistRepository,
 )
+from app.repositories.deposit_level_config_repository import (
+    DepositLevelConfigRepository,
+)
 from app.repositories.deposit_level_version_repository import (
     DepositLevelVersionRepository,
 )
@@ -78,6 +81,7 @@ __all__ = [
     # Core
     "UserRepository",
     "DepositRepository",
+    "DepositLevelConfigRepository",
     "DepositLevelVersionRepository",
     "TransactionRepository",
     "ReferralRepository",

@@ -11,6 +11,12 @@ from .singleton import get_blockchain_service, init_blockchain_service
 
 # Re-export constants for convenience
 from .constants import USDT_ABI, USDT_DECIMALS
+from .core_constants import (
+    PLEX_ABI,
+    PLEX_CONTRACT_ADDRESS,
+    PLEX_DECIMALS,
+    PLEX_PER_DOLLAR_DAILY,
+)
 
 __all__ = [
     "BlockchainService",
@@ -18,4 +24,8 @@ __all__ = [
     "init_blockchain_service",
     "USDT_ABI",
     "USDT_DECIMALS",
+    "PLEX_ABI",
+    "PLEX_CONTRACT_ADDRESS",
+    "PLEX_DECIMALS",
+    "PLEX_PER_DOLLAR_DAILY",
 ]

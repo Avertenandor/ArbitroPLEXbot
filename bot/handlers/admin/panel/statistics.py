@@ -15,7 +15,7 @@ from aiogram import F, Router
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.deposit_service import DepositService
+from app.services.deposit import DepositService
 from app.services.referral_service import ReferralService
 from app.services.user_service import UserService
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny

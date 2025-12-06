@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.enums import TransactionStatus
 from app.models.user import User
 from app.repositories.blacklist_repository import BlacklistRepository
-from app.services.deposit_service import DepositService
+from app.services.deposit import DepositService
 from bot.keyboards.inline import deposit_status_keyboard
 from bot.keyboards.reply import main_menu_reply_keyboard
 from bot.utils.formatters import format_deposit_status, format_usdt

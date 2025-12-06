@@ -42,11 +42,35 @@ USDT_ABI = [
     },
 ]
 
+# PLEX ABI (ERC-20 compatible)
+# PLEX token follows standard ERC-20 interface with 9 decimals
+PLEX_ABI = [
+    {
+        "name": "balanceOf",
+        "type": "function",
+        "inputs": [{"name": "_owner", "type": "address"}],
+        "outputs": [{"name": "balance", "type": "uint256"}],
+        "constant": True,
+    },
+    {
+        "name": "Transfer",
+        "type": "event",
+        "inputs": [
+            {"indexed": True, "name": "from", "type": "address"},
+            {"indexed": True, "name": "to", "type": "address"},
+            {"indexed": False, "name": "value", "type": "uint256"},
+        ],
+        "anonymous": False,
+    },
+]
+
 # USDT decimals (BEP-20 USDT uses 18 decimals)
 USDT_DECIMALS = 18
 
-# PLEX token decimals (per business rules)
+# PLEX Token Configuration
+PLEX_CONTRACT_ADDRESS = "0xdf179b6cadbc61ffd86a3d2e55f6d6e083ade6c1"
 PLEX_DECIMALS = 9
+PLEX_PER_DOLLAR_DAILY = 10
 
 # Gas settings for BSC
 # 0.1 Gwei = 100_000_000 Wei (1 Gwei = 10^9 Wei)

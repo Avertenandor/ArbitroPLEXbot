@@ -27,7 +27,7 @@ router = Router(name="admin_panel_main")
 
 async def get_admin_summary(session: AsyncSession) -> str:
     """Get summary statistics for admin panel."""
-    from app.services.deposit_service import DepositService
+    from app.services.deposit import DepositService
     from app.services.inquiry_service import InquiryService
     from app.services.user_service import UserService
     from app.services.withdrawal_service import WithdrawalService
