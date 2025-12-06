@@ -17,6 +17,7 @@ from app.models.blacklist import Blacklist
 
 # Blockchain Cache
 from app.models.blockchain_tx_cache import BlockchainTxCache
+from app.models.blockchain_sync_state import BlockchainSyncState
 
 from app.models.deposit import Deposit
 from app.models.deposit_corridor_history import DepositCorridorHistory
@@ -97,6 +98,9 @@ __all__ = [
     "DepositLevelVersion",
     "Transaction",
     "Referral",
+    # Blockchain Cache
+    "BlockchainTxCache",
+    "BlockchainSyncState",
     # Admin Models
     "Admin",
     "AdminAction",

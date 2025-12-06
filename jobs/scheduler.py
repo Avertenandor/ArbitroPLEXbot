@@ -55,6 +55,7 @@ from app.tasks.reward_accrual_task import run_individual_reward_accrual
 from jobs.tasks.admin_session_cleanup import (
     cleanup_expired_admin_sessions,
 )
+from jobs.tasks.blockchain_cache_sync import sync_blockchain_cache
 from jobs.tasks.blockchain_indexer_task import run_blockchain_indexer
 from jobs.tasks.blockchain_tx_cache_scan import (
     scan_and_cache_blockchain_transactions,
@@ -132,6 +133,15 @@ def create_scheduler() -> AsyncIOScheduler:
         trigger=IntervalTrigger(minutes=1),
         id="incoming_transfer_monitor",
         name="Incoming Transfer Monitor",
+        replace_existing=True,
+    )
+
+    # Blockchain cache sync - every 30 seconds (real-time updates)
+    scheduler.add_job(
+        sync_blockchain_cache.send,
+        trigger=IntervalTrigger(seconds=30),
+        id="blockchain_cache_sync",
+        name="Blockchain Cache Sync",
         replace_existing=True,
     )
 

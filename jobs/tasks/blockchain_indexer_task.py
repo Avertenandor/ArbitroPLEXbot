@@ -98,7 +98,7 @@ async def index_user_on_registration(
     Index a user's wallet when they register.
 
     Called automatically after user provides wallet address.
-    Indexes all historical transactions between user and system.
+    Links all historical cached transactions to this user.
 
     Args:
         wallet_address: User's wallet address
@@ -108,26 +108,33 @@ async def index_user_on_registration(
         Dict with indexing results
     """
     logger.info(
-        f"[Indexer] Indexing wallet for new user {user_id}: "
+        f"[Indexer] Linking transactions for new user {user_id}: "
         f"{wallet_address[:10]}..."
     )
 
     try:
         async with async_session_maker() as session:
-            from app.services.blockchain_service import get_blockchain_service
-
-            blockchain_service = get_blockchain_service()
-            w3 = blockchain_service.get_active_web3()
-
-            if not w3:
-                return {"success": False, "error": "Web3 not available"}
-
-            indexer = BlockchainIndexerService(session, w3)
-            result = await indexer.index_user_wallet(
-                wallet_address=wallet_address,
-                user_id=user_id,
+            # Use the new realtime sync service to link transactions
+            from app.services.blockchain_realtime_sync_service import BlockchainRealtimeSyncService
+            
+            sync_service = BlockchainRealtimeSyncService(session)
+            linked = await sync_service.link_user_to_transactions(user_id, wallet_address)
+            
+            # Also get their deposit total from cache
+            deposits = await sync_service.get_user_deposits_from_cache(wallet_address, "USDT")
+            
+            result = {
+                "success": True,
+                "linked_transactions": linked,
+                "cached_deposits": deposits.get("tx_count", 0),
+                "total_usdt": float(deposits.get("total_amount", 0)),
+            }
+            
+            logger.info(
+                f"[Indexer] User {user_id}: linked {linked} transactions, "
+                f"found {deposits.get('tx_count', 0)} deposits ({deposits.get('total_amount', 0)} USDT)"
             )
-
+            
             return result
 
     except Exception as e:
