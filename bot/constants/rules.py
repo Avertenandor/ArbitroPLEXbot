@@ -36,11 +36,72 @@ PLEX_CONTRACT_ADDRESS = "0xdf179b6cadbc61ffd86a3d2e55f6d6e083ade6c1"
 # Deposit level order for sequential validation
 DEPOSIT_LEVEL_ORDER = ["test", "level_1", "level_2", "level_3", "level_4", "level_5"]
 
-# Minimum PLEX balance required to work with system
+# Minimum PLEX balance required to work with system (non-withdrawable reserve)
 MINIMUM_PLEX_BALANCE = 5000
 
 # Maximum deposits per user
 MAX_DEPOSITS_PER_USER = 5
+
+
+def get_available_plex_balance(total_plex: int | Decimal) -> Decimal:
+    """
+    Calculate available PLEX balance (above minimum reserve).
+
+    The minimum reserve (5000 PLEX) must always remain on the wallet.
+    Only PLEX above this minimum can be used for:
+    - Daily deposit payments (10 PLEX per $1)
+    - Authorization payments
+    - Transfers to other wallets
+
+    Args:
+        total_plex: Total PLEX balance on wallet
+
+    Returns:
+        Available PLEX that can be spent (total - minimum reserve)
+    """
+    total = Decimal(str(total_plex))
+    minimum = Decimal(str(MINIMUM_PLEX_BALANCE))
+    available = total - minimum
+    return max(Decimal("0"), available)
+
+
+def can_spend_plex(total_plex: int | Decimal, amount_to_spend: int | Decimal) -> bool:
+    """
+    Check if user can spend specified amount of PLEX.
+
+    Ensures that after spending, the balance won't drop below minimum reserve.
+
+    Args:
+        total_plex: Current total PLEX balance
+        amount_to_spend: Amount user wants to spend
+
+    Returns:
+        True if spending is allowed (balance after >= minimum)
+    """
+    available = get_available_plex_balance(total_plex)
+    return available >= Decimal(str(amount_to_spend))
+
+
+def get_balance_after_spending(
+    total_plex: int | Decimal,
+    amount_to_spend: int | Decimal
+) -> tuple[Decimal, bool]:
+    """
+    Calculate balance after spending and check if valid.
+
+    Args:
+        total_plex: Current total PLEX balance
+        amount_to_spend: Amount to spend
+
+    Returns:
+        Tuple of (balance_after_spending, is_valid)
+        is_valid is True if balance remains >= minimum reserve
+    """
+    total = Decimal(str(total_plex))
+    spend = Decimal(str(amount_to_spend))
+    balance_after = total - spend
+    is_valid = balance_after >= Decimal(str(MINIMUM_PLEX_BALANCE))
+    return (balance_after, is_valid)
 
 
 # Work status constants
@@ -78,8 +139,8 @@ RULES_SHORT_TEXT = """
 2️⃣ **Кролики** — владение минимумом на [DEXRabbit](https://xn--80apagbbfxgmuj4j.site/)
 3️⃣ **Оплата работы:** 10 PLEX в сутки за каждый $ депозита
 
-🔴 **ВАЖНО:** Монеты PLEX нельзя выводить с кошелька!
-Продажа/перевод = отключение от бота + возврат депозитов
+🔴 **НЕСГОРАЕМЫЙ МИНИМУМ:** 5,000 PLEX всегда должны оставаться на кошельке!
+💡 Использовать можно только PLEX **сверх** этой суммы.
 """
 
 # Brief rules version (for info page with "Read more" button)
@@ -90,7 +151,8 @@ RULES_BRIEF_VERSION = f"""
 💎 **PLEX:** 10 монет за $1 депозита/день
 🐰 **Кролики:** минимум 1 на DEXRabbit
 📊 **Уровни:** 1→2→3→4→5 (по балансу PLEX)
-🔴 **ВАЖНО:** PLEX нельзя выводить!
+🔴 **НЕСГОРАЕМЫЙ МИНИМУМ:** 5,000 PLEX
+💡 Использовать можно ТОЛЬКО сверх минимума!
 
 💳 **Кошелек для оплаты:**
 `{SYSTEM_WALLET}`
@@ -135,8 +197,9 @@ RULES_FULL_TEXT = f"""
 
 🔴 **КРИТИЧЕСКИЕ ПРАВИЛА:**
 
-• **Монеты PLEX нельзя выводить с кошелька!**
-  Продал/перевел = отключение от бота
+• **НЕСГОРАЕМЫЙ МИНИМУМ:** 5,000 PLEX всегда на кошельке!
+• **Использовать можно ТОЛЬКО PLEX сверх 5,000**
+  Оплата депозитов, авторизация — всё из свободной суммы
 
 • **При нарушении депозиты возвращаются**
 

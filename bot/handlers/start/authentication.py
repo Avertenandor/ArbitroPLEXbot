@@ -41,6 +41,8 @@ from bot.constants.rules import (
     LEVELS_TABLE,
     MINIMUM_PLEX_BALANCE,
     RULES_SHORT_TEXT,
+    can_spend_plex,
+    get_available_plex_balance,
 )
 
 ECOSYSTEM_INFO = (
@@ -263,6 +265,7 @@ async def handle_wallet_input(
     verifier = WalletVerificationService()
     verification = await verifier.verify_wallet(wallet)
 
+    # Check if user has minimum PLEX balance
     if verification.is_onchain_ok and not verification.has_required_plex:
         # Get translator for unregistered user
         _ = get_translator("ru")
@@ -272,6 +275,26 @@ async def handle_wallet_input(
               minimum_plex=MINIMUM_PLEX_BALANCE),
             parse_mode="Markdown",
         )
+
+    # Check if user can afford authorization payment (10 PLEX)
+    # while keeping minimum reserve on wallet
+    auth_price = settings.auth_price_plex
+    plex_balance = verification.plex_balance or 0
+    if verification.is_onchain_ok and plex_balance > 0:
+        if not can_spend_plex(plex_balance, auth_price):
+            available = get_available_plex_balance(plex_balance)
+            shortage = auth_price - float(available)
+            await message.answer(
+                f"⚠️ **Недостаточно свободных PLEX для авторизации**\n\n"
+                f"🔒 Несгораемый минимум: **{MINIMUM_PLEX_BALANCE:,}** PLEX\n"
+                f"💰 Ваш баланс: **{int(plex_balance):,}** PLEX\n"
+                f"📊 Доступно для оплаты: **{int(available):,}** PLEX\n"
+                f"💳 Требуется для авторизации: **{auth_price}** PLEX\n"
+                f"📉 Не хватает: **{int(shortage)}** PLEX\n\n"
+                f"Пополните баланс PLEX минимум на **{int(shortage)}** токенов,\n"
+                f"чтобы после оплаты на кошельке осталось ≥ {MINIMUM_PLEX_BALANCE:,} PLEX.",
+                parse_mode="Markdown",
+            )
 
     # Save wallet to FSM
     await state.update_data(auth_wallet=wallet)
