@@ -12,7 +12,7 @@ This reduces RPC calls by:
 
 from loguru import logger
 
-from app.config.database import async_session_factory
+from app.config.database import async_session_maker
 from app.services.blockchain_tx_cache_service import BlockchainTxCacheService
 
 
@@ -37,7 +37,7 @@ async def scan_and_cache_blockchain_transactions() -> dict:
     }
 
     try:
-        async with async_session_factory() as session:
+        async with async_session_maker() as session:
             # Initialize service
             cache_service = BlockchainTxCacheService(session)
 
@@ -86,7 +86,7 @@ async def get_cache_statistics() -> dict:
         Dict with cache statistics
     """
     try:
-        async with async_session_factory() as session:
+        async with async_session_maker() as session:
             cache_service = BlockchainTxCacheService(session)
             stats = await cache_service.get_system_wallet_stats()
             return stats

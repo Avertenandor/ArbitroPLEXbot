@@ -12,7 +12,7 @@ with minimal RPC calls after initial indexing.
 
 from loguru import logger
 
-from app.config.database import async_session_factory
+from app.config.database import async_session_maker
 from app.services.blockchain_indexer_service import BlockchainIndexerService
 
 
@@ -34,7 +34,7 @@ async def run_blockchain_indexer() -> dict:
     }
 
     try:
-        async with async_session_factory() as session:
+        async with async_session_maker() as session:
             # Get Web3 instance
             from app.services.blockchain_service import BlockchainService
 
@@ -113,7 +113,7 @@ async def index_user_on_registration(
     )
 
     try:
-        async with async_session_factory() as session:
+        async with async_session_maker() as session:
             from app.services.blockchain_service import BlockchainService
 
             blockchain_service = BlockchainService()
@@ -143,7 +143,7 @@ async def get_indexer_statistics() -> dict:
         Dict with cache statistics
     """
     try:
-        async with async_session_factory() as session:
+        async with async_session_maker() as session:
             from app.services.blockchain_service import BlockchainService
 
             blockchain_service = BlockchainService()
