@@ -21,7 +21,7 @@ from app.models.deposit import Deposit
 from app.models.enums import TransactionStatus
 from app.models.user import User
 from app.services.blockchain_service import get_blockchain_service, init_blockchain_service
-from app.services.deposit_service import DepositService
+from app.services.deposit import DepositService
 from app.utils.security import mask_address
 
 # Configure logger

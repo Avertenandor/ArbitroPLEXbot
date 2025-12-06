@@ -52,6 +52,20 @@ class Settings(BaseSettings):
     auth_price_plex: float = 10.0
     bsc_rpc_url: str | None = None
 
+    # PLEX Token Configuration
+    plex_contract_address: str = Field(
+        default="0xdf179b6cadbc61ffd86a3d2e55f6d6e083ade6c1",
+        description="PLEX token smart contract address on BSC"
+    )
+    plex_per_dollar_daily: int = Field(
+        default=10,
+        description="PLEX tokens required per $1 of deposit per day"
+    )
+    plex_decimals: int = Field(
+        default=9,
+        description="PLEX token decimals"
+    )
+
     system_wallet_address: str  # System wallet for deposits
     # Blockchain polling settings
     blockchain_poll_interval: int = Field(
@@ -346,7 +360,8 @@ class Settings(BaseSettings):
         'wallet_address',
         'system_wallet_address',
         'auth_plex_token_address',
-        'auth_system_wallet_address'
+        'auth_system_wallet_address',
+        'plex_contract_address'
     )
     @classmethod
     def validate_eth_address(cls, v: str) -> str:

@@ -1,9 +1,11 @@
 """
 Settings menu keyboards module.
 
-This module contains keyboards related to user settings:
+This module contains all settings and profile related keyboards:
 - Settings menu
 - Profile menu
+- Contact management menus
+- Wallet menu
 - Notification settings
 """
 
@@ -59,6 +61,70 @@ def profile_menu_keyboard() -> ReplyKeyboardMarkup:
     )
     builder.row(
         KeyboardButton(text="◀️ Назад"),
+    )
+
+    return builder.as_markup(resize_keyboard=True)
+
+
+def contact_update_menu_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Contact update menu keyboard.
+
+    Returns:
+        ReplyKeyboardMarkup with contact update options
+    """
+    builder = ReplyKeyboardBuilder()
+
+    builder.row(
+        KeyboardButton(text="📞 Обновить телефон"),
+    )
+    builder.row(
+        KeyboardButton(text="📧 Обновить email"),
+    )
+    builder.row(
+        KeyboardButton(text="📝 Обновить оба"),
+    )
+    builder.row(
+        KeyboardButton(text="◀️ Назад"),
+        KeyboardButton(text="🏠 Главное меню"),
+    )
+
+    return builder.as_markup(resize_keyboard=True)
+
+
+def contact_input_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Contact input keyboard with skip option.
+
+    Returns:
+        ReplyKeyboardMarkup with skip and navigation options
+    """
+    builder = ReplyKeyboardBuilder()
+
+    builder.row(
+        KeyboardButton(text="⏭ Пропустить"),
+    )
+    builder.row(
+        KeyboardButton(text="◀️ Назад"),
+        KeyboardButton(text="🏠 Главное меню"),
+    )
+
+    return builder.as_markup(resize_keyboard=True)
+
+
+def wallet_menu_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Wallet menu keyboard.
+
+    Returns:
+        ReplyKeyboardMarkup with wallet options
+    """
+    builder = ReplyKeyboardBuilder()
+
+    builder.row(KeyboardButton(text="🔄 Сменить кошелек"))
+    builder.row(
+        KeyboardButton(text="⚙️ Настройки"),
+        KeyboardButton(text="📊 Главное меню")
     )
 
     return builder.as_markup(resize_keyboard=True)
@@ -122,6 +188,25 @@ def notification_settings_reply_keyboard(
 
     builder.row(
         KeyboardButton(text="📊 Главное меню"),
+    )
+
+    return builder.as_markup(resize_keyboard=True)
+
+
+def contacts_choice_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Contacts choice keyboard for registration.
+
+    Returns:
+        ReplyKeyboardMarkup with contacts choice options
+    """
+    builder = ReplyKeyboardBuilder()
+
+    builder.row(
+        KeyboardButton(text="✅ Да, оставить контакты"),
+    )
+    builder.row(
+        KeyboardButton(text="⏭ Пропустить"),
     )
 
     return builder.as_markup(resize_keyboard=True)

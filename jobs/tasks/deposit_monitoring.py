@@ -21,7 +21,7 @@ from app.config.settings import settings
 from app.models.enums import TransactionStatus
 from app.repositories.deposit_repository import DepositRepository
 from app.services.blockchain_service import get_blockchain_service
-from app.services.deposit_service import DepositService
+from app.services.deposit import DepositService
 from app.services.notification_service import NotificationService
 from app.utils.distributed_lock import DistributedLock
 

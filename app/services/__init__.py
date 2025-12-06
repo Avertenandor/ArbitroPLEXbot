@@ -22,8 +22,12 @@ from app.services.blockchain_service import (
     get_blockchain_service,
     init_blockchain_service,
 )
-from app.services.deposit_service import DepositService
-from app.services.deposit_validation_service import DepositValidationService
+from app.services.deposit import (
+    DepositService,
+    DepositValidationService,
+    PlexPaymentMonitor,
+    PlexPaymentNotifier,
+)
 
 # Additional Services
 from app.services.finpass_recovery_service import (
@@ -82,14 +86,17 @@ __all__ = [
     "ValidationResult",
     # Core
     "DepositService",
-    "NotificationService",
     "DepositValidationService",
+    "NotificationService",
     "ReferralService",
     "RewardService",
     "TransactionService",
     "UserService",
     "UserNotificationService",
     "WithdrawalService",
+    # Deposit Monitoring
+    "PlexPaymentMonitor",
+    "PlexPaymentNotifier",
     # PART5 Critical
     "NotificationRetryService",
     "PaymentRetryService",

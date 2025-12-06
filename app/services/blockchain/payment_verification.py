@@ -3,6 +3,8 @@ Payment verification operations for blockchain service.
 
 This module handles:
 - PLEX token payment verification
+- PLEX token transfer verification
+- PLEX payment scanning
 - USDT deposit scanning
 - Event log parsing and filtering
 """
@@ -16,7 +18,7 @@ from web3 import Web3
 
 from app.utils.security import mask_address
 
-from .core_constants import PLEX_DECIMALS, USDT_ABI, USDT_DECIMALS
+from .core_constants import PLEX_ABI, PLEX_DECIMALS, USDT_ABI, USDT_DECIMALS
 
 
 class PaymentVerifier:
@@ -250,3 +252,212 @@ class PaymentVerifier:
                 'tx_count': 0,
                 'transactions': [],
             }
+
+    def verify_plex_transfer(
+        self,
+        w3: Web3,
+        from_address: str,
+        amount: Decimal,
+        lookback_blocks: int = 200,
+    ) -> dict[str, Any]:
+        """
+        Verify PLEX token transfer from address to system wallet.
+
+        This is an alias for verify_plex_payment_sync with a different signature
+        to match the requested interface.
+
+        Args:
+            w3: Web3 instance
+            from_address: Sender's wallet address
+            amount: Required PLEX amount (Decimal)
+            lookback_blocks: Number of blocks to scan back
+
+        Returns:
+            Dict with success, tx_hash, amount, block, timestamp, or error
+        """
+        if not self.plex_token_address:
+            return {"success": False, "error": "PLEX token address not configured"}
+
+        try:
+            sender = to_checksum_address(from_address)
+            receiver = self.system_wallet_address
+            token_address = self.plex_token_address
+        except ValueError as e:
+            return {"success": False, "error": f"Invalid address format: {e}"}
+
+        # Convert Decimal to wei (PLEX uses 9 decimals)
+        target_wei = int(amount * Decimal(10 ** PLEX_DECIMALS))
+
+        logger.info(
+            f"[PLEX Transfer Verify] from={mask_address(sender)}, "
+            f"to={mask_address(receiver)}, amount={amount} PLEX"
+        )
+
+        latest = w3.eth.block_number
+        contract = w3.eth.contract(address=token_address, abi=PLEX_ABI)
+
+        # Scan in chunks to avoid RPC rate limits
+        chunk_size = 100
+        total_blocks = lookback_blocks
+        all_logs = []
+
+        logger.info(
+            f"[PLEX Transfer Verify] Scanning {total_blocks} blocks in chunks of {chunk_size}"
+        )
+
+        for offset in range(0, total_blocks, chunk_size):
+            from_blk = max(0, latest - offset - chunk_size)
+            to_blk = latest - offset
+
+            if from_blk >= to_blk:
+                continue
+
+            try:
+                logs = contract.events.Transfer.get_logs(
+                    fromBlock=from_blk,
+                    toBlock=to_blk,
+                    argument_filters={'from': sender, 'to': receiver}
+                )
+                chunk_logs = list(logs)
+                all_logs.extend(chunk_logs)
+                logger.debug(
+                    f"[PLEX Transfer Verify] Chunk {from_blk}-{to_blk}: {len(chunk_logs)} logs"
+                )
+            except Exception as chunk_err:
+                logger.warning(
+                    f"[PLEX Transfer Verify] Chunk {from_blk}-{to_blk} failed: {chunk_err}"
+                )
+                continue
+
+        logger.info(f"[PLEX Transfer Verify] Total found: {len(all_logs)} transfers")
+
+        # Sort by block number (newest first)
+        all_logs.sort(key=lambda x: x.get('blockNumber', 0), reverse=True)
+
+        for log in all_logs:
+            args = log.get('args', {})
+            value = args.get('value', 0)
+            tx_hash = log.get('transactionHash', b'').hex()
+            block_num = log.get('blockNumber', 0)
+
+            if value >= target_wei:
+                amount_found = Decimal(value) / Decimal(10**PLEX_DECIMALS)
+
+                # Get block timestamp
+                try:
+                    block = w3.eth.get_block(block_num)
+                    timestamp = block.get('timestamp', 0)
+                except Exception as e:
+                    logger.warning(f"Failed to get block timestamp: {e}")
+                    timestamp = 0
+
+                logger.success(
+                    f"[PLEX Transfer Verify] VERIFIED! TX={tx_hash}, "
+                    f"amount={amount_found} PLEX, block={block_num}"
+                )
+                return {
+                    "success": True,
+                    "tx_hash": tx_hash,
+                    "amount": amount_found,
+                    "block": block_num,
+                    "timestamp": timestamp,
+                }
+
+        logger.warning(
+            f"[PLEX Transfer Verify] No transfer found from {mask_address(sender)} "
+            f"with amount >= {amount} PLEX"
+        )
+        return {"success": False, "error": "Transfer not found or amount insufficient"}
+
+    def scan_plex_payments(
+        self,
+        w3: Web3,
+        from_address: str,
+        since_block: int | None = None,
+        max_blocks: int = 100000,
+    ) -> list[dict[str, Any]]:
+        """
+        Scan all PLEX Transfer events from user wallet to system wallet.
+
+        Args:
+            w3: Web3 instance
+            from_address: User's wallet address
+            since_block: Starting block number (if None, scan from max_blocks ago)
+            max_blocks: Maximum number of blocks to scan back (if since_block is None)
+
+        Returns:
+            List of payment dictionaries with:
+            - tx_hash: str - transaction hash
+            - amount: Decimal - PLEX amount transferred
+            - block: int - block number
+            - timestamp: int - block timestamp
+        """
+        if not self.plex_token_address:
+            logger.error("PLEX token address not configured")
+            return []
+
+        try:
+            sender = to_checksum_address(from_address)
+            receiver = self.system_wallet_address
+            token_address = self.plex_token_address
+
+            latest = w3.eth.block_number
+
+            # Determine starting block
+            if since_block is not None:
+                from_block = max(0, since_block)
+            else:
+                from_block = max(0, latest - max_blocks)
+
+            logger.info(
+                f"[PLEX Scan] Scanning PLEX payments from {mask_address(sender)} "
+                f"to {mask_address(receiver)}, blocks {from_block} to {latest}"
+            )
+
+            contract = w3.eth.contract(address=token_address, abi=PLEX_ABI)
+
+            # Get all Transfer events from user to system wallet
+            logs = contract.events.Transfer.get_logs(
+                fromBlock=from_block,
+                toBlock='latest',
+                argument_filters={
+                    'from': sender,
+                    'to': receiver
+                }
+            )
+
+            payments = []
+
+            for log in logs:
+                args = log.get('args', {})
+                value = args.get('value', 0)
+                tx_hash = log['transactionHash'].hex()
+                block_num = log['blockNumber']
+
+                # Get block timestamp
+                try:
+                    block = w3.eth.get_block(block_num)
+                    timestamp = block.get('timestamp', 0)
+                except Exception as e:
+                    logger.warning(f"Failed to get block {block_num} timestamp: {e}")
+                    timestamp = 0
+
+                payments.append({
+                    'tx_hash': tx_hash,
+                    'amount': Decimal(value) / Decimal(10 ** PLEX_DECIMALS),
+                    'block': block_num,
+                    'timestamp': timestamp,
+                })
+
+            # Sort by block number (oldest first)
+            payments.sort(key=lambda x: x['block'])
+
+            logger.info(
+                f"[PLEX Scan] Found {len(payments)} PLEX payments from {mask_address(sender)}"
+            )
+
+            return payments
+
+        except Exception as e:
+            logger.error(f"PLEX payment scan failed for {mask_address(from_address)}: {e}")
+            return []

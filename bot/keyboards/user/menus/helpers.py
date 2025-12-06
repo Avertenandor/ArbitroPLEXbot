@@ -1,10 +1,12 @@
 """
 Helper functions for menu keyboards.
 
-This module contains utility functions used across different menu keyboards.
+This module contains utility functions and small helper keyboards
+used across different menu keyboards.
 """
 
-from aiogram.types import KeyboardButton
+from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
+from aiogram.utils.keyboard import ReplyKeyboardBuilder
 
 
 def build_level_button_text(
@@ -73,3 +75,29 @@ def add_navigation_buttons(
         builder.row(KeyboardButton(text="◀️ Назад"))
     elif include_main_menu:
         builder.row(KeyboardButton(text="📊 Главное меню"))
+
+
+def support_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Support menu reply keyboard.
+
+    Returns:
+        ReplyKeyboardMarkup with support options
+    """
+    builder = ReplyKeyboardBuilder()
+
+    builder.row(
+        KeyboardButton(text="✉️ Создать обращение"),
+    )
+    builder.row(
+        KeyboardButton(text="📋 Мои обращения"),
+    )
+    builder.row(
+        KeyboardButton(text="❓ FAQ"),
+    )
+    builder.row(
+        KeyboardButton(text="⬅ Назад"),
+        KeyboardButton(text="📊 Главное меню"),
+    )
+
+    return builder.as_markup(resize_keyboard=True)

@@ -17,10 +17,15 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from aiogram import Bot
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+
 from app.config.settings import settings
 from app.models.deposit import Deposit
 from app.models.user import User
-from app.services.deposit_service import DepositService
+from app.services.deposit.transaction_notifier import TransactionNotifier
+from app.services.deposit import DepositService
 from app.services.notification_service import NotificationService
 from app.utils.distributed_lock import get_distributed_lock
 from app.utils.security import mask_address, mask_tx_hash
@@ -260,21 +265,42 @@ class IncomingDepositService:
             # Confirm deposit
             await self.deposit_service.confirm_deposit(deposit.id, block_number)
 
-            # Notify user about new deposit and payment requirement
-            await self.notification_service.notify_user(
-                user.id,
-                f"✅ **Новый депозит зарегистрирован!**\n\n"
-                f"💰 Сумма: `{amount} USDT`\n"
-                f"📊 Депозит #{deposit.id}\n"
-                f"🔗 TX: `{tx_hash[:16]}...`\n\n"
-                f"⚠️ **ВАЖНО: Для активации депозита**\n"
-                f"Необходимо оплатить: **{int(daily_plex_required):,} PLEX**\n\n"
-                f"💳 Кошелек для оплаты:\n"
-                f"`{SYSTEM_WALLET}`\n\n"
-                f"После оплаты PLEX депозит начнет работать.\n"
-                f"Оплата требуется ежедневно (10 PLEX за каждый $1).\n"
-                f"Ваши индивидуальные сутки начнутся с момента первой оплаты."
-            )
+            # Send transaction notification using TransactionNotifier
+            try:
+                from bot.main import bot_instance
+
+                bot = bot_instance
+                if not bot:
+                    bot = Bot(
+                        token=settings.telegram_bot_token,
+                        default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN),
+                    )
+
+                notifier = TransactionNotifier(bot, self.session)
+                await notifier.notify_usdt_received(
+                    user_telegram_id=user.telegram_id,
+                    amount=amount,
+                    tx_hash=tx_hash,
+                    deposit_id=deposit.id,
+                    plex_daily=daily_plex_required,
+                )
+            except Exception as notif_error:
+                logger.warning(f"Failed to send transaction notification: {notif_error}")
+                # Fallback to old notification method
+                await self.notification_service.notify_user(
+                    user.id,
+                    f"✅ **Новый депозит зарегистрирован!**\n\n"
+                    f"💰 Сумма: `{amount} USDT`\n"
+                    f"📊 Депозит #{deposit.id}\n"
+                    f"🔗 TX: `{tx_hash[:16]}...`\n\n"
+                    f"⚠️ **ВАЖНО: Для активации депозита**\n"
+                    f"Необходимо оплатить: **{int(daily_plex_required):,} PLEX**\n\n"
+                    f"💳 Кошелек для оплаты:\n"
+                    f"`{SYSTEM_WALLET}`\n\n"
+                    f"После оплаты PLEX депозит начнет работать.\n"
+                    f"Оплата требуется ежедневно (10 PLEX за каждый $1).\n"
+                    f"Ваши индивидуальные сутки начнутся с момента первой оплаты."
+                )
 
             # Notify admins
             username = escape_md(user.username) if user.username else "без юзернейма"

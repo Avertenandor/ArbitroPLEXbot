@@ -1,0 +1,167 @@
+"""
+Deposit menu keyboards module.
+
+This module contains all deposit-related keyboards:
+- Deposit menu with levels
+- Instructions keyboard
+- Deposit levels keyboard with corridors
+"""
+
+from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
+from aiogram.utils.keyboard import ReplyKeyboardBuilder
+
+
+def deposit_menu_keyboard(
+    levels_status: dict[int, dict] | None = None,
+) -> ReplyKeyboardMarkup:
+    """
+    Deposit menu reply keyboard with status indicators.
+
+    Args:
+        levels_status: Optional dict with level statuses from DepositValidationService.get_available_levels()
+
+    Returns:
+        ReplyKeyboardMarkup with deposit options
+    """
+    builder = ReplyKeyboardBuilder()
+
+    # Default amounts if statuses not provided
+    default_amounts = {1: 10, 2: 50, 3: 100, 4: 150, 5: 300}
+
+    for level in [1, 2, 3, 4, 5]:
+        if levels_status and level in levels_status:
+            level_info = levels_status[level]
+            amount = level_info["amount"]
+            status = level_info["status"]
+            level_info.get("status_text", "")
+
+            # Build button text with status indicator
+            if status == "active":
+                button_text = f"✅ Level {level} ({amount} USDT) - Активен"
+            elif status == "available":
+                button_text = f"💰 Пополнить Level {level} ({amount} USDT)"
+            else:
+                # unavailable - show reason in button
+                error = level_info.get("error", "")
+                if "необходимо сначала купить" in error:
+                    button_text = f"🔒 Level {level} ({amount} USDT) - Нет предыдущего"
+                elif "временно недоступен" in error:
+                    button_text = f"🔒 Level {level} ({amount} USDT) - Закрыт"
+                else:
+                    button_text = f"🔒 Level {level} ({amount} USDT) - Недоступен"
+        else:
+            # Fallback to default
+            amount = default_amounts[level]
+            button_text = f"💰 Пополнить Level {level} ({amount} USDT)"
+
+        builder.row(KeyboardButton(text=button_text))
+
+    builder.row(
+        KeyboardButton(text="📊 Главное меню"),
+    )
+
+    return builder.as_markup(resize_keyboard=True)
+
+
+def instructions_keyboard(
+    levels_status: dict[int, dict] | None = None,
+) -> ReplyKeyboardMarkup:
+    """
+    Instructions keyboard with deposit levels and detail option.
+
+    Args:
+        levels_status: Optional dict with level statuses from DepositValidationService.get_available_levels()
+
+    Returns:
+        ReplyKeyboardMarkup with instructions options
+    """
+    builder = ReplyKeyboardBuilder()
+
+    builder.row(
+        KeyboardButton(text="📖 Подробная инструкция"),
+    )
+
+    # Default amounts if statuses not provided
+    default_amounts = {1: 10, 2: 50, 3: 100, 4: 150, 5: 300}
+
+    for level in [1, 2, 3, 4, 5]:
+        if levels_status and level in levels_status:
+            level_info = levels_status[level]
+            amount = level_info["amount"]
+            status = level_info["status"]
+
+            # Build button text with status indicator
+            if status == "active":
+                button_text = f"✅ Level {level} ({amount} USDT) - Активен"
+            elif status == "available":
+                button_text = f"💰 Пополнить Level {level} ({amount} USDT)"
+            else:
+                # unavailable - show reason in button
+                error = level_info.get("error", "")
+                if "необходимо сначала купить" in error:
+                    button_text = f"🔒 Level {level} ({amount} USDT) - Нет предыдущего"
+                elif "временно недоступен" in error:
+                    button_text = f"🔒 Level {level} ({amount} USDT) - Закрыт"
+                else:
+                    button_text = f"🔒 Level {level} ({amount} USDT) - Недоступен"
+        else:
+            # Fallback to default
+            amount = default_amounts[level]
+            button_text = f"💰 Пополнить Level {level} ({amount} USDT)"
+
+        builder.row(KeyboardButton(text=button_text))
+
+    builder.row(
+        KeyboardButton(text="📊 Главное меню"),
+    )
+
+    return builder.as_markup(resize_keyboard=True)
+
+
+def deposit_levels_keyboard(levels_status: dict | None = None) -> ReplyKeyboardMarkup:
+    """
+    Клавиатура выбора уровня депозита с коридорами сумм.
+
+    Args:
+        levels_status: Словарь со статусами уровней депозита.
+            Пример: {
+                "test": {"status": "available", "min": 30, "max": 100},
+                "level_1": {"status": "locked", "min": 100, "max": 500, "reason": "Нужен тестовый"},
+                "level_2": {"status": "active", "min": 500, "max": 1000},
+                ...
+            }
+
+    Returns:
+        ReplyKeyboardMarkup: Клавиатура с уровнями депозита
+    """
+    builder = ReplyKeyboardBuilder()
+
+    levels = [
+        ("test", "🎯 Тестовый"),
+        ("level_1", "💰 Уровень 1"),
+        ("level_2", "💎 Уровень 2"),
+        ("level_3", "🏆 Уровень 3"),
+        ("level_4", "👑 Уровень 4"),
+        ("level_5", "🚀 Уровень 5"),
+    ]
+
+    for level_type, emoji_name in levels:
+        if levels_status and level_type in levels_status:
+            info = levels_status[level_type]
+            status = info.get("status", "locked")
+            min_amt = info.get("min", 0)
+            max_amt = info.get("max", 0)
+
+            if status == "active":
+                text = f"✅ {emoji_name} (${min_amt}-${max_amt}) - Активен"
+            elif status == "available":
+                text = f"{emoji_name} (${min_amt}-${max_amt})"
+            else:  # locked
+                text = f"🔒 {emoji_name} (${min_amt}-${max_amt})"
+        else:
+            text = f"🔒 {emoji_name}"
+
+        builder.row(KeyboardButton(text=text))
+
+    builder.row(KeyboardButton(text="📊 Главное меню"))
+    return builder.as_markup(resize_keyboard=True)

@@ -16,8 +16,13 @@ try:
 except ImportError:
     redis = None  # type: ignore
 
+from aiogram import Bot
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+
 from app.config.settings import settings
 from app.services.blockchain_service import get_blockchain_service
+from app.services.deposit.transaction_notifier import TransactionNotifier
 from app.services.incoming_deposit_service import IncomingDepositService
 from app.utils.distributed_lock import DistributedLock
 

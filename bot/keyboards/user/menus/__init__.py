@@ -1,206 +1,91 @@
 """
 Menu keyboards module.
 
-This module contains standard menu keyboards for various user actions:
-- Balance menu
-- Deposit menu
-- Withdrawal menu
-- Referral menu
-- Settings menu
-- Profile menu
-- Contact management menus
-- Wallet menu
-- Support menu
-- Notification settings
-- Submenu keyboards
+This module provides a unified interface to all menu keyboards.
+All keyboards are organized into modular files for better maintainability:
+- main_menu.py: Main menu and submenu keyboards
+- deposit_menu.py: Deposit-related keyboards with levels
+- financial_menu.py: Financial operation keyboards
+- settings_menu.py: Settings and profile keyboards
+- helpers.py: Helper functions and small utility keyboards
+- contacts.py: Contact management keyboards
+- referral.py: Referral system keyboards
+
+All keyboards are re-exported here for backward compatibility.
 """
 
-from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
-from aiogram.utils.keyboard import ReplyKeyboardBuilder
+# Main menu keyboards
+from .main_menu import (
+    cabinet_submenu_keyboard,
+    finances_submenu_keyboard,
+    help_submenu_keyboard,
+    main_menu_keyboard,
+)
 
-# Import from submodules
-from .contacts import (
+# Deposit menu keyboards
+from .deposit_menu import (
+    deposit_levels_keyboard,
+    deposit_menu_keyboard,
+    instructions_keyboard,
+)
+
+# Financial menu keyboards
+from .financial_menu import (
+    balance_menu_keyboard,
+    earnings_dashboard_keyboard,
+    withdrawal_menu_keyboard,
+)
+
+# Settings menu keyboards
+from .settings_menu import (
     contact_input_keyboard,
     contact_update_menu_keyboard,
     contacts_choice_keyboard,
-)
-from .financial import (
-    balance_menu_keyboard,
-    deposit_menu_keyboard,
-    earnings_dashboard_keyboard,
-    wallet_menu_keyboard,
-    withdrawal_menu_keyboard,
-)
-from .helpers import add_navigation_buttons, build_level_button_text
-from .referral import referral_menu_keyboard
-from .settings import (
     notification_settings_reply_keyboard,
     profile_menu_keyboard,
     settings_menu_keyboard,
+    wallet_menu_keyboard,
 )
 
+# Helper keyboards and functions
+from .helpers import (
+    add_navigation_buttons,
+    build_level_button_text,
+    support_keyboard,
+)
 
-def support_keyboard() -> ReplyKeyboardMarkup:
-    """
-    Support menu reply keyboard.
-
-    Returns:
-        ReplyKeyboardMarkup with support options
-    """
-    builder = ReplyKeyboardBuilder()
-
-    builder.row(
-        KeyboardButton(text="✉️ Создать обращение"),
-    )
-    builder.row(
-        KeyboardButton(text="📋 Мои обращения"),
-    )
-    builder.row(
-        KeyboardButton(text="❓ FAQ"),
-    )
-    builder.row(
-        KeyboardButton(text="⬅ Назад"),
-        KeyboardButton(text="📊 Главное меню"),
-    )
-
-    return builder.as_markup(resize_keyboard=True)
-
-
-def instructions_keyboard(
-    levels_status: dict[int, dict] | None = None,
-) -> ReplyKeyboardMarkup:
-    """
-    Instructions keyboard with deposit levels and detail option.
-
-    Args:
-        levels_status: Optional dict with level statuses
-
-    Returns:
-        ReplyKeyboardMarkup with instructions options
-    """
-    builder = ReplyKeyboardBuilder()
-
-    builder.row(
-        KeyboardButton(text="📖 Подробная инструкция"),
-    )
-
-    default_amounts = {1: 10, 2: 50, 3: 100, 4: 150, 5: 300}
-
-    for level in [1, 2, 3, 4, 5]:
-        button_text = build_level_button_text(level, levels_status, default_amounts)
-        builder.row(KeyboardButton(text=button_text))
-
-    builder.row(
-        KeyboardButton(text="📊 Главное меню"),
-    )
-
-    return builder.as_markup(resize_keyboard=True)
-
-
-def finances_submenu_keyboard() -> ReplyKeyboardMarkup:
-    """
-    Finances submenu keyboard.
-
-    Returns:
-        ReplyKeyboardMarkup with finances options
-    """
-    builder = ReplyKeyboardBuilder()
-
-    builder.row(
-        KeyboardButton(text="💰 Депозит"),
-        KeyboardButton(text="💸 Вывод"),
-    )
-
-    builder.row(
-        KeyboardButton(text="📈 Мой заработок"),
-        KeyboardButton(text="📊 Мои средства"),
-    )
-
-    builder.row(
-        KeyboardButton(text="◀️ Назад"),
-    )
-
-    return builder.as_markup(resize_keyboard=True)
-
-
-def cabinet_submenu_keyboard() -> ReplyKeyboardMarkup:
-    """
-    User cabinet submenu keyboard.
-
-    Returns:
-        ReplyKeyboardMarkup with cabinet options
-    """
-    builder = ReplyKeyboardBuilder()
-
-    builder.row(
-        KeyboardButton(text="📦 Мои депозиты"),
-        KeyboardButton(text="📜 История операций"),
-    )
-
-    builder.row(
-        KeyboardButton(text="📊 Калькулятор"),
-        KeyboardButton(text="💰 Мой заработок"),
-    )
-
-    builder.row(
-        KeyboardButton(text="◀️ Назад"),
-    )
-
-    return builder.as_markup(resize_keyboard=True)
-
-
-def help_submenu_keyboard() -> ReplyKeyboardMarkup:
-    """
-    Help submenu keyboard.
-
-    Returns:
-        ReplyKeyboardMarkup with help options
-    """
-    builder = ReplyKeyboardBuilder()
-
-    builder.row(
-        KeyboardButton(text="❓ FAQ"),
-        KeyboardButton(text="📖 Инструкции"),
-    )
-
-    builder.row(
-        KeyboardButton(text="📋 Правила"),
-        KeyboardButton(text="✉️ Написать в поддержку"),
-    )
-
-    builder.row(
-        KeyboardButton(text="📊 Главное меню"),
-    )
-
-    return builder.as_markup(resize_keyboard=True)
-
+# Referral menu keyboards
+from .referral import referral_menu_keyboard
 
 # Public exports for backward compatibility
 __all__ = [
+    # Main menu keyboards
+    "main_menu_keyboard",
+    "finances_submenu_keyboard",
+    "cabinet_submenu_keyboard",
+    "help_submenu_keyboard",
+    # Deposit menus
+    "deposit_menu_keyboard",
+    "deposit_levels_keyboard",
+    "instructions_keyboard",
     # Financial menus
     "balance_menu_keyboard",
-    "deposit_menu_keyboard",
     "withdrawal_menu_keyboard",
-    "wallet_menu_keyboard",
     "earnings_dashboard_keyboard",
-    # Referral menu
-    "referral_menu_keyboard",
     # Settings menus
     "settings_menu_keyboard",
     "profile_menu_keyboard",
     "notification_settings_reply_keyboard",
+    "wallet_menu_keyboard",
     # Contact menus
     "contact_update_menu_keyboard",
     "contact_input_keyboard",
     "contacts_choice_keyboard",
-    # Support and instructions
+    # Referral menu
+    "referral_menu_keyboard",
+    # Support
     "support_keyboard",
-    "instructions_keyboard",
-    # Submenu keyboards
-    "finances_submenu_keyboard",
-    "cabinet_submenu_keyboard",
-    "help_submenu_keyboard",
-    # Helpers
+    # Helper functions
     "build_level_button_text",
     "add_navigation_buttons",
 ]

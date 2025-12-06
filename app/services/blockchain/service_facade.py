@@ -487,6 +487,62 @@ class BlockchainService:
                 'transactions': [],
             }
 
+    async def verify_plex_transfer(
+        self,
+        from_address: str,
+        amount: Decimal,
+        lookback_blocks: int = 200,
+    ) -> dict[str, Any]:
+        """
+        Verify PLEX token transfer from address to system wallet.
+
+        Args:
+            from_address: Sender's wallet address
+            amount: Required PLEX amount (Decimal)
+            lookback_blocks: Number of blocks to scan back
+
+        Returns:
+            Dict with success, tx_hash, amount, block, timestamp, or error
+        """
+        def _verify(w3: Web3):
+            return self.payment_verifier.verify_plex_transfer(
+                w3, from_address, amount, lookback_blocks
+            )
+
+        try:
+            return await self.async_executor.run_with_failover(_verify)
+        except Exception as e:
+            logger.error(f"[PLEX Transfer Verify] Error: {e}")
+            return {"success": False, "error": str(e)}
+
+    async def scan_plex_payments(
+        self,
+        from_address: str,
+        since_block: int | None = None,
+        max_blocks: int = 100000,
+    ) -> list[dict[str, Any]]:
+        """
+        Scan all PLEX Transfer events from user wallet to system wallet.
+
+        Args:
+            from_address: User's wallet address
+            since_block: Starting block number (if None, scan from max_blocks ago)
+            max_blocks: Maximum number of blocks to scan back (if since_block is None)
+
+        Returns:
+            List of payment dictionaries with tx_hash, amount, block, timestamp
+        """
+        def _scan(w3: Web3):
+            return self.payment_verifier.scan_plex_payments(
+                w3, from_address, since_block, max_blocks
+            )
+
+        try:
+            return await self.async_executor.run_with_failover(_scan)
+        except Exception as e:
+            logger.error(f"[PLEX Scan] Error: {e}")
+            return []
+
     # ========== Block Operations ==========
 
     async def get_block_number(self) -> int:
