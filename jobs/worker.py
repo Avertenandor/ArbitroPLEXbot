@@ -50,6 +50,7 @@ from jobs.broker import broker  # noqa: F401
 
 # Import all tasks to register them with broker
 from jobs.tasks import (  # noqa: F401
+    blockchain_cache_sync,
     daily_rewards,
     deposit_monitoring,
     incoming_transfer_monitor,
