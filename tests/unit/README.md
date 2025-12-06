@@ -117,30 +117,36 @@ Comprehensive unit tests для критических финансовых фу
 
 ---
 
-### 4. test_financial_validation.py - Тесты финансовой валидации
-**Покрытие:** Deposit levels, Partner requirements, Withdrawal validation, Balance checks
+### 4. Тесты финансовой валидации (рефакторинг - 4 модуля)
+**Покрытие:** Deposit levels, Partner requirements, Withdrawal validation, Balance checks, ROI calculations, Decimal precision
 
-**Ключевые тесты:**
+**Структура после рефакторинга:**
+- `test_deposit_levels.py` - Уровни депозитов и требования к партнерам (15 тестов)
+- `test_withdrawal_validation.py` - Валидация выводов и лимиты (26 тестов)
+- `test_roi_calculations.py` - ROI расчеты и границы (6 тестов)
+- `test_decimal_operations.py` - Decimal точность и граничные условия (14 тестов)
 
-#### A. Deposit Level Configuration
+**Всего: 61 тест**
+
+#### A. test_deposit_levels.py - Deposit Level Configuration
 - ✅ **All levels defined:** Уровни 1-5 определены
 - ✅ **Positive amounts:** Все суммы положительные
 - ✅ **Ascending order:** 10 < 50 < 100 < 150 < 300
 - ✅ **Specific amounts:** Level 1=10, Level 2=50, Level 3=100, Level 4=150, Level 5=300
-
-#### B. Partner Requirements
-- ✅ **All defined:** Требования для уровней 1-5
+- ✅ **Partner requirements:** Требования для уровней 1-5
 - ✅ **Non-negative:** Все требования >= 0
 - ✅ **Level 1 no partners:** Level 1 не требует партнёров
+- ✅ **Level validation:** Проверка валидного диапазона (1-5)
 
-#### C. Withdrawal Minimum Amount
+#### B. test_withdrawal_validation.py - Withdrawal Validation
+**Minimum Amount:**
 - ✅ **Above minimum:** 10 >= 1 -> valid
 - ✅ **Exactly at minimum:** 1 >= 1 -> valid
 - ✅ **Below minimum:** 0.99 < 1 -> invalid
 - ✅ **Zero:** 0 < 1 -> invalid
 - ✅ **Negative:** -10 < 1 -> invalid
 
-#### D. Withdrawal Balance Check
+**Balance Check:**
 - ✅ **Sufficient balance:** 100 >= 50 -> valid
 - ✅ **Exact balance:** 100 >= 100 -> valid
 - ✅ **Insufficient:** 100 < 150 -> invalid
@@ -148,7 +154,7 @@ Comprehensive unit tests для критических финансовых фу
 - ✅ **Negative balance:** -10 < 10 -> invalid
 - ✅ **Very small difference:** 100.00 < 100.01 -> invalid
 
-#### E. X5 Withdrawal Rule (Detailed)
+**X5 Withdrawal Rule (Detailed):**
 - ✅ **First withdrawal:** 0 + 1000 <= 5000 -> valid
 - ✅ **Exactly at limit:** 4000 + 1000 = 5000 -> valid
 - ✅ **Exceeds limit:** 4500 + 600 > 5000 -> invalid
@@ -157,13 +163,13 @@ Comprehensive unit tests для критических финансовых фу
 - ✅ **Multiple small:** Накопительный эффект множества выводов
 - ✅ **Decimal precision:** 100.50 * 5 = 502.50
 
-#### F. Global Daily Limit
+**Global Daily Limit:**
 - ✅ **Within limit:** 5000 + 3000 <= 10000 -> valid
 - ✅ **Exactly at limit:** 7000 + 3000 = 10000 -> valid
 - ✅ **Exceeds limit:** 8000 + 3000 > 10000 -> invalid
 - ✅ **First withdrawal:** 0 + 5000 <= 10000 -> valid
 
-#### G. ROI Cap Boundaries
+#### C. test_roi_calculations.py - ROI Cap Boundaries
 - ✅ **At 500%:** 1000 * 5 = 5000
 - ✅ **Just under cap:** 4999.99 < 5000 -> not complete
 - ✅ **Exactly at cap:** 5000 >= 5000 -> complete
@@ -171,7 +177,8 @@ Comprehensive unit tests для критических финансовых фу
 - ✅ **Remaining calculation:** 5000 - 3000 = 2000
 - ✅ **Negative remaining -> 0:** max(5000 - 6000, 0) = 0
 
-#### H. Decimal Precision
+#### D. test_decimal_operations.py - Decimal Precision & Boundaries
+**Decimal Precision:**
 - ✅ **Addition:** 100.12 + 50.34 = 150.46
 - ✅ **Subtraction:** 100.12 - 50.34 = 49.78
 - ✅ **Multiplication:** 100.12 * 1.5 = 150.180
@@ -179,13 +186,13 @@ Comprehensive unit tests для критических финансовых фу
 - ✅ **Comparison:** 100.000001 < 100.000002
 - ✅ **Rounding:** 100.12345 -> 100.12 (2 decimals)
 
-#### I. Negative Amount Handling
+**Negative Amount Handling:**
 - ✅ **Negative deposit:** -100 <= 0 -> invalid
 - ✅ **Negative withdrawal:** -50 <= 0 -> invalid
 - ✅ **Negative balance:** balance < 0 -> detected
 - ✅ **Zero not negative:** 0 is not < 0
 
-#### J. Boundary Conditions
+**Boundary Conditions:**
 - ✅ **Min USDT unit:** 0.01 USDT
 - ✅ **Large amounts:** 1000000 * 0.01 = 10000
 - ✅ **Very small:** 0.000001 обрабатывается
@@ -250,8 +257,20 @@ python -m pytest tests/unit/test_encryption.py -v
 # Тесты расчёта наград
 python -m pytest tests/unit/test_reward_calculation.py -v
 
-# Тесты финансовой валидации
-python -m pytest tests/unit/test_financial_validation.py -v
+# Тесты финансовой валидации (все модули)
+python -m pytest tests/unit/test_deposit_levels.py tests/unit/test_withdrawal_validation.py tests/unit/test_roi_calculations.py tests/unit/test_decimal_operations.py -v
+
+# Тесты уровней депозитов
+python -m pytest tests/unit/test_deposit_levels.py -v
+
+# Тесты валидации выводов
+python -m pytest tests/unit/test_withdrawal_validation.py -v
+
+# Тесты ROI расчетов
+python -m pytest tests/unit/test_roi_calculations.py -v
+
+# Тесты Decimal операций
+python -m pytest tests/unit/test_decimal_operations.py -v
 ```
 
 ### С покрытием кода:
