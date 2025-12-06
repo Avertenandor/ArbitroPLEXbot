@@ -16,13 +16,8 @@ try:
 except ImportError:
     redis = None  # type: ignore
 
-from aiogram import Bot
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
-
 from app.config.settings import settings
 from app.services.blockchain_service import get_blockchain_service
-from app.services.deposit.transaction_notifier import TransactionNotifier
 from app.services.incoming_deposit_service import IncomingDepositService
 from app.utils.distributed_lock import DistributedLock
 
@@ -99,52 +94,71 @@ async def _monitor_incoming_async() -> None:
 
                 logger.info(f"Scanning blocks {from_block} to {to_block} for incoming USDT...")
 
-                # Get transfer events
+                # Get transfer events using sync Web3 in executor
+                import asyncio
+                from concurrent.futures import ThreadPoolExecutor
+                from web3 import Web3
+                
                 w3 = blockchain.get_active_web3()
-
-                # Filter for Transfer events to system wallet
-                transfer_event_signature = w3.keccak(text="Transfer(address,address,uint256)").hex()
-                padded_system_wallet = "0x" + settings.system_wallet_address[2:].lower().zfill(64)
-
-                logs = await blockchain._run_async_failover(
-                    lambda w: w.eth.get_logs({
-                        "fromBlock": from_block,
-                        "toBlock": to_block,
-                        "address": blockchain.usdt_contract_address,
-                        "topics": [
-                            transfer_event_signature,
-                            None,  # from (any)
-                            padded_system_wallet  # to (system wallet)
-                        ]
-                    })
+                
+                # Create USDT contract for event parsing
+                from app.services.blockchain.constants import USDT_ABI
+                usdt_contract = w3.eth.contract(
+                    address=Web3.to_checksum_address(blockchain.usdt_contract_address),
+                    abi=USDT_ABI
                 )
+                
+                # Scan in chunks to avoid RPC limits
+                chunk_size = 2000
+                all_logs = []
+                current_start = from_block
+                
+                while current_start <= to_block:
+                    current_end = min(current_start + chunk_size, to_block)
+                    
+                    try:
+                        # Get Transfer events TO system wallet
+                        with ThreadPoolExecutor() as executor:
+                            logs = await asyncio.get_event_loop().run_in_executor(
+                                executor,
+                                lambda: usdt_contract.events.Transfer.get_logs(
+                                    fromBlock=current_start,
+                                    toBlock=current_end,
+                                    argument_filters={
+                                        "to": Web3.to_checksum_address(settings.system_wallet_address)
+                                    }
+                                )
+                            )
+                        all_logs.extend(logs)
+                    except Exception as chunk_error:
+                        logger.warning(f"Chunk {current_start}-{current_end} failed: {chunk_error}")
+                    
+                    current_start = current_end + 1
 
-                logger.info(f"Found {len(logs)} transfer events")
+                logger.info(f"Found {len(all_logs)} transfer events")
 
-                for log in logs:
+                for log in all_logs:
                     try:
                         tx_hash = log["transactionHash"].hex()
                         block_number = log["blockNumber"]
 
-                        # Parse event
-                        from_hex = log["topics"][1].hex()
-                        from_address = "0x" + from_hex[26:]  # Last 40 chars (20 bytes)
+                        # Parse event args (from contract.events.Transfer.get_logs format)
+                        args = log.get("args", {})
+                        from_address = args.get("from") or args.get("src")
+                        to_address = args.get("to") or args.get("dst")
+                        value = args.get("value") or args.get("wad", 0)
+                        
+                        # Convert to checksum addresses
                         from_address = w3.to_checksum_address(from_address)
+                        to_address = w3.to_checksum_address(to_address)
 
-                        # Extract value
-                        value_hex = log["data"].hex()
-                        value_wei = int(value_hex, 16)
-                        amount = Decimal(value_wei) / Decimal(10 ** 18)  # USDT 18 decimals
-
-                        # Verify 'to' address just in case
-                        to_hex = log["topics"][2].hex()
-                        to_addr_extracted = "0x" + to_hex[26:]
-                        to_addr_checksum = w3.to_checksum_address(to_addr_extracted)
+                        # USDT on BSC has 18 decimals
+                        amount = Decimal(value) / Decimal(10 ** 18)
 
                         await service.process_incoming_transfer(
                             tx_hash=tx_hash,
                             from_address=from_address,
-                            to_address=to_addr_checksum,
+                            to_address=to_address,
                             amount=amount,
                             block_number=block_number
                         )
