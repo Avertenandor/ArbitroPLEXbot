@@ -82,7 +82,7 @@ class BlockchainIndexerService:
         usdt_addr = settings.usdt_contract_address
         self.usdt_address = usdt_addr.lower() if usdt_addr else None
 
-        plex_addr = settings.plex_token_address
+        plex_addr = settings.auth_plex_token_address
         self.plex_address = plex_addr.lower() if plex_addr else None
 
         # Indexing settings
