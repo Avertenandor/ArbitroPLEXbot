@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs ps clean migrate shell
+.PHONY: help build up down restart logs ps clean migrate shell import-partners
 
 # Default target
 help:
@@ -17,6 +17,8 @@ help:
 	@echo "  make migrate    - Run database migrations"
 	@echo "  make shell-bot  - Open shell in bot container"
 	@echo "  make shell-db   - Open PostgreSQL shell"
+	@echo "  make import-partners-dry - Test import partners (dry run)"
+	@echo "  make import-partners     - Import partners from CSV"
 
 # Build Docker images
 build:
@@ -75,3 +77,11 @@ shell-db:
 migration:
 	@read -p "Enter migration message: " msg; \
 	docker-compose -f docker-compose.python.yml exec bot alembic revision --autogenerate -m "$$msg"
+
+# Import partners database (dry run)
+import-partners-dry:
+	docker-compose -f docker-compose.python.yml exec bot python scripts/import_partners_base.py --dry-run
+
+# Import partners database (real import)
+import-partners:
+	docker-compose -f docker-compose.python.yml exec bot python scripts/import_partners_base.py

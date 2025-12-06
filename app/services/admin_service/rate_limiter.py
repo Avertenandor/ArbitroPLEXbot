@@ -189,8 +189,10 @@ class RateLimiter:
             if not super_admins:
                 return
 
-            # FIXED: Use context manager for Bot to prevent session leak
-            async with Bot(token=settings.telegram_bot_token) as bot:
+            # Create bot instance
+            bot = Bot(token=settings.telegram_bot_token)
+            
+            try:
                 notification_text = (
                     f"🚨 **Автоматическая блокировка**\n\n"
                     f"Telegram ID `{telegram_id}` был автоматически "
@@ -212,6 +214,8 @@ class RateLimiter:
                             f"Failed to notify super_admin "
                             f"{super_admin.id}: {e}"
                         )
+            finally:
+                await bot.session.close()
 
         except Exception as e:
             logger.error(f"Error notifying super_admins: {e}")

@@ -79,6 +79,13 @@ class ErrorHandlerMiddleware(BaseMiddleware):
             if bot and admin_ids:
                 try:
                     error_trace = traceback.format_exc()[-800:]  # Last 800 chars
+                    # Escape special characters for HTML
+                    error_trace_escaped = (
+                        error_trace
+                        .replace("&", "&amp;")
+                        .replace("<", "&lt;")
+                        .replace(">", "&gt;")
+                    )
 
                     # Get user info for context
                     user_info = "Unknown"
@@ -89,18 +96,19 @@ class ErrorHandlerMiddleware(BaseMiddleware):
                             else f"ID: {user.id}"
                         )
 
+                    error_msg = str(e)[:200].replace("<", "&lt;").replace(">", "&gt;")
                     text = (
-                        f"🚨 **CRITICAL ERROR**\n\n"
+                        f"🚨 <b>CRITICAL ERROR</b>\n\n"
                         f"👤 User: {user_info}\n"
-                        f"❌ Exception: `{type(e).__name__}`\n"
-                        f"📝 Message: `{str(e)[:200]}`\n\n"
-                        f"```\n{error_trace}\n```"
+                        f"❌ Exception: <code>{type(e).__name__}</code>\n"
+                        f"📝 Message: <code>{error_msg}</code>\n\n"
+                        f"<pre>{error_trace_escaped}</pre>"
                     )
                     # Notify first admin only (to avoid spam)
                     await bot.send_message(
                         chat_id=admin_ids[0],
                         text=text[:4096],
-                        parse_mode="Markdown",
+                        parse_mode="HTML",
                     )
                 except Exception as notify_error:
                     logger.error(f"Failed to notify admin: {notify_error}")

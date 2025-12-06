@@ -189,7 +189,7 @@ class UserRepository(BaseRepository[User]):
         from sqlalchemy import func
 
         stmt = select(func.count(User.id)).where(
-            User.is_banned is False
+            User.is_banned == False  # noqa: E712
         )
         result = await self.session.execute(stmt)
         return result.scalar() or 0

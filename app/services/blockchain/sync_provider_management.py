@@ -97,6 +97,23 @@ class SyncProviderManager:
             except Exception as e:
                 logger.error(f"Failed to init NodeReal: {e}")
 
+        # 3. NodeReal2 (Backup node - switch only by super admin)
+        nr2_url = self.settings.rpc_nodereal2_http
+        if nr2_url:
+            try:
+                w3_nr2 = Web3(Web3.HTTPProvider(
+                    nr2_url,
+                    request_kwargs={'timeout': rpc_timeout}
+                ))
+                w3_nr2.middleware_onion.inject(geth_poa_middleware, layer=0)
+                if w3_nr2.is_connected():
+                    self.providers["nodereal2"] = w3_nr2
+                    logger.info("✅ NodeReal2 (backup) provider connected (timeout=30s)")
+                else:
+                    logger.warning("❌ NodeReal2 (backup) provider failed to connect")
+            except Exception as e:
+                logger.error(f"Failed to init NodeReal2: {e}")
+
         if not self.providers:
             logger.error("🔥 NO BLOCKCHAIN PROVIDERS AVAILABLE! Service will fail.")
 

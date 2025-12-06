@@ -11,14 +11,16 @@ from aiogram.utils.keyboard import ReplyKeyboardBuilder
 def blockchain_settings_keyboard(
     active_provider: str,
     is_auto_switch: bool,
+    is_super_admin: bool = False,
 ) -> ReplyKeyboardMarkup:
     """
     Blockchain settings keyboard with provider selection and auto-switch toggle.
 
     Args:
         active_provider: Name of currently active blockchain provider
-                        ("quicknode" or "nodereal")
+                        ("quicknode", "nodereal", or "nodereal2")
         is_auto_switch: Whether automatic provider switching is enabled
+        is_super_admin: Whether the user is a super admin (for NodeReal2 access)
 
     Returns:
         ReplyKeyboardMarkup with blockchain configuration options
@@ -44,6 +46,15 @@ def blockchain_settings_keyboard(
         KeyboardButton(text=quicknode_text),
         KeyboardButton(text=nodereal_text),
     )
+
+    # NodeReal2 button - only for super admins
+    if is_super_admin:
+        nodereal2_text = (
+            "✅ NodeReal2 (резерв)"
+            if active_provider_lower == "nodereal2"
+            else "🔒 NodeReal2 (резерв)"
+        )
+        builder.row(KeyboardButton(text=nodereal2_text))
 
     # Auto-switch toggle button
     auto_switch_text = (
