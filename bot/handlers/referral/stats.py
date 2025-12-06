@@ -266,7 +266,7 @@ async def handle_referral_analytics(
         f"✅ С депозитами: *{conversion_stats['referrals_with_deposits']}* "
         f"({conversion_stats['conversion_rate']:.1f}%)\n"
     )
-    if conversion_stats['deposit_count'] > 0:
+    if conversion_stats.get('deposit_count', 0) > 0:
         total_dep = format_usdt(conversion_stats['total_deposits_amount'])
         avg_dep = format_usdt(conversion_stats['average_deposit'])
         text += (

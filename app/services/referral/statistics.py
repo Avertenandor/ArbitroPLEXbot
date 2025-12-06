@@ -349,6 +349,7 @@ class ReferralStatisticsManager:
                 "conversion_rate": Decimal("0"),
                 "total_deposits_amount": Decimal("0"),
                 "average_deposit": Decimal("0"),
+                "deposit_count": 0,
             }
 
         referral_user_ids = [r.referral_id for r in direct_referrals]
