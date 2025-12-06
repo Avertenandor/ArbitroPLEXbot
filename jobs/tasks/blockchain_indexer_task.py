@@ -36,9 +36,9 @@ async def run_blockchain_indexer() -> dict:
     try:
         async with async_session_maker() as session:
             # Get Web3 instance
-            from app.services.blockchain_service import BlockchainService
+            from app.services.blockchain_service import get_blockchain_service
 
-            blockchain_service = BlockchainService()
+            blockchain_service = get_blockchain_service()
             w3 = blockchain_service.w3
 
             if not w3:
@@ -114,9 +114,9 @@ async def index_user_on_registration(
 
     try:
         async with async_session_maker() as session:
-            from app.services.blockchain_service import BlockchainService
+            from app.services.blockchain_service import get_blockchain_service
 
-            blockchain_service = BlockchainService()
+            blockchain_service = get_blockchain_service()
             w3 = blockchain_service.w3
 
             if not w3:
@@ -144,9 +144,9 @@ async def get_indexer_statistics() -> dict:
     """
     try:
         async with async_session_maker() as session:
-            from app.services.blockchain_service import BlockchainService
+            from app.services.blockchain_service import get_blockchain_service
 
-            blockchain_service = BlockchainService()
+            blockchain_service = get_blockchain_service()
             w3 = blockchain_service.w3
 
             if not w3:

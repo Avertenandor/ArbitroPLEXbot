@@ -42,9 +42,9 @@ async def scan_and_cache_blockchain_transactions() -> dict:
             cache_service = BlockchainTxCacheService(session)
 
             # Get Web3 instance from blockchain service
-            from app.services.blockchain_service import BlockchainService
+            from app.services.blockchain_service import get_blockchain_service
 
-            blockchain_service = BlockchainService()
+            blockchain_service = get_blockchain_service()
             w3 = blockchain_service.w3
 
             if not w3:
