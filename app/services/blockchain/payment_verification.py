@@ -168,17 +168,20 @@ class PaymentVerifier:
         self,
         w3: Web3,
         user_wallet: str,
-        max_blocks: int = 100000,
+        max_blocks: int = 50000,
+        chunk_size: int = 5000,
     ) -> dict[str, Any]:
         """
         Scan all USDT Transfer events from user wallet to system wallet.
 
         Used to detect user's total deposit amount from blockchain history.
+        Scans in chunks to avoid RPC block range limits.
 
         Args:
             w3: Web3 instance
             user_wallet: User's wallet address
-            max_blocks: Maximum number of blocks to scan back
+            max_blocks: Maximum number of blocks to scan back (default 50000)
+            chunk_size: Number of blocks per scan chunk (default 5000)
 
         Returns:
             Dict with:
@@ -200,29 +203,50 @@ class PaymentVerifier:
 
             contract = w3.eth.contract(address=usdt_address, abi=USDT_ABI)
 
-            # Get all Transfer events from user to system wallet
-            logs = contract.events.Transfer.get_logs(
-                fromBlock=from_block,
-                toBlock='latest',
-                argument_filters={
-                    'from': sender,
-                    'to': receiver
-                }
+            logger.info(
+                f"[USDT Scan] Scanning {max_blocks} blocks in chunks of {chunk_size} "
+                f"for {mask_address(user_wallet)}"
             )
 
             transactions = []
             total_wei = 0
 
-            for log in logs:
-                args = log.get('args', {})
-                value = args.get('value', 0)
-                total_wei += value
+            # Scan in chunks from newest to oldest
+            current_end = latest
+            while current_end > from_block:
+                current_start = max(from_block, current_end - chunk_size)
 
-                transactions.append({
-                    'tx_hash': log['transactionHash'].hex(),
-                    'amount': Decimal(value) / Decimal(10 ** USDT_DECIMALS),
-                    'block': log['blockNumber'],
-                })
+                try:
+                    logs = contract.events.Transfer.get_logs(
+                        fromBlock=current_start,
+                        toBlock=current_end,
+                        argument_filters={
+                            'from': sender,
+                            'to': receiver
+                        }
+                    )
+
+                    logger.debug(
+                        f"[USDT Scan] Chunk {current_start}-{current_end}: {len(logs)} logs"
+                    )
+
+                    for log in logs:
+                        args = log.get('args', {})
+                        value = args.get('value', 0)
+                        total_wei += value
+
+                        transactions.append({
+                            'tx_hash': log['transactionHash'].hex(),
+                            'amount': Decimal(value) / Decimal(10 ** USDT_DECIMALS),
+                            'block': log['blockNumber'],
+                        })
+
+                except Exception as chunk_error:
+                    logger.warning(
+                        f"[USDT Scan] Chunk {current_start}-{current_end} failed: {chunk_error}"
+                    )
+
+                current_end = current_start
 
             # Sort by block number (oldest first)
             transactions.sort(key=lambda x: x['block'])
@@ -237,7 +261,7 @@ class PaymentVerifier:
             }
 
             logger.info(
-                f"Deposit scan for {mask_address(user_wallet)}: "
+                f"[USDT Scan] Complete for {mask_address(user_wallet)}: "
                 f"found {result['tx_count']} txs, total {result['total_amount']} USDT"
             )
 
