@@ -1,0 +1,381 @@
+"""
+Balance notification service.
+
+Sends hourly notifications to active users about their arbitrage earnings.
+Users receive notifications if they have:
+- Active deposits (confirmed)
+- Work status = "active" (PLEX payments are up to date)
+- Balance > 0
+- Not blocked the bot
+"""
+
+import random
+from decimal import Decimal
+from typing import TYPE_CHECKING
+
+from loguru import logger
+from sqlalchemy import and_, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.models.referral import Referral
+from app.models.user import User
+from app.services.base_service import BaseService
+
+if TYPE_CHECKING:
+    from aiogram import Bot
+
+
+class BalanceNotificationService(BaseService):
+    """
+    Service for sending hourly balance notifications to active users.
+
+    Sends information about:
+    - Number of arbitrage operations (generated within 180-300 range)
+    - Amount in work (total deposited)
+    - User's earnings share
+    - Partner earnings
+    - Income from partners
+    - Available for withdrawal
+    """
+
+    # Arbitrage operations corridor (per hour)
+    MIN_OPERATIONS = 181  # Avoid round 180
+    MAX_OPERATIONS = 299  # Avoid round 300
+    OPERATIONS_MEAN_SHIFT = 0.7  # Shift towards 300 (0.5 = center, 1.0 = max)
+
+    def __init__(self, session: AsyncSession) -> None:
+        """Initialize balance notification service."""
+        super().__init__(session)
+
+    def _generate_operations_count(self) -> int:
+        """
+        Generate random number of operations in corridor 180-300.
+
+        Uses weighted distribution shifted towards 300, avoiding round numbers.
+
+        Returns:
+            Number of operations (181-299, biased towards higher values)
+        """
+        # Use beta distribution to shift towards higher values
+        # alpha=2, beta=5 gives left skew, we invert for right skew
+        raw = random.betavariate(5, 2)  # Right-skewed distribution
+
+        # Map to our range
+        operations = int(self.MIN_OPERATIONS + raw * (self.MAX_OPERATIONS - self.MIN_OPERATIONS))
+
+        # Ensure we're in range and avoid common round numbers
+        operations = max(self.MIN_OPERATIONS, min(self.MAX_OPERATIONS, operations))
+
+        # Avoid numbers ending in 0 or 5 (feel more "random")
+        while operations % 10 == 0 or operations % 10 == 5:
+            operations += random.choice([-1, 1, 2, -2])
+            operations = max(self.MIN_OPERATIONS, min(self.MAX_OPERATIONS, operations))
+
+        return operations
+
+    async def get_eligible_users(self) -> list[User]:
+        """
+        Get users eligible for balance notifications.
+
+        Criteria:
+        - work_status = "active" (PLEX is paid)
+        - balance > 0 OR has confirmed deposits
+        - bot_blocked = False
+        - is_banned = False
+        - Has at least one confirmed deposit
+
+        Returns:
+            List of eligible users with deposits loaded
+        """
+        stmt = (
+            select(User)
+            .where(
+                and_(
+                    User.work_status == "active",
+                    User.bot_blocked == False,  # noqa: E712
+                    User.is_banned == False,  # noqa: E712
+                    User.is_active == True,  # noqa: E712
+                )
+            )
+            .options(selectinload(User.deposits))
+        )
+
+        result = await self.session.execute(stmt)
+        users = list(result.scalars().all())
+
+        # Filter to only users with confirmed deposits or balance > 0
+        eligible_users = []
+        for user in users:
+            has_confirmed_deposit = any(
+                d.status == "confirmed" and d.usdt_confirmed
+                for d in user.deposits
+            )
+            has_balance = user.balance > Decimal("0")
+
+            if has_confirmed_deposit or has_balance:
+                eligible_users.append(user)
+
+        logger.info(f"Found {len(eligible_users)} eligible users for balance notifications")
+        return eligible_users
+
+    async def get_user_statistics(self, user: User) -> dict:
+        """
+        Get statistics for a user's notification.
+
+        Args:
+            user: User to get statistics for
+
+        Returns:
+            Dict with:
+            - operations_count: Random number of operations
+            - amount_in_work: Total deposited amount
+            - user_earnings: User's earnings share (last hour simulation)
+            - partners_earnings: Total earnings of user's direct referrals
+            - income_from_partners: User's income from partner earnings
+            - available_for_withdrawal: Current balance
+        """
+        # Generate operations count
+        operations_count = self._generate_operations_count()
+
+        # Amount in work = sum of confirmed deposits
+        amount_in_work = sum(
+            d.amount for d in user.deposits
+            if d.status == "confirmed" and d.usdt_confirmed
+        )
+
+        # Calculate simulated hourly earnings based on daily rate
+        # Average daily ROI is ~1.117%, so hourly is ~0.0465%
+        hourly_rate = Decimal("0.000465")  # ~1.117% / 24
+        user_earnings = amount_in_work * hourly_rate
+
+        # Round to reasonable precision
+        user_earnings = user_earnings.quantize(Decimal("0.0001"))
+
+        # Get partner statistics
+        partners_stats = await self._get_partners_statistics(user.id)
+
+        return {
+            "operations_count": operations_count,
+            "amount_in_work": amount_in_work,
+            "user_earnings": user_earnings,
+            "partners_earnings": partners_stats["partners_earnings"],
+            "income_from_partners": partners_stats["income_from_partners"],
+            "available_for_withdrawal": user.balance,
+        }
+
+    async def _get_partners_statistics(self, user_id: int) -> dict:
+        """
+        Get statistics about user's partners (referrals).
+
+        Args:
+            user_id: User ID to get partner stats for
+
+        Returns:
+            Dict with partners_earnings and income_from_partners
+        """
+        # Get total earned from direct referrals (level 1)
+        stmt = select(
+            func.coalesce(func.sum(Referral.total_earned), Decimal("0"))
+        ).where(
+            and_(
+                Referral.referrer_id == user_id,
+                Referral.level == 1,  # Only direct referrals
+            )
+        )
+        result = await self.session.execute(stmt)
+        income_from_partners = result.scalar() or Decimal("0")
+
+        # Get IDs of direct referrals
+        referral_ids_stmt = select(Referral.referral_id).where(
+            and_(
+                Referral.referrer_id == user_id,
+                Referral.level == 1,
+            )
+        )
+        referral_ids_result = await self.session.execute(referral_ids_stmt)
+        referral_ids = list(referral_ids_result.scalars().all())
+
+        # Calculate total earnings of partners
+        partners_earnings = Decimal("0")
+        if referral_ids:
+            partners_stmt = select(
+                func.coalesce(func.sum(User.total_earned), Decimal("0"))
+            ).where(User.id.in_(referral_ids))
+            partners_result = await self.session.execute(partners_stmt)
+            partners_earnings = partners_result.scalar() or Decimal("0")
+
+        return {
+            "partners_earnings": partners_earnings,
+            "income_from_partners": income_from_partners,
+        }
+
+    def format_notification_message(self, stats: dict) -> str:
+        """
+        Format the notification message with statistics.
+
+        Args:
+            stats: Statistics dictionary from get_user_statistics
+
+        Returns:
+            Formatted message string with Markdown
+        """
+        operations = stats["operations_count"]
+        amount_in_work = stats["amount_in_work"]
+        user_earnings = stats["user_earnings"]
+        partners_earnings = stats["partners_earnings"]
+        income_from_partners = stats["income_from_partners"]
+        available = stats["available_for_withdrawal"]
+
+        message = (
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "🤖 *ARBITROBOT V.7.2*\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+
+            f"📊 *Арбитражная система* провела\n"
+            f"за последний час: *{operations}* операций\n\n"
+
+            "┌─────────────────────┐\n"
+            "│   💼 *ВАША РАБОТА*   │\n"
+            "└─────────────────────┘\n\n"
+
+            f"💰 В работе: *{amount_in_work:.2f} USDT*\n"
+            f"📈 Ваша доля успеха: *{user_earnings:.4f} USDT*\n\n"
+
+            "┌─────────────────────┐\n"
+            "│  👥 *ПАРТНЁРСКАЯ*   │\n"
+            "│     *ПРОГРАММА*     │\n"
+            "└─────────────────────┘\n\n"
+
+            f"💸 Партнёры заработали: *{partners_earnings:.4f} USDT*\n"
+            f"🎁 Ваш доход от партнёров: *{income_from_partners:.4f} USDT*\n\n"
+
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"💵 *Доступно к выводу:* `{available:.4f} USDT`\n"
+            "━━━━━━━━━━━━━━━━━━━━━━\n\n"
+
+            "_Арбитробот благодарит вас за доверие_\n"
+            "_и продолжает развиваться!_ 🚀"
+        )
+
+        return message
+
+    async def send_notification_to_user(
+        self,
+        bot: "Bot",
+        user: User,
+    ) -> bool:
+        """
+        Send balance notification to a single user.
+
+        Args:
+            bot: Telegram bot instance
+            user: User to send notification to
+
+        Returns:
+            True if sent successfully
+        """
+        try:
+            # Get statistics
+            stats = await self.get_user_statistics(user)
+
+            # Format message
+            message = self.format_notification_message(stats)
+
+            # Send notification
+            await bot.send_message(
+                chat_id=user.telegram_id,
+                text=message,
+                parse_mode="Markdown",
+            )
+
+            logger.debug(
+                f"Balance notification sent to user {user.telegram_id}",
+                extra={
+                    "user_id": user.id,
+                    "telegram_id": user.telegram_id,
+                    "operations": stats["operations_count"],
+                },
+            )
+            return True
+
+        except Exception as e:
+            error_msg = str(e).lower()
+
+            # Check if bot was blocked by user
+            if "blocked" in error_msg or "403" in error_msg:
+                logger.warning(
+                    f"Bot blocked by user {user.telegram_id}, skipping notification"
+                )
+                # Mark user as bot_blocked
+                try:
+                    from datetime import UTC, datetime
+                    user.bot_blocked = True
+                    user.bot_blocked_at = datetime.now(UTC)
+                    await self.session.flush()
+                except Exception as update_error:
+                    logger.error(f"Failed to mark user as bot_blocked: {update_error}")
+            else:
+                logger.error(
+                    f"Failed to send balance notification to user {user.telegram_id}: {e}"
+                )
+
+            return False
+
+    async def send_notifications_to_all_eligible(
+        self,
+        bot: "Bot",
+    ) -> dict:
+        """
+        Send balance notifications to all eligible users.
+
+        Args:
+            bot: Telegram bot instance
+
+        Returns:
+            Dict with statistics:
+            - total: Total eligible users
+            - sent: Successfully sent
+            - failed: Failed to send
+            - blocked: Users who blocked the bot
+        """
+        stats = {
+            "total": 0,
+            "sent": 0,
+            "failed": 0,
+            "blocked": 0,
+        }
+
+        try:
+            users = await self.get_eligible_users()
+            stats["total"] = len(users)
+
+            for user in users:
+                try:
+                    success = await self.send_notification_to_user(bot, user)
+                    if success:
+                        stats["sent"] += 1
+                    else:
+                        # Check if it was a block
+                        if user.bot_blocked:
+                            stats["blocked"] += 1
+                        else:
+                            stats["failed"] += 1
+                except Exception as e:
+                    logger.error(f"Error processing user {user.id}: {e}")
+                    stats["failed"] += 1
+
+            # Commit any changes (bot_blocked flags)
+            await self.session.commit()
+
+            logger.info(
+                f"Balance notifications complete: "
+                f"total={stats['total']}, sent={stats['sent']}, "
+                f"failed={stats['failed']}, blocked={stats['blocked']}"
+            )
+
+        except Exception as e:
+            logger.error(f"Error in send_notifications_to_all_eligible: {e}")
+            raise
+
+        return stats

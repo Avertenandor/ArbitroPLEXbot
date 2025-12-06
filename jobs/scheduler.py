@@ -70,6 +70,7 @@ from jobs.tasks.notification_fallback_processor import (
 )
 from jobs.tasks.notification_retry import process_notification_retries
 from jobs.tasks.payment_retry import process_payment_retries
+from jobs.tasks.balance_notification import send_balance_notifications
 from jobs.tasks.plex_balance_monitor import monitor_plex_balances
 from jobs.tasks.plex_payment_monitor import monitor_plex_payments
 from jobs.tasks.stuck_transaction_monitor import monitor_stuck_transactions
@@ -145,6 +146,16 @@ def create_scheduler() -> AsyncIOScheduler:
         trigger=IntervalTrigger(hours=1),
         id="plex_balance_monitor",
         name="PLEX Balance Monitor",
+        replace_existing=True,
+    )
+
+    # Balance notifications - every 1 hour
+    # Sends earnings notifications to active users with PLEX payments up to date
+    scheduler.add_job(
+        send_balance_notifications.send,
+        trigger=IntervalTrigger(hours=1),
+        id="balance_notifications",
+        name="Hourly Balance Notifications",
         replace_existing=True,
     )
 
@@ -256,7 +267,7 @@ def create_scheduler() -> AsyncIOScheduler:
         replace_existing=True,
     )
 
-    logger.info("Task scheduler configured with 17 jobs")
+    logger.info("Task scheduler configured with 18 jobs")
 
     return scheduler
 
