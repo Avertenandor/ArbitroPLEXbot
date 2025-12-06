@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.services.blockchain_service import get_blockchain_service
 from app.services.plex_payment_service import PlexPaymentService
+from bot.constants.rules import MINIMUM_PLEX_BALANCE, get_available_plex_balance
 from bot.i18n.loader import get_translator, get_user_language
 from bot.utils.user_loader import UserLoader
 
@@ -148,11 +149,19 @@ async def show_wallet_balance(
         usdt_display = format_balance(usdt_balance, 2)
         bnb_display = format_balance(bnb_balance, 6)
 
-        # Build response message
+        # Calculate available PLEX (above minimum reserve)
+        available_plex = Decimal("0")
+        if plex_balance is not None:
+            available_plex = get_available_plex_balance(plex_balance)
+        available_plex_display = format_balance(available_plex, 2)
+
+        # Build response message with available balance info
         text = (
             "💰 *Баланс вашего кошелька*\n"
             "━━━━━━━━━━━━━━━━━━━━━━\n\n"
             f"🟣 *PLEX:* `{plex_display}` PLEX\n"
+            f"  🔒 _Несгораемый минимум:_ `{MINIMUM_PLEX_BALANCE:,}` PLEX\n"
+            f"  💳 _Доступно для оплаты:_ `{available_plex_display}` PLEX\n\n"
             f"💵 *USDT:* `{usdt_display}` USDT\n"
             f"🟡 *BNB:* `{bnb_display}` BNB\n\n"
         )
@@ -163,6 +172,8 @@ async def show_wallet_balance(
             days_left = forecast["days_left"]
             warning = forecast["warning"]
             active_deposits_sum = forecast["active_deposits_sum"]
+            available_from_forecast = forecast.get("available_plex", Decimal("0"))
+            minimum_reserve = forecast.get("minimum_reserve", Decimal(str(MINIMUM_PLEX_BALANCE)))
 
             # Only show forecast if user has active deposits
             if daily_plex > 0:
@@ -170,8 +181,9 @@ async def show_wallet_balance(
                 text += "📊 *Прогноз расхода PLEX*\n\n"
                 text += f"📌 Активные депозиты: `{float(active_deposits_sum):,.2f}` USD\n"
                 text += f"⚡️ Дневной расход: `{float(daily_plex):,.0f}` PLEX/день\n"
+                text += f"💳 Доступно для оплаты: `{float(available_from_forecast):,.0f}` PLEX\n"
 
-                # Format days left display
+                # Format days left display (based on available balance)
                 if days_left == float('inf'):
                     days_display = "∞"
                 elif days_left >= 365:
@@ -185,7 +197,8 @@ async def show_wallet_balance(
 
                 # Add warning if critically low
                 if warning:
-                    text += "⚠️ *ВНИМАНИЕ!* Баланс PLEX заканчивается!\n"
+                    text += "⚠️ *ВНИМАНИЕ!* Доступный баланс PLEX заканчивается!\n"
+                    text += f"🔒 Помните: {int(minimum_reserve):,} PLEX — несгораемый минимум.\n"
                     text += "Пополните баланс для продолжения работы.\n\n"
 
         text += (

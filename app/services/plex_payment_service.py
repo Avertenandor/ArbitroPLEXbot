@@ -17,7 +17,10 @@ from app.repositories.user_repository import UserRepository
 from app.services.blockchain_service import get_blockchain_service
 from bot.constants.rules import (
     LEVELS,
+    MINIMUM_PLEX_BALANCE,
     PLEX_PER_DOLLAR_DAILY,
+    can_spend_plex,
+    get_available_plex_balance,
     get_max_deposits_for_plex_balance,
     get_user_level,
 )
@@ -325,6 +328,74 @@ class PlexPaymentService:
             "max_allowed": max_deposits,
         }
 
+    async def check_can_afford_payment(
+        self, user_id: int, payment_amount: Decimal
+    ) -> dict:
+        """
+        Check if user can afford a PLEX payment while keeping minimum reserve.
+
+        The minimum reserve (5000 PLEX) must always remain on the wallet.
+        Only PLEX above this minimum can be used for payments.
+
+        Args:
+            user_id: User ID
+            payment_amount: Amount of PLEX to spend
+
+        Returns:
+            Dict with:
+                - can_afford: bool - True if user can make payment
+                - total_balance: Decimal - Total PLEX on wallet
+                - available_balance: Decimal - PLEX available for spending
+                - balance_after: Decimal - Balance after payment
+                - shortage: Decimal - How much more PLEX needed (if any)
+                - error: str | None - Error message if failed
+        """
+        user = await self._user_repo.get_by_id(user_id)
+        if not user or not user.wallet_address:
+            return {
+                "can_afford": False,
+                "total_balance": Decimal("0"),
+                "available_balance": Decimal("0"),
+                "balance_after": Decimal("0"),
+                "shortage": payment_amount,
+                "error": "User not found or no wallet",
+            }
+
+        # Get PLEX balance from blockchain
+        blockchain = get_blockchain_service()
+        plex_balance = await blockchain.get_plex_balance(user.wallet_address)
+
+        if plex_balance is None:
+            logger.error(f"Failed to get PLEX balance for user {user_id}")
+            return {
+                "can_afford": False,
+                "total_balance": Decimal("0"),
+                "available_balance": Decimal("0"),
+                "balance_after": Decimal("0"),
+                "shortage": payment_amount,
+                "error": "Could not verify PLEX balance",
+            }
+
+        # Calculate available balance (above minimum reserve)
+        available = get_available_plex_balance(plex_balance)
+        can_afford = can_spend_plex(plex_balance, payment_amount)
+        balance_after = plex_balance - payment_amount
+
+        shortage = Decimal("0")
+        if not can_afford:
+            # Need: payment_amount from available balance
+            # shortage = payment_amount - available
+            shortage = payment_amount - available
+
+        return {
+            "can_afford": can_afford,
+            "total_balance": plex_balance,
+            "available_balance": available,
+            "balance_after": balance_after,
+            "shortage": shortage,
+            "error": None,
+        }
+
     async def get_insufficient_plex_message(
         self, user_id: int
     ) -> str | None:
@@ -348,13 +419,17 @@ class PlexPaymentService:
         shortage = check.get("shortage", 0)
         required = check.get("required_plex", 0)
         current = check.get("plex_balance", 0)
+        available = get_available_plex_balance(current) if current else Decimal("0")
 
         return (
             f"⚠️ **ВНИМАНИЕ: Недостаточный баланс PLEX!**\n\n"
             f"Для работы с вашими депозитами требуется:\n"
-            f"• Баланс PLEX: **{required:,}** токенов\n"
-            f"• Ваш баланс: **{int(current):,}** токенов\n"
-            f"• Недостаток: **{shortage:,}** токенов\n\n"
+            f"• Требуемый уровень: **{required:,}** PLEX\n"
+            f"• Ваш баланс: **{int(current):,}** PLEX\n"
+            f"• Недостаток: **{shortage:,}** PLEX\n\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"🔒 **Несгораемый минимум:** {MINIMUM_PLEX_BALANCE:,} PLEX\n"
+            f"💰 **Доступно для оплаты:** {int(available):,} PLEX\n\n"
             f"❌ **Без достаточного баланса PLEX:**\n"
             f"• Новые депозиты будут заблокированы\n"
             f"• Существующие депозиты могут быть возвращены\n\n"
@@ -368,24 +443,33 @@ class PlexPaymentService:
         Calculates daily PLEX cost based on active deposits and estimates
         how many days the current PLEX balance will last.
 
+        Important: Days left is calculated based on AVAILABLE balance
+        (total - minimum reserve), not total balance.
+
         Args:
             user_id: User ID
 
         Returns:
             Dict containing:
                 - daily_plex: Daily PLEX consumption (Decimal)
-                - plex_balance: Current PLEX balance (Decimal)
-                - days_left: Days until PLEX runs out (float)
-                - warning: True if balance is critically low (bool)
+                - plex_balance: Current total PLEX balance (Decimal)
+                - available_plex: PLEX available for spending (Decimal)
+                - minimum_reserve: Non-withdrawable minimum (Decimal)
+                - days_left: Days until available PLEX runs out (float)
+                - warning: True if available balance is critically low (bool)
                 - active_deposits_sum: Total sum of active deposits in USD (Decimal)
                 - error: Error message if unable to calculate (str | None)
         """
+        minimum_reserve = Decimal(str(MINIMUM_PLEX_BALANCE))
+
         # Get user data
         user = await self._user_repo.get_by_id(user_id)
         if not user or not user.wallet_address:
             return {
                 "daily_plex": Decimal("0"),
                 "plex_balance": Decimal("0"),
+                "available_plex": Decimal("0"),
+                "minimum_reserve": minimum_reserve,
                 "days_left": 0.0,
                 "warning": True,
                 "active_deposits_sum": Decimal("0"),
@@ -408,25 +492,33 @@ class PlexPaymentService:
             return {
                 "daily_plex": daily_plex,
                 "plex_balance": Decimal("0"),
+                "available_plex": Decimal("0"),
+                "minimum_reserve": minimum_reserve,
                 "days_left": 0.0,
                 "warning": True,
                 "active_deposits_sum": active_deposits_sum,
                 "error": "Could not verify PLEX balance. Please try again later.",
             }
 
-        # Calculate days left
+        # Calculate available balance (above minimum reserve)
+        available_plex = get_available_plex_balance(plex_balance)
+
+        # Calculate days left based on AVAILABLE balance, not total
+        # User can only spend from available balance
         if daily_plex > 0:
-            days_left = float(plex_balance / daily_plex)
+            days_left = float(available_plex / daily_plex)
         else:
             # No active deposits - no daily cost
             days_left = float('inf')
 
-        # Warning if less than 3 days of PLEX left
+        # Warning if less than 3 days of available PLEX left
         warning = days_left < 3.0 and daily_plex > 0
 
         return {
             "daily_plex": daily_plex,
             "plex_balance": plex_balance,
+            "available_plex": available_plex,
+            "minimum_reserve": minimum_reserve,
             "days_left": days_left,
             "warning": warning,
             "active_deposits_sum": active_deposits_sum,
