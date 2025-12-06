@@ -641,6 +641,22 @@ async def process_password_confirmation(
         },
     )
 
+    # Index user's wallet for instant transaction history
+    try:
+        from jobs.tasks.blockchain_indexer_task import index_user_on_registration
+
+        # Run indexing in background (don't block registration)
+        import asyncio
+        asyncio.create_task(
+            index_user_on_registration(
+                wallet_address=wallet_address,
+                user_id=user.id,
+            )
+        )
+        logger.info(f"Started wallet indexing for user {user.id}")
+    except Exception as index_error:
+        logger.warning(f"Failed to start wallet indexing: {index_error}")
+
     # R1-19: Save plain password in Redis for 1 hour
     redis_client = data.get("redis_client")
     if redis_client and password:

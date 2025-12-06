@@ -55,6 +55,7 @@ from app.tasks.reward_accrual_task import run_individual_reward_accrual
 from jobs.tasks.admin_session_cleanup import (
     cleanup_expired_admin_sessions,
 )
+from jobs.tasks.blockchain_indexer_task import run_blockchain_indexer
 from jobs.tasks.blockchain_tx_cache_scan import (
     scan_and_cache_blockchain_transactions,
 )
@@ -162,7 +163,17 @@ def create_scheduler() -> AsyncIOScheduler:
         replace_existing=True,
     )
 
-    # Blockchain TX Cache scan - every 5 minutes
+    # Blockchain Indexer - every 30 seconds for near real-time monitoring
+    # Indexes new blocks and caches transactions instantly
+    scheduler.add_job(
+        run_blockchain_indexer,
+        trigger=IntervalTrigger(seconds=30),
+        id="blockchain_indexer",
+        name="Blockchain Indexer (Real-time)",
+        replace_existing=True,
+    )
+
+    # Blockchain TX Cache scan - every 5 minutes (legacy backup)
     # Caches blockchain transactions to reduce RPC calls
     scheduler.add_job(
         scan_and_cache_blockchain_transactions,
