@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
-import httpx
+import aiohttp
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -85,11 +85,11 @@ class DeepHistorySync:
         logger.info("Finding first transaction block via BSCScan API...")
         
         try:
-            async with httpx.AsyncClient() as client:
+            async with aiohttp.ClientSession() as client:
                 # Get first normal transaction
                 url = f"https://api.bscscan.com/api?module=account&action=txlist&address={self.system_wallet}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc"
-                resp = await client.get(url, timeout=30)
-                data = resp.json()
+                async with client.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                    data = await resp.json()
                 
                 if data.get("status") == "1" and data.get("result"):
                     first_block = int(data["result"][0]["blockNumber"])
