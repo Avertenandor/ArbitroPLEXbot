@@ -143,6 +143,13 @@ class BalanceNotificationService(BaseService):
         # Get partner statistics
         partners_stats = await self._get_partners_statistics(user.id)
 
+        # PLEX statistics
+        plex_balance = user.last_plex_balance or Decimal("0")
+        required_daily_plex = user.required_daily_plex  # 10 PLEX per $1 of deposit
+        plex_days_remaining = 0
+        if required_daily_plex > 0:
+            plex_days_remaining = int(plex_balance / required_daily_plex)
+
         return {
             "operations_count": operations_count,
             "amount_in_work": amount_in_work,
@@ -150,6 +157,9 @@ class BalanceNotificationService(BaseService):
             "partners_earnings": partners_stats["partners_earnings"],
             "income_from_partners": partners_stats["income_from_partners"],
             "available_for_withdrawal": user.balance,
+            "plex_balance": plex_balance,
+            "required_daily_plex": required_daily_plex,
+            "plex_days_remaining": plex_days_remaining,
         }
 
     async def _get_partners_statistics(self, user_id: int) -> dict:
@@ -214,6 +224,9 @@ class BalanceNotificationService(BaseService):
         partners_earnings = stats["partners_earnings"]
         income_from_partners = stats["income_from_partners"]
         available = stats["available_for_withdrawal"]
+        plex_balance = stats.get("plex_balance", 0)
+        required_daily_plex = stats.get("required_daily_plex", 0)
+        plex_days_remaining = stats.get("plex_days_remaining", 0)
 
         message = (
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
@@ -243,6 +256,14 @@ class BalanceNotificationService(BaseService):
 
             f"🎁 Ваш доход от дохода ваших партнёров\n"
             f"   составил: *{income_from_partners:.4f} USDT*\n\n"
+
+            "┌───────────────────────────┐\n"
+            "│      💎 *PLEX СТАТУС*      │\n"
+            "└───────────────────────────┘\n\n"
+
+            f"⚡ Баланс PLEX: *{int(plex_balance):,}* токенов\n"
+            f"📋 Расход в сутки: *{int(required_daily_plex):,}* PLEX\n"
+            f"⏱ Хватит на: *~{plex_days_remaining}* дней\n\n"
 
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"💵 У вас доступно к выводу:\n"

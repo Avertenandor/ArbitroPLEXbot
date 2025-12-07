@@ -23,11 +23,7 @@ from app.config.constants import TELEGRAM_MESSAGE_DELAY
 from app.config.settings import settings
 from app.models.user import User
 from app.services.blockchain_service import get_blockchain_service
-from bot.constants.rules import (
-    MINIMUM_PLEX_BALANCE,
-    WorkStatus,
-    get_available_plex_balance,
-)
+from bot.constants.rules import WorkStatus
 
 
 @dramatiq.actor(max_retries=2, time_limit=600_000)  # 10 min timeout
@@ -157,12 +153,16 @@ async def _check_user_plex_balance(
     user.last_plex_balance = plex_balance
 
     balance_int = int(plex_balance)
-    is_sufficient = balance_int >= MINIMUM_PLEX_BALANCE
+    
+    # Calculate required PLEX: 10 PLEX per $1 of deposit daily
+    required_plex = int(user.required_daily_plex)
+    
+    # User is sufficient if they have at least required daily PLEX
+    is_sufficient = balance_int >= required_plex and required_plex > 0
     was_suspended = user.work_status == WorkStatus.SUSPENDED_NO_PLEX
 
-    # Calculate available balance (above minimum reserve)
-    available_plex = get_available_plex_balance(plex_balance)
-    available_int = int(available_plex)
+    # Calculate how many days of PLEX they have
+    days_remaining = balance_int // required_plex if required_plex > 0 else 0
 
     if is_sufficient:
         stats["sufficient"] += 1
@@ -177,23 +177,14 @@ async def _check_user_plex_balance(
             message = (
                 "✅ **РАБОТА ВОССТАНОВЛЕНА**\n\n"
                 f"💰 Ваш баланс PLEX: **{balance_int:,}** токенов\n"
-                f"🔒 Несгораемый минимум: **{MINIMUM_PLEX_BALANCE:,}** токенов\n"
-                f"📊 Доступно для оплаты: **{available_int:,}** токенов\n\n"
+                f"📊 Требуется в сутки: **{required_plex:,}** PLEX\n"
+                f"⏱ Хватит на: **~{days_remaining}** дней\n\n"
                 "🟢 Все системы работают в штатном режиме.\n"
                 "Ваши депозиты продолжают приносить доход."
             )
             await _send_notification(bot, user.telegram_id, message)
             logger.info(f"Restored work for user {user.id}, balance: {balance_int}")
-        else:
-            # Send hourly confirmation with available balance info
-            message = (
-                "✅ **Баланс PLEX в норме**\n\n"
-                f"💰 Ваш баланс: **{balance_int:,}** PLEX\n"
-                f"🔒 Несгораемый минимум: **{MINIMUM_PLEX_BALANCE:,}** PLEX\n"
-                f"📊 Доступно для оплаты: **{available_int:,}** PLEX\n\n"
-                "🟢 Система работает нормально."
-            )
-            await _send_notification(bot, user.telegram_id, message)
+        # Note: hourly confirmations moved to balance_notification task
 
     else:
         stats["insufficient"] += 1
@@ -205,26 +196,25 @@ async def _check_user_plex_balance(
             stats["suspended"] += 1
             logger.warning(
                 f"Suspended work for user {user.id}, "
-                f"PLEX balance: {balance_int} < {MINIMUM_PLEX_BALANCE}"
+                f"PLEX balance: {balance_int} < required {required_plex}"
             )
 
-        shortage = MINIMUM_PLEX_BALANCE - balance_int
+        shortage = required_plex - balance_int if required_plex > balance_int else 0
 
-        # Send warning notification with available balance context
+        # Send warning notification
         message = (
             "🚫 **РАБОТА ПРИОСТАНОВЛЕНА**\n\n"
             f"❌ Ваш баланс PLEX: **{balance_int:,}** токенов\n"
-            f"🔒 Несгораемый минимум: **{MINIMUM_PLEX_BALANCE:,}** токенов\n"
+            f"📊 Требуется в сутки: **{required_plex:,}** PLEX\n"
             f"📉 Недостаток: **{shortage:,}** токенов\n\n"
             "⚠️ **Причина:**\n"
-            "На кошельке меньше несгораемого минимума PLEX.\n\n"
+            "Недостаточно PLEX для оплаты работы депозитов.\n"
+            f"_(10 PLEX за каждый $1 депозита в сутки)_\n\n"
             "**Последствия:**\n"
             "• Начисления по депозитам остановлены\n"
-            "• Вывод средств недоступен\n"
-            "• Новые депозиты невозможны\n\n"
+            "• Вывод средств недоступен\n\n"
             "**Для восстановления:**\n"
-            f"Пополните баланс PLEX минимум до **{MINIMUM_PLEX_BALANCE:,}** токенов.\n"
-            "Для оплаты депозитов нужен баланс СВЕРХ этого минимума.\n\n"
+            f"Пополните баланс PLEX минимум до **{required_plex:,}** токенов.\n\n"
             "Проверка баланса происходит каждый час.\n"
             "Работа будет восстановлена автоматически."
         )
