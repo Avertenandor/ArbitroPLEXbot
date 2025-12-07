@@ -76,6 +76,10 @@ def register_user_handlers(dp: Dispatcher) -> None:
     dp.include_router(sponsor_inquiry_referral.router)
     dp.include_router(sponsor_inquiry_sponsor.router)
 
+    # CloudSonet 4.5 AI Assistant handler
+    from bot.handlers import cloudsonet_ai
+    dp.include_router(cloudsonet_ai.router)
+
     logger.info("User handlers registered successfully")
 
 
