@@ -3,7 +3,7 @@ Wallet info service.
 
 Provides comprehensive wallet information:
 - Token balances (PLEX, USDT, BNB)
-- Transaction history from BSCScan API
+- Transaction history from NodeReal Enhanced API
 - Balance formatting and caching
 """
 
@@ -102,27 +102,14 @@ class WalletInfoService:
     
     Uses:
     - BlockchainService for balance queries (RPC)
-    - BSCScan API for transaction history
+    - NodeReal Enhanced API for transaction history
     """
-    
-    # BSCScan API endpoint
-    BSCSCAN_API_URL = "https://api.bscscan.com/api"
-    
-    # Rate limiting for BSCScan
-    REQUEST_DELAY = 0.25  # 4 requests per second (free tier limit is 5/sec)
     
     def __init__(self) -> None:
         """Initialize wallet info service."""
-        self.api_key = getattr(settings, 'bscscan_api_key', None) or ""
+        # Use NodeReal Enhanced API endpoint
+        self.nodereal_url = getattr(settings, 'nodereal_api_url', None) or settings.rpc_url
         self._last_request_time = 0.0
-    
-    async def _rate_limit(self) -> None:
-        """Apply rate limiting for BSCScan API calls."""
-        now = asyncio.get_event_loop().time()
-        elapsed = now - self._last_request_time
-        if elapsed < self.REQUEST_DELAY:
-            await asyncio.sleep(self.REQUEST_DELAY - elapsed)
-        self._last_request_time = asyncio.get_event_loop().time()
     
     async def get_wallet_balances(self, wallet_address: str) -> WalletBalance | None:
         """
@@ -164,55 +151,43 @@ class WalletInfoService:
             logger.error(f"Failed to get wallet balances for {mask_address(wallet_address)}: {e}")
             return None
     
-    async def _fetch_bscscan(
-        self,
-        module: str,
-        action: str,
-        address: str,
-        **kwargs: Any,
-    ) -> dict | None:
+    async def _nodereal_rpc_call(self, method: str, params: list) -> Any:
         """
-        Fetch data from BSCScan API.
+        Make NodeReal Enhanced API JSON-RPC call.
         
         Args:
-            module: API module (account, contract, etc.)
-            action: API action
-            address: Wallet address
-            **kwargs: Additional parameters
+            method: RPC method name
+            params: RPC parameters
             
         Returns:
-            API response or None on error
+            Result or None on error
         """
-        await self._rate_limit()
-        
-        params = {
-            "module": module,
-            "action": action,
-            "address": address,
-            "apikey": self.api_key,
-            **kwargs,
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": method,
+            "params": params,
         }
         
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(
-                    self.BSCSCAN_API_URL,
-                    params=params,
-                    timeout=aiohttp.ClientTimeout(total=15),
+                async with session.post(
+                    self.nodereal_url,
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=30),
+                    headers={"Content-Type": "application/json"},
                 ) as response:
                     if response.status == 200:
                         data = await response.json()
-                        if data.get("status") == "1":
-                            return data
-                        else:
-                            # No transactions or error
-                            logger.debug(f"BSCScan API: {data.get('message', 'No result')}")
+                        if "error" in data:
+                            logger.debug(f"NodeReal RPC error: {data['error']}")
                             return None
+                        return data.get("result")
                     else:
-                        logger.warning(f"BSCScan API error: HTTP {response.status}")
+                        logger.warning(f"NodeReal API error: HTTP {response.status}")
                         return None
         except Exception as e:
-            logger.error(f"BSCScan API request failed: {e}")
+            logger.error(f"NodeReal RPC request failed: {e}")
             return None
     
     async def get_bnb_transactions(
@@ -221,7 +196,10 @@ class WalletInfoService:
         limit: int = 20,
     ) -> list[TokenTransaction]:
         """
-        Get BNB (native) transaction history.
+        Get BNB (native) transaction history using eth_getTransactionsByAddress.
+        
+        Note: This is a NodeReal Enhanced API method.
+        If not available, returns empty list.
         
         Args:
             wallet_address: Wallet address
@@ -230,27 +208,26 @@ class WalletInfoService:
         Returns:
             List of TokenTransaction
         """
-        data = await self._fetch_bscscan(
-            module="account",
-            action="txlist",
-            address=wallet_address,
-            startblock=0,
-            endblock=99999999,
-            page=1,
-            offset=limit,
-            sort="desc",
+        # Try NodeReal Enhanced API method
+        result = await self._nodereal_rpc_call(
+            "nr_getTransactionsByAddress",
+            [wallet_address, "0x0", "latest", {"order": "desc", "pageSize": hex(limit)}]
         )
         
-        if not data:
+        if not result:
+            # Fallback: return empty (transactions feature not available)
+            logger.debug("BNB transactions not available via RPC")
             return []
         
         transactions = []
         wallet_lower = wallet_address.lower()
         
-        for tx in data.get("result", [])[:limit]:
+        for tx in result.get("transactions", [])[:limit]:
             try:
-                # Only include successful transactions with value
-                if tx.get("isError") == "1" or tx.get("value") == "0":
+                value_hex = tx.get("value", "0x0")
+                value_wei = int(value_hex, 16) if value_hex else 0
+                
+                if value_wei == 0:
                     continue
                 
                 from_addr = tx.get("from", "").lower()
@@ -264,12 +241,18 @@ class WalletInfoService:
                 else:
                     continue
                 
-                value = Decimal(tx.get("value", "0")) / Decimal(10**18)
+                value = Decimal(value_wei) / Decimal(10**18)
+                block_hex = tx.get("blockNumber", "0x0")
+                block_num = int(block_hex, 16) if block_hex else 0
+                
+                # Get timestamp from block (approximate)
+                timestamp_hex = tx.get("timestamp", "0x0")
+                timestamp = int(timestamp_hex, 16) if timestamp_hex else 0
                 
                 transactions.append(TokenTransaction(
                     tx_hash=tx.get("hash", ""),
-                    block_number=int(tx.get("blockNumber", 0)),
-                    timestamp=datetime.fromtimestamp(int(tx.get("timeStamp", 0)), tz=UTC),
+                    block_number=block_num,
+                    timestamp=datetime.fromtimestamp(timestamp, tz=UTC) if timestamp else datetime.now(UTC),
                     from_address=tx.get("from", ""),
                     to_address=tx.get("to", ""),
                     value=value,
@@ -293,7 +276,7 @@ class WalletInfoService:
         limit: int = 20,
     ) -> list[TokenTransaction]:
         """
-        Get BEP-20 token transaction history.
+        Get BEP-20 token transaction history using nr_getTokenTransfers.
         
         Args:
             wallet_address: Wallet address
@@ -306,24 +289,24 @@ class WalletInfoService:
         Returns:
             List of TokenTransaction
         """
-        data = await self._fetch_bscscan(
-            module="account",
-            action="tokentx",
-            address=wallet_address,
-            contractaddress=contract_address,
-            page=1,
-            offset=limit,
-            sort="desc",
+        # Try NodeReal Enhanced API for token transfers
+        result = await self._nodereal_rpc_call(
+            "nr_getTokenTransfers",
+            [wallet_address, contract_address, "0x0", "latest", {"pageSize": hex(limit)}]
         )
         
-        if not data:
+        if not result:
+            logger.debug(f"{token_symbol} transactions not available via RPC")
             return []
         
         transactions = []
         wallet_lower = wallet_address.lower()
         
-        for tx in data.get("result", [])[:limit]:
+        for tx in result.get("transfers", [])[:limit]:
             try:
+                value_hex = tx.get("value", "0x0")
+                value_raw = int(value_hex, 16) if value_hex else 0
+                
                 from_addr = tx.get("from", "").lower()
                 to_addr = tx.get("to", "").lower()
                 
@@ -335,12 +318,17 @@ class WalletInfoService:
                 else:
                     continue
                 
-                value = Decimal(tx.get("value", "0")) / Decimal(10**decimals)
+                value = Decimal(value_raw) / Decimal(10**decimals)
+                block_hex = tx.get("blockNumber", "0x0")
+                block_num = int(block_hex, 16) if block_hex else 0
+                
+                timestamp_hex = tx.get("timestamp", "0x0")
+                timestamp = int(timestamp_hex, 16) if timestamp_hex else 0
                 
                 transactions.append(TokenTransaction(
-                    tx_hash=tx.get("hash", ""),
-                    block_number=int(tx.get("blockNumber", 0)),
-                    timestamp=datetime.fromtimestamp(int(tx.get("timeStamp", 0)), tz=UTC),
+                    tx_hash=tx.get("transactionHash", tx.get("hash", "")),
+                    block_number=block_num,
+                    timestamp=datetime.fromtimestamp(timestamp, tz=UTC) if timestamp else datetime.now(UTC),
                     from_address=tx.get("from", ""),
                     to_address=tx.get("to", ""),
                     value=value,
