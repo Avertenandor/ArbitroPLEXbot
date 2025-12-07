@@ -22,7 +22,7 @@ router = Router(name="cloudsonet_ai")
 MESSAGES_FILE = Path("/app/logs/cloudsonet_inbox.json")
 
 # ID админов
-ADMIN_IDS = {5186268007, 1691026253, 6540613027, 241568583}
+ADMIN_IDS = {1040687384, 1691026253, 6540613027, 241568583}
 
 HELP_TEXT = """🤖 *CloudSonet 4.5 - AI Ассистент*
 

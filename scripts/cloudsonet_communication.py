@@ -23,10 +23,10 @@ from aiogram import Bot
 
 # Конфигурация админов
 ADMINS = {
-    5186268007: {"name": "Главный (SuperAdmin)", "role": "super_admin", "tech": False},
+    1040687384: {"name": "Главный (@VladarevInvestBrok)", "role": "super_admin", "tech": False},
     1691026253: {"name": "Александр (@AI_XAN)", "role": "admin", "tech": True},  # Тех. заместитель
-    6540613027: {"name": "Admin (@ded_vtapkax)", "role": "admin", "tech": False},
-    241568583: {"name": "Admin (@natder)", "role": "admin", "tech": False},
+    6540613027: {"name": "Vlad (@ded_vtapkax)", "role": "admin", "tech": False},
+    241568583: {"name": "Nataliia (@natder)", "role": "admin", "tech": False},
 }
 
 # Файл для хранения сообщений от админов к CloudSonet
