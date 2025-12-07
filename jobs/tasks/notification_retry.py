@@ -72,13 +72,17 @@ async def _process_notification_retries_async() -> dict:
         try:
             # Use global session maker
             async with async_session_maker() as session:
-                # FIXED: Use context manager for Bot to prevent session leak
-                async with Bot(token=settings.telegram_bot_token) as bot:
+                # Create bot instance
+                bot = Bot(token=settings.telegram_bot_token)
+                try:
                     # Process retries
                     retry_service = NotificationRetryService(session, bot)
                     result = await retry_service.process_pending_retries()
 
                     return result
+                finally:
+                    # Close bot session
+                    await bot.session.close()
         finally:
             # Close Redis client
             if redis_client:

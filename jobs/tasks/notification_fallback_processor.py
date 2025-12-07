@@ -79,8 +79,9 @@ async def _process_notification_fallback_async() -> None:
                 f"R11-3: Processing {len(pending_notifications)} pending notifications"
             )
 
-            # FIXED: Use context manager for Bot to prevent session leak
-            async with Bot(token=settings.telegram_bot_token) as bot:
+            # Create bot instance
+            bot = Bot(token=settings.telegram_bot_token)
+            try:
                 notification_service = NotificationService(session)
 
                 sent = 0
@@ -146,6 +147,9 @@ async def _process_notification_fallback_async() -> None:
                         failed += 1
 
                 await session.commit()
+            finally:
+                # Close bot session
+                await bot.session.close()
 
             logger.info(
                 f"R11-3: Stats: {len(pending_notifications)} processed, "

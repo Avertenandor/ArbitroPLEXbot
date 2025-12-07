@@ -73,58 +73,61 @@ async def _send_anomaly_alerts(
     anomalies: list[dict[str, Any]], metrics: dict[str, Any]
 ) -> None:
     """Send anomaly alerts to admins (R14-1)."""
-    # FIXED: Use context manager for Bot to prevent session leak
+    bot = None
     try:
-        async with Bot(token=settings.telegram_bot_token) as bot:
-            async with async_session_maker() as session:
-                notification_service = NotificationService(session)
+        bot = Bot(token=settings.telegram_bot_token)
+        async with async_session_maker() as session:
+            notification_service = NotificationService(session)
 
-                admin_ids = settings.get_admin_ids()
+            admin_ids = settings.get_admin_ids()
 
-                for anomaly in anomalies:
-                    anomaly_type = anomaly.get("type", "unknown")
-                    current = anomaly.get("current", 0)
-                    expected = anomaly.get("expected_mean", 0)
-                    z_score = anomaly.get("z_score", 0)
-                    severity = anomaly.get("severity", "medium")
+            for anomaly in anomalies:
+                anomaly_type = anomaly.get("type", "unknown")
+                current = anomaly.get("current", 0)
+                expected = anomaly.get("expected_mean", 0)
+                z_score = anomaly.get("z_score", 0)
+                severity = anomaly.get("severity", "medium")
 
-                    deviation_pct = (
-                        ((current - expected) / expected * 100)
-                        if expected > 0
-                        else 0
+                deviation_pct = (
+                    ((current - expected) / expected * 100)
+                    if expected > 0
+                    else 0
+                )
+
+                message = (
+                    f"🚨 **ANOMALY DETECTED: {anomaly_type}**\n\n"
+                    f"**Severity:** {severity.upper()}\n"
+                    f"**Current:** {current}\n"
+                    f"**Expected:** {expected:.2f}\n"
+                    f"**Deviation:** {deviation_pct:+.1f}%\n"
+                    f"**Z-score:** {z_score:.2f}\n\n"
+                    f"**Timestamp:** {metrics.get('timestamp', 'N/A')}"
+                )
+
+                # Add recommendations
+                if anomaly_type == "withdrawal_pending_spike":
+                    message += (
+                        "\n\n**Recommended Actions:**\n"
+                        "- Review pending withdrawals manually\n"
+                        "- Consider temporary pause of auto-approvals"
+                    )
+                elif anomaly_type == "withdrawal_amount_spike":
+                    message += (
+                        "\n\n**Recommended Actions:**\n"
+                        "- Require two super_admin approvals for large withdrawals\n"
+                        "- Enhanced fraud detection for new operations"
                     )
 
-                    message = (
-                        f"🚨 **ANOMALY DETECTED: {anomaly_type}**\n\n"
-                        f"**Severity:** {severity.upper()}\n"
-                        f"**Current:** {current}\n"
-                        f"**Expected:** {expected:.2f}\n"
-                        f"**Deviation:** {deviation_pct:+.1f}%\n"
-                        f"**Z-score:** {z_score:.2f}\n\n"
-                        f"**Timestamp:** {metrics.get('timestamp', 'N/A')}"
+                for admin_id in admin_ids:
+                    await notification_service.send_notification(
+                        bot, admin_id, message, critical=(severity == "critical")
                     )
-
-                    # Add recommendations
-                    if anomaly_type == "withdrawal_pending_spike":
-                        message += (
-                            "\n\n**Recommended Actions:**\n"
-                            "- Review pending withdrawals manually\n"
-                            "- Consider temporary pause of auto-approvals"
-                        )
-                    elif anomaly_type == "withdrawal_amount_spike":
-                        message += (
-                            "\n\n**Recommended Actions:**\n"
-                            "- Require two super_admin approvals for large withdrawals\n"
-                            "- Enhanced fraud detection for new operations"
-                        )
-
-                    for admin_id in admin_ids:
-                        await notification_service.send_notification(
-                            bot, admin_id, message, critical=(severity == "critical")
-                        )
 
     except Exception as e:
         logger.error(f"Error sending anomaly alerts: {e}")
+    finally:
+        if bot:
+            await bot.session.close()
 
 
 async def _take_protective_actions(

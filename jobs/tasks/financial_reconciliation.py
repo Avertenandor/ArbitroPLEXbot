@@ -8,7 +8,6 @@ Runs daily at 01:00 UTC.
 import asyncio
 
 import dramatiq
-from aiogram import Bot
 from loguru import logger
 
 try:
@@ -80,41 +79,39 @@ async def _perform_reconciliation_async() -> dict:
 
     async with lock.lock("financial_reconciliation", timeout=600):
         try:
-            # FIXED: Use context manager for Bot to prevent session leak
-            async with Bot(token=settings.telegram_bot_token):
-                async with async_session_maker() as session:
-                    reconciliation_service = ReconciliationService(session)
+            async with async_session_maker() as session:
+                reconciliation_service = ReconciliationService(session)
 
-                    # Perform reconciliation
-                    result = await reconciliation_service.perform_reconciliation()
+                # Perform reconciliation
+                result = await reconciliation_service.perform_reconciliation()
 
-                    # If critical discrepancy, notify admins
-                    if result.get("critical"):
-                        try:
-                            NotificationService(session)
+                # If critical discrepancy, notify admins
+                if result.get("critical"):
+                    try:
+                        NotificationService(session)
 
-                            # Get admin telegram IDs (would need admin service)
-                            # For now, just log it
-                            logger.critical(
-                                "CRITICAL RECONCILIATION DISCREPANCY DETECTED",
-                                extra={
-                                    "snapshot_id": result.get("snapshot_id"),
-                                    "expected": result.get("expected_balance"),
-                                    "actual": result.get("actual_balance"),
-                                    "discrepancy": result.get("discrepancy"),
-                                    "discrepancy_percent": result.get(
-                                        "discrepancy_percent"
-                                    ),
-                                },
-                            )
+                        # Get admin telegram IDs (would need admin service)
+                        # For now, just log it
+                        logger.critical(
+                            "CRITICAL RECONCILIATION DISCREPANCY DETECTED",
+                            extra={
+                                "snapshot_id": result.get("snapshot_id"),
+                                "expected": result.get("expected_balance"),
+                                "actual": result.get("actual_balance"),
+                                "discrepancy": result.get("discrepancy"),
+                                "discrepancy_percent": result.get(
+                                    "discrepancy_percent"
+                                ),
+                            },
+                        )
 
-                            # TODO: Send notification to all super_admins
-                            # This would require AdminService integration
+                        # TODO: Send notification to all super_admins
+                        # This would require AdminService integration
 
-                        except Exception as e:
-                            logger.error(f"Error sending admin notification: {e}")
+                    except Exception as e:
+                        logger.error(f"Error sending admin notification: {e}")
 
-                    return result
+                return result
         finally:
             # Close Redis client
             if redis_client:
