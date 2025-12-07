@@ -361,13 +361,13 @@ async def main():
         expire_on_commit=False,
     )
     
-    # Use NodeReal for scanning (high limits)
-    nodereal_url = settings.rpc_nodereal_http
+    # Use NodeReal or primary RPC for scanning (high limits)
+    nodereal_url = settings.rpc_nodereal_http or settings.rpc_url
     if not nodereal_url:
-        logger.error("NodeReal RPC not configured! Set RPC_NODEREAL_HTTP in .env")
+        logger.error("No RPC configured! Set RPC_URL or RPC_NODEREAL_HTTP in .env")
         return
     
-    logger.info(f"NodeReal RPC: {nodereal_url[:60]}...")
+    logger.info(f"RPC URL: {nodereal_url[:60]}...")
     
     w3 = Web3(Web3.HTTPProvider(nodereal_url, request_kwargs={"timeout": 60}))
     
