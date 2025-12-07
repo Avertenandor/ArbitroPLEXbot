@@ -5,8 +5,6 @@ Processes failed notification retries with exponential backoff.
 Runs every minute to check for notifications ready for retry.
 """
 
-import asyncio
-
 import dramatiq
 from aiogram import Bot
 from loguru import logger
@@ -22,6 +20,7 @@ from app.services.notification_retry_service import (
     NotificationRetryService,
 )
 from app.utils.distributed_lock import DistributedLock
+from jobs.async_runner import run_async
 
 
 @dramatiq.actor(max_retries=3, time_limit=300_000)  # 5 min timeout
@@ -35,8 +34,8 @@ def process_notification_retries() -> None:
     logger.info("Starting notification retry processing...")
 
     try:
-        # Run async code
-        result = asyncio.run(_process_notification_retries_async())
+        # Run async code using thread-safe runner
+        result = run_async(_process_notification_retries_async())
 
         logger.info(
             f"Notification retry processing complete: "

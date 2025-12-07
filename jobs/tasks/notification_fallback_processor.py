@@ -5,7 +5,6 @@ R11-3: Processes notifications from PostgreSQL fallback queue when Redis is unav
 Polls the notification_queue_fallback table every 5 seconds and sends pending notifications.
 """
 
-import asyncio
 from datetime import UTC, datetime
 
 import dramatiq
@@ -18,6 +17,7 @@ from sqlalchemy.pool import NullPool
 from app.config.settings import settings
 from app.models.notification_queue_fallback import NotificationQueueFallback
 from app.services.notification_service import NotificationService
+from jobs.async_runner import run_async
 
 
 @dramatiq.actor(max_retries=3, time_limit=300_000)  # 5 min timeout
@@ -30,7 +30,7 @@ def process_notification_fallback() -> None:
     logger.info("R11-3: Starting notification fallback processing...")
 
     try:
-        asyncio.run(_process_notification_fallback_async())
+        run_async(_process_notification_fallback_async())
         logger.info("R11-3: Notification fallback processing complete")
     except Exception as e:
         logger.exception(f"R11-3: Notification fallback processing failed: {e}")

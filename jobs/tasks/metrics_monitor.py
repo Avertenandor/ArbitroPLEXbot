@@ -5,10 +5,11 @@ Monitors financial metrics and detects anomalies.
 Runs every 5 minutes.
 """
 
-import asyncio
 from typing import Any
 
 import dramatiq
+
+from jobs.async_runner import run_async
 from aiogram import Bot
 from loguru import logger
 
@@ -26,7 +27,7 @@ def monitor_metrics() -> None:
     logger.debug("Starting metrics monitoring...")
 
     try:
-        asyncio.run(_monitor_metrics_async())
+        run_async(_monitor_metrics_async())
 
     except Exception as e:
         logger.exception(f"Metrics monitoring failed: {e}")

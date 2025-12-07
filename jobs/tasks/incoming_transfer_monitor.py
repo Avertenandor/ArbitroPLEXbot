@@ -5,8 +5,9 @@ Scans blockchain for all incoming transfers to system wallet.
 Runs frequently (e.g. every minute) to catch deposits without explicit user action.
 """
 
-import asyncio
 from decimal import Decimal
+
+from jobs.async_runner import run_async
 
 import dramatiq
 from loguru import logger
@@ -29,7 +30,7 @@ def monitor_incoming_transfers() -> None:
     """
     logger.info("Starting incoming transfer monitoring...")
     try:
-        asyncio.run(_monitor_incoming_async())
+        run_async(_monitor_incoming_async())
         logger.info("Incoming transfer monitoring complete")
     except Exception as e:
         logger.exception(f"Incoming transfer monitoring failed: {e}")

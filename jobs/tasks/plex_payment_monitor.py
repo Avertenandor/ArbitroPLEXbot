@@ -10,8 +10,6 @@ Monitors PLEX payment requirements:
 Runs every hour via scheduler.
 """
 
-import asyncio
-
 import dramatiq
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -21,6 +19,7 @@ from app.config.settings import settings
 from app.services.blockchain.singleton import get_blockchain_service
 from app.services.deposit.plex.monitor import PlexPaymentMonitor
 from app.utils.distributed_lock import get_distributed_lock
+from jobs.async_runner import run_async
 
 
 @dramatiq.actor(max_retries=2, time_limit=600_000)  # 10 min timeout
@@ -51,7 +50,7 @@ def monitor_plex_payments() -> dict:
     logger.info("Starting PLEX payment monitoring...")
 
     try:
-        result = asyncio.run(_monitor_plex_payments_async())
+        result = run_async(_monitor_plex_payments_async())
         logger.info(f"PLEX payment monitoring complete: {result}")
         return result
     except Exception as e:
@@ -159,7 +158,7 @@ def check_single_user_plex(user_id: int, deposit_id: int) -> dict:
     logger.info(f"Checking PLEX payment for user {user_id}, deposit {deposit_id}")
 
     try:
-        result = asyncio.run(_check_single_user_async(user_id, deposit_id))
+        result = run_async(_check_single_user_async(user_id, deposit_id))
         logger.info(f"PLEX check result: {result}")
         return result
     except Exception as e:

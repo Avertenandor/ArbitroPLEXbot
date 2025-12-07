@@ -1,6 +1,5 @@
 """Cleanup task for logs and orphaned data."""
 
-import asyncio
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -16,6 +15,7 @@ from app.config.database import async_session_maker
 from app.config.settings import settings
 from app.utils.datetime_utils import utc_now
 from app.utils.distributed_lock import DistributedLock
+from jobs.async_runner import run_async
 
 
 @dramatiq.actor(max_retries=3, time_limit=300_000)  # 5 min timeout
@@ -30,7 +30,7 @@ def cleanup_logs_and_data() -> None:
     logger.info("Starting cleanup task...")
 
     try:
-        asyncio.run(_cleanup_logs_and_data_async())
+        run_async(_cleanup_logs_and_data_async())
         logger.info("Cleanup task completed")
 
     except Exception as e:

@@ -5,9 +5,9 @@ Syncs new blockchain transactions to local cache every minute.
 This keeps the blockchain_tx_cache table up-to-date for instant lookups.
 """
 
-import asyncio
-
 import dramatiq
+
+from jobs.async_runner import run_async
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -25,7 +25,7 @@ def sync_blockchain_cache() -> None:
     """
     logger.debug("Starting blockchain cache sync...")
     try:
-        asyncio.run(_sync_cache_async())
+        run_async(_sync_cache_async())
         logger.debug("Blockchain cache sync complete")
     except Exception as e:
         logger.warning(f"Blockchain cache sync failed: {e}")

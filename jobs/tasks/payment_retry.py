@@ -5,8 +5,6 @@ Processes pending payment retries with exponential backoff.
 Runs every minute to check for retries ready for processing.
 """
 
-import asyncio
-
 import dramatiq
 from loguru import logger
 
@@ -19,6 +17,7 @@ from app.config.settings import settings
 from app.services.blockchain_service import get_blockchain_service
 from app.services.payment_retry_service import PaymentRetryService
 from app.utils.distributed_lock import DistributedLock
+from jobs.async_runner import run_async
 
 
 @dramatiq.actor(max_retries=3, time_limit=300_000)  # 5 min timeout
@@ -33,7 +32,7 @@ def process_payment_retries() -> None:
     logger.info("Starting payment retry processing...")
 
     try:
-        asyncio.run(_process_payment_retries_async())
+        run_async(_process_payment_retries_async())
         logger.info("Payment retry processing complete")
 
     except Exception as e:

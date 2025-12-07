@@ -5,8 +5,6 @@ Performs daily financial reconciliation to verify system balance integrity.
 Runs daily at 01:00 UTC.
 """
 
-import asyncio
-
 import dramatiq
 from loguru import logger
 
@@ -20,6 +18,7 @@ from app.config.settings import settings
 from app.services.notification_service import NotificationService
 from app.services.reconciliation_service import ReconciliationService
 from app.utils.distributed_lock import DistributedLock
+from jobs.async_runner import run_async
 
 
 @dramatiq.actor(max_retries=3, time_limit=600_000)  # 10 min timeout
@@ -39,7 +38,7 @@ def perform_financial_reconciliation() -> None:
 
     try:
         # Run async code
-        result = asyncio.run(_perform_reconciliation_async())
+        result = run_async(_perform_reconciliation_async())
 
         if result.get("success"):
             if result.get("critical"):

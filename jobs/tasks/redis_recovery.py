@@ -5,7 +5,6 @@ R11-3: Handles recovery of notification queue and FSM states when Redis recovers
 Migrates data from PostgreSQL fallback back to Redis.
 """
 
-import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 
@@ -26,6 +25,7 @@ from app.config.settings import settings
 from app.models.notification_queue_fallback import NotificationQueueFallback
 from app.models.user_fsm_state import UserFsmState
 from app.repositories.user_repository import UserRepository
+from jobs.async_runner import run_async
 
 
 @dramatiq.actor(max_retries=3, time_limit=600_000)  # 10 min timeout
@@ -41,7 +41,7 @@ def recover_redis_data() -> dict:
     logger.info("R11-3: Starting Redis recovery process...")
 
     try:
-        result = asyncio.run(_recover_redis_data_async())
+        result = run_async(_recover_redis_data_async())
         logger.info(
             f"R11-3: Redis recovery complete: "
             f"{result['notifications_migrated']} notifications, "

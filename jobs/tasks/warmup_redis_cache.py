@@ -5,9 +5,9 @@ R11-3: Warms up Redis cache after recovery by loading frequently used data.
 Loads users, deposit levels, and system settings in batches.
 """
 
-import asyncio
-
 import dramatiq
+
+from jobs.async_runner import run_async
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
@@ -37,7 +37,7 @@ def warmup_redis_cache() -> None:
     logger.info("R11-3: Starting Redis cache warmup...")
 
     try:
-        asyncio.run(_warmup_redis_cache_async())
+        run_async(_warmup_redis_cache_async())
         logger.info("R11-3: Redis cache warmup complete")
     except Exception as e:
         logger.exception(f"R11-3: Redis cache warmup failed: {e}")

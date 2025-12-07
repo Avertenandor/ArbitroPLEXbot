@@ -17,6 +17,7 @@ from sqlalchemy.pool import NullPool
 from app.config.settings import settings
 from app.models.user import User
 from app.services.deposit_scan_service import DepositScanService
+from jobs.async_runner import run_async
 
 
 @dramatiq.actor(max_retries=2, time_limit=600_000)  # 10 min timeout
@@ -30,7 +31,7 @@ def scan_all_user_deposits() -> None:
     logger.info("Starting periodic deposit scan...")
 
     try:
-        asyncio.run(_scan_all_deposits_async())
+        run_async(_scan_all_deposits_async())
         logger.info("Periodic deposit scan complete")
     except Exception as e:
         logger.exception(f"Periodic deposit scan failed: {e}")
@@ -131,7 +132,7 @@ def scan_single_user_deposits(user_id: int) -> None:
     logger.info(f"Scanning deposits for user {user_id}")
 
     try:
-        asyncio.run(_scan_single_user_async(user_id))
+        run_async(_scan_single_user_async(user_id))
     except Exception as e:
         logger.exception(f"Deposit scan failed for user {user_id}: {e}")
 

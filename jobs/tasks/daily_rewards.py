@@ -5,8 +5,6 @@ Processes daily reward sessions for all confirmed deposits.
 Runs once per day to calculate and distribute rewards.
 """
 
-import asyncio
-
 import dramatiq
 from loguru import logger
 
@@ -19,6 +17,7 @@ from app.config.database import async_session_maker
 from app.config.settings import settings
 from app.services.reward_service import RewardService
 from app.utils.distributed_lock import DistributedLock
+from jobs.async_runner import run_async
 
 
 @dramatiq.actor(max_retries=3, time_limit=120_000)  # 2 min timeout (must be > lock timeout)
@@ -40,7 +39,7 @@ def process_daily_rewards(session_id: int | None = None) -> None:
 
     try:
         # Run async code
-        result = asyncio.run(_process_daily_rewards_async(session_id))
+        result = run_async(_process_daily_rewards_async(session_id))
 
         if result["success"]:
             logger.info(

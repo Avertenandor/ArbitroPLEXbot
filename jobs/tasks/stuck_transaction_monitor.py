@@ -5,9 +5,9 @@ Monitors withdrawal transactions stuck in PROCESSING status.
 Runs every 5 minutes to check for stuck transactions.
 """
 
-import asyncio
-
 import dramatiq
+
+from jobs.async_runner import run_async
 from aiogram import Bot
 from loguru import logger
 
@@ -42,7 +42,7 @@ def monitor_stuck_transactions() -> dict:
 
     try:
         # Run async code
-        result = asyncio.run(_monitor_stuck_transactions_async())
+        result = run_async(_monitor_stuck_transactions_async())
 
         logger.info(
             f"Stuck transaction monitoring complete: "

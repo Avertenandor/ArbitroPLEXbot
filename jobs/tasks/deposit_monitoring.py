@@ -5,7 +5,6 @@ Monitors blockchain for deposit confirmations and updates deposit status.
 Runs every minute to check pending deposits.
 """
 
-import asyncio
 from datetime import UTC, datetime, timedelta
 
 import dramatiq
@@ -24,6 +23,7 @@ from app.services.blockchain_service import get_blockchain_service
 from app.services.deposit import DepositService
 from app.services.notification_service import NotificationService
 from app.utils.distributed_lock import DistributedLock
+from jobs.async_runner import run_async
 
 
 @dramatiq.actor(max_retries=3, time_limit=300_000)  # 5 min timeout
@@ -37,8 +37,8 @@ def monitor_deposits() -> None:
     logger.info("Starting deposit monitoring...")
 
     try:
-        # Run async code
-        asyncio.run(_monitor_deposits_async())
+        # Run async code using thread-safe runner
+        run_async(_monitor_deposits_async())
         logger.info("Deposit monitoring complete")
 
     except Exception as e:

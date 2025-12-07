@@ -24,6 +24,7 @@ from app.config.settings import settings
 from app.models.user import User
 from app.services.blockchain_service import get_blockchain_service
 from bot.constants.rules import WorkStatus
+from jobs.async_runner import run_async
 
 
 @dramatiq.actor(max_retries=2, time_limit=600_000)  # 10 min timeout
@@ -37,7 +38,7 @@ def monitor_plex_balances() -> None:
     logger.info("Starting PLEX balance monitoring...")
 
     try:
-        asyncio.run(_monitor_plex_balances_async())
+        run_async(_monitor_plex_balances_async())
         logger.info("PLEX balance monitoring complete")
     except Exception as e:
         logger.exception(f"PLEX balance monitoring failed: {e}")
@@ -109,11 +110,11 @@ async def _monitor_plex_balances_async() -> None:
                 f"PLEX balance check complete: "
                 f"checked={stats['total_checked']}, "
                 f"sufficient={stats['sufficient']}, "
-                    f"insufficient={stats['insufficient']}, "
-                    f"suspended={stats['suspended']}, "
-                    f"restored={stats['restored']}, "
-                    f"errors={stats['errors']}"
-                )
+                f"insufficient={stats['insufficient']}, "
+                f"suspended={stats['suspended']}, "
+                f"restored={stats['restored']}, "
+                f"errors={stats['errors']}"
+            )
 
     except Exception as e:
         logger.exception(f"PLEX balance monitoring error: {e}")
@@ -261,7 +262,7 @@ def check_single_user_plex_balance(user_id: int) -> None:
     logger.info(f"Checking PLEX balance for user {user_id}")
 
     try:
-        asyncio.run(_check_single_user_balance_async(user_id))
+        run_async(_check_single_user_balance_async(user_id))
     except Exception as e:
         logger.exception(f"PLEX balance check failed for user {user_id}: {e}")
 

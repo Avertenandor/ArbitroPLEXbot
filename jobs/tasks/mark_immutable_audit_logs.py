@@ -5,7 +5,6 @@ Runs periodically to mark admin actions older than N days as immutable,
 preventing future modifications.
 """
 
-import asyncio
 from datetime import UTC, datetime, timedelta
 
 import dramatiq
@@ -15,6 +14,7 @@ from sqlalchemy import select, update
 from app.config.database import async_session_maker
 from app.config.settings import settings
 from app.models.admin_action import AdminAction
+from jobs.async_runner import run_async
 
 
 @dramatiq.actor(max_retries=3, time_limit=60_000)  # 1 min timeout
@@ -31,7 +31,7 @@ def mark_immutable_audit_logs() -> dict:
 
     try:
         # Run async code
-        result = asyncio.run(_mark_immutable_async())
+        result = run_async(_mark_immutable_async())
 
         logger.info(
             f"R18-4: Immutable audit log marking complete: "

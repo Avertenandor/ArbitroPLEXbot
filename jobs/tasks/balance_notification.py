@@ -19,8 +19,6 @@ Only sends to users with:
 - Not banned
 """
 
-import asyncio
-
 import dramatiq
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
@@ -32,6 +30,7 @@ from sqlalchemy.pool import NullPool
 from app.config.settings import settings
 from app.services.balance_notification_service import BalanceNotificationService
 from app.utils.distributed_lock import get_distributed_lock
+from jobs.async_runner import run_async
 
 
 @dramatiq.actor(max_retries=2, time_limit=600_000)  # 10 min timeout
@@ -55,7 +54,7 @@ def send_balance_notifications() -> dict:
     logger.info("Starting hourly balance notifications...")
 
     try:
-        result = asyncio.run(_send_balance_notifications_async())
+        result = run_async(_send_balance_notifications_async())
         logger.info(f"Balance notifications complete: {result}")
         return result
     except Exception as e:
@@ -159,7 +158,7 @@ def send_single_balance_notification(user_id: int) -> dict:
     logger.info(f"Sending balance notification to user {user_id}")
 
     try:
-        result = asyncio.run(_send_single_notification_async(user_id))
+        result = run_async(_send_single_notification_async(user_id))
         logger.info(f"Single notification result: {result}")
         return result
     except Exception as e:

@@ -5,9 +5,9 @@ Monitors blockchain node health and activates maintenance mode if needed.
 Runs every 30 seconds.
 """
 
-import asyncio
-
 import dramatiq
+
+from jobs.async_runner import run_async
 from aiogram import Bot
 from loguru import logger
 
@@ -28,7 +28,7 @@ def monitor_node_health() -> None:
     logger.debug("Starting node health check...")
 
     try:
-        asyncio.run(_monitor_node_health_async())
+        run_async(_monitor_node_health_async())
     except Exception as e:
         logger.exception(f"Node health monitoring failed: {e}")
 
