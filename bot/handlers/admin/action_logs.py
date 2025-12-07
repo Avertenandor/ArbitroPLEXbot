@@ -19,6 +19,14 @@ from bot.keyboards.reply import get_admin_keyboard_from_data
 router = Router(name="admin_action_logs")
 
 
+def escape_markdown(text: str) -> str:
+    """Escape special Markdown characters."""
+    if not text:
+        return text
+    # Escape underscores which break Markdown
+    return text.replace("_", "\\_")
+
+
 def format_action_type(action_type: str) -> str:
     """
     Format action type for display.
@@ -87,13 +95,13 @@ def format_action_details(action_type: str, details: dict | None) -> str:
         result.append(f"💵 {details['amount']} USDT")
 
     if "reason" in details:
-        result.append(f"📝 {details['reason']}")
+        result.append(f"📝 {escape_markdown(str(details['reason']))}")
 
     if "old_role" in details and "new_role" in details:
         result.append(f"📊 {details['old_role']} → {details['new_role']}")
 
     if "username" in details:
-        result.append(f"👤 @{details['username']}")
+        result.append(f"👤 @{escape_markdown(str(details['username']))}")
 
     if "telegram_id" in details:
         result.append(f"ID: {details['telegram_id']}")
@@ -150,14 +158,14 @@ async def handle_action_logs(
     text = "📋 **Логи действий админов** (последние 20)\n\n"
 
     for i, action in enumerate(actions, 1):
-        # Admin info
-        admin_name = action.admin.username or f"ID:{action.admin.telegram_id}"
+        # Admin info - escape underscores for Markdown
+        admin_name = escape_markdown(action.admin.username or f"ID:{action.admin.telegram_id}")
         admin_role = action.admin.role_display or action.admin.role
 
         # Target user info (if applicable)
         target_info = ""
         if action.target_user_id and action.target_user:
-            target_name = (
+            target_name = escape_markdown(
                 action.target_user.username
                 or f"ID:{action.target_user.telegram_id}"
             )
@@ -183,12 +191,12 @@ async def handle_action_logs(
         current_chunk = "📋 **Логи действий админов** (последние 20)\n\n"
 
         for i, action in enumerate(actions, 1):
-            admin_name = action.admin.username or f"ID:{action.admin.telegram_id}"
+            admin_name = escape_markdown(action.admin.username or f"ID:{action.admin.telegram_id}")
             admin_role = action.admin.role_display or action.admin.role
 
             target_info = ""
             if action.target_user_id and action.target_user:
-                target_name = (
+                target_name = escape_markdown(
                     action.target_user.username
                     or f"ID:{action.target_user.telegram_id}"
                 )

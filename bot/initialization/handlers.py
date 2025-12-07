@@ -88,6 +88,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
     from bot.handlers.admin import (
         action_logs,
         admins,
+        ai_assistant,
         blacklist,
         blockchain_settings,
         broadcast,
@@ -175,6 +176,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
     dp.include_router(inquiries.router)
     dp.include_router(action_logs.router)  # Admin action logs viewer
     dp.include_router(schedule_management.router)  # Schedule management
+    dp.include_router(ai_assistant.router)  # AI Assistant for admins
 
     # Admin referral stats handler
     referral_stats.router.message.middleware(admin_auth_middleware)
