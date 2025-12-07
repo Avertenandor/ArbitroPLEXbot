@@ -10,6 +10,8 @@ from datetime import UTC, datetime, timedelta
 import dramatiq
 from aiogram import Bot
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 try:
     import redis.asyncio as redis
@@ -47,6 +49,21 @@ def monitor_deposits() -> None:
 
 async def _monitor_deposits_async() -> None:
     """Async implementation of deposit monitoring."""
+    # Create a local engine with NullPool to avoid connection pool lock issues
+    local_engine = create_async_engine(
+        settings.database_url,
+        echo=False,
+        poolclass=NullPool,
+    )
+
+    local_session_maker = async_sessionmaker(
+        local_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
+
     # Create Redis client for distributed lock
     redis_client = None
     if redis:
@@ -64,16 +81,13 @@ async def _monitor_deposits_async() -> None:
     # Use distributed lock to prevent concurrent deposit monitoring
     lock = DistributedLock(redis_client=redis_client)
 
-    async with lock.lock("deposit_monitoring", timeout=300):
-        try:
-            # Use global engine and session maker
-            from app.config.database import async_session_maker
-
-            # Initialize bot for notifications (used for both recovery and regular processing)
+    try:
+        async with lock.lock("deposit_monitoring", timeout=300):
+            # Initialize bot for notifications
             bot = Bot(token=settings.telegram_bot_token)
 
             try:
-                async with async_session_maker() as session:
+                async with local_session_maker() as session:
                     deposit_repo = DepositRepository(session)
                     deposit_service = DepositService(session)
                     blockchain_service = get_blockchain_service()
@@ -379,7 +393,9 @@ async def _monitor_deposits_async() -> None:
             finally:
                 # Always close bot session to prevent memory leak
                 await bot.session.close()
-        finally:
-            # Close Redis client
-            if redis_client:
-                await redis_client.close()
+    finally:
+        # Close Redis client
+        if redis_client:
+            await redis_client.close()
+        # Dispose engine
+        await local_engine.dispose()
