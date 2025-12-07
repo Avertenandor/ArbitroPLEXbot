@@ -12,8 +12,9 @@ import dramatiq
 from jobs.async_runner import run_async
 from aiogram import Bot
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
-from app.config.database import async_session_maker
 from app.config.settings import settings
 from app.services.metrics_monitor_service import MetricsMonitorService
 from app.services.notification_service import NotificationService
@@ -35,39 +36,57 @@ def monitor_metrics() -> None:
 
 async def _monitor_metrics_async() -> dict:
     """Async implementation of metrics monitoring."""
-    async with async_session_maker() as session:
-        metrics_service = MetricsMonitorService(session)
+    # Create a local engine with NullPool to avoid connection pool lock issues
+    local_engine = create_async_engine(
+        settings.database_url,
+        echo=False,
+        poolclass=NullPool,
+    )
 
-        # Collect current metrics
-        current_metrics = await metrics_service.collect_current_metrics()
+    local_session_maker = async_sessionmaker(
+        local_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
 
-        # Detect anomalies
-        anomalies = await metrics_service.detect_anomalies(current_metrics)
+    try:
+        async with local_session_maker() as session:
+            metrics_service = MetricsMonitorService(session)
 
-        if anomalies:
-            logger.warning(
-                f"Detected {len(anomalies)} anomalies",
-                extra={"anomalies": anomalies},
-            )
+            # Collect current metrics
+            current_metrics = await metrics_service.collect_current_metrics()
 
-            # Send alerts for each anomaly
-            await _send_anomaly_alerts(anomalies, current_metrics)
+            # Detect anomalies
+            anomalies = await metrics_service.detect_anomalies(current_metrics)
 
-            # Take protective actions for critical anomalies
-            critical_anomalies = [
-                a
-                for a in anomalies
-                if a.get("severity") == "critical"
-            ]
-            if critical_anomalies:
-                await _take_protective_actions(critical_anomalies)
+            if anomalies:
+                logger.warning(
+                    f"Detected {len(anomalies)} anomalies",
+                    extra={"anomalies": anomalies},
+                )
 
-        return {
-            "success": True,
-            "metrics": current_metrics,
-            "anomalies_detected": len(anomalies),
-            "anomalies": anomalies,
-        }
+                # Send alerts for each anomaly
+                await _send_anomaly_alerts(anomalies, current_metrics)
+
+                # Take protective actions for critical anomalies
+                critical_anomalies = [
+                    a
+                    for a in anomalies
+                    if a.get("severity") == "critical"
+                ]
+                if critical_anomalies:
+                    await _take_protective_actions(critical_anomalies)
+
+            return {
+                "success": True,
+                "metrics": current_metrics,
+                "anomalies_detected": len(anomalies),
+                "anomalies": anomalies,
+            }
+    finally:
+        await local_engine.dispose()
 
 
 async def _send_anomaly_alerts(
@@ -77,52 +96,68 @@ async def _send_anomaly_alerts(
     bot = None
     try:
         bot = Bot(token=settings.telegram_bot_token)
-        async with async_session_maker() as session:
-            notification_service = NotificationService(session)
+        
+        # Create local session for notification service
+        local_engine = create_async_engine(
+            settings.database_url,
+            echo=False,
+            poolclass=NullPool,
+        )
+        local_session_maker = async_sessionmaker(
+            local_engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+        )
+        
+        try:
+            async with local_session_maker() as session:
+                notification_service = NotificationService(session)
 
-            admin_ids = settings.get_admin_ids()
+                admin_ids = settings.get_admin_ids()
 
-            for anomaly in anomalies:
-                anomaly_type = anomaly.get("type", "unknown")
-                current = anomaly.get("current", 0)
-                expected = anomaly.get("expected_mean", 0)
-                z_score = anomaly.get("z_score", 0)
-                severity = anomaly.get("severity", "medium")
+                for anomaly in anomalies:
+                    anomaly_type = anomaly.get("type", "unknown")
+                    current = anomaly.get("current", 0)
+                    expected = anomaly.get("expected_mean", 0)
+                    z_score = anomaly.get("z_score", 0)
+                    severity = anomaly.get("severity", "medium")
 
-                deviation_pct = (
-                    ((current - expected) / expected * 100)
-                    if expected > 0
-                    else 0
-                )
-
-                message = (
-                    f"🚨 **ANOMALY DETECTED: {anomaly_type}**\n\n"
-                    f"**Severity:** {severity.upper()}\n"
-                    f"**Current:** {current}\n"
-                    f"**Expected:** {expected:.2f}\n"
-                    f"**Deviation:** {deviation_pct:+.1f}%\n"
-                    f"**Z-score:** {z_score:.2f}\n\n"
-                    f"**Timestamp:** {metrics.get('timestamp', 'N/A')}"
-                )
-
-                # Add recommendations
-                if anomaly_type == "withdrawal_pending_spike":
-                    message += (
-                        "\n\n**Recommended Actions:**\n"
-                        "- Review pending withdrawals manually\n"
-                        "- Consider temporary pause of auto-approvals"
-                    )
-                elif anomaly_type == "withdrawal_amount_spike":
-                    message += (
-                        "\n\n**Recommended Actions:**\n"
-                        "- Require two super_admin approvals for large withdrawals\n"
-                        "- Enhanced fraud detection for new operations"
+                    deviation_pct = (
+                        ((current - expected) / expected * 100)
+                        if expected > 0
+                        else 0
                     )
 
-                for admin_id in admin_ids:
-                    await notification_service.send_notification(
-                        bot, admin_id, message, critical=(severity == "critical")
+                    message = (
+                        f"🚨 **ANOMALY DETECTED: {anomaly_type}**\n\n"
+                        f"**Severity:** {severity.upper()}\n"
+                        f"**Current:** {current}\n"
+                        f"**Expected:** {expected:.2f}\n"
+                        f"**Deviation:** {deviation_pct:+.1f}%\n"
+                        f"**Z-score:** {z_score:.2f}\n\n"
+                        f"**Timestamp:** {metrics.get('timestamp', 'N/A')}"
                     )
+
+                    # Add recommendations
+                    if anomaly_type == "withdrawal_pending_spike":
+                        message += (
+                            "\n\n**Recommended Actions:**\n"
+                            "- Review pending withdrawals manually\n"
+                            "- Consider temporary pause of auto-approvals"
+                        )
+                    elif anomaly_type == "withdrawal_amount_spike":
+                        message += (
+                            "\n\n**Recommended Actions:**\n"
+                            "- Require two super_admin approvals for large withdrawals\n"
+                            "- Enhanced fraud detection for new operations"
+                        )
+
+                    for admin_id in admin_ids:
+                        await notification_service.send_notification(
+                            bot, admin_id, message, critical=(severity == "critical")
+                        )
+        finally:
+            await local_engine.dispose()
 
     except Exception as e:
         logger.error(f"Error sending anomaly alerts: {e}")
