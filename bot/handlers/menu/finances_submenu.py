@@ -17,8 +17,10 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
+from app.services.deposit import DepositService
 from app.services.user_service import UserService
 from bot.keyboards.user import finances_submenu_keyboard
+from bot.utils.formatters import format_usdt
 from bot.utils.user_loader import UserLoader
 
 router = Router()
@@ -60,14 +62,37 @@ async def show_finances_submenu(
     balance_info = await user_service.get_user_balance(user.id)
 
     available = balance_info.get('available_balance', 0) if balance_info else 0
-    locked = balance_info.get('locked_balance', 0) if balance_info else 0
-    total = available + locked
+
+    # Get active deposits info
+    deposit_service = DepositService(session)
+    active_deposits = await deposit_service.get_active_deposits(user.id)
+
+    # Calculate deposits totals
+    if active_deposits:
+        total_deposited = sum(float(d.amount) for d in active_deposits)
+        total_roi_paid = sum(float(d.roi_paid_amount or 0) for d in active_deposits)
+        total_roi_cap = sum(float(d.roi_cap_amount or 0) for d in active_deposits)
+        
+        if total_roi_cap > 0:
+            overall_progress = (total_roi_paid / total_roi_cap) * 100
+        else:
+            overall_progress = 0
+        
+        deposits_section = (
+            f"📦 В депозитах: `{format_usdt(total_deposited)} USDT`\n"
+            f"📈 ROI прогресс: `{overall_progress:.1f}%`\n"
+            f"✅ Заработано: `{format_usdt(total_roi_paid)} USDT`\n"
+        )
+        total = float(available) + total_deposited
+    else:
+        deposits_section = "📦 В депозитах: `0.00 USDT`\n"
+        total = float(available)
 
     text = (
         "💰 *Финансы*\n\n"
         f"💵 Доступно: `{available:.2f} USDT`\n"
-        f"🔒 В депозитах: `{locked:.2f} USDT`\n"
-        f"💎 Всего: `{total:.2f} USDT`\n\n"
+        f"{deposits_section}"
+        f"💎 Всего активов: `{total:.2f} USDT`\n\n"
         "Выберите действие:"
     )
 
