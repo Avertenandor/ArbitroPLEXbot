@@ -8,7 +8,7 @@ activity stats, conversion stats, and platform-wide statistics.
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import func, select, text
+from sqlalchemy import case, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.deposit import Deposit
@@ -233,10 +233,16 @@ class ReferralStatisticsManager:
         earning_stats_stmt = select(
             func.sum(ReferralEarning.amount).label('total_earnings'),
             func.sum(
-                func.case((ReferralEarning.paid == True, ReferralEarning.amount), else_=0)  # noqa: E712
+                case(
+                    (ReferralEarning.paid == True, ReferralEarning.amount),  # noqa: E712
+                    else_=0
+                )
             ).label('paid_earnings'),
             func.sum(
-                func.case((ReferralEarning.paid == False, ReferralEarning.amount), else_=0)  # noqa: E712
+                case(
+                    (ReferralEarning.paid == False, ReferralEarning.amount),  # noqa: E712
+                    else_=0
+                )
             ).label('pending_earnings')
         )
 

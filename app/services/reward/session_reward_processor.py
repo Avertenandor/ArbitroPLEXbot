@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from loguru import logger
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -306,11 +306,14 @@ class SessionRewardProcessor:
         stats_stmt = select(
             func.count(DepositReward.id).label('total_rewards'),
             func.sum(
-                func.case((DepositReward.paid == True, 1), else_=0)  # noqa: E712
+                case(
+                    (DepositReward.paid == True, 1),  # noqa: E712
+                    else_=0
+                )
             ).label('paid_rewards'),
             func.sum(DepositReward.reward_amount).label('total_amount'),
             func.sum(
-                func.case(
+                case(
                     (DepositReward.paid == True, DepositReward.reward_amount),  # noqa: E712
                     else_=0
                 )
