@@ -369,10 +369,20 @@ async def main():
     
     logger.info(f"RPC URL: {nodereal_url[:60]}...")
     
-    w3 = Web3(Web3.HTTPProvider(nodereal_url, request_kwargs={"timeout": 60}))
+    # Try to connect with retry
+    w3 = None
+    for attempt in range(3):
+        try:
+            w3 = Web3(Web3.HTTPProvider(nodereal_url, request_kwargs={"timeout": 60}))
+            if w3.is_connected():
+                break
+            logger.warning(f"Connection attempt {attempt + 1} failed, retrying...")
+        except Exception as e:
+            logger.warning(f"Connection attempt {attempt + 1} error: {e}")
+        await asyncio.sleep(2)
     
-    if not w3.is_connected():
-        logger.error("Failed to connect to NodeReal RPC!")
+    if not w3 or not w3.is_connected():
+        logger.error("Failed to connect to RPC after 3 attempts!")
         return
     
     logger.info(f"Connected! Current block: {w3.eth.block_number:,}")
