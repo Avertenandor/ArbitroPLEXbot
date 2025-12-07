@@ -150,6 +150,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
         inquiries,
         action_logs,
         schedule_management,
+        ai_assistant,  # Added: AI Assistant for admins
     ])
 
     dp.include_router(wallet_key_setup.router)
