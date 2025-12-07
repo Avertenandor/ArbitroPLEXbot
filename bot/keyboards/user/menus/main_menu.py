@@ -125,6 +125,7 @@ def help_submenu_keyboard() -> ReplyKeyboardMarkup:
     )
 
     builder.row(
+        KeyboardButton(text="◀️ Назад"),
         KeyboardButton(text="📊 Главное меню"),
     )
 

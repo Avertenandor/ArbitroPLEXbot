@@ -28,6 +28,7 @@ def balance_menu_keyboard() -> ReplyKeyboardMarkup:
         KeyboardButton(text="📜 История операций"),
     )
     builder.row(
+        KeyboardButton(text="◀️ Назад"),
         KeyboardButton(text="📊 Главное меню"),
     )
 
@@ -53,6 +54,7 @@ def withdrawal_menu_keyboard() -> ReplyKeyboardMarkup:
         KeyboardButton(text="📜 История выводов"),
     )
     builder.row(
+        KeyboardButton(text="◀️ Назад"),
         KeyboardButton(text="📊 Главное меню"),
     )
 
@@ -75,6 +77,7 @@ def earnings_dashboard_keyboard() -> ReplyKeyboardMarkup:
         KeyboardButton(text="📜 История операций"),
     )
     builder.row(
+        KeyboardButton(text="◀️ Назад"),
         KeyboardButton(text="📊 Главное меню"),
     )
 

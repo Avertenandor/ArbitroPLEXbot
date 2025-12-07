@@ -39,6 +39,7 @@ def referral_menu_keyboard() -> ReplyKeyboardMarkup:
         KeyboardButton(text="📋 Скопировать ссылку"),
     )
     builder.row(
+        KeyboardButton(text="◀️ Назад"),
         KeyboardButton(text="📊 Главное меню"),
     )
 
