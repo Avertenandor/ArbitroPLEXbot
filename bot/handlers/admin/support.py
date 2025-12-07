@@ -4,6 +4,7 @@ Admin Support Handlers.
 Manages technical support tickets for administrators.
 """
 
+import re
 from typing import Any
 
 from aiogram import F, Router
@@ -27,6 +28,15 @@ router = Router(name="admin_support")
 
 
 from bot.utils.admin_utils import clear_state_preserve_admin_token
+
+
+def escape_markdown(text: str) -> str:
+    """Escape special Markdown characters in text."""
+    if not text:
+        return text
+    # Escape special Markdown characters: _ * [ ] ( ) ~ ` > # + - = | { } . !
+    escape_chars = r'_*[]()~`>#+-=|{}.!'
+    return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
 
 
 @router.message(StateFilter("*"), F.text == "🆘 Техподдержка")
@@ -278,7 +288,9 @@ async def show_ticket_details(
             }.get(msg.sender, "❓")
 
             msg_date = msg.created_at.strftime("%d.%m %H:%M")
-            text += f"{sender_icon} {msg_date}: {msg.text or '[Вложение]'}\n\n"
+            # Escape user text to prevent Markdown parsing errors
+            msg_text = escape_markdown(msg.text) if msg.text else '[Вложение]'
+            text += f"{sender_icon} {msg_date}: {msg_text}\n\n"
     else:
         text += "Нет сообщений.\n"
 
