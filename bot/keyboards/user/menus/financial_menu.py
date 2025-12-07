@@ -119,3 +119,32 @@ def finances_submenu_keyboard() -> ReplyKeyboardMarkup:
     )
 
     return builder.as_markup(resize_keyboard=True)
+
+
+def funds_overview_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Funds overview keyboard with wallet access.
+
+    Shows after viewing "📊 Мои средства" screen.
+
+    Returns:
+        ReplyKeyboardMarkup with funds options
+    """
+    builder = ReplyKeyboardBuilder()
+
+    builder.row(
+        KeyboardButton(text="👛 Мой кошелек"),
+        KeyboardButton(text="💰 Депозит"),
+    )
+
+    builder.row(
+        KeyboardButton(text="📈 Мой заработок"),
+        KeyboardButton(text="💸 Вывод"),
+    )
+
+    builder.row(
+        KeyboardButton(text="◀️ Назад"),
+        KeyboardButton(text="📊 Главное меню"),
+    )
+
+    return builder.as_markup(resize_keyboard=True)

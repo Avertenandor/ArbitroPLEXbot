@@ -117,7 +117,7 @@ async def show_funds_overview(
     **data: Any,
 ) -> None:
     """
-    Show comprehensive funds overview (balance + wallet balance).
+    Show comprehensive funds overview (balance + wallet balance + deposits).
 
     Args:
         message: Message object
@@ -160,6 +160,10 @@ async def show_funds_overview(
     total_balance = available + locked
     total_with_wallet = total_balance + wallet
 
+    # Get active deposits info
+    deposit_service = DepositService(session)
+    active_deposits = await deposit_service.get_active_deposits(user.id)
+
     text = (
         "📊 *Мои средства*\n\n"
         "━━━━━━━━━━━━━━━━━\n"
@@ -174,16 +178,56 @@ async def show_funds_overview(
     if pending_withdrawals > 0:
         text += f"⏳ В обработке (вывод): `{pending_withdrawals:.2f} USDT`\n"
 
+    # Add deposits section
+    if active_deposits:
+        text += "\n━━━━━━━━━━━━━━━━━\n"
+        text += "*📦 Активные депозиты:*\n\n"
+        
+        level_names = {0: "🎯 Тестовый", 1: "💰 Уровень 1", 2: "💎 Уровень 2", 
+                       3: "🏆 Уровень 3", 4: "👑 Уровень 4", 5: "🚀 Уровень 5"}
+        
+        total_deposited = 0
+        total_roi_paid = 0
+        
+        for dep in active_deposits:
+            level_name = level_names.get(dep.level, f"Level {dep.level}")
+            amount = float(dep.amount or 0)
+            roi_paid = float(dep.roi_paid_amount or 0)
+            roi_cap = float(dep.roi_cap_amount or 0)
+            
+            total_deposited += amount
+            total_roi_paid += roi_paid
+            
+            # Calculate progress
+            if roi_cap > 0:
+                progress = (roi_paid / roi_cap) * 100
+                text += (
+                    f"{level_name}: `{amount:.0f} USDT`\n"
+                    f"   📈 ROI: `{roi_paid:.2f}` / `{roi_cap:.2f}` ({progress:.0f}%)\n"
+                )
+            else:
+                text += f"{level_name}: `{amount:.0f} USDT`\n"
+        
+        text += f"\n💎 Всего в депозитах: `{total_deposited:.0f} USDT`\n"
+        text += f"✅ Заработано ROI: `{total_roi_paid:.2f} USDT`\n"
+    else:
+        text += "\n━━━━━━━━━━━━━━━━━\n"
+        text += "*📦 Активные депозиты:*\n"
+        text += "_У вас пока нет активных депозитов_\n"
+
     text += (
         "\n━━━━━━━━━━━━━━━━━\n"
         f"💎 *Всего средств: `{total_with_wallet:.2f} USDT`*\n\n"
-        "💡 Для пополнения используйте кнопку «💰 Депозит»\n"
-        "💡 Для вывода — кнопку «💸 Вывод»"
+        "💡 «👛 Мой кошелек» — балансы PLEX/USDT/BNB\n"
+        "💡 «💰 Депозит» — открыть новый депозит"
     )
 
+    # Use funds overview keyboard with wallet button
+    from bot.keyboards.user.menus.financial_menu import funds_overview_keyboard
+    
     await message.answer(
         text,
-        reply_markup=finances_submenu_keyboard(),
+        reply_markup=funds_overview_keyboard(),
         parse_mode="Markdown"
     )
     logger.info(f"[FUNDS] Funds overview shown to user {telegram_id}")
