@@ -129,6 +129,20 @@ async def show_user_profile(
         f"• Депозиты: `{balance_data['total_deposits']:.2f} USDT`\n"
         f"• Выводы: `{balance_data['total_withdrawals']:.2f} USDT`\n"
         f"• Заработано: `{balance_data['total_earnings']:.2f} USDT`\n"
+    )
+
+    # Add bonus info if user has bonuses
+    bonus_balance = getattr(user, 'bonus_balance', None) or 0
+    bonus_roi = getattr(user, 'bonus_roi_earned', None) or 0
+    if bonus_balance > 0 or bonus_roi > 0:
+        text += (
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"🎁 **Бонусы:**\n"
+            f"• Бонусный баланс: `{float(bonus_balance):.2f} USDT`\n"
+            f"• ROI с бонусов: `{float(bonus_roi):.2f} USDT`\n"
+        )
+
+    text += (
         f"━━━━━━━━━━━━━━━━━━\n"
         f"💎 **Депозит (из блокчейна):**\n"
         f"• Всего внесено: `{user.total_deposited_usdt:.2f} USDT`\n"

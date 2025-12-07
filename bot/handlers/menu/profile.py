@@ -146,6 +146,17 @@ async def show_my_profile(
     text += (
         f"✅ Уже выплачено: {format_usdt(balance.get('total_paid', 0))} USDT\n"
     )
+
+    # Add bonus section if user has bonuses
+    bonus_balance = getattr(user, 'bonus_balance', None) or 0
+    bonus_roi = getattr(user, 'bonus_roi_earned', None) or 0
+    if bonus_balance > 0 or bonus_roi > 0:
+        text += (
+            f"\n*🎁 Бонусы:*\n"
+            f"💎 Бонусный баланс: {format_usdt(bonus_balance)} USDT\n"
+            f"📈 Заработано с бонусов: {format_usdt(bonus_roi)} USDT\n"
+        )
+
     text += roi_section
     text += (
         f"*Депозиты и рефералы:*\n"

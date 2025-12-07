@@ -104,18 +104,58 @@ def admin_user_profile_keyboard(user_is_blocked: bool) -> ReplyKeyboardMarkup:
 
     builder.row(
         KeyboardButton(text="💳 Изменить баланс"),
+        KeyboardButton(text="🎁 Бонус"),
+    )
+    builder.row(
         KeyboardButton(text=block_text),
-    )
-    builder.row(
         KeyboardButton(text="📜 История транзакций"),
+    )
+    builder.row(
         KeyboardButton(text="👥 Рефералы"),
-    )
-    builder.row(
         KeyboardButton(text="🔄 Сканировать депозит"),
-        KeyboardButton(text="⚠️ Терминировать аккаунт"),
     )
     builder.row(
+        KeyboardButton(text="⚠️ Терминировать аккаунт"),
         KeyboardButton(text="◀️ К списку пользователей"),
+    )
+    builder.row(
         KeyboardButton(text="👑 Админ-панель"),
+    )
+    return builder.as_markup(resize_keyboard=True)
+
+
+def admin_bonus_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Keyboard for bonus management.
+
+    Returns:
+        ReplyKeyboardMarkup with bonus actions
+    """
+    builder = ReplyKeyboardBuilder()
+
+    builder.row(
+        KeyboardButton(text="➕ Начислить бонус"),
+        KeyboardButton(text="📋 Список бонусов"),
+    )
+    builder.row(
+        KeyboardButton(text="❌ Отменить бонус"),
+        KeyboardButton(text="◀️ Назад к профилю"),
+    )
+    builder.row(
+        KeyboardButton(text="👑 Админ-панель"),
+    )
+    return builder.as_markup(resize_keyboard=True)
+
+
+def admin_cancel_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Simple cancel keyboard for admin operations.
+
+    Returns:
+        ReplyKeyboardMarkup with cancel button
+    """
+    builder = ReplyKeyboardBuilder()
+    builder.row(
+        KeyboardButton(text="❌ Отмена"),
     )
     return builder.as_markup(resize_keyboard=True)

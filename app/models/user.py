@@ -24,6 +24,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.bonus_credit import BonusCredit
     from app.models.deposit import Deposit
     from app.models.plex_payment import PlexPaymentRequirement
     from app.models.transaction import Transaction
@@ -90,6 +91,20 @@ class User(Base):
     )
     pending_earnings: Mapped[Decimal] = mapped_column(
         DECIMAL(18, 8), default=Decimal("0"), nullable=False
+    )
+
+    # Bonus balance (admin-granted, participates in ROI calculations)
+    bonus_balance: Mapped[Decimal] = mapped_column(
+        DECIMAL(18, 8),
+        default=Decimal("0"),
+        nullable=False,
+        comment="Admin-granted bonus balance for ROI calculations",
+    )
+    bonus_roi_earned: Mapped[Decimal] = mapped_column(
+        DECIMAL(18, 8),
+        default=Decimal("0"),
+        nullable=False,
+        comment="Total ROI earned from bonus credits",
     )
 
     # Referral
@@ -259,6 +274,14 @@ class User(Base):
         "PlexPaymentRequirement",
         back_populates="user",
         cascade="all, delete-orphan",
+    )
+
+    # Bonus credits relationship
+    bonus_credits: Mapped[list["BonusCredit"]] = relationship(
+        "BonusCredit",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="BonusCredit.user_id",
     )
 
     @property

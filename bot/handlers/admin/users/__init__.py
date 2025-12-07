@@ -28,6 +28,7 @@ from aiogram import Router
 # Import all sub-module routers
 from bot.handlers.admin.users import (
     balance,
+    bonus,
     deposits,
     list,
     menu,
@@ -70,6 +71,9 @@ router.include_router(deposits.router)
 
 # 9. Referral statistics
 router.include_router(referrals.router)
+
+# 10. Bonus management
+router.include_router(bonus.router)
 
 # Export the main router for backward compatibility
 __all__ = ["router"]

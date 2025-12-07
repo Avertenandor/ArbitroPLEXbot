@@ -19,6 +19,9 @@ from app.models.blacklist import Blacklist
 from app.models.blockchain_tx_cache import BlockchainTxCache
 from app.models.blockchain_sync_state import BlockchainSyncState
 
+# Bonus Credits
+from app.models.bonus_credit import BonusCredit
+
 from app.models.deposit import Deposit
 from app.models.deposit_corridor_history import DepositCorridorHistory
 from app.models.deposit_level_config import DepositLevelConfig
@@ -101,6 +104,8 @@ __all__ = [
     # Blockchain Cache
     "BlockchainTxCache",
     "BlockchainSyncState",
+    # Bonus Credits
+    "BonusCredit",
     # Admin Models
     "Admin",
     "AdminAction",

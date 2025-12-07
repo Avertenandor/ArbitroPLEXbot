@@ -28,6 +28,8 @@ from bot.keyboards.admin.main_keyboards import (
 
 # User management keyboards
 from bot.keyboards.admin.user_keyboards import (
+    admin_bonus_keyboard,
+    admin_cancel_keyboard,
     admin_user_list_keyboard,
     admin_user_profile_keyboard,
     admin_users_keyboard,
@@ -125,6 +127,8 @@ __all__ = [
     "admin_users_keyboard",
     "admin_user_list_keyboard",
     "admin_user_profile_keyboard",
+    "admin_bonus_keyboard",
+    "admin_cancel_keyboard",
     # Withdrawal management
     "admin_withdrawals_keyboard",
     "withdrawal_list_keyboard",
