@@ -99,6 +99,11 @@ def main_menu_reply_keyboard(
             KeyboardButton(text="🌐 Экосистема"),
         )
 
+        # Quick access to admin question
+        builder.row(
+            KeyboardButton(text="❓ Задать вопрос"),
+        )
+
         # Security - финпароль остается в главном меню для быстрого доступа
         builder.row(
             KeyboardButton(text="🔐 Финпароль"),
