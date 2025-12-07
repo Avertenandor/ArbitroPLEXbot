@@ -79,20 +79,23 @@ class BalanceNotificationService(BaseService):
         Get users eligible for balance notifications.
 
         Criteria:
-        - work_status = "active" (PLEX is paid)
-        - balance > 0 OR has confirmed deposits
+        - work_status = "active" (PLEX is paid, checked by plex_balance_monitor)
+        - total_deposited_usdt > 0 (has deposits confirmed by blockchain)
         - bot_blocked = False
         - is_banned = False
-        - Has at least one confirmed deposit
+        - is_active = True
 
         Returns:
             List of eligible users with deposits loaded
         """
+        from bot.constants.rules import WorkStatus
+
         stmt = (
             select(User)
             .where(
                 and_(
-                    User.work_status == "active",
+                    User.work_status == WorkStatus.ACTIVE,
+                    User.total_deposited_usdt > Decimal("0"),  # Has confirmed deposits
                     User.bot_blocked == False,  # noqa: E712
                     User.is_banned == False,  # noqa: E712
                     User.is_active == True,  # noqa: E712
@@ -104,20 +107,8 @@ class BalanceNotificationService(BaseService):
         result = await self.session.execute(stmt)
         users = list(result.scalars().all())
 
-        # Filter to only users with confirmed deposits or balance > 0
-        eligible_users = []
-        for user in users:
-            has_confirmed_deposit = any(
-                d.status == "confirmed" and d.usdt_confirmed
-                for d in user.deposits
-            )
-            has_balance = user.balance > Decimal("0")
-
-            if has_confirmed_deposit or has_balance:
-                eligible_users.append(user)
-
-        logger.info(f"Found {len(eligible_users)} eligible users for balance notifications")
-        return eligible_users
+        logger.info(f"Found {len(users)} eligible users for balance notifications")
+        return users
 
     async def get_user_statistics(self, user: User) -> dict:
         """
@@ -138,11 +129,8 @@ class BalanceNotificationService(BaseService):
         # Generate operations count
         operations_count = self._generate_operations_count()
 
-        # Amount in work = sum of confirmed deposits
-        amount_in_work = sum(
-            d.amount for d in user.deposits
-            if d.status == "confirmed" and d.usdt_confirmed
-        )
+        # Amount in work = total deposited from blockchain (primary source)
+        amount_in_work = user.total_deposited_usdt or Decimal("0")
 
         # Calculate simulated hourly earnings based on daily rate
         # Average daily ROI is ~1.117%, so hourly is ~0.0465%
@@ -336,6 +324,10 @@ class BalanceNotificationService(BaseService):
         """
         Send balance notifications to all eligible users.
 
+        Implements rate limiting to respect Telegram API limits:
+        - Max 30 messages per second
+        - We use 25/sec to be safe with batches of 25 + 1.1 sec delay
+
         Args:
             bot: Telegram bot instance
 
@@ -346,6 +338,12 @@ class BalanceNotificationService(BaseService):
             - failed: Failed to send
             - blocked: Users who blocked the bot
         """
+        import asyncio
+
+        # Telegram rate limit safety: 25 messages per second
+        BATCH_SIZE = 25
+        BATCH_DELAY = 1.1  # seconds between batches
+
         stats = {
             "total": 0,
             "sent": 0,
@@ -357,7 +355,10 @@ class BalanceNotificationService(BaseService):
             users = await self.get_eligible_users()
             stats["total"] = len(users)
 
-            for user in users:
+            logger.info(f"Starting balance notifications for {len(users)} users with rate limiting")
+
+            # Process in batches to respect rate limits
+            for i, user in enumerate(users):
                 try:
                     success = await self.send_notification_to_user(bot, user)
                     if success:
@@ -368,6 +369,12 @@ class BalanceNotificationService(BaseService):
                             stats["blocked"] += 1
                         else:
                             stats["failed"] += 1
+
+                    # Rate limiting: pause after each batch
+                    if (i + 1) % BATCH_SIZE == 0:
+                        logger.debug(f"Rate limit pause after {i + 1} messages, sleeping {BATCH_DELAY}s")
+                        await asyncio.sleep(BATCH_DELAY)
+
                 except Exception as e:
                     logger.error(f"Error processing user {user.id}: {e}")
                     stats["failed"] += 1
