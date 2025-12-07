@@ -90,6 +90,7 @@ def finances_submenu_keyboard() -> ReplyKeyboardMarkup:
     - Withdrawal
     - Balance overview
     - Earnings dashboard
+    - My Wallet
 
     Returns:
         ReplyKeyboardMarkup with finances options
@@ -104,6 +105,10 @@ def finances_submenu_keyboard() -> ReplyKeyboardMarkup:
     builder.row(
         KeyboardButton(text="📈 Мой заработок"),
         KeyboardButton(text="📊 Мои средства"),
+    )
+
+    builder.row(
+        KeyboardButton(text="👛 Мой кошелек"),
     )
 
     builder.row(

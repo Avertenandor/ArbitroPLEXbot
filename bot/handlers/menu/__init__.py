@@ -53,6 +53,7 @@ from bot.handlers.menu import (
     info,
     language,
     my_funds,
+    my_wallet,
     notifications,
     profile,
     referral_menu,
@@ -81,6 +82,7 @@ router.include_router(finances_submenu.router)
 router.include_router(deposit_menu.router)
 router.include_router(withdrawal_menu.router)
 router.include_router(earnings_dashboard.router)
+router.include_router(my_wallet.router)
 
 # User profile and data
 router.include_router(profile.router)
