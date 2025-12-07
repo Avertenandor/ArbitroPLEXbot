@@ -222,7 +222,7 @@ class DepositValidationService:
         """
         Get available deposit levels for user with statuses.
 
-        Legacy method for backward compatibility. Returns levels 1-5.
+        Includes test level (0) and levels 1-5.
 
         Args:
             user_id: User ID
@@ -230,6 +230,16 @@ class DepositValidationService:
         Returns:
             Dict with level statuses: available, unavailable, active
         """
+        from app.services.deposit.constants import (
+            DEPOSIT_LEVEL_CONFIGS,
+            LEVEL_TYPE_TEST,
+            LEVEL_TYPE_LEVEL_1,
+            LEVEL_TYPE_LEVEL_2,
+            LEVEL_TYPE_LEVEL_3,
+            LEVEL_TYPE_LEVEL_4,
+            LEVEL_TYPE_LEVEL_5,
+        )
+
         # Get user's confirmed deposits
         deposits = await self.deposit_repo.find_by(
             user_id=user_id,
@@ -239,10 +249,21 @@ class DepositValidationService:
 
         levels_status = {}
 
-        for level in [1, 2, 3, 4, 5]:
-            amount = DEPOSIT_LEVELS[level]
-            can_purchase, error = await self.can_purchase_level(user_id, level)
-            has_level = level in user_levels
+        # All levels including test (0)
+        level_types = [
+            (0, LEVEL_TYPE_TEST),
+            (1, LEVEL_TYPE_LEVEL_1),
+            (2, LEVEL_TYPE_LEVEL_2),
+            (3, LEVEL_TYPE_LEVEL_3),
+            (4, LEVEL_TYPE_LEVEL_4),
+            (5, LEVEL_TYPE_LEVEL_5),
+        ]
+
+        for db_level, level_type in level_types:
+            config = DEPOSIT_LEVEL_CONFIGS[level_type]
+            amount = config.amount
+            can_purchase, error = await self.can_purchase_level_by_type(user_id, level_type)
+            has_level = db_level in user_levels
 
             if has_level:
                 status = "active"
@@ -254,9 +275,11 @@ class DepositValidationService:
                 status = "unavailable"
                 status_text = "Не доступен"
 
-            levels_status[level] = {
-                "level": level,
+            levels_status[db_level] = {
+                "level": db_level,
+                "level_type": level_type,
                 "amount": amount,
+                "display_name": config.display_name,
                 "status": status,
                 "status_text": status_text,
                 "error": error if not can_purchase else None,

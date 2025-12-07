@@ -25,39 +25,45 @@ def deposit_menu_keyboard(
     """
     builder = ReplyKeyboardBuilder()
 
-    # Default amounts if statuses not provided
-    default_amounts = {1: 10, 2: 50, 3: 100, 4: 150, 5: 300}
+    # Default amounts if statuses not provided (including test level 0)
+    default_amounts = {0: 5, 1: 10, 2: 50, 3: 100, 4: 150, 5: 300}
 
-    # Level emoji mapping
-    level_emojis = {1: "💰", 2: "💎", 3: "🏆", 4: "👑", 5: "🚀"}
+    # Level emoji mapping (including test level)
+    level_emojis = {0: "🧪", 1: "💰", 2: "💎", 3: "🏆", 4: "👑", 5: "🚀"}
+    
+    # Level display names
+    level_names = {0: "Тестовый", 1: "Уровень 1", 2: "Уровень 2", 3: "Уровень 3", 4: "Уровень 4", 5: "Уровень 5"}
 
-    for level in [1, 2, 3, 4, 5]:
+    # All levels including test (0)
+    for level in [0, 1, 2, 3, 4, 5]:
         emoji = level_emojis[level]
+        display_name = level_names[level]
 
         if levels_status and level in levels_status:
             level_info = levels_status[level]
             amount = level_info["amount"]
             status = level_info["status"]
-            level_info.get("status_text", "")
 
             # Build button text with status indicator
             if status == "active":
-                button_text = f"✅ {emoji} Уровень {level} ({amount} USDT) - Активен"
+                button_text = f"✅ {emoji} {display_name} ({amount} USDT) - Активен"
             elif status == "available":
-                button_text = f"{emoji} Уровень {level} ({amount} USDT)"
+                button_text = f"{emoji} {display_name} ({amount} USDT)"
             else:
                 # unavailable - show reason in button
                 error = level_info.get("error", "")
-                if "необходимо сначала купить" in error:
-                    button_text = f"🔒 {emoji} Уровень {level} ({amount} USDT) - Нет предыдущего"
-                elif "временно недоступен" in error:
-                    button_text = f"🔒 {emoji} Уровень {level} ({amount} USDT) - Закрыт"
+                if "уже приобретен" in error.lower() or "уже куплен" in error.lower():
+                    button_text = f"✅ {emoji} {display_name} ({amount} USDT) - Куплен"
+                elif "необходимо сначала" in error.lower() or "предыдущ" in error.lower():
+                    button_text = f"🔒 {emoji} {display_name} ({amount} USDT) - Нет предыдущего"
+                elif "временно недоступен" in error.lower():
+                    button_text = f"🔒 {emoji} {display_name} ({amount} USDT) - Закрыт"
                 else:
-                    button_text = f"🔒 {emoji} Уровень {level} ({amount} USDT) - Недоступен"
+                    button_text = f"🔒 {emoji} {display_name} ({amount} USDT) - Недоступен"
         else:
             # Fallback to default
             amount = default_amounts[level]
-            button_text = f"{emoji} Уровень {level} ({amount} USDT)"
+            button_text = f"{emoji} {display_name} ({amount} USDT)"
 
         builder.row(KeyboardButton(text=button_text))
 

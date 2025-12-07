@@ -52,39 +52,31 @@ async def show_deposit_menu(
     levels_status = await validation_service.get_available_levels(user.id)
 
     # Build text with statuses
-    from app.config.settings import settings
-
     text = "💰 *Выберите уровень депозита:*\n\n"
-    for level in [1, 2, 3, 4, 5]:
+    
+    # All levels including test (0)
+    for level in [0, 1, 2, 3, 4, 5]:
         if level in levels_status:
             level_info = levels_status[level]
             amount = level_info["amount"]
             status = level_info["status"]
-            level_info.get("status_text", "")
+            display_name = level_info.get("display_name", f"Level {level}")
 
             if status == "active":
-                text += f"✅ Level {level}: `{amount} USDT` - Активен\n"
+                text += f"✅ {display_name}: `{amount} USDT` - Активен\n"
             elif status == "available":
-                text += f"💰 Level {level}: `{amount} USDT` - Доступен\n"
+                text += f"💰 {display_name}: `{amount} USDT` - Доступен\n"
             else:
                 # Show reason for unavailability
                 error = level_info.get("error", "")
-                if "необходимо сначала купить" in error:
-                    text += f"🔒 Level {level}: `{amount} USDT` - Недоступен (нет предыдущего уровня)\n"
-                elif "необходимо минимум" in error:
-                    text += f"🔒 Level {level}: `{amount} USDT` - Недоступен (не хватает партнёров)\n"
+                if "необходимо сначала" in error.lower() or "предыдущ" in error.lower():
+                    text += f"🔒 {display_name}: `{amount} USDT` - Недоступен (нет предыдущего уровня)\n"
+                elif "необходимо минимум" in error.lower():
+                    text += f"🔒 {display_name}: `{amount} USDT` - Недоступен (не хватает партнёров)\n"
+                elif "уже приобретен" in error.lower():
+                    text += f"✅ {display_name}: `{amount} USDT` - Уже куплен\n"
                 else:
-                    text += f"🔒 Level {level}: `{amount} USDT` - Недоступен\n"
-        else:
-            # Fallback
-            amounts = {
-                1: settings.deposit_level_1,
-                2: settings.deposit_level_2,
-                3: settings.deposit_level_3,
-                4: settings.deposit_level_4,
-                5: settings.deposit_level_5,
-            }
-            text += f"💰 Level {level}: `{amounts[level]:.0f} USDT`\n"
+                    text += f"🔒 {display_name}: `{amount} USDT` - Недоступен\n"
 
     logger.info(f"[MENU] Sending deposit menu response to user {telegram_id}")
     try:
