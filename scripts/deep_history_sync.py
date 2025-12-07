@@ -2,10 +2,10 @@
 """
 Deep History Sync Script.
 
-Syncs ALL transactions for the system wallet from GENESIS (block 0)
-to the current block. Uses NodeReal for high rate limits.
+Syncs ALL transactions for the system wallet from the VERY FIRST block
+to the current block using NodeReal (high limits).
 
-This scans the ENTIRE history of the system wallet.
+Uses BSCScan API to find the first transaction, then scans everything.
 """
 
 import asyncio
@@ -14,11 +14,13 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
+import httpx
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from loguru import logger
-from sqlalchemy import func, select
+from sqlalchemy import func, select, delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 from web3 import Web3
@@ -46,54 +48,8 @@ ERC20_ABI = [
 ]
 
 
-def find_wallet_first_block(w3: Web3, wallet: str, token_address: str) -> int:
-    """
-    Binary search to find the first block where wallet had activity.
-    
-    Returns the approximate first block with token transfers.
-    """
-    logger.info(f"Searching for first transaction of {wallet[:10]}...")
-    
-    current_block = w3.eth.block_number
-    
-    # Binary search between 0 and current block
-    # Start with rough estimate - go back 6 months (~5M blocks on BSC)
-    low = max(0, current_block - 5_000_000)
-    high = current_block
-    
-    contract = w3.eth.contract(
-        address=Web3.to_checksum_address(token_address),
-        abi=ERC20_ABI
-    )
-    
-    # First, check if there are any transactions at all
-    try:
-        logs = contract.events.Transfer.get_logs(
-            fromBlock=low,
-            toBlock=high,
-            argument_filters={"to": Web3.to_checksum_address(wallet)}
-        )
-        if not logs:
-            # Try outgoing
-            logs = contract.events.Transfer.get_logs(
-                fromBlock=low,
-                toBlock=high,
-                argument_filters={"from": Web3.to_checksum_address(wallet)}
-            )
-        
-        if logs:
-            first_block = min(log["blockNumber"] for log in logs)
-            logger.info(f"Found transactions starting from block {first_block}")
-            return max(0, first_block - 1000)  # Go back a bit for safety
-    except Exception as e:
-        logger.warning(f"Search failed: {e}")
-    
-    # If no logs found in recent history, start from 6 months ago
-    return low
-
-
 class DeepHistorySync:
-    """Syncs COMPLETE transaction history for system wallet."""
+    """Deep sync of all transactions for system wallet."""
 
     def __init__(
         self,
@@ -104,13 +60,14 @@ class DeepHistorySync:
         self.session = session
         self.w3 = w3
         self.system_wallet = system_wallet.lower()
+        self.system_wallet_checksum = Web3.to_checksum_address(system_wallet)
         
         # Token addresses
-        self.usdt_address = settings.usdt_contract_address.lower()
-        self.plex_address = settings.auth_plex_token_address.lower()
+        self.usdt_address = settings.usdt_contract_address
+        self.plex_address = settings.auth_plex_token_address
         
-        # Scan settings - NodeReal can handle larger chunks
-        self.chunk_size = 5000  # 5000 blocks per request
+        # NodeReal can handle 5000 blocks per request
+        self.chunk_size = 5000
         
         # Statistics
         self.stats = {
@@ -120,7 +77,31 @@ class DeepHistorySync:
             "plex_outgoing": 0,
             "total_cached": 0,
             "duplicates_skipped": 0,
+            "errors": 0,
         }
+
+    async def find_first_transaction_block_bscscan(self) -> int:
+        """Find first transaction block using BSCScan API."""
+        logger.info("Finding first transaction block via BSCScan API...")
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                # Get first normal transaction
+                url = f"https://api.bscscan.com/api?module=account&action=txlist&address={self.system_wallet}&startblock=0&endblock=99999999&page=1&offset=1&sort=asc"
+                resp = await client.get(url, timeout=30)
+                data = resp.json()
+                
+                if data.get("status") == "1" and data.get("result"):
+                    first_block = int(data["result"][0]["blockNumber"])
+                    logger.info(f"BSCScan: First transaction at block {first_block}")
+                    return first_block
+        except Exception as e:
+            logger.warning(f"BSCScan API failed: {e}")
+        
+        # Fallback: estimate ~1 year back
+        current = self.w3.eth.block_number
+        one_year_blocks = 365 * 24 * 60 * 20  # ~1 block per 3 sec
+        return max(1, current - one_year_blocks)
 
     async def tx_exists(self, tx_hash: str) -> bool:
         """Check if transaction is already cached."""
@@ -144,44 +125,21 @@ class DeepHistorySync:
     ) -> bool:
         """Cache a single transaction."""
         try:
-            # Check for duplicate
             if await self.tx_exists(tx_hash):
                 self.stats["duplicates_skipped"] += 1
                 return False
 
-            # Try to get block timestamp
-            block_timestamp = None
-            try:
-                block = self.w3.eth.get_block(block_number)
-                block_timestamp = datetime.fromtimestamp(block["timestamp"], tz=UTC)
-            except Exception:
-                pass
-
-            # Determine user_id by matching wallet addresses
-            user_id = None
-            user_wallet = from_address if direction == "incoming" else to_address
-            
-            from app.repositories.user_repository import UserRepository
-            user_repo = UserRepository(self.session)
-            user = await user_repo.get_by_wallet(user_wallet)
-            if user:
-                user_id = user.id
-
-            decimals = USDT_DECIMALS if token_type == "USDT" else PLEX_DECIMALS
-
             tx = BlockchainTxCache(
                 tx_hash=tx_hash,
                 block_number=block_number,
-                block_timestamp=block_timestamp,
                 from_address=from_address.lower(),
                 to_address=to_address.lower(),
                 token_type=token_type,
                 token_address=token_address.lower(),
                 amount=amount,
-                amount_raw=str(int(amount * Decimal(10 ** decimals))),
+                amount_raw=str(int(amount * Decimal(10 ** (USDT_DECIMALS if token_type == "USDT" else PLEX_DECIMALS)))),
                 direction=direction,
                 status="confirmed",
-                user_id=user_id,
                 is_processed=False,
             )
 
@@ -202,8 +160,38 @@ class DeepHistorySync:
             return True
 
         except Exception as e:
-            logger.error(f"Error caching transaction {tx_hash}: {e}")
+            logger.error(f"Error caching tx {tx_hash}: {e}")
+            self.stats["errors"] += 1
             return False
+
+    def scan_token_chunk_sync(
+        self,
+        contract,
+        from_block: int,
+        to_block: int,
+    ) -> tuple:
+        """Synchronous scan of a block range for a token."""
+        try:
+            incoming = contract.events.Transfer.get_logs(
+                fromBlock=from_block,
+                toBlock=to_block,
+                argument_filters={"to": self.system_wallet_checksum}
+            )
+        except Exception as e:
+            logger.warning(f"Incoming scan failed {from_block}-{to_block}: {e}")
+            incoming = []
+            
+        try:
+            outgoing = contract.events.Transfer.get_logs(
+                fromBlock=from_block,
+                toBlock=to_block,
+                argument_filters={"from": self.system_wallet_checksum}
+            )
+        except Exception as e:
+            logger.warning(f"Outgoing scan failed {from_block}-{to_block}: {e}")
+            outgoing = []
+            
+        return incoming, outgoing
 
     async def scan_token(
         self,
@@ -212,10 +200,8 @@ class DeepHistorySync:
         from_block: int,
         to_block: int,
     ) -> int:
-        """
-        Scan all Transfer events for a token.
-        """
-        logger.info(f"Scanning {token_type}: blocks {from_block} to {to_block}")
+        """Scan all Transfer events for a token from NodeReal."""
+        logger.info(f"[{token_type}] Scanning blocks {from_block:,} to {to_block:,} ({to_block - from_block:,} blocks)")
         
         contract = self.w3.eth.contract(
             address=Web3.to_checksum_address(token_address),
@@ -225,32 +211,29 @@ class DeepHistorySync:
         decimals = USDT_DECIMALS if token_type == "USDT" else PLEX_DECIMALS
         total_cached = 0
         current_block = from_block
+        total_blocks = to_block - from_block
         
-        while current_block < to_block:
-            chunk_end = min(current_block + self.chunk_size, to_block)
+        while current_block <= to_block:
+            chunk_end = min(current_block + self.chunk_size - 1, to_block)
             
             try:
-                # Get incoming transfers (to system wallet)
-                incoming_logs = contract.events.Transfer.get_logs(
-                    fromBlock=current_block,
-                    toBlock=chunk_end,
-                    argument_filters={"to": Web3.to_checksum_address(self.system_wallet)}
-                )
-                
-                # Get outgoing transfers (from system wallet)
-                outgoing_logs = contract.events.Transfer.get_logs(
-                    fromBlock=current_block,
-                    toBlock=chunk_end,
-                    argument_filters={"from": Web3.to_checksum_address(self.system_wallet)}
+                # Run sync web3 call in executor
+                loop = asyncio.get_event_loop()
+                incoming, outgoing = await loop.run_in_executor(
+                    None,
+                    self.scan_token_chunk_sync,
+                    contract,
+                    current_block,
+                    chunk_end,
                 )
                 
                 # Process incoming
-                for log in incoming_logs:
+                for log in incoming:
                     args = log.get("args", {})
                     tx_hash = log["transactionHash"].hex()
                     amount = Decimal(args.get("value", 0)) / Decimal(10 ** decimals)
                     
-                    cached = await self.cache_transaction(
+                    if await self.cache_transaction(
                         tx_hash=tx_hash,
                         block_number=log["blockNumber"],
                         from_address=args.get("from", ""),
@@ -259,17 +242,16 @@ class DeepHistorySync:
                         token_type=token_type,
                         token_address=token_address,
                         direction="incoming",
-                    )
-                    if cached:
+                    ):
                         total_cached += 1
                 
                 # Process outgoing
-                for log in outgoing_logs:
+                for log in outgoing:
                     args = log.get("args", {})
                     tx_hash = log["transactionHash"].hex()
                     amount = Decimal(args.get("value", 0)) / Decimal(10 ** decimals)
                     
-                    cached = await self.cache_transaction(
+                    if await self.cache_transaction(
                         tx_hash=tx_hash,
                         block_number=log["blockNumber"],
                         from_address=args.get("from", ""),
@@ -278,26 +260,25 @@ class DeepHistorySync:
                         token_type=token_type,
                         token_address=token_address,
                         direction="outgoing",
-                    )
-                    if cached:
+                    ):
                         total_cached += 1
                 
-                # Commit every chunk to save progress
+                # Commit every chunk
                 await self.session.commit()
                 
-                progress = (chunk_end - from_block) / (to_block - from_block) * 100
-                if len(incoming_logs) > 0 or len(outgoing_logs) > 0:
+                # Progress
+                progress = (chunk_end - from_block) / total_blocks * 100 if total_blocks > 0 else 100
+                if len(incoming) > 0 or len(outgoing) > 0:
                     logger.info(
-                        f"[{token_type}] Block {current_block}-{chunk_end}: "
-                        f"in={len(incoming_logs)}, out={len(outgoing_logs)} | "
-                        f"Progress: {progress:.1f}%"
+                        f"[{token_type}] {current_block:,}-{chunk_end:,}: "
+                        f"in={len(incoming)}, out={len(outgoing)} | {progress:.1f}%"
                     )
                 elif int(progress) % 10 == 0:
-                    logger.info(f"[{token_type}] Progress: {progress:.1f}%")
+                    logger.debug(f"[{token_type}] Progress: {progress:.1f}%")
                 
             except Exception as e:
-                logger.error(f"Error scanning chunk {current_block}-{chunk_end}: {e}")
-                # Continue with next chunk
+                logger.error(f"[{token_type}] Chunk {current_block:,}-{chunk_end:,} error: {e}")
+                self.stats["errors"] += 1
                 
             current_block = chunk_end + 1
             
@@ -306,78 +287,68 @@ class DeepHistorySync:
         
         return total_cached
 
-    async def run_deep_sync(self, start_block: int | None = None) -> dict:
-        """
-        Run COMPLETE history sync for all tokens.
-        """
-        logger.info("=" * 60)
-        logger.info("STARTING DEEP HISTORY SYNC (FULL HISTORY)")
+    async def run(self) -> dict:
+        """Run deep history sync."""
+        logger.info("=" * 70)
+        logger.info("DEEP HISTORY SYNC - FULL BLOCKCHAIN SCAN")
         logger.info(f"System Wallet: {self.system_wallet}")
-        logger.info("=" * 60)
+        logger.info(f"Using NodeReal RPC for high-volume scanning")
+        logger.info("=" * 70)
         
         current_block = self.w3.eth.block_number
-        logger.info(f"Current block: {current_block}")
+        logger.info(f"Current block: {current_block:,}")
         
-        # Find starting point if not provided
-        if start_block is None:
-            # Find earliest known transaction
-            start_block = find_wallet_first_block(
-                self.w3, 
-                self.system_wallet, 
-                self.usdt_address
-            )
+        # Find first transaction
+        first_block = await self.find_first_transaction_block_bscscan()
+        logger.info(f"Starting from block: {first_block:,}")
         
-        logger.info(f"Starting from block: {start_block}")
+        total_blocks = current_block - first_block
+        logger.info(f"Total blocks to scan: {total_blocks:,}")
         
         # Scan USDT
-        logger.info("\n" + "=" * 40)
-        logger.info("PHASE 1: Scanning USDT transfers...")
-        logger.info("=" * 40)
+        logger.info("\n" + "=" * 50)
+        logger.info("PHASE 1: USDT TRANSFERS")
+        logger.info("=" * 50)
         
         await self.scan_token(
             token_type="USDT",
             token_address=self.usdt_address,
-            from_block=start_block,
+            from_block=first_block,
             to_block=current_block,
         )
         
         # Scan PLEX
-        logger.info("\n" + "=" * 40)
-        logger.info("PHASE 2: Scanning PLEX transfers...")
-        logger.info("=" * 40)
+        logger.info("\n" + "=" * 50)
+        logger.info("PHASE 2: PLEX TRANSFERS")
+        logger.info("=" * 50)
         
         await self.scan_token(
             token_type="PLEX",
             token_address=self.plex_address,
-            from_block=start_block,
+            from_block=first_block,
             to_block=current_block,
         )
         
         # Final commit
         await self.session.commit()
         
-        logger.info("\n" + "=" * 60)
+        logger.info("\n" + "=" * 70)
         logger.info("DEEP HISTORY SYNC COMPLETE")
-        logger.info("=" * 60)
+        logger.info("=" * 70)
         logger.info(f"USDT: {self.stats['usdt_incoming']} incoming, {self.stats['usdt_outgoing']} outgoing")
         logger.info(f"PLEX: {self.stats['plex_incoming']} incoming, {self.stats['plex_outgoing']} outgoing")
         logger.info(f"Total cached: {self.stats['total_cached']}")
         logger.info(f"Duplicates skipped: {self.stats['duplicates_skipped']}")
+        logger.info(f"Errors: {self.stats['errors']}")
         
         return self.stats
 
 
 async def main():
-    """Run deep history sync."""
-    import argparse
+    """Run deep history sync using NodeReal."""
+    logger.info("Initializing Deep History Sync with NodeReal...")
     
-    parser = argparse.ArgumentParser(description="Deep blockchain history sync")
-    parser.add_argument("--start-block", type=int, default=None, help="Start block (default: auto-detect)")
-    args = parser.parse_args()
-    
-    logger.info("Initializing Deep History Sync...")
-    
-    # Create database engine with NodeReal RPC
+    # Create database engine
     engine = create_async_engine(
         settings.database_url,
         echo=False,
@@ -390,17 +361,21 @@ async def main():
         expire_on_commit=False,
     )
     
-    # Use NodeReal for high-volume scanning
-    nodereal_url = settings.rpc_nodereal_http or settings.rpc_url
-    logger.info(f"Using RPC: {nodereal_url[:50]}...")
-    
-    w3 = Web3(Web3.HTTPProvider(nodereal_url))
-    
-    if not w3.is_connected():
-        logger.error("Failed to connect to RPC")
+    # Use NodeReal for scanning (high limits)
+    nodereal_url = settings.rpc_nodereal_http
+    if not nodereal_url:
+        logger.error("NodeReal RPC not configured! Set RPC_NODEREAL_HTTP in .env")
         return
     
-    logger.info(f"Connected to BSC, current block: {w3.eth.block_number}")
+    logger.info(f"NodeReal RPC: {nodereal_url[:60]}...")
+    
+    w3 = Web3(Web3.HTTPProvider(nodereal_url, request_kwargs={"timeout": 60}))
+    
+    if not w3.is_connected():
+        logger.error("Failed to connect to NodeReal RPC!")
+        return
+    
+    logger.info(f"Connected! Current block: {w3.eth.block_number:,}")
     
     async with session_maker() as session:
         syncer = DeepHistorySync(
@@ -409,8 +384,9 @@ async def main():
             system_wallet=settings.system_wallet_address,
         )
         
-        stats = await syncer.run_deep_sync(start_block=args.start_block)
+        stats = await syncer.run()
         
+    await engine.dispose()
     logger.info("Deep history sync completed!")
     return stats
 
