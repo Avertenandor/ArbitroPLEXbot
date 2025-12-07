@@ -16,9 +16,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.repositories.blacklist_repository import BlacklistRepository
+from app.services.deposit import DepositService
 from app.services.user_service import UserService
 from bot.i18n.loader import get_translator, get_user_language
 from bot.keyboards.reply import main_menu_reply_keyboard
+from bot.utils.formatters import format_usdt
 from bot.utils.text_utils import escape_markdown
 
 router = Router()
@@ -87,11 +89,35 @@ async def show_main_menu(
     else:
         days = 0
 
+    # Get active deposits info
+    deposit_service = DepositService(session)
+    active_deposits = await deposit_service.get_active_deposits(user.id)
+    
+    # Build deposits summary section
+    deposits_section = ""
+    if active_deposits:
+        total_deposited = sum(float(d.amount) for d in active_deposits)
+        total_roi_paid = sum(float(d.roi_paid_amount or 0) for d in active_deposits)
+        total_roi_cap = sum(float(d.roi_cap_amount or 0) for d in active_deposits)
+        
+        if total_roi_cap > 0:
+            overall_progress = (total_roi_paid / total_roi_cap) * 100
+        else:
+            overall_progress = 0
+        
+        deposits_section = (
+            f"📦 Депозит: `{format_usdt(total_deposited)} USDT`\n"
+            f"📈 ROI: `{overall_progress:.1f}%` получено `{format_usdt(total_roi_paid)} USDT`\n"
+        )
+    else:
+        deposits_section = "📦 Депозит: _нет активных_\n"
+
     text = (
         f"📊 *ГЛАВНОЕ МЕНЮ*\n"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"Добро пожаловать, {safe_username}\\!\n\n"
         f"💰 Баланс: `{available:.2f} USDT`\n"
+        f"{deposits_section}"
         f"⚡ PLEX: `{float(plex_balance):.0f}` монет \\(\\~{days} дней\\)\n\n"
         f"Выберите раздел:"
     )
