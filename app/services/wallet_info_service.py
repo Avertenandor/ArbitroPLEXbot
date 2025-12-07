@@ -102,14 +102,61 @@ class WalletInfoService:
     
     Uses:
     - BlockchainService for balance queries (RPC)
-    - NodeReal Enhanced API for transaction history
+    - eth_getLogs for token transfer history (standard RPC method)
     """
+    
+    # ERC-20 Transfer event signature
+    TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
     
     def __init__(self) -> None:
         """Initialize wallet info service."""
-        # Use NodeReal Enhanced API endpoint
-        self.nodereal_url = getattr(settings, 'nodereal_api_url', None) or settings.rpc_url
-        self._last_request_time = 0.0
+        self.rpc_url = settings.rpc_url
+        self._session: aiohttp.ClientSession | None = None
+    
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """Get or create aiohttp session."""
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+        return self._session
+    
+    async def _rpc_call(self, method: str, params: list) -> Any:
+        """
+        Make JSON-RPC call.
+        
+        Args:
+            method: RPC method name
+            params: RPC parameters
+            
+        Returns:
+            Result or None on error
+        """
+        payload = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": method,
+            "params": params,
+        }
+        
+        try:
+            session = await self._get_session()
+            async with session.post(
+                self.rpc_url,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=30),
+                headers={"Content-Type": "application/json"},
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    if "error" in data:
+                        logger.debug(f"RPC error: {data['error']}")
+                        return None
+                    return data.get("result")
+                else:
+                    logger.warning(f"RPC error: HTTP {response.status}")
+                    return None
+        except Exception as e:
+            logger.error(f"RPC request failed: {e}")
+            return None
     
     async def get_wallet_balances(self, wallet_address: str) -> WalletBalance | None:
         """
@@ -151,120 +198,12 @@ class WalletInfoService:
             logger.error(f"Failed to get wallet balances for {mask_address(wallet_address)}: {e}")
             return None
     
-    async def _nodereal_rpc_call(self, method: str, params: list) -> Any:
-        """
-        Make NodeReal Enhanced API JSON-RPC call.
-        
-        Args:
-            method: RPC method name
-            params: RPC parameters
-            
-        Returns:
-            Result or None on error
-        """
-        payload = {
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": method,
-            "params": params,
-        }
-        
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    self.nodereal_url,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=30),
-                    headers={"Content-Type": "application/json"},
-                ) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        if "error" in data:
-                            logger.debug(f"NodeReal RPC error: {data['error']}")
-                            return None
-                        return data.get("result")
-                    else:
-                        logger.warning(f"NodeReal API error: HTTP {response.status}")
-                        return None
-        except Exception as e:
-            logger.error(f"NodeReal RPC request failed: {e}")
-            return None
-    
-    async def get_bnb_transactions(
-        self,
-        wallet_address: str,
-        limit: int = 20,
-    ) -> list[TokenTransaction]:
-        """
-        Get BNB (native) transaction history using eth_getTransactionsByAddress.
-        
-        Note: This is a NodeReal Enhanced API method.
-        If not available, returns empty list.
-        
-        Args:
-            wallet_address: Wallet address
-            limit: Max transactions to return
-            
-        Returns:
-            List of TokenTransaction
-        """
-        # Try NodeReal Enhanced API method
-        result = await self._nodereal_rpc_call(
-            "nr_getTransactionsByAddress",
-            [wallet_address, "0x0", "latest", {"order": "desc", "pageSize": hex(limit)}]
-        )
-        
-        if not result:
-            # Fallback: return empty (transactions feature not available)
-            logger.debug("BNB transactions not available via RPC")
-            return []
-        
-        transactions = []
-        wallet_lower = wallet_address.lower()
-        
-        for tx in result.get("transactions", [])[:limit]:
-            try:
-                value_hex = tx.get("value", "0x0")
-                value_wei = int(value_hex, 16) if value_hex else 0
-                
-                if value_wei == 0:
-                    continue
-                
-                from_addr = tx.get("from", "").lower()
-                to_addr = tx.get("to", "").lower()
-                
-                # Determine direction
-                if to_addr == wallet_lower:
-                    direction = TX_TYPE_TRANSFER_IN
-                elif from_addr == wallet_lower:
-                    direction = TX_TYPE_TRANSFER_OUT
-                else:
-                    continue
-                
-                value = Decimal(value_wei) / Decimal(10**18)
-                block_hex = tx.get("blockNumber", "0x0")
-                block_num = int(block_hex, 16) if block_hex else 0
-                
-                # Get timestamp from block (approximate)
-                timestamp_hex = tx.get("timestamp", "0x0")
-                timestamp = int(timestamp_hex, 16) if timestamp_hex else 0
-                
-                transactions.append(TokenTransaction(
-                    tx_hash=tx.get("hash", ""),
-                    block_number=block_num,
-                    timestamp=datetime.fromtimestamp(timestamp, tz=UTC) if timestamp else datetime.now(UTC),
-                    from_address=tx.get("from", ""),
-                    to_address=tx.get("to", ""),
-                    value=value,
-                    token_symbol="BNB",
-                    token_name="BNB",
-                    direction=direction,
-                ))
-            except Exception as e:
-                logger.debug(f"Failed to parse BNB tx: {e}")
-                continue
-        
-        return transactions
+    async def _get_current_block(self) -> int:
+        """Get current block number."""
+        result = await self._rpc_call("eth_blockNumber", [])
+        if result:
+            return int(result, 16)
+        return 0
     
     async def get_token_transactions(
         self,
@@ -276,7 +215,7 @@ class WalletInfoService:
         limit: int = 20,
     ) -> list[TokenTransaction]:
         """
-        Get BEP-20 token transaction history using nr_getTokenTransfers.
+        Get BEP-20 token transaction history using eth_getLogs.
         
         Args:
             wallet_address: Wallet address
@@ -289,58 +228,109 @@ class WalletInfoService:
         Returns:
             List of TokenTransaction
         """
-        # Try NodeReal Enhanced API for token transfers
-        result = await self._nodereal_rpc_call(
-            "nr_getTokenTransfers",
-            [wallet_address, contract_address, "0x0", "latest", {"pageSize": hex(limit)}]
-        )
+        wallet_padded = "0x" + wallet_address.lower()[2:].zfill(64)
         
-        if not result:
-            logger.debug(f"{token_symbol} transactions not available via RPC")
+        # Get current block
+        current_block = await self._get_current_block()
+        if current_block == 0:
             return []
         
+        # Search last ~100k blocks (~3-4 days)
+        from_block = max(0, current_block - 100000)
+        
         transactions = []
-        wallet_lower = wallet_address.lower()
         
-        for tx in result.get("transfers", [])[:limit]:
-            try:
-                value_hex = tx.get("value", "0x0")
-                value_raw = int(value_hex, 16) if value_hex else 0
-                
-                from_addr = tx.get("from", "").lower()
-                to_addr = tx.get("to", "").lower()
-                
-                # Determine direction
-                if to_addr == wallet_lower:
-                    direction = TX_TYPE_TRANSFER_IN
-                elif from_addr == wallet_lower:
-                    direction = TX_TYPE_TRANSFER_OUT
-                else:
-                    continue
-                
-                value = Decimal(value_raw) / Decimal(10**decimals)
-                block_hex = tx.get("blockNumber", "0x0")
-                block_num = int(block_hex, 16) if block_hex else 0
-                
-                timestamp_hex = tx.get("timestamp", "0x0")
-                timestamp = int(timestamp_hex, 16) if timestamp_hex else 0
-                
-                transactions.append(TokenTransaction(
-                    tx_hash=tx.get("transactionHash", tx.get("hash", "")),
-                    block_number=block_num,
-                    timestamp=datetime.fromtimestamp(timestamp, tz=UTC) if timestamp else datetime.now(UTC),
-                    from_address=tx.get("from", ""),
-                    to_address=tx.get("to", ""),
-                    value=value,
-                    token_symbol=token_symbol,
-                    token_name=token_name,
-                    direction=direction,
-                ))
-            except Exception as e:
-                logger.debug(f"Failed to parse {token_symbol} tx: {e}")
-                continue
+        # Get incoming transfers (to wallet)
+        incoming_logs = await self._rpc_call("eth_getLogs", [{
+            "fromBlock": hex(from_block),
+            "toBlock": "latest",
+            "address": contract_address,
+            "topics": [self.TRANSFER_TOPIC, None, wallet_padded],
+        }])
         
-        return transactions
+        if incoming_logs:
+            for log in incoming_logs[-limit:]:
+                try:
+                    tx = self._parse_transfer_log(log, token_symbol, token_name, decimals, TX_TYPE_TRANSFER_IN)
+                    if tx:
+                        transactions.append(tx)
+                except Exception as e:
+                    logger.debug(f"Failed to parse incoming tx: {e}")
+        
+        # Get outgoing transfers (from wallet)
+        outgoing_logs = await self._rpc_call("eth_getLogs", [{
+            "fromBlock": hex(from_block),
+            "toBlock": "latest",
+            "address": contract_address,
+            "topics": [self.TRANSFER_TOPIC, wallet_padded, None],
+        }])
+        
+        if outgoing_logs:
+            for log in outgoing_logs[-limit:]:
+                try:
+                    tx = self._parse_transfer_log(log, token_symbol, token_name, decimals, TX_TYPE_TRANSFER_OUT)
+                    if tx:
+                        transactions.append(tx)
+                except Exception as e:
+                    logger.debug(f"Failed to parse outgoing tx: {e}")
+        
+        # Sort by block number descending and limit
+        transactions.sort(key=lambda x: x.block_number, reverse=True)
+        return transactions[:limit]
+    
+    def _parse_transfer_log(
+        self,
+        log: dict,
+        token_symbol: str,
+        token_name: str,
+        decimals: int,
+        direction: str,
+    ) -> TokenTransaction | None:
+        """Parse ERC-20 Transfer event log."""
+        try:
+            topics = log.get("topics", [])
+            if len(topics) < 3:
+                return None
+            
+            from_addr = "0x" + topics[1][-40:]
+            to_addr = "0x" + topics[2][-40:]
+            
+            value_hex = log.get("data", "0x0")
+            value_raw = int(value_hex, 16) if value_hex else 0
+            value = Decimal(value_raw) / Decimal(10**decimals)
+            
+            block_hex = log.get("blockNumber", "0x0")
+            block_num = int(block_hex, 16) if block_hex else 0
+            
+            return TokenTransaction(
+                tx_hash=log.get("transactionHash", ""),
+                block_number=block_num,
+                timestamp=datetime.now(UTC),  # Approximate, would need block timestamp
+                from_address=from_addr,
+                to_address=to_addr,
+                value=value,
+                token_symbol=token_symbol,
+                token_name=token_name,
+                direction=direction,
+            )
+        except Exception as e:
+            logger.debug(f"Failed to parse transfer log: {e}")
+            return None
+    
+    async def get_bnb_transactions(
+        self,
+        wallet_address: str,
+        limit: int = 20,
+    ) -> list[TokenTransaction]:
+        """
+        Get BNB transactions.
+        
+        Note: Native BNB transfers cannot be retrieved via eth_getLogs.
+        Returns empty list - use BSCScan API for full BNB history.
+        """
+        # BNB native transfers are not logged as events
+        # Would need to scan all blocks which is too expensive
+        return []
     
     async def get_usdt_transactions(
         self,
@@ -387,18 +377,17 @@ class WalletInfoService:
         Returns:
             Dict with keys: "BNB", "USDT", "PLEX"
         """
-        # Fetch all in parallel
-        bnb_task = self.get_bnb_transactions(wallet_address, limit_per_token)
+        # Fetch token transfers in parallel
         usdt_task = self.get_usdt_transactions(wallet_address, limit_per_token)
         plex_task = self.get_plex_transactions(wallet_address, limit_per_token)
         
-        bnb_txs, usdt_txs, plex_txs = await asyncio.gather(
-            bnb_task, usdt_task, plex_task,
+        usdt_txs, plex_txs = await asyncio.gather(
+            usdt_task, plex_task,
             return_exceptions=True
         )
         
         return {
-            "BNB": bnb_txs if isinstance(bnb_txs, list) else [],
+            "BNB": [],  # Not available via RPC logs
             "USDT": usdt_txs if isinstance(usdt_txs, list) else [],
             "PLEX": plex_txs if isinstance(plex_txs, list) else [],
         }
