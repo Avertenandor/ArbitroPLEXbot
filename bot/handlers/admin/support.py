@@ -252,7 +252,9 @@ async def show_ticket_details(
     user_label = f"ID: {ticket.user_id}"
     if hasattr(ticket, 'user') and ticket.user:
         if ticket.user.username:
-            user_label = f"@{ticket.user.username} (ID: {ticket.user_id})"
+            # Escape username to prevent Markdown issues with underscores
+            safe_username = escape_markdown(ticket.user.username)
+            user_label = f"@{safe_username} (ID: {ticket.user_id})"
         elif ticket.user.telegram_id:
             user_label = f"TG: {ticket.user.telegram_id} (ID: {ticket.user_id})"
 
@@ -266,7 +268,8 @@ async def show_ticket_details(
     assigned_text = "Не назначен"
     if ticket.assigned_admin_id:
         if hasattr(ticket, 'assigned_admin') and ticket.assigned_admin:
-            assigned_text = f"@{ticket.assigned_admin.username or 'N/A'}"
+            safe_admin_username = escape_markdown(ticket.assigned_admin.username or 'N/A')
+            assigned_text = f"@{safe_admin_username}"
         else:
             assigned_text = f"Admin ID: {ticket.assigned_admin_id}"
 
