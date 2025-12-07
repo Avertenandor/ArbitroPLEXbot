@@ -66,8 +66,11 @@ class DeepHistorySync:
         self.usdt_address = settings.usdt_contract_address
         self.plex_address = settings.auth_plex_token_address
         
-        # NodeReal can handle 5000 blocks per request
+        # NodeReal can handle 5000 blocks per request but has rate limits
         self.chunk_size = 5000
+        
+        # Delay between requests to avoid 429 errors (300ms)
+        self.request_delay = 0.3
         
         # Statistics
         self.stats = {
@@ -169,27 +172,43 @@ class DeepHistorySync:
         contract,
         from_block: int,
         to_block: int,
+        max_retries: int = 3,
     ) -> tuple:
-        """Synchronous scan of a block range for a token."""
-        try:
-            incoming = contract.events.Transfer.get_logs(
-                fromBlock=from_block,
-                toBlock=to_block,
-                argument_filters={"to": self.system_wallet_checksum}
-            )
-        except Exception as e:
-            logger.warning(f"Incoming scan failed {from_block}-{to_block}: {e}")
-            incoming = []
-            
-        try:
-            outgoing = contract.events.Transfer.get_logs(
-                fromBlock=from_block,
-                toBlock=to_block,
-                argument_filters={"from": self.system_wallet_checksum}
-            )
-        except Exception as e:
-            logger.warning(f"Outgoing scan failed {from_block}-{to_block}: {e}")
-            outgoing = []
+        """Synchronous scan of a block range for a token with retry."""
+        import time
+        
+        incoming = []
+        outgoing = []
+        
+        for attempt in range(max_retries):
+            try:
+                incoming = contract.events.Transfer.get_logs(
+                    fromBlock=from_block,
+                    toBlock=to_block,
+                    argument_filters={"to": self.system_wallet_checksum}
+                )
+                break
+            except Exception as e:
+                if "429" in str(e) and attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                    continue
+                logger.warning(f"Incoming scan failed {from_block}-{to_block}: {e}")
+                break
+        
+        for attempt in range(max_retries):
+            try:
+                outgoing = contract.events.Transfer.get_logs(
+                    fromBlock=from_block,
+                    toBlock=to_block,
+                    argument_filters={"from": self.system_wallet_checksum}
+                )
+                break
+            except Exception as e:
+                if "429" in str(e) and attempt < max_retries - 1:
+                    time.sleep(2 ** attempt)  # Exponential backoff
+                    continue
+                logger.warning(f"Outgoing scan failed {from_block}-{to_block}: {e}")
+                break
             
         return incoming, outgoing
 
@@ -282,8 +301,8 @@ class DeepHistorySync:
                 
             current_block = chunk_end + 1
             
-            # Small delay to respect rate limits
-            await asyncio.sleep(0.05)
+            # Delay to respect rate limits (avoid 429)
+            await asyncio.sleep(self.request_delay)
         
         return total_cached
 
