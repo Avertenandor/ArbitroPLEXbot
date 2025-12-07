@@ -76,11 +76,11 @@ async def handle_select_inquiry(
     is_assigned = inquiry.assigned_admin_id == admin.id
 
     await message.answer(
-        f"📬 **Обращение #{inquiry.id}**\n"
+        f"📬 *Обращение #{inquiry.id}*\n"
         f"Статус: {status_emoji.get(inquiry.status, '')} {inquiry.status}\n"
         f"От: {username}\n"
         f"Создано: {inquiry.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
-        f"**Вопрос:**\n{inquiry.initial_question}\n"
+        f"*Вопрос:*\n{inquiry.initial_question}\n"
         f"{messages_text}",
         parse_mode="Markdown",
         reply_markup=admin_inquiry_detail_keyboard(is_assigned=is_assigned),

@@ -261,7 +261,7 @@ async def show_ticket_details(
             assigned_text = f"Admin ID: {ticket.assigned_admin_id}"
 
     text = (
-        f"📋 **Обращение #{ticket.id}**\n\n"
+        f"📋 *Обращение #{ticket.id}*\n\n"
         f"👤 Пользователь: {user_label}\n"
         f"📊 Статус: {status_text}\n"
         f"👨‍💼 Назначен: {assigned_text}\n"
@@ -269,7 +269,7 @@ async def show_ticket_details(
     )
 
     if hasattr(ticket, 'messages') and ticket.messages:
-        text += "**Переписка:**\n\n"
+        text += "*Переписка:*\n\n"
         for msg in ticket.messages[-10:]:  # Show last 10 messages
             sender_icon = {
                 SupportSender.USER.value: "👤",
