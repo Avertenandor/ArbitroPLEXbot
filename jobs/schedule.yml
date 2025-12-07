@@ -1,11 +1,117 @@
-# Schedule incoming transfer monitor to run every minute
-cron:
-  - name: "Monitor Incoming Transfers"
-    minute: "*"
-    hour: "*"
-    day: "*"
-    month: "*"
-    day_of_week: "*"
-    command: "incoming_transfer_monitor.monitor_incoming_transfers"
-    args: []
+# Schedule Configuration (Documentation Only)
+# 
+# NOTE: This file is NOT used for actual scheduling!
+# Real scheduling is done via APScheduler in scheduler.py
+#
+# This file serves as documentation of scheduled tasks.
 
+# ============================================================
+# ACTIVE SCHEDULED TASKS (from scheduler.py)
+# ============================================================
+
+tasks:
+  # Critical Payment Tasks
+  - name: "💸 Payment Retry Processing"
+    interval: "1 minute"
+    module: "jobs.tasks.payment_retry"
+    description: "Retries failed payment transactions"
+    
+  - name: "🔄 Notification Retry Processing"
+    interval: "1 minute"
+    module: "jobs.tasks.notification_retry"
+    description: "Retries failed notification sends"
+    
+  - name: "📧 Notification Fallback Processing"
+    interval: "5 seconds"
+    module: "jobs.tasks.notification_fallback_processor"
+    description: "Processes pending notifications via fallback"
+
+  # Deposit Monitoring
+  - name: "📦 Deposit Monitoring"
+    interval: "1 minute"
+    module: "jobs.tasks.deposit_monitoring"
+    description: "Monitors for new deposits in blockchain"
+    
+  - name: "📥 Incoming Transfer Monitor"
+    interval: "1 minute"
+    module: "jobs.tasks.incoming_transfer_monitor"
+    description: "Monitors incoming USDT/PLEX transfers"
+
+  # Blockchain Sync
+  - name: "⛓️ Blockchain Cache Sync"
+    interval: "30 seconds"
+    module: "jobs.tasks.blockchain_cache_sync"
+    description: "Real-time blockchain sync via RPC"
+    
+  - name: "📊 Blockchain Indexer"
+    interval: "30 seconds"
+    module: "jobs.tasks.blockchain_indexer_task"
+    description: "Indexes new blocks and caches transactions"
+    
+  - name: "💾 Blockchain TX Cache Scan"
+    interval: "5 minutes"
+    module: "jobs.tasks.blockchain_tx_cache_scan"
+    description: "Legacy backup cache scan"
+
+  # Hourly Tasks
+  - name: "💎 PLEX Payment Monitor"
+    interval: "1 hour"
+    module: "jobs.tasks.plex_payment_monitor"
+    description: "Monitors PLEX payments"
+    
+  - name: "💰 PLEX Balance Monitor"
+    interval: "1 hour"
+    module: "jobs.tasks.plex_balance_monitor"
+    description: "Checks minimum 5000 PLEX requirement"
+    
+  - name: "📨 Balance Notifications"
+    interval: "1 hour"
+    module: "jobs.tasks.balance_notification"
+    description: "Sends hourly earnings notifications"
+    
+  - name: "🔍 User Deposit Scan"
+    interval: "1 hour"
+    module: "jobs.tasks.deposit_scan_task"
+    description: "Full scan of all user deposits"
+
+  # Daily Tasks
+  - name: "📈 Daily Rewards Processing"
+    cron: "0 0 * * *"  # 00:00 UTC
+    module: "jobs.tasks.daily_rewards"
+    description: "Processes daily ROI accruals"
+    
+  - name: "📊 Financial Reconciliation"
+    cron: "0 1 * * *"  # 01:00 UTC
+    module: "jobs.tasks.financial_reconciliation"
+    description: "Daily financial reconciliation"
+
+  # Maintenance Tasks
+  - name: "🔐 Admin Session Cleanup"
+    interval: "5 minutes"
+    module: "jobs.tasks.admin_session_cleanup"
+    description: "Cleans up expired admin sessions"
+    
+  - name: "⚠️ Stuck Transaction Monitor"
+    interval: "5 minutes"
+    module: "jobs.tasks.stuck_transaction_monitor"
+    description: "Monitors and resolves stuck transactions"
+    
+  - name: "🏥 Node Health Monitor"
+    interval: "30 seconds"
+    module: "jobs.tasks.node_health_monitor"
+    description: "Monitors RPC node health"
+    
+  - name: "📉 Metrics Monitor"
+    interval: "5 minutes"
+    module: "jobs.tasks.metrics_monitor"
+    description: "Collects system metrics"
+    
+  - name: "🔥 Redis Cache Warmup"
+    interval: "5 minutes"
+    module: "jobs.tasks.warmup_redis_cache"
+    description: "Warms up Redis cache with hot data"
+    
+  - name: "📝 Mark Immutable Audit Logs"
+    cron: "0 2 * * *"  # 02:00 UTC
+    module: "jobs.tasks.mark_immutable_audit_logs"
+    description: "Marks old audit logs as immutable"
