@@ -21,6 +21,7 @@ from app.services.blockchain_service import get_blockchain_service
 from app.services.plex_payment_service import PlexPaymentService
 from bot.constants.rules import MINIMUM_PLEX_BALANCE, get_available_plex_balance
 from bot.i18n.loader import get_translator, get_user_language
+from bot.utils.text_utils import safe_answer
 from bot.utils.user_loader import UserLoader
 
 router = Router()
@@ -216,7 +217,7 @@ async def show_wallet_balance(
         except Exception:
             pass
 
-        await message.answer(text, parse_mode="Markdown")
+        await safe_answer(message, text)
 
         logger.info(
             f"[WALLET_BALANCE] Successfully displayed balance for user {telegram_id}: "
@@ -243,4 +244,4 @@ async def show_wallet_balance(
             f"_Адрес: {format_wallet_short(wallet_address)}_"
         )
 
-        await message.answer(text, parse_mode="Markdown")
+        await safe_answer(message, text)

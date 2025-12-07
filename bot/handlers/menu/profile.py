@@ -19,7 +19,7 @@ from app.services.report_service import ReportService
 from app.services.user_service import UserService
 from bot.keyboards.reply import profile_keyboard
 from bot.utils.formatters import format_usdt
-from bot.utils.text_utils import escape_markdown
+from bot.utils.text_utils import escape_markdown, safe_answer
 from bot.utils.user_loader import UserLoader
 
 router = Router()
@@ -169,7 +169,7 @@ async def show_my_profile(
         f"📅 Дата регистрации: {user.created_at.strftime('%d.%m.%Y')}"
     )
 
-    await message.answer(text, parse_mode="Markdown", reply_markup=profile_keyboard())
+    await safe_answer(message, text, reply_markup=profile_keyboard())
 
 
 @router.message(StateFilter('*'), F.text == "📂 Скачать отчет")
