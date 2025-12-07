@@ -33,18 +33,34 @@ class UserStatisticsMixin:
         Returns:
             User stats dict
         """
+        from app.models.enums import TransactionStatus
+        from app.repositories.deposit_repository import DepositRepository
+        from app.repositories.referral_repository import ReferralRepository
+
         user = await self.user_repo.get_by_id(user_id)
         if not user:
             return {}
 
-        # Get deposits total (stub - should query deposits)
-        total_deposits = Decimal("0.00")
+        # Get deposits total from confirmed deposits
+        deposit_repo = DepositRepository(self.session)
+        total_deposits = await deposit_repo.get_total_deposited(user_id)
 
-        # Get referral count (stub - should query referrals)
-        referral_count = 0
+        # Also check user.total_deposited_usdt as fallback
+        user_total = getattr(user, "total_deposited_usdt", None) or Decimal("0")
+        if user_total > total_deposits:
+            total_deposits = user_total
 
-        # Get activated levels (stub - should query deposits)
-        activated_levels = []
+        # Get referral count
+        referral_repo = ReferralRepository(self.session)
+        referrals = await referral_repo.get_by_referrer(user_id, level=1)
+        referral_count = len(referrals) if referrals else 0
+
+        # Get activated levels from confirmed deposits
+        deposits = await deposit_repo.find_by(
+            user_id=user_id,
+            status=TransactionStatus.CONFIRMED.value,
+        )
+        activated_levels = list({d.level for d in deposits}) if deposits else []
 
         return {
             "total_deposits": total_deposits,

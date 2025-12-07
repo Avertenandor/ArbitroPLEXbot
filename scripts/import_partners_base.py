@@ -101,9 +101,10 @@ def create_user_from_row(row: dict, referrer_id: int | None) -> User:
     telegram_id = int(row["tg_id"])
     wallet = row.get("primary_wallet", "").strip()
 
-    # If no wallet, generate placeholder
+    # If no wallet, generate unique placeholder based on telegram_id
     if not wallet or len(wallet) < 42:
-        wallet = f"0x{'0' * 40}"
+        # Generate unique placeholder: 0xPLACEHOLDER + telegram_id in hex
+        wallet = f"0xplaceholder{telegram_id:032x}"[-42:]
 
     # Parse created_at
     created_at_str = row.get("created_at", "")
