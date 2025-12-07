@@ -71,9 +71,50 @@ async def _sync_cache_async() -> None:
                 total = sum(results.values())
                 if total > 0:
                     logger.info(f"[RT Sync] Cached {total} new transactions: {results}")
+                    
+                    # Sync user deposits if new USDT transactions found
+                    if results.get("USDT", 0) > 0:
+                        await _sync_user_deposits(local_session_maker)
         finally:
             await local_engine.dispose()
     
     except Exception as e:
         logger.error(f"[RT Sync] Error: {e}")
         raise
+
+
+async def _sync_user_deposits(session_maker) -> None:
+    """Sync users' total_deposited_usdt with cache after new transactions."""
+    from decimal import Decimal
+    from sqlalchemy import select, func
+    from app.models.user import User
+    from app.models.blockchain_tx_cache import BlockchainTxCache
+    
+    MINIMUM_DEPOSIT = Decimal("70")
+    
+    try:
+        async with session_maker() as session:
+            users_result = await session.execute(select(User).where(User.wallet_address.isnot(None)))
+            users = users_result.scalars().all()
+            
+            for user in users:
+                wallet = user.wallet_address.lower()
+                
+                sum_query = select(func.coalesce(func.sum(BlockchainTxCache.amount), 0)).where(
+                    func.lower(BlockchainTxCache.from_address) == wallet,
+                    BlockchainTxCache.token_type == "USDT",
+                    BlockchainTxCache.direction == "incoming",
+                )
+                result = await session.execute(sum_query)
+                cache_total = result.scalar() or Decimal("0")
+                
+                old_total = user.total_deposited_usdt or Decimal("0")
+                
+                if old_total != cache_total:
+                    user.total_deposited_usdt = cache_total
+                    user.is_active_depositor = cache_total >= MINIMUM_DEPOSIT
+                    logger.info(f"[User Sync] {user.username}: {old_total} -> {cache_total} USDT")
+            
+            await session.commit()
+    except Exception as e:
+        logger.warning(f"[User Sync] Error: {e}")
