@@ -8,13 +8,14 @@ Runs every minute to check for notifications ready for retry.
 import dramatiq
 from aiogram import Bot
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 try:
     import redis.asyncio as redis
 except ImportError:
     redis = None  # type: ignore
 
-from app.config.database import async_session_maker
 from app.config.settings import settings
 from app.services.notification_retry_service import (
     NotificationRetryService,
@@ -50,6 +51,22 @@ def process_notification_retries() -> None:
 
 async def _process_notification_retries_async() -> dict:
     """Async implementation of notification retry processing."""
+    # Create a local engine to ensure it attaches to the current event loop.
+    # Use NullPool to avoid keeping connections open since we create/dispose per run.
+    local_engine = create_async_engine(
+        settings.database_url,
+        echo=False,
+        poolclass=NullPool,
+    )
+
+    local_session_maker = async_sessionmaker(
+        local_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
+
     # Create Redis client for distributed lock
     redis_client = None
     if redis:
@@ -67,10 +84,9 @@ async def _process_notification_retries_async() -> dict:
     # Use distributed lock to prevent concurrent notification retry processing
     lock = DistributedLock(redis_client=redis_client)
 
-    async with lock.lock("notification_retry_processing", timeout=300):
-        try:
-            # Use global session maker
-            async with async_session_maker() as session:
+    try:
+        async with lock.lock("notification_retry_processing", timeout=300):
+            async with local_session_maker() as session:
                 # Create bot instance
                 bot = Bot(token=settings.telegram_bot_token)
                 try:
@@ -82,7 +98,9 @@ async def _process_notification_retries_async() -> dict:
                 finally:
                     # Close bot session
                     await bot.session.close()
-        finally:
-            # Close Redis client
-            if redis_client:
-                await redis_client.close()
+    finally:
+        # Close Redis client
+        if redis_client:
+            await redis_client.close()
+        # Dispose engine
+        await local_engine.dispose()

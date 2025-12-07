@@ -7,10 +7,16 @@ Solves the event loop issues with SQLAlchemy and Redis connections.
 
 import asyncio
 import threading
+from collections.abc import Callable, Coroutine
+from contextlib import asynccontextmanager
 from functools import wraps
-from typing import Any, Callable, Coroutine, TypeVar
+from typing import Any, TypeVar
 
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
+
+from app.config.settings import settings
 
 T = TypeVar("T")
 
@@ -83,6 +89,44 @@ def async_actor(func: Callable[..., Coroutine[Any, Any, T]]) -> Callable[..., T]
         coro = func(*args, **kwargs)
         return run_async(coro)
     return wrapper
+
+
+@asynccontextmanager
+async def create_local_session():
+    """
+    Create a local database session for the current event loop.
+
+    This creates a new engine with NullPool to avoid connection pool issues
+    when running in dramatiq workers with multiple threads.
+
+    Usage:
+        async with create_local_session() as session:
+            # Use session
+            await session.execute(...)
+
+    Yields:
+        AsyncSession bound to the current event loop
+    """
+    # Create a local engine with NullPool to avoid connection pool lock issues
+    local_engine = create_async_engine(
+        settings.database_url,
+        echo=False,
+        poolclass=NullPool,
+    )
+
+    local_session_maker = async_sessionmaker(
+        local_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
+
+    try:
+        async with local_session_maker() as session:
+            yield session
+    finally:
+        await local_engine.dispose()
 
 
 async def cleanup_connections() -> None:
