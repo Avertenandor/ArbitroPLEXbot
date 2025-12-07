@@ -5,20 +5,20 @@ Cleans up expired and inactive admin sessions.
 Runs every 5 minutes to deactivate expired sessions.
 """
 
-import asyncio
-
 import dramatiq
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 try:
     import redis.asyncio as redis
 except ImportError:
     redis = None  # type: ignore
 
-from app.config.database import async_session_maker
 from app.config.settings import settings
 from app.repositories.admin_session_repository import AdminSessionRepository
 from app.utils.distributed_lock import DistributedLock
+from jobs.async_runner import run_async
 
 
 @dramatiq.actor(max_retries=3, time_limit=60_000)  # 1 min timeout
@@ -36,8 +36,8 @@ def cleanup_expired_admin_sessions() -> dict:
     logger.info("Starting admin session cleanup...")
 
     try:
-        # Run async code
-        result = asyncio.run(_cleanup_sessions_async())
+        # Run async code using thread-safe runner
+        result = run_async(_cleanup_sessions_async())
 
         logger.info(
             f"Admin session cleanup complete: "
@@ -58,6 +58,21 @@ async def _cleanup_sessions_async() -> dict:
     Returns:
         Dict with cleaned_up count
     """
+    # Create a local engine with NullPool to avoid connection pool lock issues
+    local_engine = create_async_engine(
+        settings.database_url,
+        echo=False,
+        poolclass=NullPool,
+    )
+
+    local_session_maker = async_sessionmaker(
+        local_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
+
     # Create Redis client for distributed lock
     redis_client = None
     if redis:
@@ -75,9 +90,9 @@ async def _cleanup_sessions_async() -> dict:
     # Use distributed lock to prevent concurrent cleanup
     lock = DistributedLock(redis_client=redis_client)
 
-    async with lock.lock("admin_session_cleanup", timeout=30):
-        try:
-            async with async_session_maker() as session:
+    try:
+        async with lock.lock("admin_session_cleanup", timeout=30):
+            async with local_session_maker() as session:
                 session_repo = AdminSessionRepository(session)
 
                 # Cleanup expired sessions
@@ -117,7 +132,9 @@ async def _cleanup_sessions_async() -> dict:
                     )
 
                 return {"cleaned_up": total_cleaned}
-        finally:
-            # Close Redis client
-            if redis_client:
-                await redis_client.close()
+    finally:
+        # Close Redis client
+        if redis_client:
+            await redis_client.close()
+        # Dispose engine
+        await local_engine.dispose()

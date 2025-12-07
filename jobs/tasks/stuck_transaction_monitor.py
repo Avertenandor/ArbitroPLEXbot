@@ -10,13 +10,14 @@ import dramatiq
 from jobs.async_runner import run_async
 from aiogram import Bot
 from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 try:
     import redis.asyncio as redis
 except ImportError:
     redis = None  # type: ignore
 
-from app.config.database import async_session_maker
 from app.config.settings import settings
 from app.services.blockchain_service import get_blockchain_service
 from app.services.notification_service import NotificationService
@@ -67,6 +68,21 @@ def monitor_stuck_transactions() -> dict:
 
 async def _monitor_stuck_transactions_async() -> dict:
     """Async implementation of stuck transaction monitoring."""
+    # Create a local engine with NullPool to avoid connection pool lock issues
+    local_engine = create_async_engine(
+        settings.database_url,
+        echo=False,
+        poolclass=NullPool,
+    )
+
+    local_session_maker = async_sessionmaker(
+        local_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        autocommit=False,
+        autoflush=False,
+    )
+
     # Create Redis client for distributed lock
     redis_client = None
     if redis:
@@ -84,9 +100,9 @@ async def _monitor_stuck_transactions_async() -> dict:
     # Use distributed lock to prevent concurrent stuck transaction monitoring
     lock = DistributedLock(redis_client=redis_client)
 
-    async with lock.lock("stuck_transaction_monitoring", timeout=300):
-        try:
-            async with async_session_maker() as session:
+    try:
+        async with lock.lock("stuck_transaction_monitoring", timeout=300):
+            async with local_session_maker() as session:
                 stuck_service = StuckTransactionService(session)
                 blockchain_service = get_blockchain_service()
 
@@ -255,7 +271,9 @@ async def _monitor_stuck_transactions_async() -> dict:
                     "pending": pending,
                     "total_stuck": len(stuck_withdrawals),
                 }
-        finally:
-            # Close Redis client
-            if redis_client:
-                await redis_client.close()
+    finally:
+        # Close Redis client
+        if redis_client:
+            await redis_client.close()
+        # Dispose engine
+        await local_engine.dispose()
