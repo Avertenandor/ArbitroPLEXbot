@@ -261,7 +261,8 @@ class DepositValidationService:
 
         for db_level, level_type in level_types:
             config = DEPOSIT_LEVEL_CONFIGS[level_type]
-            amount = config.amount
+            min_amount = config.min_amount
+            max_amount = config.max_amount
             can_purchase, error = await self.can_purchase_level_by_type(user_id, level_type)
             has_level = db_level in user_levels
 
@@ -278,7 +279,8 @@ class DepositValidationService:
             levels_status[db_level] = {
                 "level": db_level,
                 "level_type": level_type,
-                "amount": amount,
+                "min_amount": min_amount,
+                "max_amount": max_amount,
                 "display_name": config.display_name,
                 "status": status,
                 "status_text": status_text,

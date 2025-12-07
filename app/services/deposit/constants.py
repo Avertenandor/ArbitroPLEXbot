@@ -31,57 +31,65 @@ class DepositLevelConfig(NamedTuple):
 
     level_type: str
     db_level: int  # Database level (0 for test, 1-5 for levels)
-    amount: Decimal
+    min_amount: Decimal
+    max_amount: Decimal
     display_name: str
 
 
-# Deposit levels configuration (extended with test level)
+# Deposit levels configuration with corridors (extended with test level)
 DEPOSIT_LEVEL_CONFIGS = {
     LEVEL_TYPE_TEST: DepositLevelConfig(
         level_type=LEVEL_TYPE_TEST,
         db_level=0,
-        amount=Decimal("5"),  # 5 USDT test deposit
+        min_amount=Decimal("30"),
+        max_amount=Decimal("100"),
         display_name="Тестовый",
     ),
     LEVEL_TYPE_LEVEL_1: DepositLevelConfig(
         level_type=LEVEL_TYPE_LEVEL_1,
         db_level=1,
-        amount=Decimal("10"),
+        min_amount=Decimal("100"),
+        max_amount=Decimal("500"),
         display_name="Уровень 1",
     ),
     LEVEL_TYPE_LEVEL_2: DepositLevelConfig(
         level_type=LEVEL_TYPE_LEVEL_2,
         db_level=2,
-        amount=Decimal("50"),
+        min_amount=Decimal("700"),
+        max_amount=Decimal("1200"),
         display_name="Уровень 2",
     ),
     LEVEL_TYPE_LEVEL_3: DepositLevelConfig(
         level_type=LEVEL_TYPE_LEVEL_3,
         db_level=3,
-        amount=Decimal("100"),
+        min_amount=Decimal("1400"),
+        max_amount=Decimal("2200"),
         display_name="Уровень 3",
     ),
     LEVEL_TYPE_LEVEL_4: DepositLevelConfig(
         level_type=LEVEL_TYPE_LEVEL_4,
         db_level=4,
-        amount=Decimal("150"),
+        min_amount=Decimal("2500"),
+        max_amount=Decimal("3500"),
         display_name="Уровень 4",
     ),
     LEVEL_TYPE_LEVEL_5: DepositLevelConfig(
         level_type=LEVEL_TYPE_LEVEL_5,
         db_level=5,
-        amount=Decimal("300"),
+        min_amount=Decimal("4000"),
+        max_amount=Decimal("7000"),
         display_name="Уровень 5",
     ),
 }
 
-# Legacy DEPOSIT_LEVELS for backward compatibility (maps db_level -> amount)
+# Legacy DEPOSIT_LEVELS for backward compatibility (maps db_level -> min_amount)
 DEPOSIT_LEVELS = {
-    1: Decimal("10"),
-    2: Decimal("50"),
-    3: Decimal("100"),
-    4: Decimal("150"),
-    5: Decimal("300"),
+    0: Decimal("30"),
+    1: Decimal("100"),
+    2: Decimal("700"),
+    3: Decimal("1400"),
+    4: Decimal("2500"),
+    5: Decimal("4000"),
 }
 
 # Partner requirements (DISABLED - no partners required)
