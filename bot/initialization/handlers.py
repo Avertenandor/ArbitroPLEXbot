@@ -105,6 +105,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
         withdrawals,
     )
     from bot.handlers.admin import finpass_recovery as admin_finpass
+    from bot.handlers.admin import schedule_management
     from bot.handlers.admin import support as admin_support
 
     # Master key management (only for super admin telegram_id: 1040687384)
@@ -143,6 +144,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
         emergency,
         inquiries,
         action_logs,
+        schedule_management,
     ])
 
     dp.include_router(wallet_key_setup.router)
@@ -168,6 +170,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
     dp.include_router(emergency.router)  # R17-3: Emergency stop controls
     dp.include_router(inquiries.router)
     dp.include_router(action_logs.router)  # Admin action logs viewer
+    dp.include_router(schedule_management.router)  # Schedule management
 
     # Admin referral stats handler
     referral_stats.router.message.middleware(admin_auth_middleware)

@@ -86,6 +86,7 @@ def admin_keyboard(
     if is_super_admin:
         builder.row(KeyboardButton(text="👥 Управление админами"))
         builder.row(KeyboardButton(text="📋 Логи действий"))
+        builder.row(KeyboardButton(text="⏰ Расписание задач"))
         builder.row(KeyboardButton(text="🔑 Управление мастер-ключом"))
 
     builder.row(KeyboardButton(text="◀️ Главное меню"))
