@@ -193,7 +193,7 @@ class BlockchainRealtimeSyncService:
             # Determine user_id by matching wallet addresses
             user_id = None
             user_wallet = from_address if direction == "incoming" else to_address
-            user = await self.user_repo.get_by_wallet(user_wallet)
+            user = await self.user_repo.get_by_wallet_address(user_wallet)
             if user:
                 user_id = user.id
 

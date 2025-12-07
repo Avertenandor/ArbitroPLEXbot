@@ -126,11 +126,11 @@ async def handle_set_nodereal2(
 ) -> None:
     """
     Set NodeReal2 (backup) as active provider.
-    
+
     Only super admins can switch to the backup node.
     """
     is_super_admin = data.get("is_super_admin", False)
-    
+
     # Check if user is super admin
     if not is_super_admin:
         await message.answer(

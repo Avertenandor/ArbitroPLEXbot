@@ -179,6 +179,129 @@ async def create_referral_chain(
     return created_count
 
 
+async def _phase1_create_users(
+    session: AsyncSession,
+    rows: list[dict],
+    existing_users: dict[int, User],
+    dry_run: bool,
+) -> tuple[dict[int, User], int, int]:
+    """Phase 1: Create all users without referrer_id."""
+    logger.info("\n--- PHASE 1: Creating users ---")
+    tg_to_new_user: dict[int, User] = {}
+    users_created = 0
+    errors = 0
+
+    for row in rows:
+        tg_id = int(row["tg_id"])
+        if tg_id in existing_users:
+            logger.debug(f"User {tg_id} already exists, skipping")
+            continue
+
+        try:
+            user = create_user_from_row(row, None)
+            if not dry_run:
+                session.add(user)
+            tg_to_new_user[tg_id] = user
+            users_created += 1
+            if users_created % 100 == 0:
+                logger.info(f"Created {users_created} users...")
+        except Exception as e:
+            logger.error(f"Error creating user {tg_id}: {e}")
+            errors += 1
+
+    if not dry_run:
+        await session.commit()
+        for user in tg_to_new_user.values():
+            await session.refresh(user)
+
+    logger.info(f"Created {users_created} new users")
+    return tg_to_new_user, users_created, errors
+
+
+async def _phase2_set_referrers(
+    session: AsyncSession,
+    rows: list[dict],
+    all_users: dict[int, User],
+    dry_run: bool,
+) -> int:
+    """Phase 2: Set referrer_id for all new users."""
+    logger.info("\n--- PHASE 2: Setting referrer_id ---")
+    referrer_set_count = 0
+
+    for row in rows:
+        tg_id = int(row["tg_id"])
+        referrer_tg_id_str = row.get("referrer_tg_id", "").strip()
+        if not referrer_tg_id_str:
+            continue
+
+        try:
+            referrer_tg_id = int(referrer_tg_id_str)
+        except ValueError:
+            continue
+
+        user = all_users.get(tg_id)
+        referrer = all_users.get(referrer_tg_id)
+        if not user or not referrer:
+            if not referrer:
+                logger.warning(f"Referrer {referrer_tg_id} not found for user {tg_id}")
+            continue
+
+        if user.referrer_id is None and referrer.id:
+            if not dry_run:
+                user.referrer_id = referrer.id
+            referrer_set_count += 1
+
+    if not dry_run:
+        await session.commit()
+
+    logger.info(f"Set referrer_id for {referrer_set_count} users")
+    return referrer_set_count
+
+
+async def _phase3_create_referral_chains(
+    session: AsyncSession,
+    rows: list[dict],
+    all_users: dict[int, User],
+    dry_run: bool,
+) -> tuple[int, int]:
+    """Phase 3: Create referral chain records."""
+    logger.info("\n--- PHASE 3: Creating referral chains ---")
+    referrals_created = 0
+    errors = 0
+
+    for row in rows:
+        tg_id = int(row["tg_id"])
+        referrer_tg_id_str = row.get("referrer_tg_id", "").strip()
+        if not referrer_tg_id_str:
+            continue
+
+        try:
+            referrer_tg_id = int(referrer_tg_id_str)
+        except ValueError:
+            continue
+
+        user = all_users.get(tg_id)
+        referrer = all_users.get(referrer_tg_id)
+        if not user or not referrer or not user.id or not referrer.id:
+            continue
+
+        try:
+            if not dry_run:
+                count = await create_referral_chain(session, user.id, referrer.id)
+                referrals_created += count
+            else:
+                referrals_created += 1
+        except Exception as e:
+            logger.error(f"Error creating referral chain for {tg_id}: {e}")
+            errors += 1
+
+    if not dry_run:
+        await session.commit()
+
+    logger.info(f"Created {referrals_created} referral records")
+    return referrals_created, errors
+
+
 async def import_partners(csv_path: str, dry_run: bool = False) -> tuple[int, int, int]:
     """
     Import partners from CSV file.
@@ -192,143 +315,33 @@ async def import_partners(csv_path: str, dry_run: bool = False) -> tuple[int, in
     logger.info(f"Dry Run: {dry_run}")
     logger.info("=" * 60)
 
-    # Load CSV data
     rows = await load_csv_data(csv_path)
 
-    # Build telegram_id -> row mapping
-    tg_to_row: dict[int, dict] = {}
-    for row in rows:
-        tg_id = int(row["tg_id"])
-        tg_to_row[tg_id] = row
-
-    # Create database connection
     engine = create_async_engine(settings.database_url, echo=False)
     async_session_factory = async_sessionmaker(
         engine, class_=AsyncSession, expire_on_commit=False
     )
 
-    users_created = 0
-    referrals_created = 0
-    errors = 0
-
     async with async_session_factory() as session:
-        # Get existing users
         existing_users = await get_existing_users(session)
         logger.info(f"Found {len(existing_users)} existing users in database")
 
-        # First pass: Create all users without referrer_id
-        tg_to_new_user: dict[int, User] = {}
-
-        logger.info("\n--- PHASE 1: Creating users ---")
-
-        for row in rows:
-            tg_id = int(row["tg_id"])
-
-            # Skip if already exists
-            if tg_id in existing_users:
-                logger.debug(f"User {tg_id} already exists, skipping")
-                continue
-
-            try:
-                user = create_user_from_row(row, None)
-
-                if not dry_run:
-                    session.add(user)
-
-                tg_to_new_user[tg_id] = user
-                users_created += 1
-
-                if users_created % 100 == 0:
-                    logger.info(f"Created {users_created} users...")
-
-            except Exception as e:
-                logger.error(f"Error creating user {tg_id}: {e}")
-                errors += 1
-
-        if not dry_run:
-            await session.commit()
-            # Refresh to get IDs
-            for user in tg_to_new_user.values():
-                await session.refresh(user)
-
-        logger.info(f"Created {users_created} new users")
+        # Phase 1: Create users
+        tg_to_new_user, users_created, errors = await _phase1_create_users(
+            session, rows, existing_users, dry_run
+        )
 
         # Build complete mapping
-        all_users: dict[int, User] = {**existing_users}
-        for tg_id, user in tg_to_new_user.items():
-            all_users[tg_id] = user
+        all_users: dict[int, User] = {**existing_users, **tg_to_new_user}
 
-        # Second pass: Set referrer_id for all new users
-        logger.info("\n--- PHASE 2: Setting referrer_id ---")
+        # Phase 2: Set referrer_id
+        await _phase2_set_referrers(session, rows, all_users, dry_run)
 
-        referrer_set_count = 0
-        for row in rows:
-            tg_id = int(row["tg_id"])
-            referrer_tg_id_str = row.get("referrer_tg_id", "").strip()
-
-            if not referrer_tg_id_str:
-                continue
-
-            try:
-                referrer_tg_id = int(referrer_tg_id_str)
-            except ValueError:
-                continue
-
-            user = all_users.get(tg_id)
-            if not user:
-                continue
-
-            referrer = all_users.get(referrer_tg_id)
-            if not referrer:
-                logger.warning(f"Referrer {referrer_tg_id} not found for user {tg_id}")
-                continue
-
-            if user.referrer_id is None and referrer.id:
-                if not dry_run:
-                    user.referrer_id = referrer.id
-                referrer_set_count += 1
-
-        if not dry_run:
-            await session.commit()
-
-        logger.info(f"Set referrer_id for {referrer_set_count} users")
-
-        # Third pass: Create referral chain records
-        logger.info("\n--- PHASE 3: Creating referral chains ---")
-
-        for row in rows:
-            tg_id = int(row["tg_id"])
-            referrer_tg_id_str = row.get("referrer_tg_id", "").strip()
-
-            if not referrer_tg_id_str:
-                continue
-
-            try:
-                referrer_tg_id = int(referrer_tg_id_str)
-            except ValueError:
-                continue
-
-            user = all_users.get(tg_id)
-            referrer = all_users.get(referrer_tg_id)
-
-            if not user or not referrer or not user.id or not referrer.id:
-                continue
-
-            try:
-                if not dry_run:
-                    count = await create_referral_chain(session, user.id, referrer.id)
-                    referrals_created += count
-                else:
-                    referrals_created += 1
-
-            except Exception as e:
-                logger.error(f"Error creating referral chain for {tg_id}: {e}")
-                errors += 1
-
-        if not dry_run:
-            await session.commit()
-
-        logger.info(f"Created {referrals_created} referral records")
+        # Phase 3: Create referral chains
+        referrals_created, phase3_errors = await _phase3_create_referral_chains(
+            session, rows, all_users, dry_run
+        )
+        errors += phase3_errors
 
     # Summary
     logger.info("\n" + "=" * 60)
