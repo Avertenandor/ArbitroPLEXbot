@@ -74,7 +74,8 @@ async def show_earnings_dashboard(
         stats = await earnings_service.get_full_earnings_stats(user.id)
 
         if not stats:
-            await status_msg.edit_text(
+            await status_msg.delete()
+            await message.answer(
                 "❌ Не удалось загрузить статистику заработка. "
                 "Попробуйте позже."
             )
@@ -140,8 +141,9 @@ async def show_earnings_dashboard(
             "• Держите достаточно PLEX на балансе"
         )
 
-        # Update message
-        await status_msg.edit_text(
+        # Delete loading message and send final result with keyboard
+        await status_msg.delete()
+        await message.answer(
             text,
             parse_mode="Markdown",
             reply_markup=earnings_dashboard_keyboard()
@@ -152,7 +154,11 @@ async def show_earnings_dashboard(
             f"Failed to show earnings dashboard for user {user.id}: {e}",
             exc_info=True,
         )
-        await status_msg.edit_text(
+        try:
+            await status_msg.delete()
+        except Exception:
+            pass
+        await message.answer(
             "❌ Произошла ошибка при загрузке статистики. Попробуйте позже."
         )
 
