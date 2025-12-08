@@ -28,7 +28,7 @@ class UserActivityRepository(BaseRepository[UserActivity]):
         user_id: int | None = None,
         description: str | None = None,
         message_text: str | None = None,
-        metadata: dict[str, Any] | None = None,
+        extra_data: dict[str, Any] | None = None,
     ) -> UserActivity:
         """
         Log a user activity.
@@ -39,7 +39,7 @@ class UserActivityRepository(BaseRepository[UserActivity]):
             user_id: Internal user ID (if known)
             description: Human-readable description
             message_text: Full message text (if applicable)
-            metadata: Additional JSON data
+            extra_data: Additional JSON data
 
         Returns:
             Created UserActivity record
@@ -50,7 +50,7 @@ class UserActivityRepository(BaseRepository[UserActivity]):
             activity_type=activity_type,
             description=description,
             message_text=message_text[:1000] if message_text else None,
-            metadata=metadata,
+            extra_data=extra_data,
             created_at=datetime.now(UTC),
         )
         self.session.add(activity)

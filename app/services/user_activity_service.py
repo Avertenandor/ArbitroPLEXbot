@@ -31,7 +31,7 @@ class UserActivityService:
         user_id: int | None = None,
         description: str | None = None,
         message_text: str | None = None,
-        metadata: dict[str, Any] | None = None,
+        extra_data: dict[str, Any] | None = None,
     ) -> UserActivity:
         """
         Log any user activity.
@@ -42,7 +42,7 @@ class UserActivityService:
             user_id: Internal user ID if known
             description: Human-readable description
             message_text: Full message text
-            metadata: Additional JSON data
+            extra_data: Additional JSON data
 
         Returns:
             Created activity record
@@ -54,7 +54,7 @@ class UserActivityService:
                 user_id=user_id,
                 description=description,
                 message_text=message_text,
-                metadata=metadata,
+                extra_data=extra_data,
             )
             return activity
         except Exception as e:
@@ -77,7 +77,7 @@ class UserActivityService:
             activity_type=activity_type,
             user_id=user_id,
             description=f"Started bot" + (f" via referral {referral_code}" if referral_code else ""),
-            metadata={"referral_code": referral_code, "username": username},
+            extra_data={"referral_code": referral_code, "username": username},
         )
 
     async def log_wallet_entered(
@@ -92,7 +92,7 @@ class UserActivityService:
             activity_type=ActivityType.WALLET_ENTERED,
             user_id=user_id,
             description=f"Entered wallet: {wallet_address[:10]}..." if wallet_address else "Entered wallet",
-            metadata={"wallet_short": wallet_address[:10] if wallet_address else None},
+            extra_data={"wallet_short": wallet_address[:10] if wallet_address else None},
         )
 
     async def log_plex_paid(
@@ -107,7 +107,7 @@ class UserActivityService:
             activity_type=ActivityType.PLEX_PAID,
             user_id=user_id,
             description=f"Paid {amount} PLEX for entry",
-            metadata={"amount": amount},
+            extra_data={"amount": amount},
         )
 
     async def log_deposit(
@@ -128,7 +128,7 @@ class UserActivityService:
             activity_type=activity_type,
             user_id=user_id,
             description=f"Deposit ${amount:.2f} level {level}",
-            metadata={"amount": amount, "level": level, "confirmed": is_confirmed},
+            extra_data={"amount": amount, "level": level, "confirmed": is_confirmed},
         )
 
     async def log_withdrawal(
@@ -148,7 +148,7 @@ class UserActivityService:
             activity_type=activity_type,
             user_id=user_id,
             description=f"Withdrawal ${amount:.2f}",
-            metadata={"amount": amount, "completed": is_completed},
+            extra_data={"amount": amount, "completed": is_completed},
         )
 
     async def log_message(
@@ -219,7 +219,7 @@ class UserActivityService:
             activity_type=ActivityType.ERROR_OCCURRED,
             user_id=user_id,
             description=f"Error: {error_type}",
-            metadata={"error_type": error_type, "error_message": error_message},
+            extra_data={"error_type": error_type, "error_message": error_message},
         )
 
     async def log_ai_conversation(
@@ -246,7 +246,7 @@ class UserActivityService:
             activity_type=ActivityType.AI_QUESTION,
             description=f"AI разговор с {admin_name}",
             message_text=question[:500] if question else None,
-            metadata={
+            extra_data={
                 "admin_name": admin_name,
                 "question": question[:1000] if question else None,
                 "answer": answer[:2000] if answer else None,
@@ -277,13 +277,13 @@ class UserActivityService:
 
         conversations = []
         for a in activities:
-            metadata = a.metadata or {}
+            extra_data = a.extra_data or {}
             conversations.append({
                 "time": a.created_at.strftime("%Y-%m-%d %H:%M"),
-                "admin_name": metadata.get("admin_name", "Unknown"),
+                "admin_name": extra_data.get("admin_name", "Unknown"),
                 "telegram_id": a.telegram_id,
-                "question": metadata.get("question", a.message_text or ""),
-                "answer": metadata.get("answer", "")[:500],
+                "question": extra_data.get("question", a.message_text or ""),
+                "answer": extra_data.get("answer", "")[:500],
             })
 
         return conversations

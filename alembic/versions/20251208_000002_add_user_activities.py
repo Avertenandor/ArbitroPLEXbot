@@ -30,7 +30,7 @@ def upgrade() -> None:
         sa.Column("activity_type", sa.String(length=50), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("message_text", sa.Text(), nullable=True),
-        sa.Column("metadata", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("extra_data", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=True),
