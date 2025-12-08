@@ -24,6 +24,7 @@ from app.services.ai_assistant_service import (
 from app.services.monitoring_service import MonitoringService
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
 from bot.keyboards.reply import get_admin_keyboard_from_data
+from bot.utils.text_utils import escape_markdown
 
 router = Router(name="admin_ai_assistant")
 
@@ -192,7 +193,7 @@ async def handle_ai_assistant_menu(
         f"🤖 **{AI_NAME}** — AI Помощник\n\n"
         f"Статус: {status}\n"
         f"Ваш уровень: {role_name}\n\n"
-        f"Привет, {admin.display_name}! Я {AI_NAME} — твой интеллектуальный помощник.\n\n"
+        f"Привет, {escape_markdown(admin.display_name)}! Я {AI_NAME} — твой интеллектуальный помощник.\n\n"
         f"**Что я умею:**\n"
         f"• Отвечать на вопросы о работе платформы\n"
         f"• Помогать с админ-функциями\n"

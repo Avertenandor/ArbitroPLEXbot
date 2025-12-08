@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.ai_assistant_service import AI_NAME, UserRole, get_ai_service
 from bot.keyboards.reply import main_menu_reply_keyboard
-from bot.utils.text_utils import safe_answer, sanitize_markdown
+from bot.utils.text_utils import escape_markdown, safe_answer, sanitize_markdown
 
 router = Router(name="user_ai_assistant")
 
@@ -63,7 +63,7 @@ async def user_ai_menu(
 
     ai_service = get_ai_service()
     status = "🟢 Онлайн" if ai_service.is_available() else "🔴 Недоступен"
-    user_name = message.from_user.first_name or "друг"
+    user_name = escape_markdown(message.from_user.first_name or "друг")
 
     await message.answer(
         f"🤖 **{AI_NAME}** — AI Помощник\n\n"
