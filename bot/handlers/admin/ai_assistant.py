@@ -395,6 +395,7 @@ async def show_stats(
     text += f"• Всего: **{users.get('total_users', 0)}**\n"
     text += f"• Активных (24ч): **{users.get('active_24h', 0)}**\n"
     text += f"• Активных (7д): **{users.get('active_7d', 0)}**\n"
+    text += f"• Новых за час: **{users.get('new_last_hour', 0)}**\n"
     text += f"• Новых сегодня: **{users.get('new_today', 0)}**\n"
     text += f"• Верифицированных: **{users.get('verified_users', 0)}**\n\n"
     text += "**Финансы:**\n"

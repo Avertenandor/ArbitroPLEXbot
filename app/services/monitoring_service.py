@@ -162,7 +162,15 @@ class MonitoringService:
                 .where(User.created_at >= today_start)
             )
             new_today = new_today_result.scalar() or 0
-            
+
+            # New users last hour
+            last_hour = datetime.now(UTC) - timedelta(hours=1)
+            new_hour_result = await self.session.execute(
+                select(func.count(User.id))
+                .where(User.created_at >= last_hour)
+            )
+            new_last_hour = new_hour_result.scalar() or 0
+
             # Verified users
             verified_result = await self.session.execute(
                 select(func.count(User.id))
@@ -175,6 +183,7 @@ class MonitoringService:
                 "active_24h": active_24h,
                 "active_7d": active_7d,
                 "new_today": new_today,
+                "new_last_hour": new_last_hour,
                 "verified_users": verified_users,
                 "verification_rate": (
                     round(verified_users / total_users * 100, 1)
