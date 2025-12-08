@@ -158,6 +158,8 @@ def register_admin_handlers(dp: Dispatcher) -> None:
     ])
 
     dp.include_router(wallet_key_setup.router)
+    # AI Assistant must be BEFORE panel.router to handle chatting state
+    dp.include_router(ai_assistant.router)
     # MUST be before panel.router to catch "💰 Финансовая отчётность"
     dp.include_router(financials.router)
     # MUST be before panel.router for withdrawal buttons
@@ -181,7 +183,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
     dp.include_router(inquiries.router)
     dp.include_router(action_logs.router)  # Admin action logs viewer
     dp.include_router(schedule_management.router)  # Schedule management
-    dp.include_router(ai_assistant.router)  # AI Assistant for admins
+    # ai_assistant.router registered earlier (before panel.router) for FSM priority
 
     # Admin referral stats handler
     referral_stats.router.message.middleware(admin_auth_middleware)

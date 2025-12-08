@@ -16,6 +16,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.admin_service import AdminService
 from bot.states.admin_states import AdminStates
 
+# States that should bypass master key requirement
+# (user interaction states where interruption is bad UX)
+BYPASS_AUTH_STATES = [
+    "AIAssistantStates:chatting",
+    "UserAIStates:chatting",
+]
+
 
 class AdminAuthMiddleware(BaseMiddleware):
     """
@@ -112,6 +119,15 @@ class AdminAuthMiddleware(BaseMiddleware):
         # Check if we're already in master key input state
         if current_state == AdminStates.awaiting_master_key_input:
             # Let handler process master key input
+            return await handler(event, data)
+
+        # Check if current state should bypass auth (AI chat, etc.)
+        # These are interactive states where interrupting for auth is bad UX
+        if current_state and current_state in BYPASS_AUTH_STATES:
+            logger.debug(
+                f"AdminAuthMiddleware: Bypassing auth for state {current_state}"
+            )
+            data["admin"] = admin
             return await handler(event, data)
 
         # Get session token from FSM state
