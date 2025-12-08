@@ -330,10 +330,212 @@ class MonitoringService:
             logger.error(f"Error getting system health: {e}")
             return {"status": "error", "error": str(e)}
 
+    async def get_server_metrics(self) -> dict[str, Any]:
+        """
+        Get server resource metrics (CPU, RAM, disk).
+
+        Returns:
+            Dict with server metrics
+        """
+        try:
+            import os
+            import psutil
+
+            # CPU
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+            cpu_count = psutil.cpu_count()
+
+            # Memory
+            memory = psutil.virtual_memory()
+            memory_total_gb = memory.total / (1024**3)
+            memory_used_gb = memory.used / (1024**3)
+            memory_percent = memory.percent
+
+            # Disk
+            disk = psutil.disk_usage("/")
+            disk_total_gb = disk.total / (1024**3)
+            disk_used_gb = disk.used / (1024**3)
+            disk_percent = disk.percent
+
+            # Process info
+            process = psutil.Process(os.getpid())
+            process_memory_mb = process.memory_info().rss / (1024**2)
+
+            return {
+                "cpu_percent": round(cpu_percent, 1),
+                "cpu_cores": cpu_count,
+                "memory_total_gb": round(memory_total_gb, 1),
+                "memory_used_gb": round(memory_used_gb, 1),
+                "memory_percent": round(memory_percent, 1),
+                "disk_total_gb": round(disk_total_gb, 1),
+                "disk_used_gb": round(disk_used_gb, 1),
+                "disk_percent": round(disk_percent, 1),
+                "bot_memory_mb": round(process_memory_mb, 1),
+            }
+        except ImportError:
+            return {"error": "psutil not available"}
+        except Exception as e:
+            logger.error(f"Error getting server metrics: {e}")
+            return {"error": str(e)}
+
+    async def get_deposit_details(self, hours: int = 24) -> dict[str, Any]:
+        """
+        Get detailed deposit statistics.
+
+        Args:
+            hours: Lookback period
+
+        Returns:
+            Dict with deposit details
+        """
+        try:
+            since = datetime.now(UTC) - timedelta(hours=hours)
+
+            # Deposits by status
+            status_result = await self.session.execute(
+                select(Deposit.status, func.count(Deposit.id), func.sum(Deposit.amount))
+                .group_by(Deposit.status)
+            )
+            by_status = {
+                row[0]: {"count": row[1], "amount": float(row[2] or 0)}
+                for row in status_result.fetchall()
+            }
+
+            # Recent deposits list
+            recent_result = await self.session.execute(
+                select(
+                    Deposit.amount,
+                    Deposit.status,
+                    Deposit.created_at,
+                    User.username,
+                )
+                .join(User, Deposit.user_id == User.id)
+                .where(Deposit.created_at >= since)
+                .order_by(Deposit.created_at.desc())
+                .limit(10)
+            )
+            recent_deposits = [
+                {
+                    "amount": float(row[0]),
+                    "status": row[1],
+                    "time": row[2].strftime("%d.%m %H:%M") if row[2] else "",
+                    "user": row[3] or "Unknown",
+                }
+                for row in recent_result.fetchall()
+            ]
+
+            # Today's deposits
+            today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0)
+            today_result = await self.session.execute(
+                select(func.count(Deposit.id), func.sum(Deposit.amount))
+                .where(Deposit.created_at >= today_start)
+            )
+            today_row = today_result.fetchone()
+
+            return {
+                "by_status": by_status,
+                "recent": recent_deposits,
+                "today_count": today_row[0] or 0,
+                "today_amount": float(today_row[1] or 0),
+            }
+        except Exception as e:
+            logger.error(f"Error getting deposit details: {e}")
+            return {"error": str(e)}
+
+    async def get_withdrawal_details(self, hours: int = 24) -> dict[str, Any]:
+        """
+        Get detailed withdrawal statistics.
+
+        Args:
+            hours: Lookback period
+
+        Returns:
+            Dict with withdrawal details
+        """
+        try:
+            since = datetime.now(UTC) - timedelta(hours=hours)
+
+            # Withdrawals by status
+            status_result = await self.session.execute(
+                select(Transaction.status, func.count(Transaction.id), func.sum(Transaction.amount))
+                .where(Transaction.type == "withdrawal")
+                .group_by(Transaction.status)
+            )
+            by_status = {
+                row[0]: {"count": row[1], "amount": float(row[2] or 0)}
+                for row in status_result.fetchall()
+            }
+
+            # Pending withdrawals (detailed)
+            pending_result = await self.session.execute(
+                select(
+                    Transaction.amount,
+                    Transaction.created_at,
+                    User.username,
+                )
+                .join(User, Transaction.user_id == User.id)
+                .where(Transaction.type == "withdrawal")
+                .where(Transaction.status == "pending")
+                .order_by(Transaction.created_at.asc())
+                .limit(20)
+            )
+            pending_list = [
+                {
+                    "amount": float(row[0]),
+                    "waiting_since": row[1].strftime("%d.%m %H:%M") if row[1] else "",
+                    "user": row[2] or "Unknown",
+                }
+                for row in pending_result.fetchall()
+            ]
+
+            return {
+                "by_status": by_status,
+                "pending_list": pending_list,
+                "pending_count": len(pending_list),
+            }
+        except Exception as e:
+            logger.error(f"Error getting withdrawal details: {e}")
+            return {"error": str(e)}
+
+    async def get_transaction_summary(self, hours: int = 24) -> dict[str, Any]:
+        """
+        Get transaction summary by type.
+
+        Args:
+            hours: Lookback period
+
+        Returns:
+            Dict with transaction summary
+        """
+        try:
+            since = datetime.now(UTC) - timedelta(hours=hours)
+
+            result = await self.session.execute(
+                select(
+                    Transaction.type,
+                    func.count(Transaction.id),
+                    func.sum(Transaction.amount)
+                )
+                .where(Transaction.created_at >= since)
+                .group_by(Transaction.type)
+            )
+
+            summary = {}
+            for row in result.fetchall():
+                summary[row[0]] = {
+                    "count": row[1],
+                    "total": float(row[2] or 0)
+                }
+
+            return summary
+        except Exception as e:
+            logger.error(f"Error getting transaction summary: {e}")
+            return {"error": str(e)}
+
     async def get_full_dashboard(self) -> dict[str, Any]:
         """
         Get complete dashboard data for ARIA.
-        
+
         Returns:
             Complete monitoring data
         """
@@ -342,13 +544,21 @@ class MonitoringService:
         financial_stats = await self.get_financial_stats(hours=24)
         recent_actions = await self.get_recent_admin_actions(limit=10)
         system_health = await self.get_system_health()
-        
+        server_metrics = await self.get_server_metrics()
+        deposit_details = await self.get_deposit_details(hours=24)
+        withdrawal_details = await self.get_withdrawal_details(hours=24)
+        transaction_summary = await self.get_transaction_summary(hours=24)
+
         return {
             "admin": admin_stats,
             "users": user_stats,
             "financial": financial_stats,
             "recent_actions": recent_actions,
             "system": system_health,
+            "server": server_metrics,
+            "deposits": deposit_details,
+            "withdrawals": withdrawal_details,
+            "transactions": transaction_summary,
             "generated_at": datetime.now(UTC).isoformat(),
         }
 
@@ -438,13 +648,82 @@ class MonitoringService:
                     f"  [{action.get('time')}] @{action.get('admin')}: "
                     f"{action.get('type')}"
                 )
-        
+
         lines.append("")
-        
+
+        # Server metrics
+        server = data.get("server", {})
+        if server and not server.get("error"):
+            lines.append("🖥️ СЕРВЕР:")
+            lines.append(
+                f"  CPU: {server.get('cpu_percent', 0)}% "
+                f"({server.get('cpu_cores', 0)} ядер)"
+            )
+            lines.append(
+                f"  RAM: {server.get('memory_used_gb', 0)}/"
+                f"{server.get('memory_total_gb', 0)} GB "
+                f"({server.get('memory_percent', 0)}%)"
+            )
+            lines.append(
+                f"  Диск: {server.get('disk_used_gb', 0)}/"
+                f"{server.get('disk_total_gb', 0)} GB "
+                f"({server.get('disk_percent', 0)}%)"
+            )
+            lines.append(f"  Память бота: {server.get('bot_memory_mb', 0)} MB")
+            lines.append("")
+
+        # Deposit details
+        deposits = data.get("deposits", {})
+        if deposits and not deposits.get("error"):
+            lines.append("💵 ДЕПОЗИТЫ (детали):")
+            lines.append(
+                f"  Сегодня: {deposits.get('today_count', 0)} шт "
+                f"(${deposits.get('today_amount', 0):,.2f})"
+            )
+            by_status = deposits.get("by_status", {})
+            for status, info in by_status.items():
+                lines.append(
+                    f"  {status}: {info.get('count', 0)} шт "
+                    f"(${info.get('amount', 0):,.2f})"
+                )
+            recent = deposits.get("recent", [])
+            if recent:
+                lines.append("  Последние депозиты:")
+                for dep in recent[:5]:
+                    lines.append(
+                        f"    - ${dep.get('amount', 0):.2f} от @{dep.get('user')} "
+                        f"({dep.get('time')})"
+                    )
+            lines.append("")
+
+        # Withdrawal details
+        withdrawals = data.get("withdrawals", {})
+        if withdrawals and not withdrawals.get("error"):
+            pending_list = withdrawals.get("pending_list", [])
+            if pending_list:
+                lines.append("⏳ ОЖИДАЮЩИЕ ВЫВОДА:")
+                for w in pending_list[:10]:
+                    lines.append(
+                        f"  - ${w.get('amount', 0):.2f} @{w.get('user')} "
+                        f"(ждёт с {w.get('waiting_since')})"
+                    )
+                lines.append("")
+
+        # Transaction summary
+        txns = data.get("transactions", {})
+        if txns and not txns.get("error"):
+            lines.append("📊 ТРАНЗАКЦИИ ЗА 24Ч:")
+            for tx_type, info in txns.items():
+                lines.append(
+                    f"  {tx_type}: {info.get('count', 0)} шт "
+                    f"(${info.get('total', 0):,.2f})"
+                )
+            lines.append("")
+
         # System health
         system = data.get("system", {})
-        lines.append("🖥️ СИСТЕМА:")
+        lines.append("✅ СТАТУС СИСТЕМЫ:")
         lines.append(f"  База данных: {system.get('database', 'N/A')}")
-        lines.append(f"  Статус: {system.get('status', 'N/A')}")
-        
+        lines.append(f"  Общий статус: {system.get('status', 'N/A')}")
+
         return "\n".join(lines)

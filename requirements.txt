@@ -28,6 +28,7 @@ apscheduler==3.10.4
 
 # Logging & Monitoring
 loguru==0.7.2
+psutil==5.9.8
 
 # AI Integration
 anthropic==0.40.0
