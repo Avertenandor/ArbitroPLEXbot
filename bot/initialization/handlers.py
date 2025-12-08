@@ -95,6 +95,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
         ai_assistant,
         blacklist,
         blockchain_settings,
+        bonus_management,
         broadcast,
         deposit_management,
         deposit_settings,
@@ -157,6 +158,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
         schedule_management,
         ai_assistant,  # Added: AI Assistant for admins
         knowledge_base,  # Added: Knowledge Base management
+        bonus_management,  # Added: Bonus management
     ])
 
     dp.include_router(wallet_key_setup.router)
@@ -187,6 +189,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
     dp.include_router(inquiries.router)
     dp.include_router(action_logs.router)  # Admin action logs viewer
     dp.include_router(schedule_management.router)  # Schedule management
+    dp.include_router(bonus_management.router)  # Bonus management
     # ai_assistant.router registered earlier (before panel.router) for FSM priority
 
     # Admin referral stats handler

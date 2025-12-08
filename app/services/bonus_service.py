@@ -327,3 +327,41 @@ class BonusService(BaseService):
         )
 
         return stats
+
+    async def get_global_bonus_stats(self) -> dict[str, Any]:
+        """
+        Get global bonus statistics for admin panel.
+
+        Returns:
+            Dict with total_granted, active_count, last_24h
+        """
+        now = datetime.now(UTC)
+        day_ago = now - timedelta(hours=24)
+
+        all_bonuses = await self.bonus_repo.get_all()
+        active = [b for b in all_bonuses if b.status == "active"]
+
+        total_granted = sum(b.amount for b in all_bonuses)
+        last_24h = sum(
+            b.amount for b in all_bonuses
+            if b.created_at and b.created_at >= day_ago
+        )
+
+        return {
+            "total_granted": total_granted,
+            "active_count": len(active),
+            "last_24h": last_24h,
+            "total_count": len(all_bonuses),
+        }
+
+    async def get_recent_bonuses(self, limit: int = 15) -> list[BonusCredit]:
+        """
+        Get recent bonus credits with user and admin info.
+
+        Args:
+            limit: Max number of bonuses to return
+
+        Returns:
+            List of BonusCredit objects
+        """
+        return await self.bonus_repo.get_recent_with_relations(limit=limit)

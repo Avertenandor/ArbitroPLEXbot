@@ -198,3 +198,36 @@ class BonusCreditRepository(BaseRepository[BonusCredit]):
         )
         result = await self.session.execute(stmt)
         return result.rowcount > 0
+
+    async def get_all(self) -> list[BonusCredit]:
+        """
+        Get all bonus credits.
+
+        Returns:
+            List of all bonus credits
+        """
+        query = select(BonusCredit).order_by(BonusCredit.created_at.desc())
+        result = await self.session.execute(query)
+        return list(result.scalars().all())
+
+    async def get_recent_with_relations(self, limit: int = 15) -> list[BonusCredit]:
+        """
+        Get recent bonus credits with user and admin relations.
+
+        Args:
+            limit: Max number to return
+
+        Returns:
+            List of bonus credits with loaded relations
+        """
+        query = (
+            select(BonusCredit)
+            .options(
+                selectinload(BonusCredit.user),
+                selectinload(BonusCredit.admin),
+            )
+            .order_by(BonusCredit.created_at.desc())
+            .limit(limit)
+        )
+        result = await self.session.execute(query)
+        return list(result.scalars().all())

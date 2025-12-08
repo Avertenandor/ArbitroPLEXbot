@@ -76,6 +76,9 @@ def admin_keyboard(
     # Knowledge Base - available for all admins
     builder.row(KeyboardButton(text="📚 База знаний"))
 
+    # Bonus Management - available for all admins (moderators view only)
+    builder.row(KeyboardButton(text="🎁 Бонусы"))
+
     # Sensitive controls - Extended/Super only
     if is_extended_admin or is_super_admin:
         builder.row(

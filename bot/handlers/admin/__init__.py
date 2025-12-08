@@ -3,6 +3,7 @@
 from bot.handlers.admin import (
     action_logs,
     ai_assistant,
+    bonus_management,
     inquiries,
     knowledge_base,
     referral_stats,
@@ -11,6 +12,7 @@ from bot.handlers.admin import (
 __all__ = [
     "action_logs",
     "ai_assistant",
+    "bonus_management",
     "inquiries",
     "knowledge_base",
     "referral_stats",
