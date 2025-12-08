@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.ai_assistant_service import AI_NAME, UserRole, get_ai_service
 from bot.keyboards.reply import main_menu_reply_keyboard
+from bot.utils.text_utils import safe_answer, sanitize_markdown
 
 router = Router(name="user_ai_assistant")
 
@@ -153,8 +154,10 @@ async def handle_user_chat(
 
     await state.update_data(conversation_history=history)
 
-    await message.answer(
-        response,
+    safe_response = sanitize_markdown(response)
+    await safe_answer(
+        message,
+        safe_response,
         parse_mode="Markdown",
         reply_markup=user_chat_keyboard(),
     )
@@ -175,8 +178,10 @@ async def explain_platform(
         role=UserRole.USER,
     )
 
-    await message.answer(
-        f"❓ **Как работает платформа**\n\n{response}",
+    safe_response = sanitize_markdown(response)
+    await safe_answer(
+        message,
+        f"❓ **Как работает платформа**\n\n{safe_response}",
         parse_mode="Markdown",
         reply_markup=user_ai_keyboard(),
     )
@@ -195,8 +200,10 @@ async def explain_deposits(
         role=UserRole.USER,
     )
 
-    await message.answer(
-        f"💰 **Про депозиты**\n\n{response}",
+    safe_response = sanitize_markdown(response)
+    await safe_answer(
+        message,
+        f"💰 **Про депозиты**\n\n{safe_response}",
         parse_mode="Markdown",
         reply_markup=user_ai_keyboard(),
     )
@@ -215,8 +222,10 @@ async def explain_withdrawals(
         role=UserRole.USER,
     )
 
-    await message.answer(
-        f"💸 **Про выводы**\n\n{response}",
+    safe_response = sanitize_markdown(response)
+    await safe_answer(
+        message,
+        f"💸 **Про выводы**\n\n{safe_response}",
         parse_mode="Markdown",
         reply_markup=user_ai_keyboard(),
     )
@@ -235,8 +244,10 @@ async def explain_referrals(
         role=UserRole.USER,
     )
 
-    await message.answer(
-        f"👥 **Реферальная программа**\n\n{response}",
+    safe_response = sanitize_markdown(response)
+    await safe_answer(
+        message,
+        f"👥 **Реферальная программа**\n\n{safe_response}",
         parse_mode="Markdown",
         reply_markup=user_ai_keyboard(),
     )
