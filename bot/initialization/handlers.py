@@ -95,7 +95,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
         ai_assistant,
         blacklist,
         blockchain_settings,
-        bonus_management,
+        bonus_management_v2 as bonus_management,  # V2 with improved UX
         broadcast,
         deposit_management,
         deposit_settings,
