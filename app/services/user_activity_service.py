@@ -222,6 +222,105 @@ class UserActivityService:
             metadata={"error_type": error_type, "error_message": error_message},
         )
 
+    async def log_ai_conversation(
+        self,
+        telegram_id: int,
+        admin_name: str,
+        question: str,
+        answer: str,
+    ) -> UserActivity:
+        """
+        Log AI assistant conversation (question + answer).
+
+        Args:
+            telegram_id: Admin's Telegram ID
+            admin_name: Admin display name
+            question: User's question
+            answer: AI's response
+
+        Returns:
+            Created activity record
+        """
+        return await self.log(
+            telegram_id=telegram_id,
+            activity_type=ActivityType.AI_QUESTION,
+            description=f"AI разговор с {admin_name}",
+            message_text=question[:500] if question else None,
+            metadata={
+                "admin_name": admin_name,
+                "question": question[:1000] if question else None,
+                "answer": answer[:2000] if answer else None,
+            },
+        )
+
+    async def get_ai_conversations(
+        self,
+        hours: int = 24,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """
+        Get recent AI conversations.
+
+        Args:
+            hours: Lookback period
+            limit: Max conversations
+
+        Returns:
+            List of conversations with admin name, question, answer
+        """
+        since = datetime.now(UTC) - timedelta(hours=hours)
+        activities = await self.repo.get_user_activities(
+            activity_type=ActivityType.AI_QUESTION,
+            since=since,
+            limit=limit,
+        )
+
+        conversations = []
+        for a in activities:
+            metadata = a.metadata or {}
+            conversations.append({
+                "time": a.created_at.strftime("%Y-%m-%d %H:%M"),
+                "admin_name": metadata.get("admin_name", "Unknown"),
+                "telegram_id": a.telegram_id,
+                "question": metadata.get("question", a.message_text or ""),
+                "answer": metadata.get("answer", "")[:500],
+            })
+
+        return conversations
+
+    async def format_ai_conversations_for_aria(
+        self,
+        hours: int = 24,
+    ) -> str:
+        """
+        Format AI conversations for ARIA to summarize.
+
+        Args:
+            hours: Lookback period
+
+        Returns:
+            Formatted string of conversations
+        """
+        conversations = await self.get_ai_conversations(hours, limit=30)
+
+        if not conversations:
+            return f"За последние {hours}ч разговоров с AI не было."
+
+        text = f"📝 **Разговоры с AI за {hours}ч:**\n\n"
+
+        for conv in conversations:
+            question_preview = conv["question"][:100]
+            if len(conv["question"]) > 100:
+                question_preview += "..."
+
+            text += (
+                f"⏰ {conv['time']} — **{conv['admin_name']}**\n"
+                f"❓ {question_preview}\n\n"
+            )
+
+        text += f"Всего разговоров: {len(conversations)}"
+        return text
+
     # ============ ANALYTICS METHODS ============
 
     async def get_user_journey(

@@ -1121,3 +1121,27 @@ class MonitoringService:
             logger.error(f"Error formatting activity: {e}")
             return f"Ошибка получения активности: {e}"
 
+    async def get_ai_conversations_report(
+        self,
+        hours: int = 24,
+    ) -> str:
+        """
+        Get AI conversations report for ARIA.
+
+        Args:
+            hours: Lookback period
+
+        Returns:
+            Formatted text with recent conversations
+        """
+        if not HAS_ACTIVITY:
+            return "📊 Логирование разговоров не активировано."
+
+        try:
+            from app.services.user_activity_service import UserActivityService
+            service = UserActivityService(self.session)
+            return await service.format_ai_conversations_for_aria(hours)
+        except Exception as e:
+            logger.error(f"Error getting AI conversations: {e}")
+            return f"Ошибка: {e}"
+
