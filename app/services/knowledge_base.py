@@ -103,8 +103,12 @@ DEFAULT_KB: list[dict[str, Any]] = [
 
     {"id": 31, "category": "PLEX токен",
      "question": "Адрес контракта PLEX?",
-     "answer": "0x2b83BE51c7c4a662f592090AD2041001a4525664 (BSC/BEP-20)",
-     "clarification": "ТОЛЬКО сеть BSC! Другие сети = потеря токенов!",
+     "answer": "0xdf179b6cadbc61ffd86a3d2e55f6d6e083ade6c1 (BSC/BEP-20)",
+     "clarification": (
+         "ТОЛЬКО сеть BSC! Другие сети = потеря токенов!\n"
+         "Пул ликвидности: 0x41d9650faf3341cbf8947fd8063a1fc88dbf1889\n"
+         "График: https://www.geckoterminal.com/ru/bsc/pools/0x41d9650faf3341cbf8947fd8063a1fc88dbf1889"
+     ),
      "added_by": "system", "verified_by_boss": True},
 
     {"id": 32, "category": "PLEX токен",
@@ -112,7 +116,7 @@ DEFAULT_KB: list[dict[str, Any]] = [
      "answer": (
          "1. Настройки > Добавить токен\n"
          "2. Сеть: Smart Chain (BNB)\n"
-         "3. Вставить адрес: 0x2b83BE51c7c4a662f592090AD2041001a4525664\n"
+         "3. Вставить адрес: 0xdf179b6cadbc61ffd86a3d2e55f6d6e083ade6c1\n"
          "4. Сохранить"
      ),
      "clarification": "Выбирай Smart Chain, НЕ Ethereum!",
@@ -347,7 +351,7 @@ DEFAULT_KB: list[dict[str, Any]] = [
          "2. Через BscScan по адресу кошелька\n"
          "3. Логи plex_balance_monitor в docker logs"
      ),
-     "clarification": "Контракт PLEX: 0x2b83BE51c7c4a662f592090AD2041001a4525664",
+     "clarification": "Контракт PLEX: 0xdf179b6cadbc61ffd86a3d2e55f6d6e083ade6c1",
      "added_by": "system", "verified_by_boss": True, "admin_only": True},
 
     {"id": 92, "category": "Админ: PLEX",
