@@ -16,7 +16,7 @@ from aiogram.utils.keyboard import ReplyKeyboardBuilder
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.ai_assistant_service import UserRole, get_ai_service
+from app.services.ai_assistant_service import AI_NAME, UserRole, get_ai_service
 from bot.keyboards.reply import main_menu_reply_keyboard
 
 router = Router(name="user_ai_assistant")
@@ -62,11 +62,13 @@ async def user_ai_menu(
 
     ai_service = get_ai_service()
     status = "🟢 Онлайн" if ai_service.is_available() else "🔴 Недоступен"
+    user_name = message.from_user.first_name or "друг"
 
     await message.answer(
-        f"🤖 **AI Помощник**\n\n"
+        f"🤖 **{AI_NAME}** — AI Помощник\n\n"
         f"Статус: {status}\n\n"
-        f"Привет! Я интеллектуальный помощник платформы ArbitroPLEX.\n\n"
+        f"Привет, {user_name}! Я {AI_NAME} — интеллектуальный помощник "
+        f"платформы ArbitroPLEX.\n\n"
         f"Могу рассказать о:\n"
         f"• Как работает платформа\n"
         f"• Депозиты и доходность\n"
@@ -76,8 +78,6 @@ async def user_ai_menu(
         parse_mode="Markdown",
         reply_markup=user_ai_keyboard(),
     )
-
-    logger.info(f"User {message.from_user.id} opened AI Assistant")
 
 
 @router.message(StateFilter("*"), F.text == "💬 Задать вопрос")

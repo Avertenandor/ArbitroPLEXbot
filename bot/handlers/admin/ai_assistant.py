@@ -16,7 +16,11 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.user_repository import UserRepository
-from app.services.ai_assistant_service import UserRole, get_ai_service
+from app.services.ai_assistant_service import (
+    AI_NAME,
+    UserRole,
+    get_ai_service,
+)
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
 from bot.keyboards.reply import get_admin_keyboard_from_data
 
@@ -69,11 +73,13 @@ async def get_platform_stats(session: AsyncSession) -> dict[str, Any]:
 
 
 def get_user_role_from_admin(admin: Any) -> UserRole:
-    """Convert admin model to UserRole."""
+    """Convert admin model to UserRole with reliable detection."""
     if admin.is_super_admin:
         return UserRole.SUPER_ADMIN
     elif admin.is_extended_admin:
         return UserRole.EXTENDED_ADMIN
+    elif admin.role == "moderator":
+        return UserRole.MODERATOR
     else:
         return UserRole.ADMIN
 
@@ -94,11 +100,19 @@ async def handle_ai_assistant_menu(
 
     ai_service = get_ai_service()
     status = "🟢 Онлайн" if ai_service.is_available() else "🔴 Недоступен"
+    role = get_user_role_from_admin(admin)
+    role_name = {
+        UserRole.SUPER_ADMIN: "👑 Владелец",
+        UserRole.EXTENDED_ADMIN: "⭐ Расширенный админ",
+        UserRole.ADMIN: "👤 Админ",
+        UserRole.MODERATOR: "📝 Модератор",
+    }.get(role, "👤 Админ")
 
     await message.answer(
-        f"🤖 **AI Помощник CloudSonet**\n\n"
-        f"Статус: {status}\n\n"
-        f"Привет, {admin.display_name}! Я твой интеллектуальный помощник.\n\n"
+        f"🤖 **{AI_NAME}** — AI Помощник\n\n"
+        f"Статус: {status}\n"
+        f"Ваш уровень: {role_name}\n\n"
+        f"Привет, {admin.display_name}! Я {AI_NAME} — твой интеллектуальный помощник.\n\n"
         f"**Что я умею:**\n"
         f"• Отвечать на вопросы о работе платформы\n"
         f"• Помогать с админ-функциями\n"
@@ -109,7 +123,7 @@ async def handle_ai_assistant_menu(
         reply_markup=ai_assistant_keyboard(),
     )
 
-    logger.info(f"Admin {admin.username} opened AI Assistant")
+    logger.info(f"Admin {admin.username} (role={role.value}) opened {AI_NAME}")
 
 
 @router.message(StateFilter("*"), F.text == "💬 Свободный диалог")
