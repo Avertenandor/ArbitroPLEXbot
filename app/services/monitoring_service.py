@@ -996,6 +996,36 @@ class MonitoringService:
                 )
             lines.append("")
 
+        # User inquiries / support requests
+        inquiries = data.get("inquiries", {})
+        if inquiries and inquiries.get("available"):
+            lines.append("📩 ОБРАЩЕНИЯ ПОЛЬЗОВАТЕЛЕЙ:")
+            lines.append(f"  Всего обращений: {inquiries.get('total', 0)}")
+            lines.append(f"  🆕 Новых (ждут ответа): {inquiries.get('new_count', 0)}")
+            lines.append(
+                f"  🔄 В работе: {inquiries.get('in_progress_count', 0)}"
+            )
+            lines.append(f"  ✅ Закрыто: {inquiries.get('closed_count', 0)}")
+
+            recent_inquiries = inquiries.get("recent", [])
+            if recent_inquiries:
+                lines.append("  Последние обращения:")
+                for inq in recent_inquiries[:10]:
+                    status_emoji = {
+                        "new": "🆕",
+                        "in_progress": "🔄",
+                        "closed": "✅"
+                    }.get(inq.get("status"), "❓")
+                    lines.append(
+                        f"    {status_emoji} [{inq.get('created')}] "
+                        f"@{inq.get('user')}: {inq.get('question', '')[:60]}..."
+                    )
+                    if inq.get("assigned_to") != "Не назначен":
+                        lines.append(
+                            f"       → Назначен: @{inq.get('assigned_to')}"
+                        )
+            lines.append("")
+
         # System health
         system = data.get("system", {})
         lines.append("✅ СТАТУС СИСТЕМЫ:")
