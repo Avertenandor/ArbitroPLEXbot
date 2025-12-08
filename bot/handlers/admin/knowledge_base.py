@@ -65,6 +65,55 @@ def categories_keyboard(categories: list[str]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+def entries_list_keyboard(
+    entries: list[dict],
+    page: int = 0,
+    per_page: int = 5,
+    list_type: str = "all"
+) -> InlineKeyboardMarkup:
+    """Generate inline keyboard with entries list for navigation."""
+    buttons = []
+    
+    start = page * per_page
+    end = start + per_page
+    page_entries = entries[start:end]
+    
+    for e in page_entries:
+        verified = "✅" if e.get("verified_by_boss") else "⚠️"
+        learned = "🧠" if e.get("learned_from_dialog") else ""
+        label = f"{verified}{learned} #{e['id']}: {e['question'][:35]}..."
+        buttons.append([InlineKeyboardButton(
+            text=label,
+            callback_data=f"kb_view:{e['id']}"
+        )])
+    
+    # Pagination
+    nav_row = []
+    total_pages = (len(entries) + per_page - 1) // per_page
+    
+    if page > 0:
+        nav_row.append(InlineKeyboardButton(
+            text="⬅️ Назад",
+            callback_data=f"kb_page:{list_type}:{page - 1}"
+        ))
+    
+    nav_row.append(InlineKeyboardButton(
+        text=f"{page + 1}/{total_pages}",
+        callback_data="kb_noop"
+    ))
+    
+    if end < len(entries):
+        nav_row.append(InlineKeyboardButton(
+            text="Вперёд ➡️",
+            callback_data=f"kb_page:{list_type}:{page + 1}"
+        ))
+    
+    if nav_row:
+        buttons.append(nav_row)
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
 def entry_actions_keyboard(
     entry_id: int, is_boss: bool, is_verified: bool = False
 ) -> InlineKeyboardMarkup:
@@ -281,21 +330,13 @@ async def list_learned_entries(
         return
 
     text = f"🧠 **Записи из диалогов ({len(learned)}):**\n\n"
-    
-    for i, e in enumerate(learned[:10], 1):
-        verified = "✅" if e.get("verified_by_boss") else "⚠️"
-        source = e.get("source_user", "unknown")
-        cat = e.get("category", "Из диалогов")
-        
-        text += f"**{i}. {verified} {cat}**\n"
-        text += f"❓ _{e['question'][:50]}_\n"
-        text += f"💬 {e['answer'][:70]}...\n"
-        text += f"👤 @{source} | /kb_{e['id']}\n\n"
+    text += "Нажми на запись чтобы открыть:"
 
-    if len(learned) > 10:
-        text += f"_...и ещё {len(learned) - 10} записей_"
-
-    await message.answer(text, parse_mode="Markdown")
+    await message.answer(
+        text,
+        parse_mode="Markdown",
+        reply_markup=entries_list_keyboard(learned, page=0, list_type="learned"),
+    )
 
 
 @router.message(KBStates.viewing, F.text == "🔍 Поиск")
@@ -368,27 +409,17 @@ async def list_unverified(
     unverified = kb.get_unverified()
 
     if not unverified:
-        await message.answer("✅ **Все записи проверены!**")
+        await message.answer("✅ **Все записи проверены!**", parse_mode="Markdown")
         return
 
     text = f"⚠️ **Записи на проверку ({len(unverified)}):**\n\n"
-    
-    for i, e in enumerate(unverified[:10], 1):
-        source = e.get("added_by", "unknown")
-        learned = "🧠" if e.get("learned_from_dialog") else "📝"
-        cat = e.get("category", "Без категории")
-        
-        text += f"**{i}. {learned} {cat}**\n"
-        text += f"❓ _{e['question'][:60]}_\n"
-        text += f"💬 {e['answer'][:80]}...\n"
-        text += f"👤 @{source} | /kb_{e['id']}\n\n"
+    text += "Нажми на запись чтобы открыть:"
 
-    if len(unverified) > 10:
-        text += f"_...и ещё {len(unverified) - 10} записей_\n"
-
-    text += "\n📌 Нажми /kb\\_ID чтобы открыть запись и подтвердить."
-
-    await message.answer(text, parse_mode="Markdown")
+    await message.answer(
+        text,
+        parse_mode="Markdown",
+        reply_markup=entries_list_keyboard(unverified, page=0, list_type="unverified"),
+    )
 
 
 @router.message(KBStates.viewing, F.text == "📋 Все записи")
@@ -730,6 +761,83 @@ async def next_entry(
     await callback.answer()
 
 
+@router.callback_query(F.data.startswith("kb_view:"))
+async def view_entry_callback(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """View entry by inline button click."""
+    admin = await get_admin_or_deny(callback.message, session, **data)
+    if not admin:
+        return
+
+    entry_id = int(callback.data.split(":")[1])
+    kb = get_knowledge_base()
+    entry = next((e for e in kb.entries if e.get("id") == entry_id), None)
+
+    if not entry:
+        await callback.answer("Запись не найдена", show_alert=True)
+        return
+
+    await show_entry(callback.message, entry, admin, edit=False)
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("kb_page:"))
+async def paginate_entries(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Handle pagination for entries list."""
+    admin = await get_admin_or_deny(callback.message, session, **data)
+    if not admin:
+        return
+
+    parts = callback.data.split(":")
+    list_type = parts[1]
+    page = int(parts[2])
+
+    kb = get_knowledge_base()
+
+    if list_type == "unverified":
+        entries = kb.get_unverified()
+        title = f"⚠️ **Записи на проверку ({len(entries)}):**"
+    elif list_type == "learned":
+        entries = [e for e in kb.entries if e.get("learned_from_dialog")]
+        title = f"🧠 **Записи из диалогов ({len(entries)}):**"
+    elif list_type == "all":
+        entries = kb.entries
+        title = f"📚 **Все записи ({len(entries)}):**"
+    else:
+        entries = kb.entries
+        title = "📚 **Записи:**"
+
+    text = f"{title}\n\nНажми на запись чтобы открыть:"
+
+    try:
+        await callback.message.edit_text(
+            text,
+            parse_mode="Markdown",
+            reply_markup=entries_list_keyboard(entries, page=page, list_type=list_type),
+        )
+    except Exception:
+        await callback.message.answer(
+            text,
+            parse_mode="Markdown",
+            reply_markup=entries_list_keyboard(entries, page=page, list_type=list_type),
+        )
+
+    await callback.answer()
+
+
+@router.callback_query(F.data == "kb_noop")
+async def noop_callback(callback: CallbackQuery) -> None:
+    """Do nothing (for page indicator)."""
+    await callback.answer()
+
+
 @router.callback_query(F.data == "kb_list")
 async def back_to_list(
     callback: CallbackQuery,
@@ -742,19 +850,15 @@ async def back_to_list(
         return
 
     kb = get_knowledge_base()
+    entries = kb.entries
 
-    text = "📚 **Все записи:**\n\n"
-    for cat in kb.get_categories():
-        text += f"📂 **{cat}**\n"
-        for e in kb.entries:
-            if e.get("category") == cat:
-                verified = "✅" if e.get("verified_by_boss") else "⚠️"
-                text += f"  {verified} #{e['id']}: {e['question'][:40]}...\n"
-        text += "\n"
+    text = f"📚 **Все записи ({len(entries)}):**\n\nНажми на запись чтобы открыть:"
 
-    text += "_Нажми /kb_N для просмотра записи_"
-
-    await callback.message.answer(text, parse_mode="Markdown")
+    await callback.message.answer(
+        text,
+        parse_mode="Markdown",
+        reply_markup=entries_list_keyboard(entries, page=0, list_type="all"),
+    )
     await callback.answer()
 
 
