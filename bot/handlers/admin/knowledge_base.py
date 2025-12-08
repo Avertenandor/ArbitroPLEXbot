@@ -35,15 +35,17 @@ class KBStates(StatesGroup):
     adding_answer = State()
     adding_clarification = State()
     adding_category = State()
+    searching = State()
 
 
 def kb_menu_keyboard() -> ReplyKeyboardMarkup:
-    """Knowledge base menu keyboard."""
+    """Knowledge base menu keyboard - user friendly."""
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="📋 Все записи")],
-            [KeyboardButton(text="➕ Добавить запись")],
-            [KeyboardButton(text="🔍 Поиск"), KeyboardButton(text="⚠️ Непроверенные")],
+            [KeyboardButton(text="📂 По категориям"), KeyboardButton(text="📋 Все записи")],
+            [KeyboardButton(text="➕ Добавить"), KeyboardButton(text="🔍 Поиск")],
+            [KeyboardButton(text="⚠️ На проверку"), KeyboardButton(text="🧠 Из диалогов")],
+            [KeyboardButton(text="📊 Статистика БЗ")],
             [KeyboardButton(text="◀️ Назад в админку")],
         ],
         resize_keyboard=True,
@@ -128,12 +130,16 @@ async def open_knowledge_base(
     await state.set_state(KBStates.viewing)
 
     kb = get_knowledge_base()
+    learned = len([e for e in kb.entries if e.get("learned_from_dialog")])
+
     stats = (
         f"📚 **База знаний ARIA**\n\n"
-        f"Всего записей: {len(kb.entries)}\n"
-        f"Категорий: {len(kb.get_categories())}\n"
-        f"Непроверенных: {len(kb.get_unverified())}\n\n"
-        f"_Источник истины: @VladarevInvestBrok_"
+        f"📋 Всего записей: **{len(kb.entries)}**\n"
+        f"📂 Категорий: **{len(kb.get_categories())}**\n"
+        f"⚠️ На проверку: **{len(kb.get_unverified())}**\n"
+        f"🧠 Из диалогов: **{learned}**\n\n"
+        f"_Источник истины: @VladarevInvestBrok_\n\n"
+        f"Выбери действие:"
     )
 
     await message.answer(
@@ -141,6 +147,232 @@ async def open_knowledge_base(
         parse_mode="Markdown",
         reply_markup=kb_menu_keyboard(),
     )
+
+
+@router.message(KBStates.viewing, F.text == "📊 Статистика БЗ")
+async def kb_statistics(
+    message: Message,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Show knowledge base statistics."""
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
+        return
+
+    kb = get_knowledge_base()
+
+    # Count by category
+    cat_stats = {}
+    for e in kb.entries:
+        cat = e.get("category", "Без категории")
+        cat_stats[cat] = cat_stats.get(cat, 0) + 1
+
+    # Count verified vs unverified
+    verified = len([e for e in kb.entries if e.get("verified_by_boss")])
+    unverified = len(kb.entries) - verified
+    learned = len([e for e in kb.entries if e.get("learned_from_dialog")])
+
+    text = "📊 **Статистика Базы Знаний**\n\n"
+    text += f"📋 Всего записей: **{len(kb.entries)}**\n"
+    text += f"✅ Подтверждённых: **{verified}**\n"
+    text += f"⚠️ На проверку: **{unverified}**\n"
+    text += f"🧠 Из диалогов с ARIA: **{learned}**\n\n"
+
+    text += "📂 **По категориям:**\n"
+    for cat, count in sorted(cat_stats.items()):
+        text += f"  • {cat}: {count}\n"
+
+    await message.answer(text, parse_mode="Markdown")
+
+
+@router.message(KBStates.viewing, F.text == "📂 По категориям")
+async def list_categories(
+    message: Message,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """List all categories with entry counts."""
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
+        return
+
+    kb = get_knowledge_base()
+    categories = kb.get_categories()
+
+    if not categories:
+        await message.answer("Категорий пока нет.")
+        return
+
+    # Build inline keyboard with categories
+    buttons = []
+    for cat in categories:
+        count = len([e for e in kb.entries if e.get("category") == cat])
+        buttons.append([InlineKeyboardButton(
+            text=f"📂 {cat} ({count})",
+            callback_data=f"kb_showcat:{cat[:30]}"
+        )])
+
+    await message.answer(
+        "📂 **Выбери категорию:**",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+    )
+
+
+@router.callback_query(F.data.startswith("kb_showcat:"))
+async def show_category_entries(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Show entries in selected category."""
+    admin = await get_admin_or_deny(callback.message, session, **data)
+    if not admin:
+        return
+
+    category = callback.data.split(":")[1]
+    kb = get_knowledge_base()
+
+    entries = [e for e in kb.entries if e.get("category", "").startswith(category)]
+
+    if not entries:
+        await callback.message.answer(f"В категории '{category}' нет записей.")
+        await callback.answer()
+        return
+
+    text = f"📂 **{category}** ({len(entries)} записей)\n\n"
+    for e in entries[:15]:  # Limit to 15
+        verified = "✅" if e.get("verified_by_boss") else "⚠️"
+        text += f"{verified} /kb_{e['id']} — {e['question'][:50]}...\n"
+
+    if len(entries) > 15:
+        text += f"\n_...и ещё {len(entries) - 15} записей_"
+
+    await callback.message.answer(text, parse_mode="Markdown")
+    await callback.answer()
+
+
+@router.message(KBStates.viewing, F.text == "🧠 Из диалогов")
+async def list_learned_entries(
+    message: Message,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """List entries learned from dialogs."""
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
+        return
+
+    kb = get_knowledge_base()
+    learned = [e for e in kb.entries if e.get("learned_from_dialog")]
+
+    if not learned:
+        await message.answer(
+            "🧠 **Записей из диалогов пока нет.**\n\n"
+            "ARIA извлекает знания из свободных диалогов с Боссом и админами."
+        )
+        return
+
+    text = "🧠 **Записи из диалогов с ARIA:**\n\n"
+    for e in learned[:15]:
+        verified = "✅" if e.get("verified_by_boss") else "⚠️"
+        source = e.get("source_user", "unknown")
+        text += f"{verified} /kb_{e['id']} — {e['question'][:40]}...\n"
+        text += f"   _от @{source}_\n"
+
+    if len(learned) > 15:
+        text += f"\n_...и ещё {len(learned) - 15} записей_"
+
+    await message.answer(text, parse_mode="Markdown")
+
+
+@router.message(KBStates.viewing, F.text == "🔍 Поиск")
+async def start_search(
+    message: Message,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Start search mode."""
+    await state.set_state(KBStates.searching)
+    await message.answer(
+        "🔍 **Поиск по базе знаний**\n\n"
+        "Введи слово или фразу для поиска:\n"
+        "_Например: депозит, PLEX, арбитраж_\n\n"
+        "Или нажми /cancel для отмены"
+    )
+
+
+@router.message(KBStates.searching)
+async def do_search(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Perform search."""
+    if message.text == "/cancel":
+        await state.set_state(KBStates.viewing)
+        await message.answer("Поиск отменён.", reply_markup=kb_menu_keyboard())
+        return
+
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
+        return
+
+    kb = get_knowledge_base()
+    results = kb.search(message.text)
+
+    if not results:
+        await message.answer(
+            f"🔍 По запросу «{message.text}» ничего не найдено.\n"
+            "Попробуй другой запрос или /cancel"
+        )
+        return
+
+    text = f"🔍 **Найдено: {len(results)}**\n\n"
+    for e in results[:10]:
+        verified = "✅" if e.get("verified_by_boss") else "⚠️"
+        text += f"{verified} /kb_{e['id']} — {e['question'][:50]}...\n"
+
+    if len(results) > 10:
+        text += f"\n_...и ещё {len(results) - 10}_"
+
+    await state.set_state(KBStates.viewing)
+    await message.answer(text, parse_mode="Markdown", reply_markup=kb_menu_keyboard())
+
+
+@router.message(KBStates.viewing, F.text == "⚠️ На проверку")
+async def list_unverified(
+    message: Message,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """List entries pending verification."""
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
+        return
+
+    kb = get_knowledge_base()
+    unverified = kb.get_unverified()
+
+    if not unverified:
+        await message.answer("✅ **Все записи проверены!**")
+        return
+
+    text = "⚠️ **Записи на проверку Боссом:**\n\n"
+    for e in unverified[:15]:
+        source = e.get("added_by", "unknown")
+        learned = "🧠" if e.get("learned_from_dialog") else "📝"
+        text += f"{learned} /kb_{e['id']} — {e['question'][:40]}...\n"
+        text += f"   _добавил: @{source}_\n"
+
+    if len(unverified) > 15:
+        text += f"\n_...и ещё {len(unverified) - 15} записей_"
+
+    text += "\n\n_Только Босс может подтвердить записи._"
+
+    await message.answer(text, parse_mode="Markdown")
 
 
 @router.message(KBStates.viewing, F.text == "📋 Все записи")
@@ -174,35 +406,7 @@ async def list_all_entries(
     await message.answer(text, parse_mode="Markdown")
 
 
-@router.message(KBStates.viewing, F.text == "⚠️ Непроверенные")
-async def list_unverified(
-    message: Message,
-    session: AsyncSession,
-    **data: Any,
-) -> None:
-    """List unverified entries."""
-    admin = await get_admin_or_deny(message, session, **data)
-    if not admin:
-        return
-
-    kb = get_knowledge_base()
-    unverified = kb.get_unverified()
-
-    if not unverified:
-        await message.answer("✅ Все записи проверены Боссом!")
-        return
-
-    text = "⚠️ **Непроверенные записи:**\n\n"
-    for e in unverified:
-        text += f"#{e['id']}: {e['question'][:50]}...\n"
-        text += f"  Добавил: @{e.get('added_by', 'unknown')}\n\n"
-
-    text += "_Только Босс может подтверждать записи._"
-
-    await message.answer(text, parse_mode="Markdown")
-
-
-@router.message(KBStates.viewing, F.text == "➕ Добавить запись")
+@router.message(KBStates.viewing, F.text.in_(["➕ Добавить", "➕ Добавить запись"]))
 async def start_add_entry(
     message: Message,
     session: AsyncSession,
@@ -330,12 +534,6 @@ async def add_new_category(message: Message, state: FSMContext) -> None:
         parse_mode="Markdown",
         reply_markup=kb_menu_keyboard(),
     )
-
-
-@router.message(KBStates.viewing, F.text == "🔍 Поиск")
-async def start_search(message: Message) -> None:
-    """Start search."""
-    await message.answer("🔍 Введи поисковый запрос:")
 
 
 @router.message(KBStates.viewing, F.text.startswith("/kb_"))

@@ -18,37 +18,155 @@ def get_kb_path() -> Path:
 
 
 DEFAULT_KB: list[dict[str, Any]] = [
-    {"id": 1, "category": "PLEX", "question": "Что такое PLEX?",
-     "answer": "PLEX - токен на BSC для входа (10) и депозитов (10 за $1).",
-     "clarification": "Это ключ для участия в платформе.",
+    # === ОСНОВАТЕЛЬ И КОМАНДА ===
+    {"id": 1, "category": "Основатель",
+     "question": "Кто создатель ArbitroPLEX и монеты PLEX?",
+     "answer": (
+         "Александр Владарев (@VladarevInvestBrok) — создатель экосистемы "
+         "монеты PLEX, проектировщик, программист, аналитик. Создал несколько "
+         "десятков серьёзных криптопродуктов и несколько видов фиатного бизнеса."
+     ),
+     "clarification": (
+         "Александр известен нетривиальными криптопродуктами: арбитражные "
+         "роботы, MEV-роботы, линейка торговых роботов. Также работает над "
+         "собственной DEX-биржей."
+     ),
      "added_by": "system", "verified_by_boss": True},
-    {"id": 2, "category": "PLEX", "question": "Адрес контракта PLEX?",
+
+    {"id": 2, "category": "Основатель",
+     "question": "Что такое FreeTube?",
+     "answer": (
+         "FreeTube — собственный блокчейн Александра Владарева, который сейчас "
+         "разрабатывается и тестируется. Он альфа-совместим с Binance Smart Chain."
+     ),
+     "clarification": "Это перспективный проект экосистемы PLEX.",
+     "added_by": "system", "verified_by_boss": True},
+
+    # === ЭКОСИСТЕМА PLEX ===
+    {"id": 10, "category": "Экосистема PLEX",
+     "question": "Что такое экосистема Монеты PLEX?",
+     "answer": (
+         "Экосистема построена на циркуляции утилити-токена PLEX. "
+         "Выпущено немногим более 12 миллионов токенов. Мощная ежедневная "
+         "циркуляция вызывает системный подъём курса."
+     ),
+     "clarification": (
+         "Часть PLEX, которые приносят пользователи, система продаёт для "
+         "поддержания резервов USDT и PLEX для бонусов, выплат и наград."
+     ),
+     "added_by": "system", "verified_by_boss": True},
+
+    {"id": 11, "category": "Экосистема PLEX",
+     "question": "Какие ещё проекты используют PLEX?",
+     "answer": (
+         "Кроме ArbitroPLEX существует несколько партнёрских проектов, "
+         "в которых работает утилити-токен PLEX."
+     ),
+     "clarification": "Подробности о партнёрских проектах у @VladarevInvestBrok.",
+     "added_by": "system", "verified_by_boss": True},
+
+    # === АТОМАРНЫЙ АРБИТРАЖ ===
+    {"id": 20, "category": "Арбитраж",
+     "question": "Как работает атомарный арбитраж?",
+     "answer": (
+         "Бот приносит 30-70% прибыли через атомарный арбитраж. "
+         "У каждой монеты есть пулы ликвидности V2 и V3 на PancakeSwap с разной "
+         "комиссией. После каждой сделки образуется арбитражная разница."
+     ),
+     "clarification": (
+         "Арбитробот с закрытого защищённого сервера в рамках ОДНОЙ транзакции "
+         "покупает в одном пуле, продаёт в другом и забирает разницу."
+     ),
+     "added_by": "system", "verified_by_boss": True},
+
+    {"id": 21, "category": "Арбитраж",
+     "question": "Почему нужен PLEX для арбитража?",
+     "answer": (
+         "Для доступа к боту и чтобы деньги зарабатывали на арбитраже, "
+         "нужна Монета PLEX: 10 монет за вход + 10 монет на каждый $1 депозита."
+     ),
+     "clarification": (
+         "Это создаёт постоянную циркуляцию монеты и поддерживает экономику."
+     ),
+     "added_by": "system", "verified_by_boss": True},
+
+    # === ТОКЕН PLEX ===
+    {"id": 30, "category": "PLEX токен",
+     "question": "Что такое PLEX токен?",
+     "answer": (
+         "PLEX — утилити-токен на BNB Smart Chain (BEP-20). "
+         "Всего выпущено ~12 млн токенов. Нужен для входа (10 PLEX) "
+         "и для депозитов (10 PLEX за каждый $1)."
+     ),
+     "clarification": "Это ключ для участия в экосистеме ArbitroPLEX.",
+     "added_by": "system", "verified_by_boss": True},
+
+    {"id": 31, "category": "PLEX токен",
+     "question": "Адрес контракта PLEX?",
      "answer": "0x2b83BE51c7c4a662f592090AD2041001a4525664 (BSC/BEP-20)",
-     "clarification": "Только BSC! Другие сети = потеря токенов.",
+     "clarification": "ТОЛЬКО сеть BSC! Другие сети = потеря токенов!",
      "added_by": "system", "verified_by_boss": True},
-    {"id": 3, "category": "PLEX", "question": "Как добавить в Trust Wallet?",
-     "answer": "Настройки > Добавить токен > Smart Chain > вставить адрес",
-     "clarification": "Выбирай Smart Chain, не Ethereum!",
+
+    {"id": 32, "category": "PLEX токен",
+     "question": "Как добавить PLEX в Trust Wallet?",
+     "answer": (
+         "1. Настройки > Добавить токен\n"
+         "2. Сеть: Smart Chain (BNB)\n"
+         "3. Вставить адрес: 0x2b83BE51c7c4a662f592090AD2041001a4525664\n"
+         "4. Сохранить"
+     ),
+     "clarification": "Выбирай Smart Chain, НЕ Ethereum!",
      "added_by": "system", "verified_by_boss": True},
-    {"id": 4, "category": "PLEX", "question": "Как добавить в SafePal?",
-     "answer": "Активы > + > BSC > Вручную > вставить адрес контракта",
-     "clarification": "Название подтянется автоматически.",
+
+    {"id": 33, "category": "PLEX токен",
+     "question": "Как добавить PLEX в SafePal?",
+     "answer": (
+         "Активы > + > BSC > Вручную > вставить адрес контракта"
+     ),
+     "clarification": "Название и символ подтянутся автоматически.",
      "added_by": "system", "verified_by_boss": True},
-    {"id": 10, "category": "Депозиты", "question": "Как сделать депозит?",
-     "answer": "Депозит > сумма > отправить USDT (TRC-20) на адрес",
-     "clarification": "Минимум $10. Нужны PLEX. Только TRC-20!",
+
+    # === ДЕПОЗИТЫ ===
+    {"id": 40, "category": "Депозиты",
+     "question": "Как сделать депозит?",
+     "answer": (
+         "1. Убедись что есть PLEX (10 за вход + 10 за каждый $1)\n"
+         "2. Депозит > выбери сумму\n"
+         "3. Отправь USDT (TRC-20) на указанный адрес\n"
+         "4. Жди подтверждения (1-5 мин)"
+     ),
+     "clarification": "Минимум $10. ТОЛЬКО сеть TRC-20!",
      "added_by": "system", "verified_by_boss": True},
-    {"id": 11, "category": "Депозиты", "question": "Депозит не пришел?",
-     "answer": "Проверь hash на tronscan.org, жди 15 мин, пиши в поддержку",
-     "clarification": "Частая ошибка - ERC-20 вместо TRC-20.",
+
+    {"id": 41, "category": "Депозиты",
+     "question": "Депозит не пришёл, что делать?",
+     "answer": (
+         "1. Проверь hash на tronscan.org\n"
+         "2. Убедись что отправил по TRC-20\n"
+         "3. Подожди 15 минут\n"
+         "4. Пиши в поддержку с hash"
+     ),
+     "clarification": "Частая ошибка: ERC-20 вместо TRC-20 = потеря средств!",
      "added_by": "system", "verified_by_boss": True},
-    {"id": 20, "category": "Выводы", "question": "Как вывести?",
-     "answer": "Вывод > сумма > адрес USDT TRC-20 > подтвердить",
-     "clarification": "Минимум $10. Обработка до 24-48ч.",
+
+    # === ВЫВОДЫ ===
+    {"id": 50, "category": "Выводы",
+     "question": "Как вывести деньги?",
+     "answer": (
+         "Вывод > сумма > адрес USDT TRC-20 > подтвердить. "
+         "Минимум $10. Обработка до 24-48ч."
+     ),
+     "clarification": "Выводы обрабатываются вручную для безопасности.",
      "added_by": "system", "verified_by_boss": True},
-    {"id": 30, "category": "ROI", "question": "Как начисляется ROI?",
-     "answer": "Автоматически каждый день на активные депозиты.",
-     "clarification": "Ставки не разглашаются, смотри в кабинете.",
+
+    # === ROI ===
+    {"id": 60, "category": "ROI и доход",
+     "question": "Как начисляется ROI?",
+     "answer": (
+         "ROI начисляется автоматически каждый день на активные депозиты. "
+         "Доходность 30-70% зависит от рыночных условий арбитража."
+     ),
+     "clarification": "Точные ставки динамические, смотри в личном кабинете.",
      "added_by": "system", "verified_by_boss": True},
 ]
 
@@ -146,6 +264,43 @@ class KnowledgeBase:
                         lines.append(f"  ! {c}")
             lines.append("")
         return "\n".join(lines)
+
+    def add_learned_entry(
+        self,
+        question: str,
+        answer: str,
+        category: str = "Из диалогов",
+        source_user: str = "unknown",
+        needs_verification: bool = True,
+    ) -> dict:
+        """Add entry learned from conversation with admin/boss."""
+        entry = {
+            "id": self.get_next_id(),
+            "category": category,
+            "question": question,
+            "answer": answer,
+            "clarification": f"Извлечено из диалога с @{source_user}",
+            "added_by": "ARIA",
+            "added_at": datetime.now(UTC).isoformat(),
+            "verified_by_boss": not needs_verification,
+            "learned_from_dialog": True,
+            "source_user": source_user,
+        }
+        self.entries.append(entry)
+        self.save()
+        logger.info(f"ARIA learned: {question[:50]}... from @{source_user}")
+        return entry
+
+    def get_learned_entries(self) -> list[dict]:
+        """Get entries that were learned from dialogs."""
+        return [e for e in self.entries if e.get("learned_from_dialog")]
+
+    def get_pending_verification(self) -> list[dict]:
+        """Get entries pending boss verification."""
+        return [
+            e for e in self.entries
+            if e.get("learned_from_dialog") and not e.get("verified_by_boss")
+        ]
 
 
 _kb: KnowledgeBase | None = None
