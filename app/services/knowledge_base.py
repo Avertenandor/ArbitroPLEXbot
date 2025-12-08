@@ -107,7 +107,8 @@ DEFAULT_KB: list[dict[str, Any]] = [
      "clarification": (
          "ТОЛЬКО сеть BSC! Другие сети = потеря токенов!\n"
          "Пул ликвидности: 0x41d9650faf3341cbf8947fd8063a1fc88dbf1889\n"
-         "График: https://www.geckoterminal.com/ru/bsc/pools/0x41d9650faf3341cbf8947fd8063a1fc88dbf1889"
+         "График: https://www.geckoterminal.com/ru/bsc/pools/0x41d9650faf3341cbf8947fd8063a1fc88dbf1889\n"
+         "Купить за USDT: https://pancakeswap.finance/swap?outputCurrency=0xdf179b6cAdBC61FFD86A3D2e55f6d6e083ade6c1&inputCurrency=0x55d398326f99059fF775485246999027B3197955&chain=bsc"
      ),
      "added_by": "system", "verified_by_boss": True},
 

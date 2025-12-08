@@ -109,7 +109,7 @@ SYSTEM_PROMPT_BASE = f"""Ты — {AI_NAME} (Artificial Reliable Investment Assi
 - Контрактный адрес: 0xdf179b6cadbc61ffd86a3d2e55f6d6e083ade6c1
 - Адрес пула ликвидности: 0x41d9650faf3341cbf8947fd8063a1fc88dbf1889
 - Где посмотреть график: https://www.geckoterminal.com/ru/bsc/pools/0x41d9650faf3341cbf8947fd8063a1fc88dbf1889
-- Где купить: PancakeSwap или через бота
+- Где купить PLEX за USDT: https://pancakeswap.finance/swap?outputCurrency=0xdf179b6cAdBC61FFD86A3D2e55f6d6e083ade6c1&inputCurrency=0x55d398326f99059fF775485246999027B3197955&chain=bsc
 - Нужен для: входа на платформу (10 PLEX) и депозитов (10 PLEX за каждый $1)
 
 КАК ДОБАВИТЬ PLEX В КОШЕЛЁК:
