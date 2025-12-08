@@ -1,7 +1,7 @@
 """Add user_activities table for comprehensive activity logging.
 
-Revision ID: 20251208_000002_add_user_activities
-Revises: 20251208_000001_add_bonus_credits
+Revision ID: 20251208_000002
+Revises: 20251208_000001
 Create Date: 2025-12-08
 
 """
@@ -14,8 +14,8 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = "20251208_000002_add_user_activities"
-down_revision: str | None = "20251208_000001_add_bonus_credits"
+revision: str = "20251208_000002"
+down_revision: str | None = "20251208_000001"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
