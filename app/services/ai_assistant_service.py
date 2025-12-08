@@ -310,10 +310,9 @@ _ai_service: AIAssistantService | None = None
 def get_ai_service() -> AIAssistantService:
     """Get or create AI service singleton."""
     global _ai_service
-    
+
     if _ai_service is None:
-        from app.config.settings import get_settings
-        settings = get_settings()
+        from app.config.settings import settings
         _ai_service = AIAssistantService(api_key=settings.anthropic_api_key)
-    
+
     return _ai_service
