@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from loguru import logger
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user_activity import ActivityType, UserActivity
@@ -22,7 +23,45 @@ class UserActivityService:
         self.session = session
         self.repo = UserActivityRepository(session)
 
+    # ============ CONFIGURATION ============
+
+    # Maximum records to keep (older will be deleted)
+    MAX_RECORDS = 100000
+
+    # Days to keep records
+    RETENTION_DAYS = 30
+
     # ============ LOGGING METHODS ============
+
+    async def log_safe(
+        self,
+        telegram_id: int,
+        activity_type: str,
+        user_id: int | None = None,
+        description: str | None = None,
+        message_text: str | None = None,
+        extra_data: dict[str, Any] | None = None,
+    ) -> UserActivity | None:
+        """
+        Safely log activity without raising exceptions.
+        Use this for non-critical logging that should not break the main flow.
+
+        Returns:
+            Created activity record or None on error
+        """
+        try:
+            return await self.log(
+                telegram_id=telegram_id,
+                activity_type=activity_type,
+                user_id=user_id,
+                description=description,
+                message_text=message_text,
+                extra_data=extra_data,
+            )
+        except Exception as e:
+            # Log but don't raise - non-blocking
+            logger.debug(f"Activity logging skipped: {e}")
+            return None
 
     async def log(
         self,
@@ -253,6 +292,28 @@ class UserActivityService:
             },
         )
 
+    async def log_ai_conversation_safe(
+        self,
+        telegram_id: int,
+        admin_name: str,
+        question: str,
+        answer: str,
+    ) -> UserActivity | None:
+        """
+        Safely log AI conversation without breaking main flow.
+        Non-blocking - returns None on any error.
+        """
+        try:
+            return await self.log_ai_conversation(
+                telegram_id=telegram_id,
+                admin_name=admin_name,
+                question=question,
+                answer=answer,
+            )
+        except Exception as e:
+            logger.debug(f"AI conversation logging skipped: {e}")
+            return None
+
     async def get_ai_conversations(
         self,
         hours: int = 24,
@@ -477,3 +538,116 @@ class UserActivityService:
                 })
 
         return result
+
+    # ============ MAINTENANCE METHODS ============
+
+    async def cleanup_old_records(self) -> int:
+        """
+        Delete records older than RETENTION_DAYS.
+
+        Returns:
+            Number of deleted records
+        """
+        try:
+            cutoff = datetime.now(UTC) - timedelta(days=self.RETENTION_DAYS)
+            result = await self.session.execute(
+                text(
+                    "DELETE FROM user_activities WHERE created_at < :cutoff"
+                ),
+                {"cutoff": cutoff},
+            )
+            deleted = result.rowcount or 0
+            if deleted > 0:
+                logger.info(f"Cleaned up {deleted} old activity records")
+            return deleted
+        except Exception as e:
+            logger.error(f"Failed to cleanup old records: {e}")
+            return 0
+
+    async def enforce_max_records(self) -> int:
+        """
+        Delete oldest records if total exceeds MAX_RECORDS.
+
+        Returns:
+            Number of deleted records
+        """
+        try:
+            # Count total records
+            count_result = await self.session.execute(
+                text("SELECT COUNT(*) FROM user_activities")
+            )
+            total = count_result.scalar() or 0
+
+            if total <= self.MAX_RECORDS:
+                return 0
+
+            # Delete oldest records
+            to_delete = total - self.MAX_RECORDS
+            result = await self.session.execute(
+                text("""
+                    DELETE FROM user_activities
+                    WHERE id IN (
+                        SELECT id FROM user_activities
+                        ORDER BY created_at ASC
+                        LIMIT :limit
+                    )
+                """),
+                {"limit": to_delete},
+            )
+            deleted = result.rowcount or 0
+            if deleted > 0:
+                logger.info(
+                    f"Enforced max records limit: deleted {deleted} oldest records"
+                )
+            return deleted
+        except Exception as e:
+            logger.error(f"Failed to enforce max records: {e}")
+            return 0
+
+    async def get_stats(self) -> dict[str, Any]:
+        """
+        Get activity logging statistics.
+
+        Returns:
+            Dict with stats: total, oldest, newest, by_type
+        """
+        try:
+            # Total count
+            count_result = await self.session.execute(
+                text("SELECT COUNT(*) FROM user_activities")
+            )
+            total = count_result.scalar() or 0
+
+            # Oldest and newest
+            range_result = await self.session.execute(
+                text("""
+                    SELECT MIN(created_at), MAX(created_at)
+                    FROM user_activities
+                """)
+            )
+            row = range_result.fetchone()
+            oldest = row[0] if row else None
+            newest = row[1] if row else None
+
+            # By type
+            type_result = await self.session.execute(
+                text("""
+                    SELECT activity_type, COUNT(*) as cnt
+                    FROM user_activities
+                    GROUP BY activity_type
+                    ORDER BY cnt DESC
+                """)
+            )
+            by_type = {row[0]: row[1] for row in type_result.fetchall()}
+
+            return {
+                "total": total,
+                "max_records": self.MAX_RECORDS,
+                "retention_days": self.RETENTION_DAYS,
+                "oldest": oldest.isoformat() if oldest else None,
+                "newest": newest.isoformat() if newest else None,
+                "by_type": by_type,
+            }
+        except Exception as e:
+            logger.error(f"Failed to get stats: {e}")
+            return {"error": str(e)}
