@@ -130,6 +130,15 @@ class AdminAuthMiddleware(BaseMiddleware):
             data["admin"] = admin
             return await handler(event, data)
 
+        # Super admin bypass: allow super admin to work without master key
+        # for convenience during development/testing
+        if admin.is_super_admin:
+            logger.debug(
+                f"AdminAuthMiddleware: Super admin {admin.telegram_id} bypass"
+            )
+            data["admin"] = admin
+            return await handler(event, data)
+
         # Get session token from FSM state
         state_data = await state.get_data()
         session_token = state_data.get("admin_session_token")

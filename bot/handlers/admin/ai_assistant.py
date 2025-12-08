@@ -28,6 +28,15 @@ from bot.keyboards.reply import get_admin_keyboard_from_data
 router = Router(name="admin_ai_assistant")
 
 
+async def clear_state_keep_session(state: FSMContext) -> None:
+    """Clear FSM state but preserve admin session token."""
+    state_data = await state.get_data()
+    session_token = state_data.get("admin_session_token")
+    await state.clear()
+    if session_token:
+        await state.update_data(admin_session_token=session_token)
+
+
 class AIAssistantStates(StatesGroup):
     """States for AI assistant interaction."""
 
@@ -108,7 +117,7 @@ async def handle_ai_assistant_menu(
     if not admin:
         return
 
-    await state.clear()
+    await clear_state_keep_session(state)
 
     ai_service = get_ai_service()
     status = "🟢 Онлайн" if ai_service.is_available() else "🔴 Недоступен"
@@ -170,7 +179,7 @@ async def end_chat(
     **data: Any,
 ) -> None:
     """End chat mode."""
-    await state.clear()
+    await clear_state_keep_session(state)
     await message.answer(
         "✅ Диалог завершён.\n\n"
         "Было приятно пообщаться! Возвращайся, если будут вопросы.",
@@ -376,7 +385,7 @@ async def back_to_admin(
     **data: Any,
 ) -> None:
     """Return to admin panel."""
-    await state.clear()
+    await clear_state_keep_session(state)
     await message.answer(
         "👑 Возвращаюсь в админ-панель...",
         reply_markup=get_admin_keyboard_from_data(data),
