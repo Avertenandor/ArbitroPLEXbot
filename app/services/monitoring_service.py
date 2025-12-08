@@ -35,21 +35,23 @@ class MonitoringService:
     async def get_admin_stats(self, hours: int = 24) -> dict[str, Any]:
         """
         Get admin activity statistics.
-        
+
         Args:
             hours: Lookback period in hours
-            
+
         Returns:
             Dict with admin statistics
         """
         try:
             since = datetime.now(UTC) - timedelta(hours=hours)
-            
+            logger.debug(f"MonitoringService: Getting admin stats, since={since}")
+
             # Total admins
             total_result = await self.session.execute(
                 select(func.count(Admin.id))
             )
             total_admins = total_result.scalar() or 0
+            logger.debug(f"MonitoringService: total_admins={total_admins}")
             
             # Active admins (have session in last N hours)
             active_result = await self.session.execute(
