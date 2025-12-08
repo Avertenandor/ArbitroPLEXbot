@@ -63,20 +63,53 @@ def categories_keyboard(categories: list[str]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def entry_actions_keyboard(entry_id: int, is_boss: bool) -> InlineKeyboardMarkup:
-    """Entry actions keyboard."""
-    buttons = [
-        [InlineKeyboardButton(
-            text="✏️ Редактировать", callback_data=f"kb_edit:{entry_id}"
-        )],
-        [InlineKeyboardButton(
-            text="🗑 Удалить", callback_data=f"kb_del:{entry_id}"
-        )],
-    ]
+def entry_actions_keyboard(
+    entry_id: int, is_boss: bool, is_verified: bool = False
+) -> InlineKeyboardMarkup:
+    """Entry actions keyboard with full navigation."""
+    buttons = []
+
+    # Boss verification controls
     if is_boss:
-        buttons.append([InlineKeyboardButton(
-            text="✅ Подтвердить (Босс)", callback_data=f"kb_verify:{entry_id}"
-        )])
+        if not is_verified:
+            buttons.append([
+                InlineKeyboardButton(
+                    text="✅ Подтвердить", callback_data=f"kb_verify:{entry_id}"
+                ),
+                InlineKeyboardButton(
+                    text="📝 Доработать", callback_data=f"kb_rework:{entry_id}"
+                ),
+            ])
+        else:
+            buttons.append([InlineKeyboardButton(
+                text="🔓 Снять подтверждение", callback_data=f"kb_unverify:{entry_id}"
+            )])
+
+    # Edit and delete buttons
+    buttons.append([
+        InlineKeyboardButton(
+            text="✏️ Редактировать", callback_data=f"kb_edit:{entry_id}"
+        ),
+        InlineKeyboardButton(
+            text="🗑 Удалить", callback_data=f"kb_del:{entry_id}"
+        ),
+    ])
+
+    # Navigation buttons
+    buttons.append([
+        InlineKeyboardButton(
+            text="⬅️ Предыдущая", callback_data=f"kb_prev:{entry_id}"
+        ),
+        InlineKeyboardButton(
+            text="➡️ Следующая", callback_data=f"kb_next:{entry_id}"
+        ),
+    ])
+
+    # Back to list
+    buttons.append([InlineKeyboardButton(
+        text="📋 К списку", callback_data="kb_list"
+    )])
+
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -343,11 +376,12 @@ async def view_entry(
     text += f"\n_Добавил: @{entry.get('added_by', 'system')}_"
 
     is_boss = admin.role == "super_admin"
+    is_verified = entry.get("verified_by_boss", False)
 
     await message.answer(
         text,
         parse_mode="Markdown",
-        reply_markup=entry_actions_keyboard(entry_id, is_boss),
+        reply_markup=entry_actions_keyboard(entry_id, is_boss, is_verified),
     )
 
 
@@ -372,6 +406,178 @@ async def verify_entry(
         await callback.message.answer("Ошибка при подтверждении.")
 
     await callback.answer()
+
+
+@router.callback_query(F.data.startswith("kb_unverify:"))
+async def unverify_entry(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Remove verification from entry (boss only)."""
+    admin = await get_admin_or_deny(callback.message, session, **data)
+    if not admin or admin.role != "super_admin":
+        await callback.answer("Только Босс!", show_alert=True)
+        return
+
+    entry_id = int(callback.data.split(":")[1])
+    kb = get_knowledge_base()
+
+    for entry in kb.entries:
+        if entry.get("id") == entry_id:
+            entry["verified_by_boss"] = False
+            kb.save()
+            await callback.message.answer(
+                f"🔓 Подтверждение снято с записи #{entry_id}"
+            )
+            break
+
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("kb_rework:"))
+async def rework_entry(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Request rework of entry (boss sends comment)."""
+    admin = await get_admin_or_deny(callback.message, session, **data)
+    if not admin or admin.role != "super_admin":
+        await callback.answer("Только Босс!", show_alert=True)
+        return
+
+    entry_id = int(callback.data.split(":")[1])
+    await state.update_data(rework_entry_id=entry_id)
+    await state.set_state(KBStates.viewing)
+
+    await callback.message.answer(
+        f"📝 **Доработка записи #{entry_id}**\n\n"
+        "Напиши комментарий что нужно исправить.\n"
+        "Комментарий будет добавлен к записи как требование Босса.\n\n"
+        "_Или нажми /cancel для отмены_",
+        parse_mode="Markdown",
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("kb_prev:"))
+async def prev_entry(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Navigate to previous entry."""
+    admin = await get_admin_or_deny(callback.message, session, **data)
+    if not admin:
+        return
+
+    current_id = int(callback.data.split(":")[1])
+    kb = get_knowledge_base()
+
+    # Find previous entry
+    ids = sorted(e.get("id", 0) for e in kb.entries)
+    current_idx = ids.index(current_id) if current_id in ids else 0
+    prev_idx = (current_idx - 1) % len(ids)
+    prev_id = ids[prev_idx]
+
+    entry = next((e for e in kb.entries if e.get("id") == prev_id), None)
+    if entry:
+        await show_entry(callback.message, entry, admin, edit=True)
+
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("kb_next:"))
+async def next_entry(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Navigate to next entry."""
+    admin = await get_admin_or_deny(callback.message, session, **data)
+    if not admin:
+        return
+
+    current_id = int(callback.data.split(":")[1])
+    kb = get_knowledge_base()
+
+    # Find next entry
+    ids = sorted(e.get("id", 0) for e in kb.entries)
+    current_idx = ids.index(current_id) if current_id in ids else 0
+    next_idx = (current_idx + 1) % len(ids)
+    next_id = ids[next_idx]
+
+    entry = next((e for e in kb.entries if e.get("id") == next_id), None)
+    if entry:
+        await show_entry(callback.message, entry, admin, edit=True)
+
+    await callback.answer()
+
+
+@router.callback_query(F.data == "kb_list")
+async def back_to_list(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Go back to entries list."""
+    admin = await get_admin_or_deny(callback.message, session, **data)
+    if not admin:
+        return
+
+    kb = get_knowledge_base()
+
+    text = "📚 **Все записи:**\n\n"
+    for cat in kb.get_categories():
+        text += f"📂 **{cat}**\n"
+        for e in kb.entries:
+            if e.get("category") == cat:
+                verified = "✅" if e.get("verified_by_boss") else "⚠️"
+                text += f"  {verified} #{e['id']}: {e['question'][:40]}...\n"
+        text += "\n"
+
+    text += "_Нажми /kb_N для просмотра записи_"
+
+    await callback.message.answer(text, parse_mode="Markdown")
+    await callback.answer()
+
+
+async def show_entry(message: Message, entry: dict, admin, edit: bool = False):
+    """Helper to display entry with keyboard."""
+    verified = "✅ Проверено" if entry.get("verified_by_boss") else "⚠️ Не проверено"
+
+    text = (
+        f"📋 **Запись #{entry['id']}** {verified}\n\n"
+        f"**Категория:** {entry.get('category', 'Общее')}\n\n"
+        f"**Вопрос:**\n{entry['question']}\n\n"
+        f"**Ответ:**\n{entry['answer']}\n"
+    )
+
+    if c := entry.get("clarification"):
+        text += f"\n**Разъяснение:**\n{c}\n"
+
+    if rework := entry.get("boss_rework_comment"):
+        text += f"\n⚠️ **Комментарий Босса:**\n_{rework}_\n"
+
+    text += f"\n_Добавил: @{entry.get('added_by', 'system')}_"
+
+    is_boss = admin.role == "super_admin"
+    is_verified = entry.get("verified_by_boss", False)
+
+    if edit:
+        await message.edit_text(
+            text,
+            parse_mode="Markdown",
+            reply_markup=entry_actions_keyboard(entry["id"], is_boss, is_verified),
+        )
+    else:
+        await message.answer(
+            text,
+            parse_mode="Markdown",
+            reply_markup=entry_actions_keyboard(entry["id"], is_boss, is_verified),
+        )
 
 
 @router.callback_query(F.data.startswith("kb_del:"))
