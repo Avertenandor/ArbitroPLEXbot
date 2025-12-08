@@ -31,7 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.bonus_service import BonusService
 from app.services.user_service import UserService
-from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
+from bot.handlers.admin.utils.admin_checks import get_admin_or_deny, get_admin_or_deny_callback
 from bot.keyboards.reply import get_admin_keyboard_from_data
 from bot.utils.formatters import format_usdt
 from bot.utils.text_utils import escape_markdown
@@ -335,7 +335,7 @@ async def confirm_grant_bonus(
     **data: Any,
 ) -> None:
     """Confirm and execute bonus grant."""
-    admin = await get_admin_or_deny(callback.message, session, **data)
+    admin = await get_admin_or_deny_callback(callback, session, **data)
     if not admin:
         return
 

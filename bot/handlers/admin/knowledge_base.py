@@ -22,7 +22,7 @@ from aiogram.types import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.knowledge_base import get_knowledge_base
-from bot.handlers.admin.utils import get_admin_or_deny
+from bot.handlers.admin.utils import get_admin_or_deny, get_admin_or_deny_callback
 
 router = Router(name="knowledge_base")
 
@@ -276,7 +276,7 @@ async def show_category_entries(
     **data: Any,
 ) -> None:
     """Show entries in selected category."""
-    admin = await get_admin_or_deny(callback.message, session, **data)
+    admin = await get_admin_or_deny_callback(callback, session, **data)
     if not admin:
         return
 
@@ -637,7 +637,7 @@ async def verify_entry(
     **data: Any,
 ) -> None:
     """Verify entry (boss only)."""
-    admin = await get_admin_or_deny(callback.message, session, **data)
+    admin = await get_admin_or_deny_callback(callback, session, **data)
     if not admin or admin.role != "super_admin":
         await callback.answer("Только Босс может подтверждать!", show_alert=True)
         return
@@ -660,7 +660,7 @@ async def unverify_entry(
     **data: Any,
 ) -> None:
     """Remove verification from entry (boss only)."""
-    admin = await get_admin_or_deny(callback.message, session, **data)
+    admin = await get_admin_or_deny_callback(callback, session, **data)
     if not admin or admin.role != "super_admin":
         await callback.answer("Только Босс!", show_alert=True)
         return
@@ -688,7 +688,7 @@ async def rework_entry(
     **data: Any,
 ) -> None:
     """Request rework of entry (boss sends comment)."""
-    admin = await get_admin_or_deny(callback.message, session, **data)
+    admin = await get_admin_or_deny_callback(callback, session, **data)
     if not admin or admin.role != "super_admin":
         await callback.answer("Только Босс!", show_alert=True)
         return
@@ -714,7 +714,7 @@ async def prev_entry(
     **data: Any,
 ) -> None:
     """Navigate to previous entry."""
-    admin = await get_admin_or_deny(callback.message, session, **data)
+    admin = await get_admin_or_deny_callback(callback, session, **data)
     if not admin:
         return
 
@@ -741,7 +741,7 @@ async def next_entry(
     **data: Any,
 ) -> None:
     """Navigate to next entry."""
-    admin = await get_admin_or_deny(callback.message, session, **data)
+    admin = await get_admin_or_deny_callback(callback, session, **data)
     if not admin:
         return
 
@@ -768,7 +768,7 @@ async def view_entry_callback(
     **data: Any,
 ) -> None:
     """View entry by inline button click."""
-    admin = await get_admin_or_deny(callback.message, session, **data)
+    admin = await get_admin_or_deny_callback(callback, session, **data)
     if not admin:
         return
 
@@ -791,7 +791,7 @@ async def paginate_entries(
     **data: Any,
 ) -> None:
     """Handle pagination for entries list."""
-    admin = await get_admin_or_deny(callback.message, session, **data)
+    admin = await get_admin_or_deny_callback(callback, session, **data)
     if not admin:
         return
 
@@ -845,7 +845,7 @@ async def back_to_list(
     **data: Any,
 ) -> None:
     """Go back to entries list."""
-    admin = await get_admin_or_deny(callback.message, session, **data)
+    admin = await get_admin_or_deny_callback(callback, session, **data)
     if not admin:
         return
 
@@ -905,7 +905,7 @@ async def delete_entry(
     **data: Any,
 ) -> None:
     """Delete entry."""
-    admin = await get_admin_or_deny(callback.message, session, **data)
+    admin = await get_admin_or_deny_callback(callback, session, **data)
     if not admin:
         return
 

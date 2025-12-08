@@ -19,7 +19,7 @@ Usage:
 
 from typing import Any
 
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin import Admin
@@ -145,6 +145,59 @@ async def get_admin_or_deny(
 
     if not has_access:
         await message.answer(error or "❌ Доступ запрещён")
+        return None
+
+    return admin
+
+
+async def get_admin_or_deny_callback(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    require_super: bool = False,
+    require_extended: bool = False,
+    **data: Any,
+) -> Admin | None:
+    """
+    Get admin or send denial message for CallbackQuery.
+
+    This is a convenience wrapper for callbacks that uses callback.from_user
+    instead of message.from_user (which would be the bot for callbacks).
+
+    Args:
+        callback: Telegram CallbackQuery to answer if access denied
+        session: Database session
+        require_super: If True, requires super_admin role
+        require_extended: If True, requires extended_admin or super_admin role
+        **data: Handler data dict (can contain 'admin' key)
+
+    Returns:
+        Admin object if access granted, None otherwise (message already sent)
+    """
+    # Check if admin is already in data (from middleware)
+    admin: Admin | None = data.get("admin")
+    is_admin = data.get("is_admin", False)
+
+    # Fast path: check middleware data first
+    if not is_admin:
+        await callback.answer("❌ Эта функция доступна только администраторам", show_alert=True)
+        return None
+
+    # Get telegram_id from callback.from_user (NOT callback.message.from_user!)
+    telegram_id = callback.from_user.id if callback.from_user else None
+    if not telegram_id:
+        await callback.answer("❌ Не удалось определить пользователя", show_alert=True)
+        return None
+
+    # Verify admin access with role requirements
+    has_access, admin, error = await check_admin_access(
+        session,
+        telegram_id,
+        require_super=require_super,
+        require_extended=require_extended,
+    )
+
+    if not has_access:
+        await callback.answer(error or "❌ Доступ запрещён", show_alert=True)
         return None
 
     return admin
