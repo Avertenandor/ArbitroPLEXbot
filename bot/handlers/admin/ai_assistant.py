@@ -234,10 +234,33 @@ async def start_free_chat(
 @router.message(AIAssistantStates.chatting, F.text == "🔚 Завершить диалог")
 async def end_chat(
     message: Message,
+    session: AsyncSession,
     state: FSMContext,
     **data: Any,
 ) -> None:
-    """End chat mode."""
+    """End chat mode and extract knowledge from conversation."""
+    admin = await get_admin_or_deny(message, session, **data)
+
+    # Get conversation history for knowledge extraction
+    state_data = await state.get_data()
+    history = state_data.get("conversation_history", [])
+
+    # Try to extract knowledge if boss or tech deputy
+    if admin and admin.role in ("super_admin",) and len(history) >= 4:
+        ai_service = get_ai_service()
+        username = admin.username or str(admin.telegram_id)
+
+        await message.answer("🧠 Анализирую диалог для извлечения знаний...")
+
+        qa_pairs = await ai_service.extract_knowledge(history, username)
+        if qa_pairs:
+            saved = await ai_service.save_learned_knowledge(qa_pairs, username)
+            if saved > 0:
+                await message.answer(
+                    f"✅ Извлечено {saved} новых записей в базу знаний!\n"
+                    "Они ожидают вашего подтверждения в 📚 База знаний.",
+                )
+
     await clear_state_keep_session(state)
     await message.answer(
         "✅ Диалог завершён.\n\n"
