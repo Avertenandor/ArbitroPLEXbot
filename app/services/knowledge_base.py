@@ -132,31 +132,31 @@ DEFAULT_KB: list[dict[str, Any]] = [
      "answer": (
          "1. Убедись что есть PLEX (10 за вход + 10 за каждый $1)\n"
          "2. Депозит > выбери сумму\n"
-         "3. Отправь USDT (TRC-20) на указанный адрес\n"
+         "3. Отправь USDT на указанный адрес (сеть BSC/BEP-20)\n"
          "4. Жди подтверждения (1-5 мин)"
      ),
-     "clarification": "Минимум $10. ТОЛЬКО сеть TRC-20!",
+     "clarification": "Минимум $10. ТОЛЬКО сеть BSC (BNB Smart Chain, BEP-20)!",
      "added_by": "system", "verified_by_boss": True},
 
     {"id": 41, "category": "Депозиты",
      "question": "Депозит не пришёл, что делать?",
      "answer": (
-         "1. Проверь hash на tronscan.org\n"
-         "2. Убедись что отправил по TRC-20\n"
+         "1. Проверь hash на bscscan.com\n"
+         "2. Убедись что отправил по сети BSC (BEP-20)\n"
          "3. Подожди 15 минут\n"
          "4. Пиши в поддержку с hash"
      ),
-     "clarification": "Частая ошибка: ERC-20 вместо TRC-20 = потеря средств!",
+     "clarification": "Частая ошибка: ERC-20 или TRC-20 вместо BSC = потеря средств!",
      "added_by": "system", "verified_by_boss": True},
 
     # === ВЫВОДЫ ===
     {"id": 50, "category": "Выводы",
      "question": "Как вывести деньги?",
      "answer": (
-         "Вывод > сумма > адрес USDT TRC-20 > подтвердить. "
+         "Вывод > сумма > адрес USDT (сеть BSC/BEP-20) > подтвердить. "
          "Минимум $10. Обработка до 24-48ч."
      ),
-     "clarification": "Выводы обрабатываются вручную для безопасности.",
+     "clarification": "ВАЖНО: Указывай адрес ТОЛЬКО в сети BSC (BNB Smart Chain)! Выводы обрабатываются вручную.",
      "added_by": "system", "verified_by_boss": True},
 
     # === ROI ===
