@@ -25,6 +25,7 @@ from bot.keyboards.admin import (
     admin_cancel_keyboard,
 )
 from bot.utils.formatters import format_usdt
+from bot.utils.text_utils import escape_markdown
 
 router = Router(name="admin_users_bonus")
 
@@ -66,10 +67,11 @@ async def show_bonus_menu(
     bonus_service = BonusService(session)
     stats = await bonus_service.get_user_bonus_stats(user_id)
 
+    safe_username = escape_markdown(user.username) if user.username else str(user.telegram_id)
     text = (
         f"🎁 **Бонусы пользователя**\n"
         f"━━━━━━━━━━━━━━━━━━\n"
-        f"👤 Пользователь: `{user.username or user.telegram_id}`\n"
+        f"👤 Пользователь: `{safe_username}`\n"
         f"🆔 ID: `{user.id}`\n\n"
         f"💰 **Бонусный баланс:** `{format_usdt(stats['total_bonus_balance'])} USDT`\n"
         f"📊 **Заработано ROI:** `{format_usdt(stats['total_bonus_roi_earned'])} USDT`\n"
@@ -233,9 +235,10 @@ async def process_bonus_reason(
 
     roi_cap = bonus.roi_cap_amount if bonus else amount * Decimal("5")
 
+    safe_username = escape_markdown(user.username) if user and user.username else str(user_id)
     await message.answer(
         f"✅ **Бонус успешно начислен!**\n\n"
-        f"👤 Пользователь: `{user.username if user else user_id}`\n"
+        f"👤 Пользователь: `{safe_username}`\n"
         f"💰 Сумма: `{format_usdt(amount)} USDT`\n"
         f"🎯 ROI Cap: `{format_usdt(roi_cap)} USDT` (500%)\n"
         f"📝 Причина: {reason}\n\n"

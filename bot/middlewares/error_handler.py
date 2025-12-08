@@ -10,6 +10,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware, Bot
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, Message, TelegramObject, Update, User
 from loguru import logger
 
@@ -53,6 +54,26 @@ class ErrorHandlerMiddleware(BaseMiddleware):
         """Execute middleware."""
         try:
             return await handler(event, data)
+        except TelegramBadRequest as e:
+            # Handle Markdown parse errors gracefully - don't notify admin
+            if "can't parse entities" in str(e):
+                logger.warning(f"Markdown parse error (handled): {e}")
+                bot: Bot | None = data.get("bot")
+                user = self._get_user(event)
+                if bot and user:
+                    try:
+                        await bot.send_message(
+                            chat_id=user.id,
+                            text=(
+                                "⚠️ Произошла ошибка форматирования.\n"
+                                "Попробуйте ещё раз."
+                            ),
+                        )
+                    except Exception:
+                        pass
+                return None
+            # Other TelegramBadRequest errors - handle normally
+            raise
         except Exception as e:
             # Log error
             logger.exception(f"Unhandled exception: {e}")
