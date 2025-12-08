@@ -830,3 +830,65 @@ async def back_to_admin(
         "👑 Возвращаюсь в админ-панель...",
         reply_markup=get_admin_keyboard_from_data(data),
     )
+
+
+# ============ GLOBAL COMMAND HANDLER (works from any state) ============
+
+@router.message(F.text.regexp(r"^/kb_(\d+)$"))
+async def view_entry_global(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """View specific entry from ANY state (global command)."""
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
+        return
+
+    # Extract entry_id from command
+    import re
+    match = re.match(r"^/kb_(\d+)$", message.text)
+    if not match:
+        return
+    
+    entry_id = int(match.group(1))
+    kb = get_knowledge_base()
+    entry = next((e for e in kb.entries if e.get("id") == entry_id), None)
+
+    if not entry:
+        await message.answer(f"❌ Запись #{entry_id} не найдена.")
+        return
+
+    # Set state to viewing for proper context
+    await state.set_state(KBStates.viewing)
+
+    verified = "✅ Проверено Боссом" if entry.get("verified_by_boss") else "⚠️ Ожидает проверки"
+    learned = "🧠 Из диалога" if entry.get("learned_from_dialog") else ""
+
+    text = (
+        f"📋 **Запись #{entry['id']}**\n"
+        f"━━━━━━━━━━━━━━━━━━\n\n"
+        f"📁 **Категория:** {entry.get('category', 'Общее')}\n"
+        f"📌 **Статус:** {verified} {learned}\n\n"
+        f"❓ **Вопрос:**\n{entry['question']}\n\n"
+        f"💬 **Ответ:**\n{entry['answer']}\n"
+    )
+
+    if c := entry.get("clarification"):
+        text += f"\n📝 **Уточнение:**\n{c}\n"
+
+    text += f"\n━━━━━━━━━━━━━━━━━━\n"
+    text += f"👤 Добавил: @{entry.get('added_by', 'system')}\n"
+    
+    if source := entry.get("source_user"):
+        text += f"💬 Источник: @{source}\n"
+
+    is_boss = admin.role == "super_admin"
+    is_verified = entry.get("verified_by_boss", False)
+
+    await message.answer(
+        text,
+        parse_mode="Markdown",
+        reply_markup=entry_actions_keyboard(entry_id, is_boss, is_verified),
+    )
