@@ -20,11 +20,11 @@ from app.config.settings import settings
 engine: AsyncEngine = create_async_engine(
     settings.database_url,
     echo=settings.database_echo,
-    pool_size=5,  # Reduced from 20 to prevent connection exhaustion
-    max_overflow=10,  # Reduced from 40
+    pool_size=20,  # Increased for high load
+    max_overflow=30,  # Allow burst connections
     pool_pre_ping=True,
-    pool_recycle=300,  # Recycle connections every 5 minutes (was 3600)
-    pool_timeout=30,  # Wait max 30 seconds for connection
+    pool_recycle=300,  # Recycle connections every 5 minutes
+    pool_timeout=60,  # Wait max 60 seconds for connection
 )
 
 # Export as async_engine for jobs
