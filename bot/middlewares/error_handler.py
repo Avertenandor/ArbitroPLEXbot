@@ -3,14 +3,16 @@ Global Error Handler Middleware.
 
 Catches unhandled exceptions and notifies admins.
 Sends friendly message to users - never shows technical details.
+Includes retry logic for network errors.
 """
 
+import asyncio
 import traceback
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 from aiogram import BaseMiddleware, Bot
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError, TelegramRetryAfter
 from aiogram.types import CallbackQuery, Message, TelegramObject, Update, User
 from loguru import logger
 
@@ -22,9 +24,13 @@ class ErrorHandlerMiddleware(BaseMiddleware):
     Global error handler middleware.
 
     - Logs all exceptions
+    - Retries on network errors (SSL, timeout)
     - Notifies admins with technical details
     - Sends friendly message to user (no technical info!)
     """
+
+    MAX_RETRIES = 3
+    RETRY_DELAYS = [1, 2, 4]  # Exponential backoff
 
     def _get_user(self, event: TelegramObject) -> User | None:
         """Extract user from event."""
@@ -51,88 +57,116 @@ class ErrorHandlerMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: dict[str, Any],
     ) -> Any:
-        """Execute middleware."""
-        try:
-            return await handler(event, data)
-        except TelegramBadRequest as e:
-            # Handle Markdown parse errors gracefully - don't notify admin
-            if "can't parse entities" in str(e):
-                logger.warning(f"Markdown parse error (handled): {e}")
+        """Execute middleware with retry logic for network errors."""
+        last_exception = None
+
+        for attempt in range(self.MAX_RETRIES):
+            try:
+                return await handler(event, data)
+
+            except TelegramNetworkError as e:
+                # Network errors (SSL, timeout) - retry with backoff
+                last_exception = e
+                if attempt < self.MAX_RETRIES - 1:
+                    delay = self.RETRY_DELAYS[attempt]
+                    logger.warning(
+                        f"Network error (attempt {attempt + 1}/{self.MAX_RETRIES}), "
+                        f"retrying in {delay}s: {e}"
+                    )
+                    await asyncio.sleep(delay)
+                    continue
+                else:
+                    logger.error(f"Network error after {self.MAX_RETRIES} attempts: {e}")
+                    # Don't notify admin for transient network errors
+                    return None
+
+            except TelegramRetryAfter as e:
+                # Flood control - wait and retry
+                wait_time = min(e.retry_after, 60)  # Max 60 seconds
+                logger.warning(f"Rate limited, waiting {wait_time}s")
+                await asyncio.sleep(wait_time)
+                continue
+
+            except TelegramBadRequest as e:
+                # Handle Markdown parse errors gracefully - don't notify admin
+                if "can't parse entities" in str(e):
+                    logger.warning(f"Markdown parse error (handled): {e}")
+                    bot: Bot | None = data.get("bot")
+                    user = self._get_user(event)
+                    if bot and user:
+                        try:
+                            await bot.send_message(
+                                chat_id=user.id,
+                                text=(
+                                    "⚠️ Произошла ошибка форматирования.\n"
+                                    "Попробуйте ещё раз."
+                                ),
+                            )
+                        except Exception:
+                            pass
+                    return None
+                # Other TelegramBadRequest errors - handle normally
+                raise
+
+            except Exception as e:
+                # Log error
+                logger.exception(f"Unhandled exception: {e}")
+
                 bot: Bot | None = data.get("bot")
                 user = self._get_user(event)
+
+                # 1. Send friendly message to user (NO technical details!)
                 if bot and user:
                     try:
                         await bot.send_message(
                             chat_id=user.id,
                             text=(
-                                "⚠️ Произошла ошибка форматирования.\n"
-                                "Попробуйте ещё раз."
+                                "❌ Произошла временная ошибка.\n\n"
+                                "Администраторы уже уведомлены и работают над решением.\n"
+                                "Пожалуйста, попробуйте позже или обратитесь в поддержку."
                             ),
                         )
-                    except Exception:
-                        pass
-                return None
-            # Other TelegramBadRequest errors - handle normally
-            raise
-        except Exception as e:
-            # Log error
-            logger.exception(f"Unhandled exception: {e}")
+                    except Exception as user_notify_error:
+                        logger.warning(f"Failed to notify user: {user_notify_error}")
 
-            bot: Bot | None = data.get("bot")
-            user = self._get_user(event)
-
-            # 1. Send friendly message to user (NO technical details!)
-            if bot and user:
-                try:
-                    await bot.send_message(
-                        chat_id=user.id,
-                        text=(
-                            "❌ Произошла временная ошибка.\n\n"
-                            "Администраторы уже уведомлены и работают над решением.\n"
-                            "Пожалуйста, попробуйте позже или обратитесь в поддержку."
-                        ),
-                    )
-                except Exception as user_notify_error:
-                    logger.warning(f"Failed to notify user: {user_notify_error}")
-
-            # 2. Notify admins with technical details
-            admin_ids = settings.get_admin_ids()
-            if bot and admin_ids:
-                try:
-                    error_trace = traceback.format_exc()[-800:]  # Last 800 chars
-                    # Escape special characters for HTML
-                    error_trace_escaped = (
-                        error_trace
-                        .replace("&", "&amp;")
-                        .replace("<", "&lt;")
-                        .replace(">", "&gt;")
-                    )
-
-                    # Get user info for context
-                    user_info = "Unknown"
-                    if user:
-                        user_info = (
-                            f"@{user.username}"
-                            if user.username
-                            else f"ID: {user.id}"
+                # 2. Notify admins with technical details
+                admin_ids = settings.get_admin_ids()
+                if bot and admin_ids:
+                    try:
+                        error_trace = traceback.format_exc()[-800:]
+                        # Escape special characters for HTML
+                        error_trace_escaped = (
+                            error_trace
+                            .replace("&", "&amp;")
+                            .replace("<", "&lt;")
+                            .replace(">", "&gt;")
                         )
 
-                    error_msg = str(e)[:200].replace("<", "&lt;").replace(">", "&gt;")
-                    text = (
-                        f"🚨 <b>CRITICAL ERROR</b>\n\n"
-                        f"👤 User: {user_info}\n"
-                        f"❌ Exception: <code>{type(e).__name__}</code>\n"
-                        f"📝 Message: <code>{error_msg}</code>\n\n"
-                        f"<pre>{error_trace_escaped}</pre>"
-                    )
-                    # Notify first admin only (to avoid spam)
-                    await bot.send_message(
-                        chat_id=admin_ids[0],
-                        text=text[:4096],
-                        parse_mode="HTML",
-                    )
-                except Exception as notify_error:
-                    logger.error(f"Failed to notify admin: {notify_error}")
+                        # Get user info for context
+                        user_info = "Unknown"
+                        if user:
+                            user_info = (
+                                f"@{user.username}"
+                                if user.username
+                                else f"ID: {user.id}"
+                            )
 
-            # Return None to prevent crash
-            return None
+                        error_msg = str(e)[:200].replace("<", "&lt;").replace(">", "&gt;")
+                        text = (
+                            f"🚨 <b>CRITICAL ERROR</b>\n\n"
+                            f"👤 User: {user_info}\n"
+                            f"❌ Exception: <code>{type(e).__name__}</code>\n"
+                            f"📝 Message: <code>{error_msg}</code>\n\n"
+                            f"<pre>{error_trace_escaped}</pre>"
+                        )
+                        # Notify first admin only (to avoid spam)
+                        await bot.send_message(
+                            chat_id=admin_ids[0],
+                            text=text[:4096],
+                            parse_mode="HTML",
+                        )
+                    except Exception as notify_error:
+                        logger.error(f"Failed to notify admin: {notify_error}")
+
+                # Return None to prevent crash
+                return None

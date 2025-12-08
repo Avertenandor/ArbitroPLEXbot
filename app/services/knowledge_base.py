@@ -322,6 +322,46 @@ DEFAULT_KB: list[dict[str, Any]] = [
      ),
      "clarification": "Следите за новостями в канале для участия в акциях.",
      "added_by": "system", "verified_by_boss": True},
+
+    # === PLEX АНАЛИТИКА (ТОЛЬКО ДЛЯ АДМИНОВ) ===
+    {"id": 90, "category": "Админ: PLEX",
+     "question": "Где посмотреть статистику PLEX-платежей?",
+     "answer": (
+         "⚠️ ТОЛЬКО ДЛЯ АДМИНОВ!\n\n"
+         "PLEX-транзакции хранятся в таблице plex_payment_requirements.\n"
+         "Для анализа используйте:\n"
+         "• Логи сервера (docker logs)\n"
+         "• Прямые SQL-запросы к БД\n"
+         "• Блокчейн-эксплорер BscScan\n\n"
+         "В боте пока нет раздела 'PLEX Analytics'."
+     ),
+     "clarification": "Это планируется к добавлению.",
+     "added_by": "system", "verified_by_boss": True, "admin_only": True},
+
+    {"id": 91, "category": "Админ: PLEX",
+     "question": "Как проверить PLEX-баланс пользователя?",
+     "answer": (
+         "⚠️ ТОЛЬКО ДЛЯ АДМИНОВ!\n\n"
+         "Способы проверки PLEX:\n"
+         "1. В профиле пользователя (админка → Пользователи → Профиль)\n"
+         "2. Через BscScan по адресу кошелька\n"
+         "3. Логи plex_balance_monitor в docker logs"
+     ),
+     "clarification": "Контракт PLEX: 0x2b83BE51c7c4a662f592090AD2041001a4525664",
+     "added_by": "system", "verified_by_boss": True, "admin_only": True},
+
+    {"id": 92, "category": "Админ: PLEX",
+     "question": "Где логи платежей за вход (10 PLEX)?",
+     "answer": (
+         "⚠️ ТОЛЬКО ДЛЯ АДМИНОВ!\n\n"
+         "Платежи за вход (10 PLEX) логируются:\n"
+         "• В docker logs arbitragebot-bot (поиск 'auth payment')\n"
+         "• В таблице users (поле is_verified)\n"
+         "• В blockchain (BscScan по адресу)\n\n"
+         "Отдельной таблицы входных платежей нет."
+     ),
+     "clarification": "Вход подтверждается через blockchain верификацию баланса.",
+     "added_by": "system", "verified_by_boss": True, "admin_only": True},
 ]
 
 
