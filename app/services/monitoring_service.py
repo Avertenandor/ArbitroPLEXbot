@@ -56,7 +56,7 @@ class MonitoringService:
             # Active admins (have session in last N hours)
             active_result = await self.session.execute(
                 select(func.count(func.distinct(AdminSession.admin_id)))
-                .where(AdminSession.last_activity_at >= since)
+                .where(AdminSession.last_activity >= since)
                 .where(AdminSession.is_active == True)  # noqa: E712
             )
             active_admins = active_result.scalar() or 0
@@ -128,15 +128,15 @@ class MonitoringService:
             since_24h = datetime.now(UTC) - timedelta(hours=24)
             active_result = await self.session.execute(
                 select(func.count(User.id))
-                .where(User.last_activity_at >= since_24h)
+                .where(User.updated_at >= since_24h)
             )
             active_24h = active_result.scalar() or 0
-            
+
             # Active users (last 7d)
             since_7d = datetime.now(UTC) - timedelta(days=7)
             active_7d_result = await self.session.execute(
                 select(func.count(User.id))
-                .where(User.last_activity_at >= since_7d)
+                .where(User.updated_at >= since_7d)
             )
             active_7d = active_7d_result.scalar() or 0
             
@@ -268,11 +268,11 @@ class MonitoringService:
         """
         try:
             since = datetime.now(UTC) - timedelta(hours=hours)
-            
+
             result = await self.session.execute(
                 select(
                     AdminAction.action_type,
-                    AdminAction.description,
+                    AdminAction.details,
                     AdminAction.created_at,
                     Admin.username,
                 )
@@ -281,16 +281,23 @@ class MonitoringService:
                 .order_by(AdminAction.created_at.desc())
                 .limit(limit)
             )
-            
+
             actions = []
             for row in result.fetchall():
+                # details is JSON, extract description if available
+                details = row[1] or {}
+                desc = ""
+                if isinstance(details, dict):
+                    desc = details.get("description", details.get("action", ""))
+                elif details:
+                    desc = str(details)[:100]
                 actions.append({
                     "type": row[0],
-                    "description": row[1][:100] if row[1] else "",
+                    "description": desc[:100] if desc else "",
                     "time": row[2].strftime("%H:%M") if row[2] else "",
                     "admin": row[3] or "Unknown",
                 })
-            
+
             return actions
         except Exception as e:
             logger.error(f"Error getting recent actions: {e}")
