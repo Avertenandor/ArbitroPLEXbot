@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     telegram_bot_token: str
     telegram_bot_username: str | None = None
 
+    # AI Assistant (Anthropic Claude API)
+    anthropic_api_key: str | None = None
+
     # Database
     database_url: str
     database_echo: bool = False

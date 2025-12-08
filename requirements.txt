@@ -29,6 +29,9 @@ apscheduler==3.10.4
 # Logging & Monitoring
 loguru==0.7.2
 
+# AI Integration
+anthropic==0.40.0
+
 # Utilities
 python-dateutil==2.8.2
 openpyxl==3.1.2

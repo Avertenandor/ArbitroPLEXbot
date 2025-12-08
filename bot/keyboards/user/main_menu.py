@@ -99,8 +99,9 @@ def main_menu_reply_keyboard(
             KeyboardButton(text="🌐 Экосистема"),
         )
 
-        # Quick access to admin question
+        # AI Assistant for users
         builder.row(
+            KeyboardButton(text="🤖 Помощник"),
             KeyboardButton(text="❓ Задать вопрос"),
         )
 

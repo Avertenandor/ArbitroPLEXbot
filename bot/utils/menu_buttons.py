@@ -27,6 +27,7 @@ MAIN_MENU_BUTTONS = [
     "💰 Финансы",  # Finance submenu
     "📊 Мой кабинет",  # My cabinet submenu
     "💬 Помощь",  # Help submenu
+    "🤖 Помощник",  # AI Assistant
 ]
 
 # Deposit menu buttons
