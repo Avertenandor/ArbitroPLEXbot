@@ -157,6 +157,59 @@ SYSTEM_PROMPT_SUPER_ADMIN = SYSTEM_PROMPT_BASE + """
 - Будь проактивным — предлагай улучшения
 """
 
+# Special prompt for technical deputy @AIXAN
+SYSTEM_PROMPT_TECH_DEPUTY = SYSTEM_PROMPT_BASE + """
+
+=== ВАЖНО: ТЫ СЕЙЧАС ОБЩАЕШЬСЯ С ТЕХНИЧЕСКИМ ЗАМЕСТИТЕЛЕМ ===
+Это @AIXAN — заместитель владельца по техническим вопросам.
+Уровень доступа: ПОЛНЫЙ ПО ТЕХНИЧЕСКИМ ВОПРОСАМ.
+
+КРАТКО О @AIXAN:
+- Заместитель владельца по техническим вопросам
+- Отвечает за всю техническую часть платформы
+- Имеет право на полную техническую информацию
+- Можно и нужно давать максимально подробные технические данные
+
+У ТЕБЯ ДЛЯ НЕГО ПОЛНЫЙ ДОСТУП К:
+- Серверным метрикам (CPU, RAM, диск, память процессов)
+- Статистике базы данных и запросов
+- Логам ошибок и предупреждений
+- Информации о всех пользователях
+- Истории всех обращений и их решений
+- Техническим деталям депозитов, транзакций, блокчейна
+- Архитектуре системы и её компонентам
+- Настройкам и конфигурации
+- Коду и логике работы системы
+
+КАК ОТВЕЧАТЬ:
+- Давай МАКСИМАЛЬНО полную и подробную техническую информацию
+- Не сокращай данные — выводи полностью
+- Используй технические термины свободно
+- Показывай реальные цифры и метрики
+- При запросе о пользователе — показывай ВСЮ историю
+- При запросе об обращениях — показывай ВСЕ детали
+- Если есть ошибки — показывай полные stack traces
+- Предлагай технические решения и оптимизации
+
+СТИЛЬ:
+- Общайся как с коллегой-техником
+- Будь конкретен и точен
+- Технические детали важнее красивого оформления
+- Если данных много — структурируй, но не сокращай
+
+ПРИМЕР ОТВЕТА НА "покажи историю пользователя @test":
+Показываешь ВСЮ информацию:
+- Все поля профиля
+- Все депозиты с датами и статусами
+- Все транзакции
+- Все обращения с полным текстом
+- Все действия админов над этим пользователем
+- Все технические детали
+"""
+
+# Technical deputies list (usernames without @)
+TECH_DEPUTIES = ["AIXAN"]
+
 
 class AIAssistantService:
     """
@@ -189,8 +242,14 @@ class AIAssistantService:
         else:
             logger.warning("No Anthropic API key provided")
 
-    def _get_system_prompt(self, role: UserRole) -> str:
-        """Get system prompt based on user role."""
+    def _get_system_prompt(
+        self, role: UserRole, username: str | None = None
+    ) -> str:
+        """Get system prompt based on user role and username."""
+        # Check if user is a technical deputy (gets full tech access)
+        if username and username.replace("@", "") in TECH_DEPUTIES:
+            return SYSTEM_PROMPT_TECH_DEPUTY
+
         if role == UserRole.SUPER_ADMIN:
             return SYSTEM_PROMPT_SUPER_ADMIN
         elif role in (UserRole.ADMIN, UserRole.EXTENDED_ADMIN):
@@ -261,6 +320,11 @@ class AIAssistantService:
             )
 
         try:
+            # Extract username from user_data for tech deputy check
+            username = None
+            if user_data:
+                username = user_data.get("username") or user_data.get("Имя")
+
             # Build messages
             messages = []
 
@@ -277,19 +341,19 @@ class AIAssistantService:
                     "role": "assistant",
                     "content": f"Понял. Я {AI_NAME}, готова помочь!"
                 })
-            
+
             # Add conversation history
             if conversation_history:
                 messages.extend(conversation_history[-10:])  # Last 10 messages
-            
+
             # Add current message
             messages.append({
                 "role": "user",
                 "content": message
             })
 
-            # Get system prompt
-            system_prompt = self._get_system_prompt(role)
+            # Get system prompt (with username for tech deputy check)
+            system_prompt = self._get_system_prompt(role, username)
 
             # Call Claude API
             response = self.client.messages.create(
