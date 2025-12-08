@@ -149,6 +149,10 @@ class UserStatisticsMixin:
         pending_earnings = getattr(user, "pending_earnings", Decimal("0.00"))
         total_balance = available_balance + pending_earnings
 
+        # Get bonus balance info
+        bonus_balance = getattr(user, "bonus_balance", Decimal("0.00")) or Decimal("0.00")
+        bonus_roi_earned = getattr(user, "bonus_roi_earned", Decimal("0.00")) or Decimal("0.00")
+
         return {
             "available_balance": available_balance,
             "total_balance": total_balance,
@@ -158,4 +162,6 @@ class UserStatisticsMixin:
             "total_deposits": total_deposits,
             "total_withdrawals": total_withdrawals,
             "total_earnings": total_earnings,
+            "bonus_balance": bonus_balance,
+            "bonus_roi_earned": bonus_roi_earned,
         }

@@ -193,13 +193,26 @@ async def show_my_funds(
         bnb_display = format_balance(bnb_balance, 6)
         daily_plex_display = format_balance(daily_plex, 2)
 
+        # Get bonus balance if exists
+        bonus_balance = Decimal("0")
+        if system_balance:
+            bonus_balance = system_balance.get('bonus_balance', Decimal("0")) or Decimal("0")
+        bonus_display = format_balance(bonus_balance, 2)
+
         # Build response message
         text = (
             "💰 *МОИ СРЕДСТВА*\n"
             "━━━━━━━━━━━━━━━━━━━━\n\n"
             f"📊 *В системе:* `{system_display}` USDT\n"
-            "   _(доступно для вывода)_\n\n"
-            "🔗 *На кошельке BSC:*\n"
+            "   _(доступно для вывода)_\n"
+        )
+
+        # Add bonus balance if exists
+        if bonus_balance > 0:
+            text += f"🎁 *Бонусный баланс:* `{bonus_display}` USDT\n"
+
+        text += (
+            "\n🔗 *На кошельке BSC:*\n"
             f"   • PLEX: `{plex_display}` монет\n"
             f"   • USDT: `{usdt_display}` USDT\n"
             f"   • BNB: `{bnb_display}` BNB\n\n"

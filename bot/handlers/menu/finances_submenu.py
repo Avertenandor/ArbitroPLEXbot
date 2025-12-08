@@ -96,6 +96,14 @@ async def show_finances_submenu(
     text = (
         "💰 *Финансы*\n\n"
         f"💵 Доступно: `{available:.2f} USDT`\n"
+    )
+
+    # Add bonus section if user has bonuses
+    bonus_balance = balance_info.get('bonus_balance', 0) if balance_info else 0
+    if bonus_balance and bonus_balance > 0:
+        text += f"🎁 Бонусный баланс: `{float(bonus_balance):.2f} USDT`\n"
+
+    text += (
         f"{deposits_section}"
         f"💎 Всего активов: `{total:.2f} USDT`\n\n"
         "Выберите действие:"

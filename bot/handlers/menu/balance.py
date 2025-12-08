@@ -54,12 +54,27 @@ async def show_balance(
         await message.answer(_('errors.balance_error'))
         return
 
+    # Get bonus info
+    bonus_balance = balance.get('bonus_balance', 0) or 0
+    bonus_roi = balance.get('bonus_roi_earned', 0) or 0
+
     text = (
         f"💰 *Ваш баланс:*\n\n"
         f"Общий: `{balance['total_balance']:.2f} USDT`\n"
         f"Доступно: `{balance['available_balance']:.2f} USDT`\n"
-        f"В ожидании: `{balance['pending_earnings']:.2f} USDT`\n\n"
-        f"📊 *Статистика:*\n"
+        f"В ожидании: `{balance['pending_earnings']:.2f} USDT`\n"
+    )
+
+    # Add bonus section if user has bonuses
+    if bonus_balance > 0 or bonus_roi > 0:
+        text += (
+            f"\n🎁 *Бонусы:*\n"
+            f"Бонусный баланс: `{float(bonus_balance):.2f} USDT`\n"
+            f"Заработано с бонусов: `{float(bonus_roi):.2f} USDT`\n"
+        )
+
+    text += (
+        f"\n📊 *Статистика:*\n"
         f"Депозиты: `{balance['total_deposits']:.2f} USDT`\n"
         f"Выводы: `{balance['total_withdrawals']:.2f} USDT`\n"
         f"Заработано: `{balance['total_earnings']:.2f} USDT`"
