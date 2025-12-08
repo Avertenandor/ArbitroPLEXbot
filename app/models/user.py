@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from app.models.deposit import Deposit
     from app.models.plex_payment import PlexPaymentRequirement
     from app.models.transaction import Transaction
+    from app.models.user_activity import UserActivity
     from app.models.user_fsm_state import UserFsmState
     from app.models.user_notification_settings import UserNotificationSettings
 
@@ -282,6 +283,14 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
         foreign_keys="BonusCredit.user_id",
+    )
+
+    # Activity logs relationship
+    activities: Mapped[list["UserActivity"]] = relationship(
+        "UserActivity",
+        back_populates="user",
+        cascade="all, delete-orphan",
+        lazy="dynamic",
     )
 
     @property

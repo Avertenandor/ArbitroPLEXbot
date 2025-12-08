@@ -33,6 +33,12 @@ try:
 except ImportError:
     HAS_TICKETS = False
 
+try:
+    from app.models.user_activity import UserActivity
+    HAS_ACTIVITY = True
+except ImportError:
+    HAS_ACTIVITY = False
+
 
 class MonitoringService:
     """
@@ -1042,3 +1048,76 @@ class MonitoringService:
         lines.append(f"  Общий статус: {system.get('status', 'N/A')}")
 
         return "\n".join(lines)
+
+    async def get_activity_analytics(
+        self,
+        hours: int = 24,
+    ) -> dict[str, Any]:
+        """
+        Get comprehensive user activity analytics for ARIA.
+
+        Args:
+            hours: Lookback period
+
+        Returns:
+            Dict with activity statistics, funnel, conversions
+        """
+        if not HAS_ACTIVITY:
+            return {"error": "Activity tracking not available"}
+
+        try:
+            from app.services.user_activity_service import UserActivityService
+            service = UserActivityService(self.session)
+            return await service.get_comprehensive_stats(hours)
+        except Exception as e:
+            logger.error(f"Error getting activity analytics: {e}")
+            return {"error": str(e)}
+
+    async def get_user_journey(
+        self,
+        telegram_id: int,
+    ) -> list[dict[str, Any]]:
+        """
+        Get complete journey of a specific user.
+
+        Args:
+            telegram_id: User's Telegram ID
+
+        Returns:
+            List of user activities in chronological order
+        """
+        if not HAS_ACTIVITY:
+            return []
+
+        try:
+            from app.services.user_activity_service import UserActivityService
+            service = UserActivityService(self.session)
+            return await service.get_user_journey(telegram_id)
+        except Exception as e:
+            logger.error(f"Error getting user journey: {e}")
+            return []
+
+    async def format_activity_for_aria(
+        self,
+        hours: int = 24,
+    ) -> str:
+        """
+        Format activity statistics for ARIA assistant.
+
+        Args:
+            hours: Lookback period
+
+        Returns:
+            Formatted text report
+        """
+        if not HAS_ACTIVITY:
+            return "📊 Система логирования активности не активирована."
+
+        try:
+            from app.services.user_activity_service import UserActivityService
+            service = UserActivityService(self.session)
+            return await service.format_stats_for_aria(hours)
+        except Exception as e:
+            logger.error(f"Error formatting activity: {e}")
+            return f"Ошибка получения активности: {e}"
+

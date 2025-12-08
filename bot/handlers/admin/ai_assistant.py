@@ -147,7 +147,14 @@ async def get_monitoring_data(session: AsyncSession) -> str:
     try:
         monitoring = MonitoringService(session)
         dashboard = await monitoring.get_full_dashboard()
-        return monitoring.format_dashboard_for_ai(dashboard)
+        formatted = monitoring.format_dashboard_for_ai(dashboard)
+
+        # Add activity analytics
+        activity_report = await monitoring.format_activity_for_aria(24)
+        if activity_report and "не активирована" not in activity_report:
+            formatted += "\n\n" + activity_report
+
+        return formatted
     except Exception as e:
         logger.error(f"Error getting monitoring data: {e}")
         return ""

@@ -96,4 +96,8 @@ def register_middlewares(dp: Dispatcher, redis_client) -> None:
     # Message logging must be after Auth (to get user_id) and Ban (to not log banned users)
     dp.update.middleware(MessageLogMiddleware())
 
+    # Activity logging - must be LAST to have all context (user, session)
+    from bot.middlewares.activity_logging import ActivityLoggingMiddleware
+    dp.update.middleware(ActivityLoggingMiddleware())
+
     logger.info("Middlewares registered successfully")
