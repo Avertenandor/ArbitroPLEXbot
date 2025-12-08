@@ -346,19 +346,15 @@ async def handle_chat_message(
         reply_markup=chat_keyboard(),
     )
 
-    # Log AI conversation to activity log
-    try:
-        from app.services.user_activity_service import UserActivityService
-        activity_service = UserActivityService(session)
-        await activity_service.log_ai_conversation(
-            telegram_id=admin.telegram_id,
-            admin_name=admin.display_name or admin.username,
-            question=user_message,
-            answer=response,
-        )
-        await session.commit()
-    except Exception as e:
-        logger.warning(f"Failed to log AI conversation: {e}")
+    # NOTE: AI conversation logging disabled until user_activities table is created
+    # To enable: run alembic upgrade head first
+    # try:
+    #     from app.services.user_activity_service import UserActivityService
+    #     activity_service = UserActivityService(session)
+    #     await activity_service.log_ai_conversation(...)
+    #     await session.commit()
+    # except Exception as e:
+    #     logger.warning(f"Failed to log AI conversation: {e}")
 
     logger.info(f"AI chat with admin {admin.username}: {user_message[:50]}...")
 
