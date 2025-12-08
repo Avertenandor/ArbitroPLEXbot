@@ -1103,6 +1103,7 @@ class MonitoringService:
     ) -> str:
         """
         Format activity statistics for ARIA assistant.
+        Uses separate session to avoid transaction conflicts.
 
         Args:
             hours: Lookback period
@@ -1114,12 +1115,16 @@ class MonitoringService:
             return "📊 Система логирования активности не активирована."
 
         try:
+            # Use separate session to avoid polluting main transaction
+            from app.config.database import async_session_maker
             from app.services.user_activity_service import UserActivityService
-            service = UserActivityService(self.session)
-            return await service.format_stats_for_aria(hours)
+
+            async with async_session_maker() as activity_session:
+                service = UserActivityService(activity_session)
+                return await service.format_stats_for_aria(hours)
         except Exception as e:
             logger.error(f"Error formatting activity: {e}")
-            return f"Ошибка получения активности: {e}"
+            return "⚠️ Ошибка получения статистики активности"
 
     async def get_ai_conversations_report(
         self,
@@ -1127,6 +1132,7 @@ class MonitoringService:
     ) -> str:
         """
         Get AI conversations report for ARIA.
+        Uses separate session to avoid transaction conflicts.
 
         Args:
             hours: Lookback period
@@ -1138,10 +1144,14 @@ class MonitoringService:
             return "📊 Логирование разговоров не активировано."
 
         try:
+            # Use separate session to avoid polluting main transaction
+            from app.config.database import async_session_maker
             from app.services.user_activity_service import UserActivityService
-            service = UserActivityService(self.session)
-            return await service.format_ai_conversations_for_aria(hours)
+
+            async with async_session_maker() as ai_session:
+                service = UserActivityService(ai_session)
+                return await service.format_ai_conversations_for_aria(hours)
         except Exception as e:
             logger.error(f"Error getting AI conversations: {e}")
-            return f"Ошибка: {e}"
+            return "⚠️ Ошибка получения разговоров с AI"
 

@@ -424,9 +424,24 @@ class UserActivityService:
         Returns:
             Complete statistics dict
         """
-        stats = await self.repo.get_activity_stats(hours)
-        funnel = await self.repo.get_funnel_stats(hours)
-        hourly = await self.repo.get_hourly_activity(hours)
+        # Get stats with error handling for each query
+        try:
+            stats = await self.repo.get_activity_stats(hours)
+        except Exception as e:
+            logger.warning(f"Failed to get activity stats: {e}")
+            stats = {"activities": {}, "total_actions": 0, "total_unique_users": 0}
+
+        try:
+            funnel = await self.repo.get_funnel_stats(hours)
+        except Exception as e:
+            logger.warning(f"Failed to get funnel stats: {e}")
+            funnel = {"starts": 0, "wallets_entered": 0, "plex_paid": 0, "first_deposits": 0}
+
+        try:
+            hourly = await self.repo.get_hourly_activity(hours)
+        except Exception as e:
+            logger.warning(f"Failed to get hourly activity: {e}")
+            hourly = []
 
         # Calculate conversion rates
         starts = funnel.get("starts", 0)
