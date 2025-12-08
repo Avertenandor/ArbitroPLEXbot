@@ -28,6 +28,65 @@ from bot.keyboards.reply import get_admin_keyboard_from_data
 router = Router(name="admin_ai_assistant")
 
 
+def sanitize_markdown(text: str) -> str:
+    """
+    Sanitize text to prevent Telegram Markdown parse errors.
+    Fixes unclosed formatting and escapes problematic characters.
+    """
+    if not text:
+        return text
+
+    # Count formatting characters
+    # Fix unclosed bold markers
+    bold_count = text.count("**")
+    if bold_count % 2 != 0:
+        # Remove the last unpaired **
+        last_idx = text.rfind("**")
+        text = text[:last_idx] + text[last_idx + 2:]
+
+    # Fix unclosed single asterisks (italic)
+    # First, temporarily replace ** with placeholder
+    text = text.replace("**", "\x00BOLD\x00")
+    asterisk_count = text.count("*")
+    if asterisk_count % 2 != 0:
+        # Remove the last unpaired *
+        last_idx = text.rfind("*")
+        text = text[:last_idx] + text[last_idx + 1:]
+    # Restore bold markers
+    text = text.replace("\x00BOLD\x00", "**")
+
+    # Fix unclosed underscores
+    # Replace __ with placeholder first
+    text = text.replace("__", "\x00UNDER\x00")
+    underscore_count = text.count("_")
+    if underscore_count % 2 != 0:
+        last_idx = text.rfind("_")
+        text = text[:last_idx] + text[last_idx + 1:]
+    text = text.replace("\x00UNDER\x00", "__")
+
+    # Fix unclosed backticks
+    # Handle code blocks first (```)
+    code_block_count = text.count("```")
+    if code_block_count % 2 != 0:
+        text += "\n```"
+
+    # Handle inline code (single `)
+    text = text.replace("```", "\x00CODE\x00")
+    backtick_count = text.count("`")
+    if backtick_count % 2 != 0:
+        last_idx = text.rfind("`")
+        text = text[:last_idx] + text[last_idx + 1:]
+    text = text.replace("\x00CODE\x00", "```")
+
+    # Fix unclosed square brackets (links)
+    open_brackets = text.count("[")
+    close_brackets = text.count("]")
+    if open_brackets > close_brackets:
+        text += "]" * (open_brackets - close_brackets)
+
+    return text
+
+
 async def clear_state_keep_session(state: FSMContext) -> None:
     """Clear FSM state but preserve admin session token."""
     state_data = await state.get_data()
@@ -247,8 +306,11 @@ async def handle_chat_message(
 
     await state.update_data(conversation_history=history)
 
+    # Sanitize markdown to prevent parse errors
+    safe_response = sanitize_markdown(response)
+
     await message.answer(
-        response,
+        safe_response,
         parse_mode="Markdown",
         reply_markup=chat_keyboard(),
     )
@@ -277,8 +339,9 @@ async def show_system_status(
         monitoring_data=monitoring_data,
     )
 
+    safe_response = sanitize_markdown(response)
     await message.answer(
-        f"📊 **Статус системы**\n\n{response}",
+        f"📊 **Статус системы**\n\n{safe_response}",
         parse_mode="Markdown",
         reply_markup=ai_assistant_keyboard(),
     )
@@ -303,18 +366,18 @@ async def show_stats(
     fin = dashboard.get("financial", {})
     admin_stats = dashboard.get("admin", {})
 
-    text = f"👥 **Статистика платформы**\n\n"
-    text += f"**Пользователи:**\n"
+    text = "👥 **Статистика платформы**\n\n"
+    text += "**Пользователи:**\n"
     text += f"• Всего: **{users.get('total_users', 0)}**\n"
     text += f"• Активных (24ч): **{users.get('active_24h', 0)}**\n"
     text += f"• Активных (7д): **{users.get('active_7d', 0)}**\n"
     text += f"• Новых сегодня: **{users.get('new_today', 0)}**\n"
     text += f"• Верифицированных: **{users.get('verified_users', 0)}**\n\n"
-    text += f"**Финансы:**\n"
+    text += "**Финансы:**\n"
     text += f"• Депозитов: **${fin.get('total_active_deposits', 0):,.2f}**\n"
     text += f"• Ожидают вывода: **{fin.get('pending_withdrawals_count', 0)}** "
     text += f"(${fin.get('pending_withdrawals_amount', 0):,.2f})\n\n"
-    text += f"**Администраторы:**\n"
+    text += "**Администраторы:**\n"
     text += f"• Всего: **{admin_stats.get('total_admins', 0)}**\n"
     text += f"• Активных (24ч): **{admin_stats.get('active_admins_last_hours', 0)}**\n"
     text += f"• Действий (24ч): **{admin_stats.get('total_actions', 0)}**\n"
@@ -345,8 +408,9 @@ async def show_admin_help(
         role=role,
     )
 
+    safe_response = sanitize_markdown(response)
     await message.answer(
-        f"❓ **Справка по админ-панели**\n\n{response}",
+        f"❓ **Справка по админ-панели**\n\n{safe_response}",
         parse_mode="Markdown",
         reply_markup=ai_assistant_keyboard(),
     )
@@ -371,8 +435,9 @@ async def show_faq(
         role=role,
     )
 
+    safe_response = sanitize_markdown(response)
     await message.answer(
-        f"📚 **Частые вопросы**\n\n{response}",
+        f"📚 **Частые вопросы**\n\n{safe_response}",
         parse_mode="Markdown",
         reply_markup=ai_assistant_keyboard(),
     )
