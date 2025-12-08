@@ -101,6 +101,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
         emergency,
         financials,
         inquiries,
+        knowledge_base,
         master_key_management,
         panel,
         referral_stats,
@@ -155,11 +156,14 @@ def register_admin_handlers(dp: Dispatcher) -> None:
         action_logs,
         schedule_management,
         ai_assistant,  # Added: AI Assistant for admins
+        knowledge_base,  # Added: Knowledge Base management
     ])
 
     dp.include_router(wallet_key_setup.router)
     # AI Assistant must be BEFORE panel.router to handle chatting state
     dp.include_router(ai_assistant.router)
+    # Knowledge Base management
+    dp.include_router(knowledge_base.router)
     # MUST be before panel.router to catch "💰 Финансовая отчётность"
     dp.include_router(financials.router)
     # MUST be before panel.router for withdrawal buttons

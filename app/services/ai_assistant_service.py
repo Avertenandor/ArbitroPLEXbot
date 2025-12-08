@@ -351,6 +351,17 @@ class AIAssistantService:
                 context_parts.append(f"- {key}: {value}")
             context_parts.append("")
 
+        # Add knowledge base for all users
+        try:
+            from app.services.knowledge_base import get_knowledge_base
+            kb = get_knowledge_base()
+            kb_context = kb.format_for_ai()
+            if kb_context:
+                context_parts.append(kb_context)
+                context_parts.append("")
+        except Exception:
+            pass  # KB not available
+
         # Add real monitoring data for admins
         if monitoring_data and role != UserRole.USER:
             context_parts.append(monitoring_data)

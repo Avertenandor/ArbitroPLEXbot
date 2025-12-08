@@ -73,6 +73,9 @@ def admin_keyboard(
     # AI Assistant - available for all admins
     builder.row(KeyboardButton(text="🤖 AI Помощник"))
 
+    # Knowledge Base - available for all admins
+    builder.row(KeyboardButton(text="📚 База знаний"))
+
     # Sensitive controls - Extended/Super only
     if is_extended_admin or is_super_admin:
         builder.row(
