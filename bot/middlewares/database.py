@@ -159,8 +159,10 @@ class DatabaseMiddleware(BaseMiddleware):
                     await session.rollback()
                     # R11-1: Record non-database exceptions as failures too
                     circuit_breaker.record_failure()
+                    # Escape curly braces in error message to prevent loguru parsing
+                    error_msg = str(e).replace("{", "{{").replace("}", "}}")
                     logger.error(
-                        f"Unexpected error in handler: {e}",
+                        f"Unexpected error in handler: {error_msg}",
                         extra={"error_type": type(e).__name__},
                     )
                     raise
@@ -168,8 +170,9 @@ class DatabaseMiddleware(BaseMiddleware):
             # R11-1: Database connection failure at middleware level
             # R11-1: Record failure in circuit breaker
             circuit_breaker.record_failure()
+            error_msg = str(e).replace("{", "{{").replace("}", "}}")
             logger.critical(
-                f"Database connection failure in middleware: {e}",
+                f"Database connection failure in middleware: {error_msg}",
                 extra={"error_type": type(e).__name__},
             )
 
