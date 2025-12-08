@@ -154,6 +154,12 @@ async def get_monitoring_data(session: AsyncSession) -> str:
         if activity_report and "не активирована" not in activity_report:
             formatted += "\n\n" + activity_report
 
+        # Add AI conversations if available
+        ai_conversations = await monitoring.get_ai_conversations_report(24)
+        if ai_conversations and "не активировано" not in ai_conversations.lower():
+            formatted += "\n\n" + ai_conversations
+
+        logger.debug(f"ARIA context size: {len(formatted)} chars")
         return formatted
     except Exception as e:
         logger.error(f"Error getting monitoring data: {e}")
@@ -361,8 +367,9 @@ async def handle_chat_message(
                 answer=response,
             )
             await log_session.commit()
-    except Exception:
-        pass  # Silently ignore - logging should never break the bot
+            logger.debug(f"AI conversation logged for {admin.username}")
+    except Exception as log_error:
+        logger.warning(f"AI conversation logging failed: {log_error}")
 
     logger.info(f"AI chat with admin {admin.username}: {user_message[:50]}...")
 
