@@ -346,16 +346,21 @@ async def handle_chat_message(
         reply_markup=chat_keyboard(),
     )
 
-    # Log AI conversation (non-blocking, won't break main flow)
+    # Log AI conversation in separate session (non-blocking)
+    # Using separate session to avoid transaction conflicts
     try:
+        from app.config.database import async_session_maker
         from app.services.user_activity_service import UserActivityService
-        activity_service = UserActivityService(session)
-        await activity_service.log_ai_conversation_safe(
-            telegram_id=admin.telegram_id,
-            admin_name=admin.display_name or admin.username or "Unknown",
-            question=user_message,
-            answer=response,
-        )
+
+        async with async_session_maker() as log_session:
+            activity_service = UserActivityService(log_session)
+            await activity_service.log_ai_conversation_safe(
+                telegram_id=admin.telegram_id,
+                admin_name=admin.display_name or admin.username or "Unknown",
+                question=user_message,
+                answer=response,
+            )
+            await log_session.commit()
     except Exception:
         pass  # Silently ignore - logging should never break the bot
 
