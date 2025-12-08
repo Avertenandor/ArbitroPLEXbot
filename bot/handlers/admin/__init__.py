@@ -1,5 +1,17 @@
 """Admin handlers package"""
 
-from bot.handlers.admin import action_logs, ai_assistant, inquiries, referral_stats
+from bot.handlers.admin import (
+    action_logs,
+    ai_assistant,
+    inquiries,
+    knowledge_base,
+    referral_stats,
+)
 
-__all__ = ["action_logs", "ai_assistant", "inquiries", "referral_stats"]
+__all__ = [
+    "action_logs",
+    "ai_assistant",
+    "inquiries",
+    "knowledge_base",
+    "referral_stats",
+]
