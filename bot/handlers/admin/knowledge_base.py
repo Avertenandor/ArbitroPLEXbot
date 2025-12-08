@@ -270,19 +270,30 @@ async def list_learned_entries(
     if not learned:
         await message.answer(
             "🧠 **Записей из диалогов пока нет.**\n\n"
-            "ARIA извлекает знания из свободных диалогов с Боссом и админами."
+            "ARIA извлекает знания из свободных диалогов с Боссом и админами.\n\n"
+            "Как это работает:\n"
+            "1. Войди в 🤖 AI Помощник → 💬 Свободный диалог\n"
+            "2. Расскажи ARIA что-то новое о платформе\n"
+            "3. Нажми «Завершить диалог»\n"
+            "4. ARIA извлечёт и сохранит знания",
+            parse_mode="Markdown",
         )
         return
 
-    text = "🧠 **Записи из диалогов с ARIA:**\n\n"
-    for e in learned[:15]:
+    text = f"🧠 **Записи из диалогов ({len(learned)}):**\n\n"
+    
+    for i, e in enumerate(learned[:10], 1):
         verified = "✅" if e.get("verified_by_boss") else "⚠️"
         source = e.get("source_user", "unknown")
-        text += f"{verified} /kb_{e['id']} — {e['question'][:40]}...\n"
-        text += f"   _от @{source}_\n"
+        cat = e.get("category", "Из диалогов")
+        
+        text += f"**{i}. {verified} {cat}**\n"
+        text += f"❓ _{e['question'][:50]}_\n"
+        text += f"💬 {e['answer'][:70]}...\n"
+        text += f"👤 @{source} | /kb_{e['id']}\n\n"
 
-    if len(learned) > 15:
-        text += f"\n_...и ещё {len(learned) - 15} записей_"
+    if len(learned) > 10:
+        text += f"_...и ещё {len(learned) - 10} записей_"
 
     await message.answer(text, parse_mode="Markdown")
 
@@ -360,17 +371,22 @@ async def list_unverified(
         await message.answer("✅ **Все записи проверены!**")
         return
 
-    text = "⚠️ **Записи на проверку Боссом:**\n\n"
-    for e in unverified[:15]:
+    text = f"⚠️ **Записи на проверку ({len(unverified)}):**\n\n"
+    
+    for i, e in enumerate(unverified[:10], 1):
         source = e.get("added_by", "unknown")
         learned = "🧠" if e.get("learned_from_dialog") else "📝"
-        text += f"{learned} /kb_{e['id']} — {e['question'][:40]}...\n"
-        text += f"   _добавил: @{source}_\n"
+        cat = e.get("category", "Без категории")
+        
+        text += f"**{i}. {learned} {cat}**\n"
+        text += f"❓ _{e['question'][:60]}_\n"
+        text += f"💬 {e['answer'][:80]}...\n"
+        text += f"👤 @{source} | /kb_{e['id']}\n\n"
 
-    if len(unverified) > 15:
-        text += f"\n_...и ещё {len(unverified) - 15} записей_"
+    if len(unverified) > 10:
+        text += f"_...и ещё {len(unverified) - 10} записей_\n"
 
-    text += "\n\n_Только Босс может подтвердить записи._"
+    text += "\n📌 Нажми /kb\\_ID чтобы открыть запись и подтвердить."
 
     await message.answer(text, parse_mode="Markdown")
 
