@@ -203,20 +203,32 @@ class AIAssistantService:
         role: UserRole,
         user_data: dict[str, Any] | None = None,
         platform_stats: dict[str, Any] | None = None,
+        monitoring_data: str | None = None,
     ) -> str:
         """Build context message with user/platform data."""
         context_parts = []
-        
+
+        # Role identification (critical for AI to know who it's talking to)
+        role_desc = ROLE_DESCRIPTIONS.get(role, "пользователь")
+        context_parts.append(f"[РОЛЬ СОБЕСЕДНИКА: {role_desc.upper()}]")
+        context_parts.append("")
+
         if user_data:
-            context_parts.append("ИНФОРМАЦИЯ О ПОЛЬЗОВАТЕЛЕ:")
+            context_parts.append("ИНФОРМАЦИЯ О СОБЕСЕДНИКЕ:")
             for key, value in user_data.items():
                 context_parts.append(f"- {key}: {value}")
-        
+            context_parts.append("")
+
+        # Add real monitoring data for admins
+        if monitoring_data and role != UserRole.USER:
+            context_parts.append(monitoring_data)
+            context_parts.append("")
+
         if platform_stats and role != UserRole.USER:
-            context_parts.append("\nСТАТИСТИКА ПЛАТФОРМЫ:")
+            context_parts.append("ДОПОЛНИТЕЛЬНАЯ СТАТИСТИКА:")
             for key, value in platform_stats.items():
                 context_parts.append(f"- {key}: {value}")
-        
+
         return "\n".join(context_parts) if context_parts else ""
 
     async def chat(
@@ -225,41 +237,45 @@ class AIAssistantService:
         role: UserRole = UserRole.USER,
         user_data: dict[str, Any] | None = None,
         platform_stats: dict[str, Any] | None = None,
+        monitoring_data: str | None = None,
         conversation_history: list[dict] | None = None,
     ) -> str:
         """
         Send message to AI and get response.
-        
+
         Args:
             message: User's message
             role: User's role for access control
             user_data: Optional user context data
             platform_stats: Optional platform statistics (for admins)
+            monitoring_data: Real-time monitoring data (formatted text)
             conversation_history: Optional previous messages
-            
+
         Returns:
             AI response text
         """
         if not self.client:
             return (
-                "🤖 К сожалению, AI-помощник временно недоступен. "
+                f"🤖 К сожалению, {AI_NAME} временно недоступна. "
                 "Пожалуйста, попробуйте позже или обратитесь в поддержку."
             )
 
         try:
             # Build messages
             messages = []
-            
+
             # Add context as first user message if available
-            context = self._build_context(role, user_data, platform_stats)
+            context = self._build_context(
+                role, user_data, platform_stats, monitoring_data
+            )
             if context:
                 messages.append({
                     "role": "user",
                     "content": f"[КОНТЕКСТ СИСТЕМЫ]\n{context}"
                 })
                 messages.append({
-                    "role": "assistant", 
-                    "content": "Понял контекст. Готов помочь!"
+                    "role": "assistant",
+                    "content": f"Понял. Я {AI_NAME}, готова помочь!"
                 })
             
             # Add conversation history

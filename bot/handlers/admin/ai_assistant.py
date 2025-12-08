@@ -21,6 +21,7 @@ from app.services.ai_assistant_service import (
     UserRole,
     get_ai_service,
 )
+from app.services.monitoring_service import MonitoringService
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
 from bot.keyboards.reply import get_admin_keyboard_from_data
 
@@ -70,6 +71,17 @@ async def get_platform_stats(session: AsyncSession) -> dict[str, Any]:
     except Exception as e:
         logger.error(f"Error getting platform stats: {e}")
         return {}
+
+
+async def get_monitoring_data(session: AsyncSession) -> str:
+    """Get real-time monitoring data for ARIA."""
+    try:
+        monitoring = MonitoringService(session)
+        dashboard = await monitoring.get_full_dashboard()
+        return monitoring.format_dashboard_for_ai(dashboard)
+    except Exception as e:
+        logger.error(f"Error getting monitoring data: {e}")
+        return ""
 
 
 def get_user_role_from_admin(admin: Any) -> UserRole:
@@ -196,6 +208,9 @@ async def handle_chat_message(
     # Get platform stats for context
     platform_stats = await get_platform_stats(session)
 
+    # Get real-time monitoring data
+    monitoring_data = await get_monitoring_data(session)
+
     # Admin context
     admin_data = {
         "Имя": admin.display_name,
@@ -209,6 +224,7 @@ async def handle_chat_message(
         role=role,
         user_data=admin_data,
         platform_stats=platform_stats,
+        monitoring_data=monitoring_data,
         conversation_history=history,
     )
 
@@ -244,12 +260,12 @@ async def show_system_status(
 
     ai_service = get_ai_service()
     role = get_user_role_from_admin(admin)
-    platform_stats = await get_platform_stats(session)
+    monitoring_data = await get_monitoring_data(session)
 
     response = await ai_service.chat(
-        message="Дай краткий отчёт о статусе системы.",
+        message="Дай краткий отчёт о текущем статусе системы на основе мониторинга.",
         role=role,
-        platform_stats=platform_stats,
+        monitoring_data=monitoring_data,
     )
 
     await message.answer(
@@ -270,11 +286,29 @@ async def show_stats(
     if not admin:
         return
 
-    stats = await get_platform_stats(session)
+    # Get comprehensive stats via monitoring service
+    monitoring = MonitoringService(session)
+    dashboard = await monitoring.get_full_dashboard()
 
-    text = "👥 **Статистика платформы**\n\n"
-    for key, value in stats.items():
-        text += f"• {key}: **{value}**\n"
+    users = dashboard.get("users", {})
+    fin = dashboard.get("financial", {})
+    admin_stats = dashboard.get("admin", {})
+
+    text = f"👥 **Статистика платформы**\n\n"
+    text += f"**Пользователи:**\n"
+    text += f"• Всего: **{users.get('total_users', 0)}**\n"
+    text += f"• Активных (24ч): **{users.get('active_24h', 0)}**\n"
+    text += f"• Активных (7д): **{users.get('active_7d', 0)}**\n"
+    text += f"• Новых сегодня: **{users.get('new_today', 0)}**\n"
+    text += f"• Верифицированных: **{users.get('verified_users', 0)}**\n\n"
+    text += f"**Финансы:**\n"
+    text += f"• Депозитов: **${fin.get('total_active_deposits', 0):,.2f}**\n"
+    text += f"• Ожидают вывода: **{fin.get('pending_withdrawals_count', 0)}** "
+    text += f"(${fin.get('pending_withdrawals_amount', 0):,.2f})\n\n"
+    text += f"**Администраторы:**\n"
+    text += f"• Всего: **{admin_stats.get('total_admins', 0)}**\n"
+    text += f"• Активных (24ч): **{admin_stats.get('active_admins_last_hours', 0)}**\n"
+    text += f"• Действий (24ч): **{admin_stats.get('total_actions', 0)}**\n"
 
     await message.answer(
         text,
