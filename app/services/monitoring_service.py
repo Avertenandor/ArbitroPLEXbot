@@ -17,7 +17,7 @@ from app.models.admin import Admin
 from app.models.admin_action import AdminAction
 from app.models.admin_session import AdminSession
 from app.models.deposit import Deposit
-from app.models.transaction import Transaction, TransactionType
+from app.models.transaction import Transaction
 from app.models.user import User
 
 
@@ -210,26 +210,26 @@ class MonitoringService:
                 .where(Deposit.created_at >= since)
             )
             recent_deposits_count = recent_count_result.scalar() or 0
-            
+
             # Withdrawals (period)
             withdrawals_result = await self.session.execute(
                 select(func.sum(Transaction.amount))
-                .where(Transaction.transaction_type == TransactionType.WITHDRAWAL)
+                .where(Transaction.type == "withdrawal")
                 .where(Transaction.created_at >= since)
             )
             withdrawals = withdrawals_result.scalar() or Decimal("0")
-            
+
             withdrawals_count_result = await self.session.execute(
                 select(func.count(Transaction.id))
-                .where(Transaction.transaction_type == TransactionType.WITHDRAWAL)
+                .where(Transaction.type == "withdrawal")
                 .where(Transaction.created_at >= since)
             )
             withdrawals_count = withdrawals_count_result.scalar() or 0
-            
+
             # Pending withdrawals
             pending_result = await self.session.execute(
                 select(func.count(Transaction.id), func.sum(Transaction.amount))
-                .where(Transaction.transaction_type == TransactionType.WITHDRAWAL)
+                .where(Transaction.type == "withdrawal")
                 .where(Transaction.status == "pending")
             )
             pending_row = pending_result.fetchone()
