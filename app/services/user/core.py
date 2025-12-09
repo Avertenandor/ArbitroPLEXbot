@@ -86,6 +86,20 @@ class UserServiceCore:
             referral_code
         )
 
+    async def get_by_username(
+        self, username: str
+    ) -> User | None:
+        """
+        Get user by Telegram username.
+
+        Args:
+            username: Telegram username (with or without @)
+
+        Returns:
+            User or None
+        """
+        return await self.user_repo.get_by_username(username)
+
     async def find_by_id(self, user_id: int) -> User | None:
         """
         Find user by ID (alias for get_by_id).

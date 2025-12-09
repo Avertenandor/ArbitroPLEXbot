@@ -86,6 +86,29 @@ class UserRepository(BaseRepository[User]):
         """
         return await self.get_by(referral_code=referral_code)
 
+    async def get_by_username(
+        self, username: str
+    ) -> User | None:
+        """
+        Get user by Telegram username (case-insensitive).
+
+        Args:
+            username: Telegram username (without @)
+
+        Returns:
+            User or None
+        """
+        if not username:
+            return None
+        # Remove @ if present
+        clean_username = username.lstrip("@").lower()
+        # Search case-insensitive
+        stmt = select(User).where(
+            User.username.ilike(clean_username)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
     async def get_with_referrals(
         self, user_id: int
     ) -> User | None:
