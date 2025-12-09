@@ -146,8 +146,9 @@ def amount_quick_select_keyboard() -> ReplyKeyboardMarkup:
 def reason_templates_keyboard() -> InlineKeyboardMarkup:
     """Шаблоны причин для быстрого выбора."""
     buttons = []
-    for emoji_name, reason in BONUS_REASON_TEMPLATES:
-        callback = f"bonus_reason:{reason}" if reason else "bonus_reason:custom"
+    for idx, (emoji_name, reason) in enumerate(BONUS_REASON_TEMPLATES):
+        # Use index instead of full text to avoid 64-byte callback_data limit
+        callback = f"bonus_reason:{idx}" if reason else "bonus_reason:custom"
         buttons.append([InlineKeyboardButton(text=emoji_name, callback_data=callback)])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -658,6 +659,20 @@ async def process_reason_template(
         await callback.answer()
         return
     
+    # Get reason text from index
+    try:
+        reason_idx = int(reason_data)
+        if 0 <= reason_idx < len(BONUS_REASON_TEMPLATES):
+            _, reason_text = BONUS_REASON_TEMPLATES[reason_idx]
+            if reason_text:
+                await state.update_data(reason=reason_text)
+                await show_grant_confirmation(callback.message, state, admin)
+                await callback.answer()
+                return
+    except ValueError:
+        pass
+    
+    # Fallback: use raw data as reason (backward compatibility)
     await state.update_data(reason=reason_data)
     await show_grant_confirmation(callback.message, state, admin)
     await callback.answer()
