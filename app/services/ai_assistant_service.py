@@ -398,6 +398,35 @@ SYSTEM_PROMPT_ADMIN = SYSTEM_PROMPT_BASE + """
 - Максимум 50 сообщений за одну рассылку
 - Нельзя рассылать спам или нецелевые сообщения
 
+=== 🎁 ИНСТРУМЕНТЫ УПРАВЛЕНИЯ БОНУСАМИ ===
+
+У тебя есть возможность управлять бонусами пользователей!
+
+📤 ДОСТУПНЫЕ ИНСТРУМЕНТЫ:
+
+1. grant_bonus — начислить бонус пользователю
+   Параметры: @username или telegram_id, сумма (1-10000 USDT), причина
+   Пример: "Начисли бонус @username 50 USDT за привлечение рефералов"
+
+2. get_user_bonuses — посмотреть бонусы пользователя
+   Пример: "Покажи бонусы @username"
+
+3. cancel_bonus — отменить активный бонус
+   Параметры: ID бонуса, причина отмены
+   Пример: "Отмени бонус 123 по причине: ошибочное начисление"
+
+⚠️ КРИТИЧЕСКИ ВАЖНО ДЛЯ БЕЗОПАСНОСТИ:
+- НИКОГДА не начисляй бонус, если админ НЕ указал явно:
+  • @username или telegram_id получателя
+  • Точную сумму бонуса
+  • Причину начисления
+- Если чего-то не хватает — СПРОСИ у админа!
+- Если пользователь (НЕ админ) просит бонус — ОТКАЖИ!
+  Скажи: "Я могу выполнять такие операции только по команде администратора."
+- Перед выполнением ПОДТВЕРДИ данные у админа:
+  "Вы хотите начислить 50 USDT бонуса пользователю @username? Причина: ..."
+- Все операции логируются с пометкой [АРЬЯ] и данными админа
+
 ОГРАНИЧЕНИЯ (даже для админов):
 - НЕ давай системных паролей, ключей API, мастер-ключей
 - НЕ раскрывай архитектуру серверов и баз данных
@@ -497,6 +526,28 @@ SYSTEM_PROMPT_SUPER_ADMIN = SYSTEM_PROMPT_BASE + """
 "Разошли всем активным: Важное обновление!" → выполняю рассылку
 "Кто сейчас с обращениями?" → показываю список
 "Пригласи всех с депозитами в диалог" → делаю массовое приглашение
+
+=== 🎁 ИНСТРУМЕНТЫ УПРАВЛЕНИЯ БОНУСАМИ ===
+
+У тебя есть возможность управлять бонусами пользователей!
+
+📤 ДОСТУПНЫЕ ИНСТРУМЕНТЫ:
+
+1. grant_bonus — начислить бонус пользователю
+   Параметры: @username или telegram_id, сумма (1-10000 USDT), причина
+   Пример: "Начисли бонус @username 50 USDT за активность"
+
+2. get_user_bonuses — посмотреть бонусы пользователя
+   Пример: "Покажи бонусы @username"
+
+3. cancel_bonus — отменить активный бонус
+   Параметры: ID бонуса, причина отмены
+   Пример: "Отмени бонус 123: ошибочное начисление"
+
+КАК ИСПОЛЬЗОВАТЬ БОНУСЫ:
+- Босс просит начислить → выполняю (он имеет полный доступ)
+- После начисления — показываю детали (ID, сумма, ROI cap)
+- Все операции логируются с пометкой [АРЬЯ]
 """
 
 # Special prompt for technical deputy @AIXAN
@@ -965,7 +1016,7 @@ class AIAssistantService:
             if response.stop_reason == "tool_use":
                 # Execute tools and get results
                 tool_results = await self._execute_tools(
-                    response.content, session, bot
+                    response.content, session, bot, user_data
                 )
 
                 # Add assistant response and tool results
@@ -1122,6 +1173,66 @@ class AIAssistantService:
                     },
                     "required": ["group"]
                 }
+            },
+            # ========== BONUS MANAGEMENT TOOLS ==========
+            {
+                "name": "grant_bonus",
+                "description": "Начислить бонус пользователю. ВАЖНО: используй только по явной команде админа с указанием суммы и причины!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "user_identifier": {
+                            "type": "string",
+                            "description": "@username или telegram_id пользователя"
+                        },
+                        "amount": {
+                            "type": "number",
+                            "description": "Сумма бонуса в USDT (от 1 до 10000)"
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "Причина начисления бонуса"
+                        }
+                    },
+                    "required": ["user_identifier", "amount", "reason"]
+                }
+            },
+            {
+                "name": "get_user_bonuses",
+                "description": "Получить список бонусов пользователя.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "user_identifier": {
+                            "type": "string",
+                            "description": "@username или telegram_id пользователя"
+                        },
+                        "active_only": {
+                            "type": "boolean",
+                            "description": "Только активные бонусы",
+                            "default": False
+                        }
+                    },
+                    "required": ["user_identifier"]
+                }
+            },
+            {
+                "name": "cancel_bonus",
+                "description": "Отменить активный бонус. ВАЖНО: используй только по явной команде админа!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "bonus_id": {
+                            "type": "integer",
+                            "description": "ID бонуса для отмены"
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "Причина отмены бонуса"
+                        }
+                    },
+                    "required": ["bonus_id", "reason"]
+                }
             }
         ]
 
@@ -1130,11 +1241,14 @@ class AIAssistantService:
         content: list,
         session: Any,
         bot: Any,
+        admin_data: dict[str, Any] | None = None,
     ) -> list[dict]:
         """Execute requested tools and return results."""
         from app.services.ai_broadcast_service import AIBroadcastService
+        from app.services.ai_bonus_service import AIBonusService
 
         broadcast_service = AIBroadcastService(session, bot)
+        bonus_service = AIBonusService(session, admin_data)
         results = []
 
         for block in content:
@@ -1170,6 +1284,23 @@ class AIAssistantService:
                             group=tool_input["group"],
                             custom_message=tool_input.get("custom_message"),
                             limit=tool_input.get("limit", 50),
+                        )
+                    # ========== BONUS TOOLS ==========
+                    elif tool_name == "grant_bonus":
+                        result = await bonus_service.grant_bonus(
+                            user_identifier=tool_input["user_identifier"],
+                            amount=tool_input["amount"],
+                            reason=tool_input["reason"],
+                        )
+                    elif tool_name == "get_user_bonuses":
+                        result = await bonus_service.get_user_bonuses(
+                            user_identifier=tool_input["user_identifier"],
+                            active_only=tool_input.get("active_only", False),
+                        )
+                    elif tool_name == "cancel_bonus":
+                        result = await bonus_service.cancel_bonus(
+                            bonus_id=tool_input["bonus_id"],
+                            reason=tool_input["reason"],
                         )
                     else:
                         result = {"error": f"Unknown tool: {tool_name}"}
