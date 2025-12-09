@@ -1107,11 +1107,25 @@ class AIAssistantService:
 
         except Exception as e:
             logger.error(f"Chat with tools error: {e}")
-            # Fallback to regular chat
-            return await self.chat(
-                message, role, user_data, platform_stats,
-                monitoring_data, conversation_history
-            )
+            # Check if it's an API error
+            error_str = str(e).lower()
+            if "500" in error_str or "internal server error" in error_str:
+                return (
+                    "🤖 Извини, сейчас API временно недоступен (ошибка сервера Anthropic). "
+                    "Попробуй повторить запрос через минуту."
+                )
+            # Fallback to regular chat for other errors
+            try:
+                return await self.chat(
+                    message, role, user_data, platform_stats,
+                    monitoring_data, conversation_history
+                )
+            except Exception as fallback_error:
+                logger.error(f"Fallback chat also failed: {fallback_error}")
+                return (
+                    "🤖 К сожалению, я сейчас недоступна. "
+                    "Попробуй позже или обратись напрямую к команде."
+                )
 
     def _get_broadcast_tools(self, role: UserRole = UserRole.SUPER_ADMIN) -> list[dict]:
         """Get tool definitions for broadcasting based on role."""
