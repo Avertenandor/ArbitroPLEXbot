@@ -46,6 +46,30 @@ from bot.utils.text_utils import escape_markdown
 router = Router(name="admin_bonus_management_v2")
 
 
+# ============ HELPERS ============
+
+def get_bonus_status(bonus: "BonusCredit") -> str:
+    """
+    Get status string from BonusCredit model.
+    
+    Model has: is_active, is_roi_completed, cancelled_at
+    Returns: "active", "completed", or "cancelled"
+    """
+    if bonus.cancelled_at is not None:
+        return "cancelled"
+    if bonus.is_roi_completed:
+        return "completed"
+    if bonus.is_active:
+        return "active"
+    return "inactive"
+
+
+def get_bonus_status_emoji(bonus: "BonusCredit") -> str:
+    """Get status emoji for bonus."""
+    status = get_bonus_status(bonus)
+    return {"active": "🟢", "completed": "✅", "cancelled": "❌", "inactive": "⚪"}.get(status, "⚪")
+
+
 # ============ STATES ============
 
 class BonusStates(StatesGroup):
@@ -314,9 +338,9 @@ async def show_detailed_stats(
     recent = await bonus_service.get_recent_bonuses(limit=50)
     
     # Считаем по статусам
-    active_sum = sum(b.amount for b in recent if b.status == "active")
-    completed_sum = sum(b.amount for b in recent if b.status == "completed")
-    cancelled_sum = sum(b.amount for b in recent if b.status == "cancelled")
+    active_sum = sum(b.amount for b in recent if get_bonus_status(b) == "active")
+    completed_sum = sum(b.amount for b in recent if get_bonus_status(b) == "completed")
+    cancelled_sum = sum(b.amount for b in recent if get_bonus_status(b) == "cancelled")
     
     text = (
         f"📊 **Детальная статистика бонусов**\n"
@@ -363,12 +387,7 @@ async def show_bonus_history(
 
     for b in recent:
         # Статус
-        if b.status == "active":
-            status = "🟢"
-        elif b.status == "completed":
-            status = "✅"
-        else:
-            status = "❌"
+        status = get_bonus_status_emoji(b)
         
         # Данные
         admin_name = b.admin.username if b.admin else "система"
@@ -378,7 +397,7 @@ async def show_bonus_history(
         
         # ROI прогресс для активных
         progress = ""
-        if b.status == "active" and hasattr(b, "roi_progress_percent"):
+        if get_bonus_status(b) == "active" and hasattr(b, "roi_progress_percent"):
             progress = f" ({b.roi_progress_percent:.0f}%)"
         
         reason_short = (b.reason or "")[:25]
@@ -425,7 +444,7 @@ async def show_my_bonuses(
     
     # Статистика
     total = sum(b.amount for b in my_bonuses)
-    active = [b for b in my_bonuses if b.status == "active"]
+    active = [b for b in my_bonuses if get_bonus_status(b) == "active"]
     
     text = (
         f"📑 **Ваши начисления**\n"
@@ -435,7 +454,7 @@ async def show_my_bonuses(
     )
     
     for b in my_bonuses[:10]:
-        status = "🟢" if b.status == "active" else ("✅" if b.status == "completed" else "❌")
+        status = get_bonus_status_emoji(b)
         user_name = b.user.username if b.user else f"ID:{b.user_id}"
         safe_user = escape_markdown(user_name)
         
@@ -1004,7 +1023,7 @@ async def start_cancel_bonus(
     # Показать активные бонусы для отмены
     bonus_service = BonusService(session)
     recent = await bonus_service.get_recent_bonuses(limit=20)
-    active_bonuses = [b for b in recent if b.status == "active"]
+    active_bonuses = [b for b in recent if get_bonus_status(b) == "active"]
     
     if not active_bonuses:
         await message.answer(
@@ -1072,7 +1091,7 @@ async def confirm_cancel_bonus(
         await callback.answer("❌ Бонус не найден", show_alert=True)
         return
     
-    if bonus.status != "active":
+    if get_bonus_status(bonus) != "active":
         await callback.answer("❌ Бонус уже неактивен", show_alert=True)
         return
     
@@ -1199,11 +1218,12 @@ async def view_bonus_details(
         return
     
     # Статус
+    bonus_status = get_bonus_status(bonus)
     status_text = {
         "active": "🟢 Активен",
         "completed": "✅ Завершён (ROI выплачен)",
         "cancelled": "❌ Отменён",
-    }.get(bonus.status, bonus.status)
+    }.get(bonus_status, bonus_status)
     
     user_name = bonus.user.username if bonus.user else f"ID:{bonus.user_id}"
     admin_name = bonus.admin.username if bonus.admin else "система"
@@ -1228,7 +1248,7 @@ async def view_bonus_details(
     )
     
     # Кнопка отмены только для супер-админа и активных бонусов
-    can_cancel = admin.role == "super_admin" and bonus.status == "active"
+    can_cancel = admin.role == "super_admin" and get_bonus_status(bonus) == "active"
     
     await message.answer(
         text,

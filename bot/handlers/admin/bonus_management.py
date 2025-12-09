@@ -39,6 +39,17 @@ from bot.utils.text_utils import escape_markdown
 router = Router(name="admin_bonus_management")
 
 
+def _get_bonus_status(bonus) -> str:
+    """Get status string from BonusCredit model."""
+    if bonus.cancelled_at is not None:
+        return "cancelled"
+    if bonus.is_roi_completed:
+        return "completed"
+    if bonus.is_active:
+        return "active"
+    return "inactive"
+
+
 class BonusMgmtStates(StatesGroup):
     """States for bonus management."""
 
@@ -431,7 +442,7 @@ async def show_bonus_history(
     text = "📋 **Последние бонусы:**\n\n"
 
     for b in recent:
-        status = "🟢" if b.status == "active" else "⚪"
+        status = "🟢" if _get_bonus_status(b) == "active" else "⚪"
         admin_name = b.admin.username if b.admin else "система"
         user_name = b.user.username if b.user else f"ID:{b.user_id}"
         safe_user = escape_markdown(user_name) if user_name else str(b.user_id)
