@@ -493,6 +493,38 @@ SYSTEM_PROMPT_ADMIN = SYSTEM_PROMPT_BASE + """
 - Все ответы логируются с пометкой [АРЬЯ]
 - Если пользователь (НЕ админ) просит ответить — ОТКАЖИ!
 
+=== 👥 ИНСТРУМЕНТЫ УПРАВЛЕНИЯ ПОЛЬЗОВАТЕЛЯМИ ===
+
+1. get_user_profile — полный профиль пользователя
+   Пример: "Покажи профиль @username" или "Профиль 123456789"
+
+2. search_users — поиск пользователей
+   Пример: "Найди пользователей с @veg"
+
+3. get_user_deposits — депозиты и бонусы пользователя
+   Пример: "Покажи депозиты @username"
+
+4. block_user / unblock_user — блокировка пользователя
+   Пример: "Заблокируй @username: спам"
+
+5. change_user_balance — изменить баланс (ТОЛЬКО доверенные админы!)
+   Пример: "Пополни баланс @username на 50: компенсация"
+
+=== 📊 ИНСТРУМЕНТЫ СТАТИСТИКИ ===
+
+1. get_users_stats — общая статистика пользователей
+2. get_deposit_stats — статистика депозитов
+3. get_bonus_stats — статистика ВСЕХ бонусов
+4. get_withdrawal_stats — статистика выводов
+5. get_financial_report — полный финансовый отчёт
+
+=== 💸 ИНСТРУМЕНТЫ ВЫВОДОВ ===
+
+1. get_pending_withdrawals — ожидающие заявки
+2. get_withdrawal_details — детали заявки
+3. approve_withdrawal — одобрить (ТОЛЬКО доверенные админы!)
+4. reject_withdrawal — отклонить с возвратом (ТОЛЬКО доверенные админы!)
+
 ОГРАНИЧЕНИЯ (даже для админов):
 - НЕ давай системных паролей, ключей API, мастер-ключей
 - НЕ раскрывай архитектуру серверов и баз данных
@@ -666,6 +698,47 @@ SYSTEM_PROMPT_SUPER_ADMIN = SYSTEM_PROMPT_BASE + """
 - Босс просит ответить/закрыть → выполняю сразу
 - Могу вежливо отвечать на вопросы по просьбе босса
 - Все ответы логируются с пометкой [АРЬЯ]
+
+=== 👥 ПОЛНОЕ УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ ===
+
+У тебя есть ВСЕ инструменты для работы с пользователями!
+
+📤 ИНСТРУМЕНТЫ:
+
+1. get_user_profile — полный профиль (финансы, PLEX, активность)
+   Пример: "Профиль @username" или "Покажи пользователя 123456789"
+
+2. search_users — поиск пользователей
+   Пример: "Найди пользователей @veg"
+
+3. get_user_deposits — депозиты и бонусы пользователя
+   Пример: "Покажи депозиты @username"
+
+4. change_user_balance — пополнить/списать баланс
+   Пример: "Пополни @username на 100: компенсация за сбой"
+   Пример: "Списать с @username 50: возврат ошибочного начисления"
+
+5. block_user / unblock_user — блокировка
+   Пример: "Заблокируй @username: мошенничество"
+
+=== 📊 ПОЛНАЯ СТАТИСТИКА ===
+
+1. get_users_stats — общая статистика пользователей
+2. get_deposit_stats — статистика депозитов по уровням
+3. get_bonus_stats — статистика ВСЕХ бонусов (топ-10, общая сумма)
+4. get_withdrawal_stats — статистика выводов
+5. get_financial_report — ПОЛНЫЙ финансовый отчёт
+6. get_roi_stats — статистика ROI
+
+=== 💸 УПРАВЛЕНИЕ ВЫВОДАМИ ===
+
+1. get_pending_withdrawals — ожидающие заявки
+2. get_withdrawal_details — детали заявки
+3. approve_withdrawal — одобрить вывод
+4. reject_withdrawal — отклонить с возвратом на баланс
+
+ТЫ — ПОЛНОЦЕННЫЙ ТЕХНИЧЕСКИЙ АДМИН!
+Босс просит → выполняю сразу без лишних вопросов.
 """
 
 # Special prompt for technical deputy @AIXAN
@@ -691,6 +764,24 @@ SYSTEM_PROMPT_TECH_DEPUTY = SYSTEM_PROMPT_BASE + """
 - Архитектуре системы и её компонентам
 - Настройкам и конфигурации
 - Коду и логике работы системы
+
+=== 👥 ВСЕ ИНСТРУМЕНТЫ УПРАВЛЕНИЯ ===
+
+ПОЛЬЗОВАТЕЛИ:
+- get_user_profile, search_users, get_user_deposits
+- change_user_balance, block_user, unblock_user
+
+СТАТИСТИКА:
+- get_users_stats, get_deposit_stats, get_bonus_stats
+- get_withdrawal_stats, get_financial_report, get_roi_stats
+
+ВЫВОДЫ:
+- get_pending_withdrawals, get_withdrawal_details
+- approve_withdrawal, reject_withdrawal
+
+ОБРАЩЕНИЯ:
+- get_appeals_list, get_appeal_details, take_appeal, resolve_appeal
+- get_inquiries_list, get_inquiry_details, reply_to_inquiry
 
 КАК ОТВЕЧАТЬ:
 - Давай МАКСИМАЛЬНО полную и подробную техническую информацию
@@ -719,7 +810,7 @@ SYSTEM_PROMPT_TECH_DEPUTY = SYSTEM_PROMPT_BASE + """
 """
 
 # Technical deputies list (usernames without @)
-TECH_DEPUTIES = ["AIXAN"]
+TECH_DEPUTIES = ["AIXAN", "AI_XAN"]
 
 
 class AIAssistantService:
@@ -1540,6 +1631,205 @@ class AIAssistantService:
                     },
                     "required": ["inquiry_id"]
                 }
+            },
+            # ========== USER MANAGEMENT TOOLS ==========
+            {
+                "name": "get_user_profile",
+                "description": "Получить полный профиль пользователя: финансы, депозиты, PLEX, активность.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "user_identifier": {
+                            "type": "string",
+                            "description": "@username, telegram_id или адрес кошелька"
+                        }
+                    },
+                    "required": ["user_identifier"]
+                }
+            },
+            {
+                "name": "search_users",
+                "description": "Поиск пользователей по username, telegram_id или кошельку.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Поисковый запрос (@username, ID или часть кошелька)"
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Максимум результатов (по умолчанию 20)",
+                            "default": 20
+                        }
+                    },
+                    "required": ["query"]
+                }
+            },
+            {
+                "name": "change_user_balance",
+                "description": "Изменить баланс пользователя. ТОЛЬКО для доверенных админов!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "user_identifier": {
+                            "type": "string",
+                            "description": "@username или telegram_id"
+                        },
+                        "amount": {
+                            "type": "number",
+                            "description": "Сумма изменения (положительная)"
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "Причина изменения"
+                        },
+                        "operation": {
+                            "type": "string",
+                            "enum": ["add", "subtract"],
+                            "description": "add=пополнить, subtract=списать"
+                        }
+                    },
+                    "required": ["user_identifier", "amount", "reason", "operation"]
+                }
+            },
+            {
+                "name": "block_user",
+                "description": "Заблокировать пользователя. ТОЛЬКО по команде админа!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "user_identifier": {
+                            "type": "string",
+                            "description": "@username или telegram_id"
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "Причина блокировки"
+                        }
+                    },
+                    "required": ["user_identifier", "reason"]
+                }
+            },
+            {
+                "name": "unblock_user",
+                "description": "Разблокировать пользователя. ТОЛЬКО по команде админа!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "user_identifier": {
+                            "type": "string",
+                            "description": "@username или telegram_id"
+                        }
+                    },
+                    "required": ["user_identifier"]
+                }
+            },
+            {
+                "name": "get_user_deposits",
+                "description": "Получить депозиты и бонусы конкретного пользователя.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "user_identifier": {
+                            "type": "string",
+                            "description": "@username или telegram_id"
+                        }
+                    },
+                    "required": ["user_identifier"]
+                }
+            },
+            # ========== STATISTICS TOOLS ==========
+            {
+                "name": "get_deposit_stats",
+                "description": "Получить статистику по депозитам всех пользователей.",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            {
+                "name": "get_bonus_stats",
+                "description": "Получить статистику по бонусам ВСЕХ пользователей.",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            {
+                "name": "get_withdrawal_stats",
+                "description": "Получить статистику по выводам.",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            {
+                "name": "get_financial_report",
+                "description": "Получить полный финансовый отчёт системы.",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            {
+                "name": "get_users_stats",
+                "description": "Получить общую статистику по пользователям.",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            # ========== WITHDRAWALS TOOLS ==========
+            {
+                "name": "get_pending_withdrawals",
+                "description": "Получить список ожидающих заявок на вывод.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "limit": {
+                            "type": "integer",
+                            "description": "Максимум результатов",
+                            "default": 20
+                        }
+                    },
+                    "required": []
+                }
+            },
+            {
+                "name": "get_withdrawal_details",
+                "description": "Получить детали заявки на вывод.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "withdrawal_id": {
+                            "type": "integer",
+                            "description": "ID заявки"
+                        }
+                    },
+                    "required": ["withdrawal_id"]
+                }
+            },
+            {
+                "name": "approve_withdrawal",
+                "description": "Одобрить заявку на вывод. ТОЛЬКО для доверенных админов!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "withdrawal_id": {
+                            "type": "integer",
+                            "description": "ID заявки"
+                        },
+                        "tx_hash": {
+                            "type": "string",
+                            "description": "Хэш транзакции в блокчейне (опционально)"
+                        }
+                    },
+                    "required": ["withdrawal_id"]
+                }
+            },
+            {
+                "name": "reject_withdrawal",
+                "description": "Отклонить заявку на вывод с возвратом средств. ТОЛЬКО для доверенных админов!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "withdrawal_id": {
+                            "type": "integer",
+                            "description": "ID заявки"
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "Причина отклонения"
+                        }
+                    },
+                    "required": ["withdrawal_id", "reason"]
+                }
             }
         ]
 
@@ -1555,11 +1845,17 @@ class AIAssistantService:
         from app.services.ai_bonus_service import AIBonusService
         from app.services.ai_appeals_service import AIAppealsService
         from app.services.ai_inquiries_service import AIInquiriesService
+        from app.services.ai_users_service import AIUsersService
+        from app.services.ai_statistics_service import AIStatisticsService
+        from app.services.ai_withdrawals_service import AIWithdrawalsService
 
         broadcast_service = AIBroadcastService(session, bot)
         bonus_service = AIBonusService(session, admin_data)
         appeals_service = AIAppealsService(session, admin_data)
         inquiries_service = AIInquiriesService(session, admin_data)
+        users_service = AIUsersService(session, admin_data)
+        stats_service = AIStatisticsService(session, admin_data)
+        withdrawals_service = AIWithdrawalsService(session, admin_data)
         results = []
 
         for block in content:
@@ -1663,6 +1959,68 @@ class AIAssistantService:
                         result = await inquiries_service.close_inquiry(
                             inquiry_id=tool_input["inquiry_id"],
                             reason=tool_input.get("reason"),
+                        )
+                    # ========== USER MANAGEMENT TOOLS ==========
+                    elif tool_name == "get_user_profile":
+                        result = await users_service.get_user_profile(
+                            user_identifier=tool_input["user_identifier"],
+                        )
+                    elif tool_name == "search_users":
+                        result = await users_service.search_users(
+                            query=tool_input["query"],
+                            limit=tool_input.get("limit", 20),
+                        )
+                    elif tool_name == "change_user_balance":
+                        result = await users_service.change_user_balance(
+                            user_identifier=tool_input["user_identifier"],
+                            amount=tool_input["amount"],
+                            reason=tool_input["reason"],
+                            operation=tool_input["operation"],
+                        )
+                    elif tool_name == "block_user":
+                        result = await users_service.block_user(
+                            user_identifier=tool_input["user_identifier"],
+                            reason=tool_input["reason"],
+                        )
+                    elif tool_name == "unblock_user":
+                        result = await users_service.unblock_user(
+                            user_identifier=tool_input["user_identifier"],
+                        )
+                    elif tool_name == "get_user_deposits":
+                        result = await users_service.get_user_deposits(
+                            user_identifier=tool_input["user_identifier"],
+                        )
+                    elif tool_name == "get_users_stats":
+                        result = await users_service.get_users_stats()
+                    # ========== STATISTICS TOOLS ==========
+                    elif tool_name == "get_deposit_stats":
+                        result = await stats_service.get_deposit_stats()
+                    elif tool_name == "get_bonus_stats":
+                        result = await stats_service.get_bonus_stats()
+                    elif tool_name == "get_withdrawal_stats":
+                        result = await stats_service.get_withdrawal_stats()
+                    elif tool_name == "get_financial_report":
+                        result = await stats_service.get_financial_report()
+                    elif tool_name == "get_roi_stats":
+                        result = await stats_service.get_roi_stats()
+                    # ========== WITHDRAWALS TOOLS ==========
+                    elif tool_name == "get_pending_withdrawals":
+                        result = await withdrawals_service.get_pending_withdrawals(
+                            limit=tool_input.get("limit", 20),
+                        )
+                    elif tool_name == "get_withdrawal_details":
+                        result = await withdrawals_service.get_withdrawal_details(
+                            withdrawal_id=tool_input["withdrawal_id"],
+                        )
+                    elif tool_name == "approve_withdrawal":
+                        result = await withdrawals_service.approve_withdrawal(
+                            withdrawal_id=tool_input["withdrawal_id"],
+                            tx_hash=tool_input.get("tx_hash"),
+                        )
+                    elif tool_name == "reject_withdrawal":
+                        result = await withdrawals_service.reject_withdrawal(
+                            withdrawal_id=tool_input["withdrawal_id"],
+                            reason=tool_input["reason"],
                         )
                     else:
                         result = {"error": f"Unknown tool: {tool_name}"}
