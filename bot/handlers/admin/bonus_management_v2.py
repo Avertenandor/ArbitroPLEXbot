@@ -129,13 +129,13 @@ def amount_quick_select_keyboard() -> ReplyKeyboardMarkup:
     buttons = [
         [
             KeyboardButton(text="10 USDT"),
-            KeyboardButton(text="25 USDT"),
+            KeyboardButton(text="5 USDT"),
             KeyboardButton(text="50 USDT"),
         ],
         [
             KeyboardButton(text="100 USDT"),
-            KeyboardButton(text="250 USDT"),
-            KeyboardButton(text="500 USDT"),
+            KeyboardButton(text="30 USDT"),
+            KeyboardButton(text="70 USDT"),
         ],
         [KeyboardButton(text="💵 Ввести сумму вручную")],
         [KeyboardButton(text="❌ Отмена")],
