@@ -140,7 +140,7 @@ async def process_bonus_amount(
         return
 
     if message.text == "❌ Отмена":
-        await state.clear()
+        await state.set_state(None)  # Keep selected_user_id for navigation
         await message.answer(
             "Операция отменена",
             reply_markup=admin_bonus_keyboard(),
@@ -185,7 +185,7 @@ async def process_bonus_reason(
         return
 
     if message.text == "❌ Отмена":
-        await state.clear()
+        await state.set_state(None)  # Keep selected_user_id for navigation
         await message.answer(
             "Операция отменена",
             reply_markup=admin_bonus_keyboard(),
@@ -197,8 +197,11 @@ async def process_bonus_reason(
     amount_str = state_data.get("bonus_amount")
 
     if not user_id or not amount_str:
-        await state.clear()
-        await message.answer("❌ Ошибка: данные сессии потеряны")
+        await state.set_state(None)
+        await message.answer(
+            "❌ Ошибка: данные сессии потеряны",
+            reply_markup=admin_bonus_keyboard(),
+        )
         return
 
     amount = Decimal(amount_str)
@@ -372,7 +375,7 @@ async def process_cancel_bonus(
         return
 
     if message.text == "❌ Отмена":
-        await state.clear()
+        await state.set_state(None)  # Keep selected_user_id for navigation
         await message.answer(
             "Операция отменена",
             reply_markup=admin_bonus_keyboard(),
@@ -413,7 +416,7 @@ async def process_cancel_bonus(
         return
 
     await session.commit()
-    await state.clear()
+    await state.set_state(None)  # Keep selected_user_id for navigation
 
     await message.answer(
         f"✅ **Бонус ID {bonus_id} отменён**\n\n"

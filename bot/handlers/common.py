@@ -31,6 +31,9 @@ async def cancel_handler(
 
     This handler catches the "❌ Отмена" button from any state
     and clears the state, returning to the main menu.
+    
+    NOTE: Admin-specific states (BonusStates, etc.) have their own
+    cancel handlers that should take priority.
 
     Args:
         message: Telegram message
@@ -42,6 +45,19 @@ async def cancel_handler(
     current_state = await state.get_state()
 
     if current_state:
+        # Skip if this is an admin-specific state (let admin handlers handle it)
+        admin_state_prefixes = (
+            "BonusStates:",
+            "BonusMgmtStates:",
+            "AdminUserStates:",
+            "UserEditStates:",
+        )
+        if current_state.startswith(admin_state_prefixes):
+            logger.debug(
+                f"Common cancel_handler skipping admin state: {current_state}"
+            )
+            return  # Let admin-specific handlers process this
+        
         logger.info(
             f"User {user.id if user else 'unknown'} cancelled operation from state: {current_state}"
         )
