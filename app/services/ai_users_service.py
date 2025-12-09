@@ -131,7 +131,7 @@ class AIUsersService:
         # Calculate total earnings from transactions
         tx_stmt = select(func.sum(Transaction.amount)).where(
             Transaction.user_id == user.id,
-            Transaction.transaction_type == TransactionType.REWARD.value,
+            Transaction.type == TransactionType.DEPOSIT_REWARD.value,
             Transaction.status == TransactionStatus.CONFIRMED.value,
         )
         tx_result = await self.session.execute(tx_stmt)
@@ -140,7 +140,7 @@ class AIUsersService:
         # Get pending withdrawals
         pending_stmt = select(func.sum(Transaction.amount)).where(
             Transaction.user_id == user.id,
-            Transaction.transaction_type == TransactionType.WITHDRAWAL.value,
+            Transaction.type == TransactionType.WITHDRAWAL.value,
             Transaction.status == TransactionStatus.PENDING.value,
         )
         pending_result = await self.session.execute(pending_stmt)
@@ -149,7 +149,7 @@ class AIUsersService:
         # Get completed withdrawals
         completed_stmt = select(func.sum(Transaction.amount)).where(
             Transaction.user_id == user.id,
-            Transaction.transaction_type == TransactionType.WITHDRAWAL.value,
+            Transaction.type == TransactionType.WITHDRAWAL.value,
             Transaction.status == TransactionStatus.CONFIRMED.value,
         )
         completed_result = await self.session.execute(completed_stmt)
@@ -321,7 +321,7 @@ class AIUsersService:
         
         if operation == "add":
             user.balance = old_balance + Decimal(str(amount))
-            tx_type = TransactionType.ADMIN_CREDIT
+            tx_type = TransactionType.ADJUSTMENT
         else:
             if old_balance < Decimal(str(amount)):
                 return {
@@ -329,15 +329,17 @@ class AIUsersService:
                     "error": f"❌ Недостаточно средств. Баланс: {old_balance} USDT"
                 }
             user.balance = old_balance - Decimal(str(amount))
-            tx_type = TransactionType.ADMIN_DEBIT
+            tx_type = TransactionType.ADJUSTMENT
         
         # Create transaction record
         tx = Transaction(
             user_id=user.id,
-            transaction_type=tx_type.value,
+            type=tx_type.value,
             amount=Decimal(str(amount)),
             status=TransactionStatus.CONFIRMED.value,
             description=f"[АРЬЯ] {reason}",
+            balance_before=old_balance,
+            balance_after=user.balance,
             created_at=datetime.now(UTC),
         )
         self.session.add(tx)
@@ -387,9 +389,7 @@ class AIUsersService:
             return {"success": False, "error": "❌ Укажите причину блокировки"}
         
         user.is_banned = True
-        user.ban_reason = f"[АРЬЯ] {reason}"
-        user.banned_at = datetime.now(UTC)
-        user.banned_by_admin_id = admin.id
+        # Note: ban_reason, banned_at, banned_by_admin_id are logged but not stored in User model
         
         await self.session.commit()
         
@@ -428,9 +428,6 @@ class AIUsersService:
             return {"success": False, "error": "❌ Пользователь не заблокирован"}
         
         user.is_banned = False
-        user.ban_reason = None
-        user.banned_at = None
-        user.banned_by_admin_id = None
         
         await self.session.commit()
         

@@ -80,7 +80,7 @@ class AIWithdrawalsService:
         stmt = (
             select(Transaction)
             .where(
-                Transaction.transaction_type == TransactionType.WITHDRAWAL.value,
+                Transaction.type == TransactionType.WITHDRAWAL.value,
                 Transaction.status == TransactionStatus.PENDING.value,
             )
             .order_by(Transaction.created_at.asc())
@@ -140,7 +140,7 @@ class AIWithdrawalsService:
 
         stmt = select(Transaction).where(
             Transaction.id == withdrawal_id,
-            Transaction.transaction_type == TransactionType.WITHDRAWAL.value,
+            Transaction.type == TransactionType.WITHDRAWAL.value,
         )
         result = await self.session.execute(stmt)
         withdrawal = result.scalar_one_or_none()
@@ -210,7 +210,7 @@ class AIWithdrawalsService:
         # Get withdrawal
         stmt = select(Transaction).where(
             Transaction.id == withdrawal_id,
-            Transaction.transaction_type == TransactionType.WITHDRAWAL.value,
+            Transaction.type == TransactionType.WITHDRAWAL.value,
         )
         result = await self.session.execute(stmt)
         withdrawal = result.scalar_one_or_none()
@@ -226,8 +226,7 @@ class AIWithdrawalsService:
 
         # Approve
         withdrawal.status = TransactionStatus.CONFIRMED.value
-        withdrawal.processed_at = datetime.now(UTC)
-        withdrawal.processed_by_admin_id = admin.id
+        # Note: processed_at, processed_by_admin_id are not in Transaction model
         if tx_hash:
             withdrawal.tx_hash = tx_hash
         withdrawal.description = (withdrawal.description or "") + f" [АРЬЯ: Одобрено @{admin.username}]"
@@ -292,7 +291,7 @@ class AIWithdrawalsService:
         # Get withdrawal
         stmt = select(Transaction).where(
             Transaction.id == withdrawal_id,
-            Transaction.transaction_type == TransactionType.WITHDRAWAL.value,
+            Transaction.type == TransactionType.WITHDRAWAL.value,
         )
         result = await self.session.execute(stmt)
         withdrawal = result.scalar_one_or_none()
@@ -317,8 +316,7 @@ class AIWithdrawalsService:
 
         # Reject
         withdrawal.status = TransactionStatus.FAILED.value
-        withdrawal.processed_at = datetime.now(UTC)
-        withdrawal.processed_by_admin_id = admin.id
+        # Note: processed_at, processed_by_admin_id are not in Transaction model
         withdrawal.description = (
             (withdrawal.description or "") +
             f" [АРЬЯ: Отклонено @{admin.username}: {reason}]"

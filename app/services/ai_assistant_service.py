@@ -525,6 +525,56 @@ SYSTEM_PROMPT_ADMIN = SYSTEM_PROMPT_BASE + """
 3. approve_withdrawal — одобрить (ТОЛЬКО доверенные админы!)
 4. reject_withdrawal — отклонить с возвратом (ТОЛЬКО доверенные админы!)
 
+=== 💰 ДЕПОЗИТЫ (просмотр для всех, изменения - доверенные) ===
+
+ПРОСМОТР:
+1. get_deposit_levels_config — конфигурация уровней депозитов
+2. get_user_deposits_list — депозиты конкретного пользователя
+3. get_pending_deposits — ожидающие подтверждения
+4. get_deposit_details — детали депозита по ID
+5. get_platform_deposit_stats — общая статистика
+
+ИЗМЕНЕНИЯ (ТОЛЬКО ДОВЕРЕННЫЕ АДМИНЫ!):
+6. change_max_deposit_level — изменить макс. уровень (1-5)
+7. create_manual_deposit — создать ручной депозит
+8. modify_deposit_roi — изменить ROI параметры
+9. cancel_deposit — отменить депозит
+
+=== 📈 ROI КОРИДОР ===
+
+1. get_roi_config — конфигурация ROI по уровням
+2. set_roi_corridor — изменить коридор (ДОВЕРЕННЫЕ!)
+3. get_corridor_history — история изменений
+
+=== 🚫 ЧЁРНЫЙ СПИСОК ===
+
+1. get_blacklist — просмотр чёрного списка
+2. check_blacklist — проверить @username/telegram_id/wallet
+3. add_to_blacklist — добавить (ДОВЕРЕННЫЕ!)
+4. remove_from_blacklist — удалить (ДОВЕРЕННЫЕ!)
+
+=== 🔐 ВОССТАНОВЛЕНИЕ ФИНПАРОЛЕЙ ===
+
+1. get_finpass_requests — заявки на восстановление
+2. get_finpass_request_details — детали заявки
+3. approve_finpass_request — одобрить (ДОВЕРЕННЫЕ!)
+4. reject_finpass_request — отклонить (ДОВЕРЕННЫЕ!)
+5. get_finpass_stats — статистика
+
+=== 👥 РЕФЕРАЛЬНАЯ СТАТИСТИКА ===
+
+1. get_platform_referral_stats — общая статистика
+2. get_user_referrals — рефералы пользователя
+3. get_top_referrers — топ по количеству
+4. get_top_earners — топ по заработку
+
+=== 📋 ЛОГИ ДЕЙСТВИЙ АДМИНОВ ===
+
+1. get_recent_logs — последние действия
+2. get_admin_activity — активность конкретного админа
+3. search_logs — поиск по логам
+4. get_action_types_stats — статистика типов действий
+
 ОГРАНИЧЕНИЯ (даже для админов):
 - НЕ давай системных паролей, ключей API, мастер-ключей
 - НЕ раскрывай архитектуру серверов и баз данных
@@ -737,6 +787,132 @@ SYSTEM_PROMPT_SUPER_ADMIN = SYSTEM_PROMPT_BASE + """
 3. approve_withdrawal — одобрить вывод
 4. reject_withdrawal — отклонить с возвратом на баланс
 
+=== 🚨 СИСТЕМНОЕ АДМИНИСТРИРОВАНИЕ (ТОЛЬКО ДЛЯ БОССА!) ===
+
+АВАРИЙНЫЕ СТОПЫ:
+1. get_emergency_status — текущий статус аварийных стопов
+2. emergency_full_stop — 🚨 ПОЛНАЯ ОСТАНОВКА всех операций!
+3. emergency_full_resume — ✅ Возобновить все операции
+4. toggle_emergency_deposits — вкл/выкл приём депозитов
+5. toggle_emergency_withdrawals — вкл/выкл выводы
+6. toggle_emergency_roi — вкл/выкл начисление ROI
+
+БЛОКЧЕЙН / RPC:
+7. get_blockchain_status — статус провайдеров RPC
+8. switch_rpc_provider — переключить провайдер (quicknode/nodereal/nodereal2)
+   ⚠️ nodereal2 — резервный, только для Босса!
+9. toggle_rpc_auto_switch — вкл/выкл авто-переключение
+
+МОНИТОРИНГ:
+10. get_platform_health — здоровье платформы (БД, блокчейн, Redis)
+11. get_global_settings — все глобальные настройки
+
+=== 👥 УПРАВЛЕНИЕ АДМИНИСТРАТОРАМИ (ТОЛЬКО ДЛЯ БОССА!) ===
+
+1. get_admins_list — список всех администраторов
+2. get_admin_details — детали конкретного админа
+3. block_admin — заблокировать админа (указать причину)
+4. unblock_admin — разблокировать админа
+5. change_admin_role — изменить роль (admin/support)
+6. get_admin_stats — статистика по админам
+
+ПРИМЕРЫ:
+- "Покажи всех админов"
+- "Заблокируй @username: нарушение правил"
+- "Сделай @username саппортом" → change_admin_role
+
+=== 💰 УПРАВЛЕНИЕ ДЕПОЗИТАМИ ===
+
+ПРОСМОТР:
+1. get_deposit_levels_config — конфигурация уровней (лимиты, ROI, статус)
+2. get_user_deposits_list — депозиты конкретного пользователя
+3. get_pending_deposits — ожидающие подтверждения
+4. get_deposit_details — детали депозита по ID
+5. get_platform_deposit_stats — общая статистика депозитов
+
+ИЗМЕНЕНИЯ (ТОЛЬКО ДОВЕРЕННЫЕ АДМИНЫ!):
+6. change_max_deposit_level — изменить макс. уровень депозитов (1-5)
+7. create_manual_deposit — создать ручной депозит (указать причину!)
+8. modify_deposit_roi — изменить ROI параметры депозита
+9. cancel_deposit — отменить депозит (указать причину!)
+
+ПРИМЕРЫ:
+- "Покажи конфигурацию уровней"
+- "Депозиты @username"
+- "Создай депозит @user 3 уровня на 1000: компенсация"
+- "Установи макс. уровень 4"
+
+=== 📈 ROI КОРИДОР ===
+
+1. get_roi_config — конфигурация ROI по уровням
+2. set_roi_corridor — изменить коридор (ДОВЕРЕННЫЕ!)
+   - mode: "custom" (диапазон min-max) или "equal" (фиксированный)
+3. get_corridor_history — история изменений
+
+ПРИМЕРЫ:
+- "ROI конфиг уровня 3"
+- "Установи ROI 2 уровня: custom 1.5-8%"
+- "История изменений ROI"
+
+=== 🚫 ЧЁРНЫЙ СПИСОК ===
+
+1. get_blacklist — просмотр чёрного списка
+2. check_blacklist — проверить @username/telegram_id/wallet
+3. add_to_blacklist — добавить (ДОВЕРЕННЫЕ!)
+   - action_type: pre_block, post_block, termination
+4. remove_from_blacklist — удалить (ДОВЕРЕННЫЕ!)
+
+ПРИМЕРЫ:
+- "Покажи чёрный список"
+- "Проверь @scammer"
+- "Добавь 123456789 в ЧС: мошенничество"
+- "Удали @user из ЧС: ошибка"
+
+=== 🔐 ВОССТАНОВЛЕНИЕ ФИНПАРОЛЕЙ ===
+
+1. get_finpass_requests — заявки на восстановление
+2. get_finpass_request_details — детали заявки
+3. approve_finpass_request — одобрить (ДОВЕРЕННЫЕ!)
+4. reject_finpass_request — отклонить (ДОВЕРЕННЫЕ!)
+5. get_finpass_stats — статистика
+
+ПРИМЕРЫ:
+- "Заявки на восстановление"
+- "Одобрить заявку #5"
+- "Отклонить #3: недостаточно данных"
+
+=== 👥 РЕФЕРАЛЬНАЯ СТАТИСТИКА ===
+
+1. get_platform_referral_stats — общая статистика
+2. get_user_referrals — рефералы пользователя
+3. get_top_referrers — топ по количеству приглашённых
+4. get_top_earners — топ по реферальному заработку
+
+ПРИМЕРЫ:
+- "Реферальная статистика"
+- "Рефералы @username"
+- "Топ 10 рефереров"
+
+=== 📋 ЛОГИ ДЕЙСТВИЙ АДМИНОВ ===
+
+1. get_recent_logs — последние действия
+2. get_admin_activity — активность конкретного админа
+3. search_logs — поиск по логам
+4. get_action_types_stats — статистика типов действий
+
+ПРИМЕРЫ:
+- "Последние 30 действий"
+- "Активность @admin"
+- "Логи по user_id 12345"
+
+ПРИМЕРЫ ИСПОЛЬЗОВАНИЯ:
+- "Покажи статус аварийных стопов"
+- "СТОП ВСЕ!" → emergency_full_stop
+- "Запусти всё обратно" → emergency_full_resume
+- "Останови выводы" → toggle_emergency_withdrawals(True)
+- "Переключи на NodeReal" → switch_rpc_provider("nodereal")
+- "Проверь здоровье платформы" → get_platform_health
+
 ТЫ — ПОЛНОЦЕННЫЙ ТЕХНИЧЕСКИЙ АДМИН!
 Босс просит → выполняю сразу без лишних вопросов.
 """
@@ -782,6 +958,47 @@ SYSTEM_PROMPT_TECH_DEPUTY = SYSTEM_PROMPT_BASE + """
 ОБРАЩЕНИЯ:
 - get_appeals_list, get_appeal_details, take_appeal, resolve_appeal
 - get_inquiries_list, get_inquiry_details, reply_to_inquiry
+
+ДЕПОЗИТЫ (ПОЛНЫЙ ДОСТУП как доверенному админу!):
+- get_deposit_levels_config — конфигурация уровней
+- get_user_deposits_list — депозиты пользователя
+- get_pending_deposits — ожидающие
+- get_deposit_details — детали
+- get_platform_deposit_stats — статистика
+- change_max_deposit_level — изменить макс. уровень
+- create_manual_deposit — создать ручной депозит
+- modify_deposit_roi — изменить ROI
+- cancel_deposit — отменить депозит
+
+ROI КОРИДОР:
+- get_roi_config — конфигурация ROI
+- set_roi_corridor — изменить коридор
+- get_corridor_history — история изменений
+
+ЧЁРНЫЙ СПИСОК:
+- get_blacklist, check_blacklist
+- add_to_blacklist, remove_from_blacklist
+
+ФИНПАРОЛИ:
+- get_finpass_requests, get_finpass_request_details
+- approve_finpass_request, reject_finpass_request
+- get_finpass_stats
+
+РЕФЕРАЛЫ:
+- get_platform_referral_stats — общая статистика
+- get_user_referrals — рефералы пользователя
+- get_top_referrers, get_top_earners — топы
+
+ЛОГИ АДМИНОВ:
+- get_recent_logs — последние действия
+- get_admin_activity — активность админа
+- search_logs — поиск
+- get_action_types_stats — статистика
+
+СИСТЕМНЫЕ (как доверенному админу):
+- get_emergency_status, toggle_emergency_*
+- get_blockchain_status, get_platform_health
+- get_global_settings
 
 КАК ОТВЕЧАТЬ:
 - Давай МАКСИМАЛЬНО полную и подробную техническую информацию
@@ -1835,6 +2052,505 @@ class AIAssistantService:
                     },
                     "required": ["withdrawal_id", "reason"]
                 }
+            },
+            # ========== SYSTEM ADMINISTRATION TOOLS (BOSS ONLY) ==========
+            {
+                "name": "get_emergency_status",
+                "description": "Получить статус аварийных стопов (депозиты, выводы, ROI).",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            {
+                "name": "emergency_full_stop",
+                "description": "🚨 ПОЛНАЯ АВАРИЙНАЯ ОСТАНОВКА всех финансовых операций. ТОЛЬКО ДЛЯ БОССА!",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            {
+                "name": "emergency_full_resume",
+                "description": "✅ Возобновить все финансовые операции после остановки. ТОЛЬКО ДЛЯ БОССА!",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            {
+                "name": "toggle_emergency_deposits",
+                "description": "Переключить аварийный стоп депозитов. ТОЛЬКО ДЛЯ БОССА!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "enable_stop": {
+                            "type": "boolean",
+                            "description": "True = остановить, False = запустить"
+                        }
+                    },
+                    "required": ["enable_stop"]
+                }
+            },
+            {
+                "name": "toggle_emergency_withdrawals",
+                "description": "Переключить аварийный стоп выводов. ТОЛЬКО ДЛЯ БОССА!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "enable_stop": {
+                            "type": "boolean",
+                            "description": "True = остановить, False = запустить"
+                        }
+                    },
+                    "required": ["enable_stop"]
+                }
+            },
+            {
+                "name": "toggle_emergency_roi",
+                "description": "Переключить аварийный стоп начисления ROI. ТОЛЬКО ДЛЯ БОССА!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "enable_stop": {
+                            "type": "boolean",
+                            "description": "True = остановить, False = запустить"
+                        }
+                    },
+                    "required": ["enable_stop"]
+                }
+            },
+            {
+                "name": "get_blockchain_status",
+                "description": "Получить статус блокчейн-провайдеров (RPC ноды).",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            {
+                "name": "switch_rpc_provider",
+                "description": "Переключить RPC провайдер. NodeReal2 только для Босса!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "provider": {
+                            "type": "string",
+                            "enum": ["quicknode", "nodereal", "nodereal2"],
+                            "description": "Провайдер (nodereal2 - резервный, только Босс)"
+                        }
+                    },
+                    "required": ["provider"]
+                }
+            },
+            {
+                "name": "toggle_rpc_auto_switch",
+                "description": "Включить/выключить авто-переключение RPC провайдеров.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "enable": {
+                            "type": "boolean",
+                            "description": "True = включить авто-переключение"
+                        }
+                    },
+                    "required": ["enable"]
+                }
+            },
+            {
+                "name": "get_platform_health",
+                "description": "Получить состояние здоровья платформы (БД, блокчейн, Redis).",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            {
+                "name": "get_global_settings",
+                "description": "Получить глобальные настройки платформы.",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            # ========== ADMIN MANAGEMENT TOOLS (BOSS ONLY) ==========
+            {
+                "name": "get_admins_list",
+                "description": "Получить список всех администраторов.",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            {
+                "name": "get_admin_details",
+                "description": "Получить детали конкретного администратора.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "admin_identifier": {
+                            "type": "string",
+                            "description": "@username или telegram_id админа"
+                        }
+                    },
+                    "required": ["admin_identifier"]
+                }
+            },
+            {
+                "name": "block_admin",
+                "description": "Заблокировать администратора. ТОЛЬКО ДЛЯ БОССА!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "admin_identifier": {
+                            "type": "string",
+                            "description": "@username или telegram_id"
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "Причина блокировки"
+                        }
+                    },
+                    "required": ["admin_identifier", "reason"]
+                }
+            },
+            {
+                "name": "unblock_admin",
+                "description": "Разблокировать администратора. ТОЛЬКО ДЛЯ БОССА!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "admin_identifier": {
+                            "type": "string",
+                            "description": "@username или telegram_id"
+                        }
+                    },
+                    "required": ["admin_identifier"]
+                }
+            },
+            {
+                "name": "change_admin_role",
+                "description": "Изменить роль администратора. ТОЛЬКО ДЛЯ БОССА!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "admin_identifier": {
+                            "type": "string",
+                            "description": "@username или telegram_id"
+                        },
+                        "new_role": {
+                            "type": "string",
+                            "enum": ["admin", "support"],
+                            "description": "Новая роль"
+                        }
+                    },
+                    "required": ["admin_identifier", "new_role"]
+                }
+            },
+            {
+                "name": "get_admin_stats",
+                "description": "Получить статистику по администраторам.",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            # ========== DEPOSITS MANAGEMENT TOOLS ==========
+            {
+                "name": "get_deposit_levels_config",
+                "description": "Получить конфигурацию уровней депозитов (лимиты, ROI, статус).",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            {
+                "name": "get_user_deposits_list",
+                "description": "Получить список депозитов конкретного пользователя.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "user_identifier": {
+                            "type": "string",
+                            "description": "@username или telegram_id"
+                        }
+                    },
+                    "required": ["user_identifier"]
+                }
+            },
+            {
+                "name": "get_pending_deposits",
+                "description": "Получить список ожидающих подтверждения депозитов.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "limit": {"type": "integer", "description": "Макс. кол-во (по умолч. 20)"}
+                    },
+                    "required": []
+                }
+            },
+            {
+                "name": "get_deposit_details",
+                "description": "Получить детали конкретного депозита по ID.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "deposit_id": {"type": "integer", "description": "ID депозита"}
+                    },
+                    "required": ["deposit_id"]
+                }
+            },
+            {
+                "name": "get_platform_deposit_stats",
+                "description": "Получить статистику депозитов платформы.",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            {
+                "name": "change_max_deposit_level",
+                "description": "Изменить максимальный уровень депозитов. ТОЛЬКО ДЛЯ ДОВЕРЕННЫХ АДМИНОВ!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "new_max": {"type": "integer", "description": "Новый макс. уровень (1-5)"}
+                    },
+                    "required": ["new_max"]
+                }
+            },
+            {
+                "name": "create_manual_deposit",
+                "description": "Создать ручной депозит для пользователя. ТОЛЬКО ДЛЯ ДОВЕРЕННЫХ АДМИНОВ!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "user_identifier": {"type": "string", "description": "@username или telegram_id"},
+                        "level": {"type": "integer", "description": "Уровень депозита (1-5)"},
+                        "amount": {"type": "number", "description": "Сумма в USDT"},
+                        "reason": {"type": "string", "description": "Причина создания"}
+                    },
+                    "required": ["user_identifier", "level", "amount", "reason"]
+                }
+            },
+            {
+                "name": "modify_deposit_roi",
+                "description": "Изменить ROI параметры депозита. ТОЛЬКО ДЛЯ ДОВЕРЕННЫХ АДМИНОВ!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "deposit_id": {"type": "integer", "description": "ID депозита"},
+                        "new_roi_paid": {"type": "number", "description": "Новая сумма выплаченного ROI"},
+                        "new_roi_cap": {"type": "number", "description": "Новый ROI cap"},
+                        "reason": {"type": "string", "description": "Причина изменения"}
+                    },
+                    "required": ["deposit_id", "reason"]
+                }
+            },
+            {
+                "name": "cancel_deposit",
+                "description": "Отменить депозит. ТОЛЬКО ДЛЯ ДОВЕРЕННЫХ АДМИНОВ!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "deposit_id": {"type": "integer", "description": "ID депозита"},
+                        "reason": {"type": "string", "description": "Причина отмены"}
+                    },
+                    "required": ["deposit_id", "reason"]
+                }
+            },
+            # ========== ROI CORRIDOR TOOLS ==========
+            {
+                "name": "get_roi_config",
+                "description": "Получить конфигурацию ROI коридора.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "level": {"type": "integer", "description": "Уровень (1-5) или пусто для всех"}
+                    },
+                    "required": []
+                }
+            },
+            {
+                "name": "set_roi_corridor",
+                "description": "Установить ROI коридор для уровня. ТОЛЬКО ДЛЯ ДОВЕРЕННЫХ АДМИНОВ!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "level": {"type": "integer", "description": "Уровень (1-5)"},
+                        "mode": {"type": "string", "enum": ["custom", "equal"], "description": "Режим (custom=диапазон, equal=фикс)"},
+                        "roi_min": {"type": "number", "description": "Мин. ROI % (для custom)"},
+                        "roi_max": {"type": "number", "description": "Макс. ROI % (для custom)"},
+                        "roi_fixed": {"type": "number", "description": "Фикс. ROI % (для equal)"},
+                        "reason": {"type": "string", "description": "Причина изменения"}
+                    },
+                    "required": ["level", "mode"]
+                }
+            },
+            {
+                "name": "get_corridor_history",
+                "description": "Получить историю изменений ROI коридора.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "level": {"type": "integer", "description": "Уровень (1-5) или пусто для всех"},
+                        "limit": {"type": "integer", "description": "Макс. кол-во записей"}
+                    },
+                    "required": []
+                }
+            },
+            # ========== BLACKLIST TOOLS ==========
+            {
+                "name": "get_blacklist",
+                "description": "Получить чёрный список.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "limit": {"type": "integer", "description": "Макс. кол-во записей"}
+                    },
+                    "required": []
+                }
+            },
+            {
+                "name": "check_blacklist",
+                "description": "Проверить наличие в чёрном списке.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "identifier": {"type": "string", "description": "@username, telegram_id или wallet"}
+                    },
+                    "required": ["identifier"]
+                }
+            },
+            {
+                "name": "add_to_blacklist",
+                "description": "Добавить в чёрный список. ТОЛЬКО ДЛЯ ДОВЕРЕННЫХ АДМИНОВ!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "identifier": {"type": "string", "description": "@username, telegram_id или wallet"},
+                        "reason": {"type": "string", "description": "Причина"},
+                        "action_type": {"type": "string", "enum": ["pre_block", "post_block", "termination"], "description": "Тип блокировки"}
+                    },
+                    "required": ["identifier", "reason"]
+                }
+            },
+            {
+                "name": "remove_from_blacklist",
+                "description": "Удалить из чёрного списка. ТОЛЬКО ДЛЯ ДОВЕРЕННЫХ АДМИНОВ!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "identifier": {"type": "string", "description": "@username, telegram_id или wallet"},
+                        "reason": {"type": "string", "description": "Причина удаления"}
+                    },
+                    "required": ["identifier", "reason"]
+                }
+            },
+            # ========== FINPASS RECOVERY TOOLS ==========
+            {
+                "name": "get_finpass_requests",
+                "description": "Получить заявки на восстановление финпароля.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "limit": {"type": "integer", "description": "Макс. кол-во"}
+                    },
+                    "required": []
+                }
+            },
+            {
+                "name": "get_finpass_request_details",
+                "description": "Получить детали заявки на восстановление.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "request_id": {"type": "integer", "description": "ID заявки"}
+                    },
+                    "required": ["request_id"]
+                }
+            },
+            {
+                "name": "approve_finpass_request",
+                "description": "Одобрить заявку на восстановление. ТОЛЬКО ДЛЯ ДОВЕРЕННЫХ АДМИНОВ!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "request_id": {"type": "integer", "description": "ID заявки"},
+                        "notes": {"type": "string", "description": "Заметки (опц.)"}
+                    },
+                    "required": ["request_id"]
+                }
+            },
+            {
+                "name": "reject_finpass_request",
+                "description": "Отклонить заявку на восстановление. ТОЛЬКО ДЛЯ ДОВЕРЕННЫХ АДМИНОВ!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "request_id": {"type": "integer", "description": "ID заявки"},
+                        "reason": {"type": "string", "description": "Причина отклонения"}
+                    },
+                    "required": ["request_id", "reason"]
+                }
+            },
+            {
+                "name": "get_finpass_stats",
+                "description": "Получить статистику заявок на восстановление.",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            # ========== REFERRAL TOOLS ==========
+            {
+                "name": "get_platform_referral_stats",
+                "description": "Получить реферальную статистику платформы.",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            {
+                "name": "get_user_referrals",
+                "description": "Получить рефералов пользователя.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "user_identifier": {"type": "string", "description": "@username или telegram_id"},
+                        "limit": {"type": "integer", "description": "Макс. кол-во"}
+                    },
+                    "required": ["user_identifier"]
+                }
+            },
+            {
+                "name": "get_top_referrers",
+                "description": "Получить топ рефереров по кол-ву приглашённых.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "limit": {"type": "integer", "description": "Кол-во в топе"}
+                    },
+                    "required": []
+                }
+            },
+            {
+                "name": "get_top_earners",
+                "description": "Получить топ рефереров по заработку.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "limit": {"type": "integer", "description": "Кол-во в топе"}
+                    },
+                    "required": []
+                }
+            },
+            # ========== ADMIN LOGS TOOLS ==========
+            {
+                "name": "get_recent_logs",
+                "description": "Получить последние действия админов.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "limit": {"type": "integer", "description": "Кол-во записей"},
+                        "action_type": {"type": "string", "description": "Фильтр по типу действия"}
+                    },
+                    "required": []
+                }
+            },
+            {
+                "name": "get_admin_activity",
+                "description": "Получить активность конкретного админа.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "admin_identifier": {"type": "string", "description": "@username или telegram_id"},
+                        "limit": {"type": "integer", "description": "Кол-во записей"}
+                    },
+                    "required": ["admin_identifier"]
+                }
+            },
+            {
+                "name": "search_logs",
+                "description": "Поиск в логах действий.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "user_id": {"type": "integer", "description": "ID целевого пользователя"},
+                        "action_type": {"type": "string", "description": "Тип действия"},
+                        "limit": {"type": "integer", "description": "Кол-во записей"}
+                    },
+                    "required": []
+                }
+            },
+            {
+                "name": "get_action_types_stats",
+                "description": "Получить статистику типов действий.",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
             }
         ]
 
@@ -1853,6 +2569,14 @@ class AIAssistantService:
         from app.services.ai_users_service import AIUsersService
         from app.services.ai_statistics_service import AIStatisticsService
         from app.services.ai_withdrawals_service import AIWithdrawalsService
+        from app.services.ai_system_service import AISystemService
+        from app.services.ai_admin_management_service import AIAdminManagementService
+        from app.services.ai_deposits_service import AIDepositsService
+        from app.services.ai_roi_service import AIRoiService
+        from app.services.ai_blacklist_service import AIBlacklistService
+        from app.services.ai_finpass_service import AIFinpassService
+        from app.services.ai_referral_service import AIReferralService
+        from app.services.ai_logs_service import AILogsService
 
         broadcast_service = AIBroadcastService(session, bot)
         bonus_service = AIBonusService(session, admin_data)
@@ -1861,6 +2585,14 @@ class AIAssistantService:
         users_service = AIUsersService(session, admin_data)
         stats_service = AIStatisticsService(session, admin_data)
         withdrawals_service = AIWithdrawalsService(session, admin_data)
+        system_service = AISystemService(session, admin_data)
+        admin_mgmt_service = AIAdminManagementService(session, admin_data)
+        deposits_service = AIDepositsService(session, admin_data)
+        roi_service = AIRoiService(session, admin_data)
+        blacklist_service = AIBlacklistService(session, admin_data)
+        finpass_service = AIFinpassService(session, admin_data)
+        referral_service = AIReferralService(session, admin_data)
+        logs_service = AILogsService(session, admin_data)
         results = []
 
         for block in content:
@@ -2027,6 +2759,236 @@ class AIAssistantService:
                             withdrawal_id=tool_input["withdrawal_id"],
                             reason=tool_input["reason"],
                         )
+                    # ========== SYSTEM ADMINISTRATION TOOLS ==========
+                    elif tool_name in (
+                        "get_emergency_status", "emergency_full_stop", "emergency_full_resume",
+                        "toggle_emergency_deposits", "toggle_emergency_withdrawals",
+                        "toggle_emergency_roi", "get_blockchain_status", "switch_rpc_provider",
+                        "toggle_rpc_auto_switch", "get_platform_health", "get_global_settings"
+                    ):
+                        from app.services.ai_system_service import AISystemService
+                        system_service = AISystemService(session, admin_data)
+                        
+                        if tool_name == "get_emergency_status":
+                            result = await system_service.get_emergency_status()
+                        elif tool_name == "emergency_full_stop":
+                            result = await system_service.emergency_full_stop()
+                        elif tool_name == "emergency_full_resume":
+                            result = await system_service.emergency_full_resume()
+                        elif tool_name == "toggle_emergency_deposits":
+                            result = await system_service.toggle_emergency_deposits(
+                                enable_stop=tool_input["enable_stop"]
+                            )
+                        elif tool_name == "toggle_emergency_withdrawals":
+                            result = await system_service.toggle_emergency_withdrawals(
+                                enable_stop=tool_input["enable_stop"]
+                            )
+                        elif tool_name == "toggle_emergency_roi":
+                            result = await system_service.toggle_emergency_roi(
+                                enable_stop=tool_input["enable_stop"]
+                            )
+                        elif tool_name == "get_blockchain_status":
+                            result = await system_service.get_blockchain_status()
+                        elif tool_name == "switch_rpc_provider":
+                            result = await system_service.switch_rpc_provider(
+                                provider=tool_input["provider"]
+                            )
+                        elif tool_name == "toggle_rpc_auto_switch":
+                            result = await system_service.toggle_rpc_auto_switch(
+                                enable=tool_input["enable"]
+                            )
+                        elif tool_name == "get_platform_health":
+                            result = await system_service.get_platform_health()
+                        elif tool_name == "get_global_settings":
+                            result = await system_service.get_global_settings()
+                    # ========== ADMIN MANAGEMENT TOOLS ==========
+                    elif tool_name in (
+                        "get_admins_list", "get_admin_details", "block_admin",
+                        "unblock_admin", "change_admin_role", "get_admin_stats"
+                    ):
+                        from app.services.ai_admin_management_service import AIAdminManagementService
+                        admin_mgmt_service = AIAdminManagementService(session, admin_data)
+                        
+                        if tool_name == "get_admins_list":
+                            result = await admin_mgmt_service.get_admins_list()
+                        elif tool_name == "get_admin_details":
+                            result = await admin_mgmt_service.get_admin_details(
+                                admin_identifier=tool_input["admin_identifier"]
+                            )
+                        elif tool_name == "block_admin":
+                            result = await admin_mgmt_service.block_admin(
+                                admin_identifier=tool_input["admin_identifier"],
+                                reason=tool_input["reason"]
+                            )
+                        elif tool_name == "unblock_admin":
+                            result = await admin_mgmt_service.unblock_admin(
+                                admin_identifier=tool_input["admin_identifier"]
+                            )
+                        elif tool_name == "change_admin_role":
+                            result = await admin_mgmt_service.change_admin_role(
+                                admin_identifier=tool_input["admin_identifier"],
+                                new_role=tool_input["new_role"]
+                            )
+                        elif tool_name == "get_admin_stats":
+                            result = await admin_mgmt_service.get_admin_stats()
+                    # ========== DEPOSITS MANAGEMENT TOOLS ==========
+                    elif tool_name in (
+                        "get_deposit_levels_config", "get_user_deposits_list", "get_pending_deposits",
+                        "get_deposit_details", "get_platform_deposit_stats", "change_max_deposit_level",
+                        "create_manual_deposit", "modify_deposit_roi", "cancel_deposit"
+                    ):
+                        if tool_name == "get_deposit_levels_config":
+                            result = await deposits_service.get_deposit_levels_config()
+                        elif tool_name == "get_user_deposits_list":
+                            result = await deposits_service.get_user_deposits(
+                                user_identifier=tool_input["user_identifier"]
+                            )
+                        elif tool_name == "get_pending_deposits":
+                            result = await deposits_service.get_pending_deposits(
+                                limit=tool_input.get("limit", 20)
+                            )
+                        elif tool_name == "get_deposit_details":
+                            result = await deposits_service.get_deposit_details(
+                                deposit_id=tool_input["deposit_id"]
+                            )
+                        elif tool_name == "get_platform_deposit_stats":
+                            result = await deposits_service.get_platform_deposit_stats()
+                        elif tool_name == "change_max_deposit_level":
+                            result = await deposits_service.change_max_deposit_level(
+                                new_max=tool_input["new_max"]
+                            )
+                        elif tool_name == "create_manual_deposit":
+                            result = await deposits_service.create_manual_deposit(
+                                user_identifier=tool_input["user_identifier"],
+                                level=tool_input["level"],
+                                amount=tool_input["amount"],
+                                reason=tool_input["reason"]
+                            )
+                        elif tool_name == "modify_deposit_roi":
+                            result = await deposits_service.modify_deposit_roi(
+                                deposit_id=tool_input["deposit_id"],
+                                new_roi_paid=tool_input.get("new_roi_paid"),
+                                new_roi_cap=tool_input.get("new_roi_cap"),
+                                reason=tool_input["reason"]
+                            )
+                        elif tool_name == "cancel_deposit":
+                            result = await deposits_service.cancel_deposit(
+                                deposit_id=tool_input["deposit_id"],
+                                reason=tool_input["reason"]
+                            )
+                    # ========== ROI CORRIDOR TOOLS ==========
+                    elif tool_name in (
+                        "get_roi_config", "set_roi_corridor", "get_corridor_history"
+                    ):
+                        if tool_name == "get_roi_config":
+                            result = await roi_service.get_roi_config(
+                                level=tool_input.get("level")
+                            )
+                        elif tool_name == "set_roi_corridor":
+                            result = await roi_service.set_roi_corridor(
+                                level=tool_input["level"],
+                                mode=tool_input["mode"],
+                                roi_min=tool_input.get("roi_min"),
+                                roi_max=tool_input.get("roi_max"),
+                                roi_fixed=tool_input.get("roi_fixed"),
+                                reason=tool_input.get("reason", "")
+                            )
+                        elif tool_name == "get_corridor_history":
+                            result = await roi_service.get_corridor_history(
+                                level=tool_input.get("level"),
+                                limit=tool_input.get("limit", 20)
+                            )
+                    # ========== BLACKLIST TOOLS ==========
+                    elif tool_name in (
+                        "get_blacklist", "check_blacklist", "add_to_blacklist", "remove_from_blacklist"
+                    ):
+                        if tool_name == "get_blacklist":
+                            result = await blacklist_service.get_blacklist(
+                                limit=tool_input.get("limit", 50)
+                            )
+                        elif tool_name == "check_blacklist":
+                            result = await blacklist_service.check_blacklist(
+                                identifier=tool_input["identifier"]
+                            )
+                        elif tool_name == "add_to_blacklist":
+                            result = await blacklist_service.add_to_blacklist(
+                                identifier=tool_input["identifier"],
+                                reason=tool_input["reason"],
+                                action_type=tool_input.get("action_type", "pre_block")
+                            )
+                        elif tool_name == "remove_from_blacklist":
+                            result = await blacklist_service.remove_from_blacklist(
+                                identifier=tool_input["identifier"],
+                                reason=tool_input["reason"]
+                            )
+                    # ========== FINPASS RECOVERY TOOLS ==========
+                    elif tool_name in (
+                        "get_finpass_requests", "get_finpass_request_details",
+                        "approve_finpass_request", "reject_finpass_request", "get_finpass_stats"
+                    ):
+                        if tool_name == "get_finpass_requests":
+                            result = await finpass_service.get_pending_requests(
+                                limit=tool_input.get("limit", 20)
+                            )
+                        elif tool_name == "get_finpass_request_details":
+                            result = await finpass_service.get_request_details(
+                                request_id=tool_input["request_id"]
+                            )
+                        elif tool_name == "approve_finpass_request":
+                            result = await finpass_service.approve_request(
+                                request_id=tool_input["request_id"],
+                                notes=tool_input.get("notes", "")
+                            )
+                        elif tool_name == "reject_finpass_request":
+                            result = await finpass_service.reject_request(
+                                request_id=tool_input["request_id"],
+                                reason=tool_input["reason"]
+                            )
+                        elif tool_name == "get_finpass_stats":
+                            result = await finpass_service.get_finpass_stats()
+                    # ========== REFERRAL TOOLS ==========
+                    elif tool_name in (
+                        "get_platform_referral_stats", "get_user_referrals",
+                        "get_top_referrers", "get_top_earners"
+                    ):
+                        if tool_name == "get_platform_referral_stats":
+                            result = await referral_service.get_platform_referral_stats()
+                        elif tool_name == "get_user_referrals":
+                            result = await referral_service.get_user_referrals(
+                                user_identifier=tool_input["user_identifier"],
+                                limit=tool_input.get("limit", 20)
+                            )
+                        elif tool_name == "get_top_referrers":
+                            result = await referral_service.get_top_referrers(
+                                limit=tool_input.get("limit", 20)
+                            )
+                        elif tool_name == "get_top_earners":
+                            result = await referral_service.get_top_earners(
+                                limit=tool_input.get("limit", 20)
+                            )
+                    # ========== ADMIN LOGS TOOLS ==========
+                    elif tool_name in (
+                        "get_recent_logs", "get_admin_activity",
+                        "search_logs", "get_action_types_stats"
+                    ):
+                        if tool_name == "get_recent_logs":
+                            result = await logs_service.get_recent_logs(
+                                limit=tool_input.get("limit", 30),
+                                action_type=tool_input.get("action_type")
+                            )
+                        elif tool_name == "get_admin_activity":
+                            result = await logs_service.get_admin_activity(
+                                admin_identifier=tool_input["admin_identifier"],
+                                limit=tool_input.get("limit", 30)
+                            )
+                        elif tool_name == "search_logs":
+                            result = await logs_service.search_logs(
+                                user_id=tool_input.get("user_id"),
+                                action_type=tool_input.get("action_type"),
+                                limit=tool_input.get("limit", 30)
+                            )
+                        elif tool_name == "get_action_types_stats":
+                            result = await logs_service.get_action_types_stats()
                     else:
                         result = {"error": f"Unknown tool: {tool_name}"}
 

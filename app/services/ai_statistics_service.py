@@ -207,7 +207,7 @@ class AIStatisticsService:
             func.count(Transaction.id),
             func.sum(Transaction.amount)
         ).where(
-            Transaction.transaction_type == TransactionType.WITHDRAWAL.value,
+            Transaction.type == TransactionType.WITHDRAWAL.value,
             Transaction.status == TransactionStatus.PENDING.value,
         )
         pending_result = await self.session.execute(pending_stmt)
@@ -220,7 +220,7 @@ class AIStatisticsService:
             func.count(Transaction.id),
             func.sum(Transaction.amount)
         ).where(
-            Transaction.transaction_type == TransactionType.WITHDRAWAL.value,
+            Transaction.type == TransactionType.WITHDRAWAL.value,
             Transaction.status == TransactionStatus.CONFIRMED.value,
         )
         completed_result = await self.session.execute(completed_stmt)
@@ -231,7 +231,7 @@ class AIStatisticsService:
         # Today's withdrawals
         today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
         today_stmt = select(func.sum(Transaction.amount)).where(
-            Transaction.transaction_type == TransactionType.WITHDRAWAL.value,
+            Transaction.type == TransactionType.WITHDRAWAL.value,
             Transaction.status == TransactionStatus.CONFIRMED.value,
             Transaction.created_at >= today,
         )
@@ -241,7 +241,7 @@ class AIStatisticsService:
         # This week
         week_ago = datetime.now(UTC) - timedelta(days=7)
         week_stmt = select(func.sum(Transaction.amount)).where(
-            Transaction.transaction_type == TransactionType.WITHDRAWAL.value,
+            Transaction.type == TransactionType.WITHDRAWAL.value,
             Transaction.status == TransactionStatus.CONFIRMED.value,
             Transaction.created_at >= week_ago,
         )
@@ -288,7 +288,7 @@ class AIStatisticsService:
 
         # Total ROI paid (rewards)
         rewards_stmt = select(func.sum(Transaction.amount)).where(
-            Transaction.transaction_type == TransactionType.REWARD.value,
+            Transaction.type == TransactionType.DEPOSIT_REWARD.value,
             Transaction.status == TransactionStatus.CONFIRMED.value,
         )
         rewards_result = await self.session.execute(rewards_stmt)
@@ -296,7 +296,7 @@ class AIStatisticsService:
 
         # Total withdrawals
         withdrawals_stmt = select(func.sum(Transaction.amount)).where(
-            Transaction.transaction_type == TransactionType.WITHDRAWAL.value,
+            Transaction.type == TransactionType.WITHDRAWAL.value,
             Transaction.status == TransactionStatus.CONFIRMED.value,
         )
         withdrawals_result = await self.session.execute(withdrawals_stmt)
@@ -304,7 +304,7 @@ class AIStatisticsService:
 
         # Pending withdrawals
         pending_stmt = select(func.sum(Transaction.amount)).where(
-            Transaction.transaction_type == TransactionType.WITHDRAWAL.value,
+            Transaction.type == TransactionType.WITHDRAWAL.value,
             Transaction.status == TransactionStatus.PENDING.value,
         )
         pending_result = await self.session.execute(pending_stmt)
@@ -345,7 +345,7 @@ class AIStatisticsService:
 
         # Total ROI paid from deposits
         deposit_roi_stmt = select(func.sum(Transaction.amount)).where(
-            Transaction.transaction_type == TransactionType.REWARD.value,
+            Transaction.type == TransactionType.DEPOSIT_REWARD.value,
             Transaction.status == TransactionStatus.CONFIRMED.value,
         )
         deposit_roi_result = await self.session.execute(deposit_roi_stmt)
@@ -359,7 +359,7 @@ class AIStatisticsService:
         # Today's ROI
         today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
         today_stmt = select(func.sum(Transaction.amount)).where(
-            Transaction.transaction_type == TransactionType.REWARD.value,
+            Transaction.type == TransactionType.DEPOSIT_REWARD.value,
             Transaction.status == TransactionStatus.CONFIRMED.value,
             Transaction.created_at >= today,
         )
