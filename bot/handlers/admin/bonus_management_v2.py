@@ -494,11 +494,16 @@ async def process_grant_user(
     **data: Any,
 ) -> None:
     """Обработать ввод пользователя."""
+    logger.info(f"process_grant_user called with text: {message.text}")
+    
     admin = await get_admin_or_deny(message, session, **data)
     if not admin:
+        logger.warning("process_grant_user: admin check failed")
         return
 
-    user_input = message.text.strip()
+    user_input = message.text.strip() if message.text else ""
+    logger.info(f"process_grant_user: user_input='{user_input}'")
+    
     user_service = UserService(session)
     user = None
     
@@ -569,11 +574,15 @@ async def process_grant_amount(
     **data: Any,
 ) -> None:
     """Обработать выбор/ввод суммы."""
+    logger.info(f"process_grant_amount called with text: {message.text}")
+    
     admin = await get_admin_or_deny(message, session, **data)
     if not admin:
+        logger.warning("process_grant_amount: admin check failed")
         return
 
-    text_input = message.text.strip()
+    text_input = message.text.strip() if message.text else ""
+    logger.info(f"process_grant_amount: text_input='{text_input}'")
     
     # Обработка быстрого выбора
     if text_input == "💵 Ввести сумму вручную":
@@ -590,6 +599,7 @@ async def process_grant_amount(
     
     # Парсим сумму
     amount_str = text_input.replace("USDT", "").replace(",", ".").strip()
+    logger.info(f"process_grant_amount: amount_str='{amount_str}'")
     
     try:
         amount = Decimal(amount_str)
@@ -597,7 +607,8 @@ async def process_grant_amount(
             raise ValueError("Minimum 1 USDT")
         if amount > 100000:
             raise ValueError("Maximum 100000 USDT")
-    except (InvalidOperation, ValueError):
+    except (InvalidOperation, ValueError) as e:
+        logger.warning(f"process_grant_amount: invalid amount '{amount_str}': {e}")
         await message.answer(
             "❌ **Неверная сумма**\n\n"
             "Введите число от 1 до 100,000\n"
@@ -606,6 +617,7 @@ async def process_grant_amount(
         )
         return
 
+    logger.info(f"process_grant_amount: amount={amount}")
     await state.update_data(amount=str(amount))
     
     roi_cap = amount * 5  # 500%
