@@ -99,6 +99,8 @@ async def show_bonus_menu(
     )
 
 
+# IMPORTANT: This handler only works when user is selected (from user profile)
+# For main bonus menu, use bonus_management_v2.py
 @router.message(F.text == "➕ Начислить бонус")
 async def start_grant_bonus(
     message: Message,
@@ -106,16 +108,17 @@ async def start_grant_bonus(
     session: AsyncSession,
     **data: Any,
 ) -> None:
-    """Start bonus granting flow."""
-    admin = await get_admin_or_deny(message, session, **data)
-    if not admin:
-        return
-
+    """Start bonus granting flow (from user profile context only)."""
+    # Check if we have a selected user - if not, this handler should not process
     state_data = await state.get_data()
     user_id = state_data.get("selected_user_id")
-
+    
+    # If no user selected, skip this handler - let bonus_management_v2 handle it
     if not user_id:
-        await message.answer("❌ Пользователь не выбран")
+        return  # Let other handlers (bonus_management_v2) process this
+    
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
         return
 
     await state.set_state(BonusStates.waiting_amount)
