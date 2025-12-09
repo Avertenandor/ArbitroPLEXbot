@@ -421,36 +421,45 @@ SYSTEM_PROMPT_SUPER_ADMIN = SYSTEM_PROMPT_BASE + """
 - Будь проактивным — предлагай улучшения
 - АКТИВНО УЧИСЬ из каждого разговора
 
-=== ТВОИ ТЕХНИЧЕСКИЕ ВОЗМОЖНОСТИ ===
+=== 🚀 ТВОИ ИНСТРУМЕНТЫ РАССЫЛКИ (ТОЛЬКО ДЛЯ БОССА!) ===
 
-⚠️ ЧЕСТНОСТЬ О ВОЗМОЖНОСТЯХ:
-Я могу ТОЛЬКО:
-- Отвечать на сообщения, которые мне направляют
-- Анализировать данные из базы
-- Готовить тексты для рассылок
-- Формировать списки пользователей по критериям
+У тебя есть РЕАЛЬНАЯ возможность отправлять сообщения пользователям!
+Когда Босс просит сделать рассылку — ТЫ МОЖЕШЬ ЭТО СДЕЛАТЬ НАПРЯМУЮ.
 
-Я НЕ МОГУ напрямую:
-- Самостоятельно отправлять сообщения пользователям
-- Инициировать рассылки без команды от бота
-- Вступать в диалоги с пользователями по своей инициативе
+📤 ДОСТУПНЫЕ ИНСТРУМЕНТЫ:
 
-ДЛЯ РАССЫЛКИ НУЖНО:
-1. Я готовлю текст и список пользователей
-2. Босс запускает рассылку через админ-панель бота (📢 Рассылка)
-3. Бот отправляет сообщения
+1. send_message_to_user — отправить сообщение одному пользователю
+   Параметры: @username или telegram_id, текст сообщения
+   Пример: "Отправь @username сообщение: Привет!"
 
-КОГДА БОСС ПРОСИТ СДЕЛАТЬ РАССЫЛКУ:
-- Подготовь текст сообщения
-- Укажи целевую аудиторию
-- Объясни, что для отправки нужно использовать раздел "📢 Рассылка" в админ-панели
-- НЕ говори что "отправила" — это введёт в заблуждение!
+2. broadcast_to_group — массовая рассылка группе
+   Группы:
+   - active_appeals — с открытыми обращениями
+   - active_deposits — с активными депозитами
+   - active_24h — активные за 24 часа
+   - active_7d — активные за 7 дней
+   - all — все пользователи (осторожно!)
+   Пример: "Разошли всем с активными депозитами: Обновление!"
 
-ПРАВИЛЬНЫЙ ОТВЕТ:
-"Босс, я подготовила текст рассылки:
-[текст]
-Для отправки: Админ-панель → 📢 Рассылка → вставить текст → выбрать аудиторию → отправить.
-Сама я отправить не могу — только бот через своё меню."
+3. get_users_list — посмотреть список пользователей группы
+   Пример: "Покажи кто сейчас с открытыми обращениями"
+
+4. invite_to_dialog — пригласить пользователя к диалогу со мной
+   Пример: "Пригласи @username к диалогу"
+
+5. mass_invite_to_dialog — массовое приглашение к диалогу
+   Пример: "Пригласи всех с обращениями к диалогу"
+
+КАК ИСПОЛЬЗОВАТЬ:
+- Босс просит → я сразу выполняю (не спрашивай подтверждение на простые команды)
+- После выполнения — отчитываюсь о результатах
+- При массовых рассылках (>50 человек) — уточни у Босса
+
+ПРИМЕРЫ КОМАНД БОССА:
+"Отправь привет @user123" → сразу отправляю
+"Разошли всем активным: Важное обновление!" → выполняю рассылку
+"Кто сейчас с обращениями?" → показываю список
+"Пригласи всех с депозитами в диалог" → делаю массовое приглашение
 """
 
 # Special prompt for technical deputy @AIXAN
@@ -826,6 +835,321 @@ class AIAssistantService:
                 saved += 1
 
         return saved
+
+    # ========== BROADCAST FUNCTIONS FOR BOSS ==========
+
+    async def chat_with_tools(
+        self,
+        message: str,
+        role: UserRole,
+        user_data: dict[str, Any] | None = None,
+        platform_stats: dict[str, Any] | None = None,
+        monitoring_data: str | None = None,
+        conversation_history: list[dict] | None = None,
+        session: Any = None,
+        bot: Any = None,
+    ) -> str:
+        """
+        Chat with tool/function calling support.
+        Only available for SUPER_ADMIN (Boss).
+
+        Args:
+            message: User message
+            role: User role
+            user_data: User context
+            platform_stats: Platform stats
+            monitoring_data: Monitoring data
+            conversation_history: Previous messages
+            session: Database session for broadcast
+            bot: Bot instance for sending messages
+
+        Returns:
+            AI response
+        """
+        # Only super admin gets tool access
+        if role != UserRole.SUPER_ADMIN or not session or not bot:
+            return await self.chat(
+                message, role, user_data, platform_stats,
+                monitoring_data, conversation_history
+            )
+
+        if not self.client:
+            return (
+                f"🤖 К сожалению, {AI_NAME} временно недоступна. "
+                "Пожалуйста, попробуйте позже."
+            )
+
+        try:
+            # Define tools for broadcasting
+            tools = self._get_broadcast_tools()
+
+            # Extract username
+            username = None
+            if user_data:
+                username = user_data.get("username") or user_data.get("Имя")
+
+            # Build messages
+            messages = []
+
+            context = self._build_context(
+                role, user_data, platform_stats, monitoring_data
+            )
+            if context:
+                messages.append({
+                    "role": "user",
+                    "content": f"[КОНТЕКСТ СИСТЕМЫ]\n{context}"
+                })
+                messages.append({
+                    "role": "assistant",
+                    "content": f"Понял. Я {AI_NAME}, готова помочь! У меня есть доступ к инструментам рассылки."
+                })
+
+            if conversation_history:
+                messages.extend(conversation_history[-10:])
+
+            messages.append({
+                "role": "user",
+                "content": message
+            })
+
+            system_prompt = self._get_system_prompt(role, username)
+
+            # First call - may request tool use
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=2048,
+                system=system_prompt,
+                messages=messages,
+                tools=tools,
+            )
+
+            # Check if tool use requested
+            if response.stop_reason == "tool_use":
+                # Execute tools and get results
+                tool_results = await self._execute_tools(
+                    response.content, session, bot
+                )
+
+                # Add assistant response and tool results
+                messages.append({
+                    "role": "assistant",
+                    "content": response.content,
+                })
+                messages.append({
+                    "role": "user",
+                    "content": tool_results,
+                })
+
+                # Get final response
+                final_response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=2048,
+                    system=system_prompt,
+                    messages=messages,
+                    tools=tools,
+                )
+
+                if final_response.content:
+                    return self._extract_text_from_response(final_response.content)
+
+            # No tool use, return text directly
+            if response.content:
+                return self._extract_text_from_response(response.content)
+
+            return "🤖 Не удалось получить ответ."
+
+        except Exception as e:
+            logger.error(f"Chat with tools error: {e}")
+            # Fallback to regular chat
+            return await self.chat(
+                message, role, user_data, platform_stats,
+                monitoring_data, conversation_history
+            )
+
+    def _get_broadcast_tools(self) -> list[dict]:
+        """Get tool definitions for broadcasting."""
+        return [
+            {
+                "name": "send_message_to_user",
+                "description": "Отправить персональное сообщение конкретному пользователю. Используй для личных обращений.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "user_identifier": {
+                            "type": "string",
+                            "description": "@username, telegram_id или ID:xxx пользователя"
+                        },
+                        "message_text": {
+                            "type": "string",
+                            "description": "Текст сообщения (поддерживается Markdown)"
+                        }
+                    },
+                    "required": ["user_identifier", "message_text"]
+                }
+            },
+            {
+                "name": "broadcast_to_group",
+                "description": "Массовая рассылка сообщения группе пользователей.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "group": {
+                            "type": "string",
+                            "enum": ["active_appeals", "active_deposits", "active_24h", "active_7d", "all"],
+                            "description": "Группа: active_appeals (с обращениями), active_deposits (с депозитами), active_24h (активные за 24ч), active_7d (за 7 дней), all (все)"
+                        },
+                        "message_text": {
+                            "type": "string",
+                            "description": "Текст сообщения (Markdown)"
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Максимум получателей (по умолчанию 100)",
+                            "default": 100
+                        }
+                    },
+                    "required": ["group", "message_text"]
+                }
+            },
+            {
+                "name": "get_users_list",
+                "description": "Получить список пользователей группы для предпросмотра перед рассылкой.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "group": {
+                            "type": "string",
+                            "enum": ["active_appeals", "active_deposits", "active_24h", "active_7d", "all"],
+                            "description": "Группа пользователей"
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Максимум записей",
+                            "default": 20
+                        }
+                    },
+                    "required": ["group"]
+                }
+            },
+            {
+                "name": "invite_to_dialog",
+                "description": "Отправить персональное приглашение к диалогу с Арьей.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "user_identifier": {
+                            "type": "string",
+                            "description": "@username или telegram_id"
+                        },
+                        "custom_message": {
+                            "type": "string",
+                            "description": "Кастомный текст (опционально)"
+                        }
+                    },
+                    "required": ["user_identifier"]
+                }
+            },
+            {
+                "name": "mass_invite_to_dialog",
+                "description": "Массовая рассылка приглашений к диалогу группе пользователей.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "group": {
+                            "type": "string",
+                            "enum": ["active_appeals", "active_deposits", "active_24h", "active_7d"],
+                            "description": "Группа пользователей"
+                        },
+                        "custom_message": {
+                            "type": "string",
+                            "description": "Кастомный текст с {name} для персонализации"
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Максимум приглашений",
+                            "default": 50
+                        }
+                    },
+                    "required": ["group"]
+                }
+            }
+        ]
+
+    async def _execute_tools(
+        self,
+        content: list,
+        session: Any,
+        bot: Any,
+    ) -> list[dict]:
+        """Execute requested tools and return results."""
+        from app.services.ai_broadcast_service import AIBroadcastService
+
+        broadcast_service = AIBroadcastService(session, bot)
+        results = []
+
+        for block in content:
+            if block.type == "tool_use":
+                tool_name = block.name
+                tool_input = block.input
+                tool_id = block.id
+
+                try:
+                    if tool_name == "send_message_to_user":
+                        result = await broadcast_service.send_message_to_user(
+                            user_identifier=tool_input["user_identifier"],
+                            message_text=tool_input["message_text"],
+                        )
+                    elif tool_name == "broadcast_to_group":
+                        result = await broadcast_service.broadcast_to_group(
+                            group=tool_input["group"],
+                            message_text=tool_input["message_text"],
+                            limit=tool_input.get("limit", 100),
+                        )
+                    elif tool_name == "get_users_list":
+                        result = await broadcast_service.get_users_list(
+                            group=tool_input["group"],
+                            limit=tool_input.get("limit", 20),
+                        )
+                    elif tool_name == "invite_to_dialog":
+                        result = await broadcast_service.invite_to_dialog(
+                            user_identifier=tool_input["user_identifier"],
+                            custom_message=tool_input.get("custom_message"),
+                        )
+                    elif tool_name == "mass_invite_to_dialog":
+                        result = await broadcast_service.mass_invite_to_dialog(
+                            group=tool_input["group"],
+                            custom_message=tool_input.get("custom_message"),
+                            limit=tool_input.get("limit", 50),
+                        )
+                    else:
+                        result = {"error": f"Unknown tool: {tool_name}"}
+
+                    results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tool_id,
+                        "content": str(result),
+                    })
+
+                    logger.info(f"ARIA executed tool '{tool_name}': {result}")
+
+                except Exception as e:
+                    logger.error(f"Tool execution error: {e}")
+                    results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tool_id,
+                        "content": f"Error: {str(e)}",
+                        "is_error": True,
+                    })
+
+        return results
+
+    def _extract_text_from_response(self, content: list) -> str:
+        """Extract text from response content blocks."""
+        text_parts = []
+        for block in content:
+            if hasattr(block, "text"):
+                text_parts.append(block.text)
+        return "\n".join(text_parts) if text_parts else "🤖 Готово!"
 
 
 # Singleton instance

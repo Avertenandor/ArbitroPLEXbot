@@ -321,17 +321,31 @@ async def handle_chat_message(
         "Имя": admin.display_name,
         "Роль": admin.role_display,
         "ID": admin.telegram_id,
+        "username": getattr(admin, "username", None),
     }
 
-    # Get AI response
-    response = await ai_service.chat(
-        message=user_message,
-        role=role,
-        user_data=admin_data,
-        platform_stats=platform_stats,
-        monitoring_data=monitoring_data,
-        conversation_history=history,
-    )
+    # Use chat_with_tools for super admin (Boss) to enable broadcasting
+    if role == UserRole.SUPER_ADMIN:
+        response = await ai_service.chat_with_tools(
+            message=user_message,
+            role=role,
+            user_data=admin_data,
+            platform_stats=platform_stats,
+            monitoring_data=monitoring_data,
+            conversation_history=history,
+            session=session,
+            bot=message.bot,
+        )
+    else:
+        # Regular chat for other admins
+        response = await ai_service.chat(
+            message=user_message,
+            role=role,
+            user_data=admin_data,
+            platform_stats=platform_stats,
+            monitoring_data=monitoring_data,
+            conversation_history=history,
+        )
 
     # Update history
     history.append({"role": "user", "content": user_message})
