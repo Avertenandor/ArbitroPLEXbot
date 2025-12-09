@@ -53,4 +53,6 @@ async def navigate_to_home(
 
     from bot.handlers.menu import show_main_menu
 
-    await show_main_menu(message, session, user, state, **data)
+    # Remove 'user' from data to avoid "multiple values for argument" error
+    clean_data = {k: v for k, v in data.items() if k != "user"}
+    await show_main_menu(message, session, user, state, **clean_data)
