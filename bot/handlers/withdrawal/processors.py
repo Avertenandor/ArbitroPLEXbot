@@ -328,7 +328,14 @@ async def process_financial_password(
     await state.clear()
 
 
-@router.message(F.text.regexp(r"^\d+([.,]\d+)?$"))
+# Custom filter: only handle numeric input if in withdrawal menu context
+async def in_withdrawal_menu(message: Message, state: FSMContext) -> bool:
+    """Filter: only handle if user is in withdrawal menu context."""
+    state_data = await state.get_data()
+    return state_data.get("in_withdrawal_menu", False) is True
+
+
+@router.message(F.text.regexp(r"^\d+([.,]\d+)?$"), in_withdrawal_menu)
 async def handle_smart_withdrawal_amount(
     message: Message,
     state: FSMContext,
@@ -338,12 +345,6 @@ async def handle_smart_withdrawal_amount(
     Smart handler for numeric input in withdrawal menu context.
     Allows users to type amount directly without clicking button first.
     """
-    # Check if user is in withdrawal menu context
-    state_data = await state.get_data()
-    if not state_data.get("in_withdrawal_menu"):
-        # Not in withdrawal context, let other handlers process
-        return
-
     user: User | None = data.get("user")
     if not user:
         return
