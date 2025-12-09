@@ -45,7 +45,7 @@ async def show_bonus_menu(
     session: AsyncSession,
     **data: Any,
 ) -> None:
-    """Show bonus management menu for selected user."""
+    """Show bonus management menu OR go directly to grant (simplified flow)."""
     admin = await get_admin_or_deny(message, session, **data)
     if not admin:
         return
@@ -68,34 +68,28 @@ async def show_bonus_menu(
     stats = await bonus_service.get_user_bonus_stats(user_id)
 
     safe_username = escape_markdown(user.username) if user.username else str(user.telegram_id)
+    
+    # SIMPLIFIED FLOW: Go directly to grant bonus
+    # Show user info and ask for amount immediately
     text = (
-        f"🎁 **Бонусы пользователя**\n"
+        f"🎁 **Начисление бонуса**\n"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"👤 Пользователь: `{safe_username}`\n"
         f"🆔 ID: `{user.id}`\n\n"
-        f"💰 **Бонусный баланс:** `{format_usdt(stats['total_bonus_balance'])} USDT`\n"
-        f"📊 **Заработано ROI:** `{format_usdt(stats['total_bonus_roi_earned'])} USDT`\n"
-        f"✅ **Активных бонусов:** {stats['active_bonuses_count']}\n"
-        f"📋 **Всего бонусов:** {stats['total_bonuses_count']}\n"
+        f"💰 **Текущий баланс:** `{format_usdt(stats['total_bonus_balance'])} USDT`\n"
+        f"✅ **Активных бонусов:** {stats['active_bonuses_count']}\n\n"
+        f"💵 **Введите сумму бонуса в USDT:**\n\n"
+        f"Например: `100` или `50.5`\n\n"
+        f"ℹ️ Бонус будет участвовать в начислении ROI "
+        f"с теми же ставками, что и обычные депозиты (до 500%)."
     )
-
-    # Show active bonuses
-    if stats.get("active_bonuses"):
-        text += "\n**Активные бонусы:**\n"
-        for bonus in stats["active_bonuses"]:
-            progress = bonus.roi_progress_percent
-            remaining = bonus.roi_remaining
-            text += (
-                f"• ID {bonus.id}: {format_usdt(bonus.amount)} USDT "
-                f"(ROI: {progress:.1f}%, осталось: {format_usdt(remaining)})\n"
-            )
-
-    text += "\n━━━━━━━━━━━━━━━━━━\nВыберите действие:"
+    
+    await state.set_state(BonusStates.waiting_amount)
 
     await message.answer(
         text,
         parse_mode="Markdown",
-        reply_markup=admin_bonus_keyboard(),
+        reply_markup=admin_cancel_keyboard(),
     )
 
 
@@ -230,7 +224,9 @@ async def process_bonus_reason(
         return
 
     await session.commit()
-    await state.clear()
+    
+    # Keep selected_user_id for navigation but clear bonus state
+    await state.set_state(None)
 
     user_service = UserService(session)
     user = await user_service.get_by_id(user_id)
