@@ -14,13 +14,12 @@ from datetime import UTC, datetime
 from typing import Any
 
 from loguru import logger
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
 
 from app.models.appeal import Appeal, AppealStatus
-from app.models.user import User
 from app.models.blacklist import Blacklist
+from app.models.user import User
 from app.repositories.admin_repository import AdminRepository
 
 
@@ -93,10 +92,9 @@ class AIAppealsService:
         if error:
             return {"success": False, "error": error}
         
-        # Build query
+        # Build query - no joinedload since Appeal doesn't have user relationship
         stmt = (
             select(Appeal)
-            .options(joinedload(Appeal.user))
             .order_by(Appeal.created_at.desc())
             .limit(limit)
         )
@@ -121,13 +119,24 @@ class AIAppealsService:
                 "message": f"ℹ️ Обращений{status_text} не найдено"
             }
         
+        # Collect user_ids and fetch users in batch
+        user_ids = [a.user_id for a in appeals if a.user_id]
+        users_map = {}
+        if user_ids:
+            user_stmt = select(User).where(User.id.in_(user_ids))
+            user_result = await self.session.execute(user_stmt)
+            for u in user_result.scalars().all():
+                users_map[u.id] = u
+        
         # Format appeals
         appeals_list = []
         for a in appeals:
             # Get user info
-            user_info = "Неизвестен"
-            if hasattr(a, 'user') and a.user:
-                user_info = f"@{a.user.username}" if a.user.username else f"ID:{a.user.telegram_id}"
+            user = users_map.get(a.user_id)
+            if user:
+                user_info = f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
+            else:
+                user_info = f"User#{a.user_id}"
             
             status_emoji = {
                 "pending": "🟡",
@@ -182,28 +191,28 @@ class AIAppealsService:
         if error:
             return {"success": False, "error": error}
         
-        # Get appeal with related data
-        stmt = (
-            select(Appeal)
-            .options(joinedload(Appeal.user))
-            .where(Appeal.id == appeal_id)
-        )
+        # Get appeal
+        stmt = select(Appeal).where(Appeal.id == appeal_id)
         result = await self.session.execute(stmt)
         appeal = result.scalar_one_or_none()
         
         if not appeal:
             return {"success": False, "error": f"❌ Обращение ID {appeal_id} не найдено"}
         
-        # Get user info
-        user_info = "Неизвестен"
+        # Get user info separately
+        user_info = f"User#{appeal.user_id}"
         user_telegram = None
-        if hasattr(appeal, 'user') and appeal.user:
-            user_info = f"@{appeal.user.username}" if appeal.user.username else f"ID:{appeal.user.telegram_id}"
-            user_telegram = appeal.user.telegram_id
+        if appeal.user_id:
+            user_stmt = select(User).where(User.id == appeal.user_id)
+            user_result = await self.session.execute(user_stmt)
+            user = user_result.scalar_one_or_none()
+            if user:
+                user_info = f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
+                user_telegram = user.telegram_id
         
         status_emoji = {
             "pending": "🟡 Ожидает",
-            "under_review": "🔵 На рассмотрении", 
+            "under_review": "🔵 На рассмотрении",
             "approved": "✅ Одобрено",
             "rejected": "❌ Отклонено"
         }.get(appeal.status, appeal.status)
@@ -315,12 +324,8 @@ class AIAppealsService:
                 "error": "❌ Решение должно быть 'approve' (одобрить) или 'reject' (отклонить)"
             }
         
-        # Get appeal with user
-        stmt = (
-            select(Appeal)
-            .options(joinedload(Appeal.user))
-            .where(Appeal.id == appeal_id)
-        )
+        # Get appeal
+        stmt = select(Appeal).where(Appeal.id == appeal_id)
         result = await self.session.execute(stmt)
         appeal = result.scalar_one_or_none()
         
@@ -329,7 +334,7 @@ class AIAppealsService:
         
         if appeal.status in [AppealStatus.APPROVED, AppealStatus.REJECTED]:
             return {
-                "success": False, 
+                "success": False,
                 "error": f"❌ Обращение уже закрыто со статусом '{appeal.status}'"
             }
         
@@ -353,9 +358,13 @@ class AIAppealsService:
         await self.session.commit()
         
         # Get user info for logging
-        user_info = "Неизвестен"
-        if hasattr(appeal, 'user') and appeal.user:
-            user_info = f"@{appeal.user.username}" if appeal.user.username else f"ID:{appeal.user.telegram_id}"
+        user_info = f"User#{appeal.user_id}"
+        if appeal.user_id:
+            user_stmt = select(User).where(User.id == appeal.user_id)
+            user_result = await self.session.execute(user_stmt)
+            user = user_result.scalar_one_or_none()
+            if user:
+                user_info = f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
         
         decision_emoji = "✅" if decision == "approve" else "❌"
         decision_text = "одобрено" if decision == "approve" else "отклонено"
@@ -408,19 +417,22 @@ class AIAppealsService:
         if not message or len(message) < 5:
             return {"success": False, "error": "❌ Сообщение должно содержать минимум 5 символов"}
         
-        # Get appeal with user
-        stmt = (
-            select(Appeal)
-            .options(joinedload(Appeal.user))
-            .where(Appeal.id == appeal_id)
-        )
+        # Get appeal
+        stmt = select(Appeal).where(Appeal.id == appeal_id)
         result = await self.session.execute(stmt)
         appeal = result.scalar_one_or_none()
         
         if not appeal:
             return {"success": False, "error": f"❌ Обращение ID {appeal_id} не найдено"}
         
-        if not appeal.user or not appeal.user.telegram_id:
+        # Get user separately
+        user = None
+        if appeal.user_id:
+            user_stmt = select(User).where(User.id == appeal.user_id)
+            user_result = await self.session.execute(user_stmt)
+            user = user_result.scalar_one_or_none()
+        
+        if not user or not user.telegram_id:
             return {"success": False, "error": "❌ Не удалось найти пользователя для отправки"}
         
         # Format message
@@ -436,13 +448,15 @@ class AIAppealsService:
         # Send message
         try:
             await bot.send_message(
-                chat_id=appeal.user.telegram_id,
+                chat_id=user.telegram_id,
                 text=formatted_message,
                 parse_mode="Markdown",
             )
         except Exception as e:
             logger.error(f"Failed to send reply to appeal {appeal_id}: {e}")
             return {"success": False, "error": f"❌ Не удалось отправить: {str(e)}"}
+        
+        user_info = f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
         
         logger.info(
             f"AI APPEALS: Admin {admin.telegram_id} replied to appeal {appeal_id}: {message[:50]}..."
@@ -451,7 +465,7 @@ class AIAppealsService:
         return {
             "success": True,
             "appeal_id": appeal_id,
-            "user": f"@{appeal.user.username}" if appeal.user.username else f"ID:{appeal.user.telegram_id}",
+            "user": user_info,
             "message_sent": message[:100] + "..." if len(message) > 100 else message,
-            "message": f"✅ Ответ отправлен пользователю"
+            "message": "✅ Ответ отправлен пользователю"
         }
