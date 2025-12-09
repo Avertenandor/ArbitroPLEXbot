@@ -1765,6 +1765,11 @@ class AIAssistantService:
                 "description": "Получить общую статистику по пользователям.",
                 "input_schema": {"type": "object", "properties": {}, "required": []}
             },
+            {
+                "name": "get_roi_stats",
+                "description": "Получить статистику по ROI начислениям.",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
             # ========== WITHDRAWALS TOOLS ==========
             {
                 "name": "get_pending_withdrawals",
