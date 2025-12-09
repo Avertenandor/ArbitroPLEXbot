@@ -308,14 +308,18 @@ class User(Base):
     @property
     def required_daily_plex(self) -> Decimal:
         """
-        Calculate required daily PLEX based on deposit amount.
+        Calculate required daily PLEX based on total investment (deposits + bonuses).
 
-        Formula: deposit_amount * 10 PLEX per dollar per day.
+        Formula: (deposit_amount + bonus_balance) * 10 PLEX per dollar per day.
+        
+        Every dollar invested (whether real deposit or admin bonus) requires
+        10 PLEX coins per day to maintain active status in the ecosystem.
 
         Returns:
             Required PLEX amount per day
         """
-        return self.total_deposited_usdt * Decimal("10")
+        total_investment = self.total_deposited_usdt + (self.bonus_balance or Decimal("0"))
+        return total_investment * Decimal("10")
 
     @property
     def deposit_status_text(self) -> str:

@@ -4,6 +4,7 @@ Handles user profile display with detailed information
 """
 
 import re
+from decimal import Decimal
 from typing import Any
 
 from aiogram import F, Router
@@ -132,8 +133,8 @@ async def show_user_profile(
     )
 
     # Add bonus info if user has bonuses
-    bonus_balance = getattr(user, 'bonus_balance', None) or 0
-    bonus_roi = getattr(user, 'bonus_roi_earned', None) or 0
+    bonus_balance = getattr(user, 'bonus_balance', None) or Decimal("0")
+    bonus_roi = getattr(user, 'bonus_roi_earned', None) or Decimal("0")
     if bonus_balance > 0 or bonus_roi > 0:
         text += (
             f"━━━━━━━━━━━━━━━━━━\n"
@@ -142,14 +143,28 @@ async def show_user_profile(
             f"• ROI с бонусов: `{float(bonus_roi):.2f} USDT`\n"
         )
 
+    # Calculate PLEX breakdown
+    plex_from_deposits = int(user.total_deposited_usdt * 10)
+    plex_from_bonus = int(bonus_balance * 10)
+    total_plex = int(user.required_daily_plex)
+
     text += (
         f"━━━━━━━━━━━━━━━━━━\n"
         f"💎 **Депозит (из блокчейна):**\n"
         f"• Всего внесено: `{user.total_deposited_usdt:.2f} USDT`\n"
         f"• Статус: {user.deposit_status_text}\n"
-        f"• PLEX в сутки: `{int(user.required_daily_plex):,}`\n"
-        f"• Транзакций: `{user.deposit_tx_count}`\n"
     )
+    
+    # Show PLEX breakdown - every dollar requires 10 PLEX/day
+    if bonus_balance > 0:
+        text += (
+            f"• PLEX в сутки: `{total_plex:,}` "
+            f"({plex_from_deposits:,} от депозита + {plex_from_bonus:,} от бонуса)\n"
+        )
+    else:
+        text += f"• PLEX в сутки: `{total_plex:,}`\n"
+    
+    text += f"• Транзакций: `{user.deposit_tx_count}`\n"
 
     # Add last scan date
     if user.last_deposit_scan_at:
