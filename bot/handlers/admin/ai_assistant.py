@@ -336,8 +336,20 @@ async def handle_chat_message(
             session=session,
             bot=message.bot,
         )
+    elif role in (UserRole.ADMIN, UserRole.EXTENDED_ADMIN):
+        # Admins also get tool access (with limits)
+        response = await ai_service.chat_with_tools(
+            message=user_message,
+            role=role,
+            user_data=admin_data,
+            platform_stats=platform_stats,
+            monitoring_data=monitoring_data,
+            conversation_history=history,
+            session=session,
+            bot=message.bot,
+        )
     else:
-        # Regular chat for other admins
+        # Regular chat for users (should not happen in admin handler)
         response = await ai_service.chat(
             message=user_message,
             role=role,

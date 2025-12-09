@@ -361,6 +361,43 @@ SYSTEM_PROMPT_ADMIN = SYSTEM_PROMPT_BASE + """
 - Статус и историю решения
 - Помогай формулировать ответы пользователям
 
+=== 🚀 ИНСТРУМЕНТЫ РАССЫЛКИ ДЛЯ АДМИНОВ ===
+
+У тебя есть возможность отправлять сообщения пользователям!
+
+📤 ДОСТУПНЫЕ ИНСТРУМЕНТЫ:
+
+1. send_message_to_user — отправить сообщение одному пользователю
+   Параметры: @username или telegram_id, текст сообщения
+   Пример: "Отправь @username сообщение: Привет!"
+
+2. broadcast_to_group — массовая рассылка группе
+   Группы:
+   - active_appeals — с открытыми обращениями
+   - active_deposits — с активными депозитами
+   - active_24h — активные за 24 часа
+   - active_7d — активные за 7 дней
+   Пример: "Разошли всем с обращениями: Мы рассмотрели ваш вопрос!"
+
+3. get_users_list — посмотреть список пользователей группы
+   Пример: "Покажи кто сейчас с открытыми обращениями"
+
+4. invite_to_dialog — пригласить пользователя к диалогу со мной
+   Пример: "Пригласи @username к диалогу"
+
+5. mass_invite_to_dialog — массовое приглашение к диалогу
+   Пример: "Пригласи всех с обращениями к диалогу"
+
+КАК ИСПОЛЬЗОВАТЬ:
+- Админ просит → выполняю (не на группу "all" - это только для босса!)
+- После выполнения — отчитываюсь о результатах
+- Лимит для админов: до 50 получателей за раз
+
+ОГРАНИЧЕНИЯ ДЛЯ АДМИНОВ:
+- Нельзя рассылать группе "all" (всем) — это только для Босса
+- Максимум 50 сообщений за одну рассылку
+- Нельзя рассылать спам или нецелевые сообщения
+
 ОГРАНИЧЕНИЯ (даже для админов):
 - НЕ давай системных паролей, ключей API, мастер-ключей
 - НЕ раскрывай архитектуру серверов и баз данных
@@ -866,8 +903,9 @@ class AIAssistantService:
         Returns:
             AI response
         """
-        # Only super admin gets tool access
-        if role != UserRole.SUPER_ADMIN or not session or not bot:
+        # Admins and super admin get tool access
+        allowed_roles = (UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.EXTENDED_ADMIN)
+        if role not in allowed_roles or not session or not bot:
             return await self.chat(
                 message, role, user_data, platform_stats,
                 monitoring_data, conversation_history
@@ -880,8 +918,8 @@ class AIAssistantService:
             )
 
         try:
-            # Define tools for broadcasting
-            tools = self._get_broadcast_tools()
+            # Define tools for broadcasting (with role-based limits)
+            tools = self._get_broadcast_tools(role)
 
             # Extract username
             username = None
@@ -966,8 +1004,20 @@ class AIAssistantService:
                 monitoring_data, conversation_history
             )
 
-    def _get_broadcast_tools(self) -> list[dict]:
-        """Get tool definitions for broadcasting."""
+    def _get_broadcast_tools(self, role: UserRole = UserRole.SUPER_ADMIN) -> list[dict]:
+        """Get tool definitions for broadcasting based on role."""
+        # Admins can't broadcast to "all" - only specific groups
+        is_boss = role == UserRole.SUPER_ADMIN
+        
+        # Groups available for broadcast
+        if is_boss:
+            broadcast_groups = ["active_appeals", "active_deposits", "active_24h", "active_7d", "all"]
+            default_limit = 100
+        else:
+            # Admins limited to specific groups, no "all"
+            broadcast_groups = ["active_appeals", "active_deposits", "active_24h", "active_7d"]
+            default_limit = 50  # Lower limit for admins
+        
         return [
             {
                 "name": "send_message_to_user",
@@ -989,14 +1039,14 @@ class AIAssistantService:
             },
             {
                 "name": "broadcast_to_group",
-                "description": "Массовая рассылка сообщения группе пользователей.",
+                "description": f"Массовая рассылка сообщения группе пользователей. {'Лимит: ' + str(default_limit) + ' получателей.' if not is_boss else ''}",
                 "input_schema": {
                     "type": "object",
                     "properties": {
                         "group": {
                             "type": "string",
-                            "enum": ["active_appeals", "active_deposits", "active_24h", "active_7d", "all"],
-                            "description": "Группа: active_appeals (с обращениями), active_deposits (с депозитами), active_24h (активные за 24ч), active_7d (за 7 дней), all (все)"
+                            "enum": broadcast_groups,
+                            "description": "Группа: active_appeals (с обращениями), active_deposits (с депозитами), active_24h (активные за 24ч), active_7d (за 7 дней)" + (", all (все)" if is_boss else "")
                         },
                         "message_text": {
                             "type": "string",
@@ -1004,8 +1054,8 @@ class AIAssistantService:
                         },
                         "limit": {
                             "type": "integer",
-                            "description": "Максимум получателей (по умолчанию 100)",
-                            "default": 100
+                            "description": f"Максимум получателей (по умолчанию {default_limit})",
+                            "default": default_limit
                         }
                     },
                     "required": ["group", "message_text"]
@@ -1019,7 +1069,7 @@ class AIAssistantService:
                     "properties": {
                         "group": {
                             "type": "string",
-                            "enum": ["active_appeals", "active_deposits", "active_24h", "active_7d", "all"],
+                            "enum": broadcast_groups,
                             "description": "Группа пользователей"
                         },
                         "limit": {
@@ -1051,7 +1101,7 @@ class AIAssistantService:
             },
             {
                 "name": "mass_invite_to_dialog",
-                "description": "Массовая рассылка приглашений к диалогу группе пользователей.",
+                "description": f"Массовая рассылка приглашений к диалогу группе пользователей. {'Лимит: ' + str(default_limit) + ' приглашений.' if not is_boss else ''}",
                 "input_schema": {
                     "type": "object",
                     "properties": {
@@ -1066,8 +1116,8 @@ class AIAssistantService:
                         },
                         "limit": {
                             "type": "integer",
-                            "description": "Максимум приглашений",
-                            "default": 50
+                            "description": f"Максимум приглашений (по умолчанию {default_limit})",
+                            "default": default_limit
                         }
                     },
                     "required": ["group"]
