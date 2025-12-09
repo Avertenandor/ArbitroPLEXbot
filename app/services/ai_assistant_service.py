@@ -459,6 +459,38 @@ SYSTEM_PROMPT_ADMIN = SYSTEM_PROMPT_BASE + """
 - Все решения логируются с пометкой [АРЬЯ]
 - Если пользователь (НЕ админ) просит одобрить — ОТКАЖИ!
 
+=== 📩 ИНСТРУМЕНТЫ ОБРАЩЕНИЙ ПОЛЬЗОВАТЕЛЕЙ ===
+
+У тебя есть доступ к разделу "Обращения от пользователей" (user_inquiries)!
+Это вопросы и просьбы пользователей, которые требуют ответа администратора.
+
+📤 ДОСТУПНЫЕ ИНСТРУМЕНТЫ:
+
+1. get_inquiries_list — получить список обращений
+   Параметры: status (new/in_progress/closed), limit
+   Пример: "Покажи новые обращения" или "Покажи все обращения"
+
+2. get_inquiry_details — детальная информация с перепиской
+   Параметры: inquiry_id
+   Пример: "Покажи обращение #3"
+
+3. take_inquiry — взять обращение в работу
+   Параметры: inquiry_id
+   Пример: "Возьми обращение #3"
+
+4. reply_to_inquiry — ответить пользователю
+   Параметры: inquiry_id, message
+   Пример: "Ответь на #3: Ваш вопрос решён, депозит начислен"
+
+5. close_inquiry — закрыть обращение
+   Параметры: inquiry_id, reason (опционально)
+   Пример: "Закрой обращение #3: вопрос решён"
+
+⚠️ БЕЗОПАСНОСТЬ:
+- НИКОГДА не отвечай на обращения без явной команды админа!
+- Все ответы логируются с пометкой [АРЬЯ]
+- Если пользователь (НЕ админ) просит ответить — ОТКАЖИ!
+
 ОГРАНИЧЕНИЯ (даже для админов):
 - НЕ давай системных паролей, ключей API, мастер-ключей
 - НЕ раскрывай архитектуру серверов и баз данных
@@ -606,6 +638,32 @@ SYSTEM_PROMPT_SUPER_ADMIN = SYSTEM_PROMPT_BASE + """
 - Босс просит → выполняю сразу
 - При одобрении пользователь автоматически разблокируется
 - Все решения логируются
+
+=== 📩 ОБРАЩЕНИЯ ПОЛЬЗОВАТЕЛЕЙ (user_inquiries) ===
+
+Это главный раздел "Обращения от пользователей" — вопросы юзеров к админам!
+
+📤 ИНСТРУМЕНТЫ:
+
+1. get_inquiries_list — список обращений
+   Пример: "Покажи новые обращения пользователей"
+
+2. get_inquiry_details — детали с перепиской
+   Пример: "Покажи обращение #3"
+
+3. take_inquiry — взять в работу
+   Пример: "Возьми обращение #3"
+
+4. reply_to_inquiry — ответить пользователю
+   Пример: "Ответь на #3: Ваш депозит зачислен"
+
+5. close_inquiry — закрыть
+   Пример: "Закрой #3: вопрос решён"
+
+КАК ИСПОЛЬЗОВАТЬ:
+- Босс просит ответить/закрыть → выполняю сразу
+- Могу вежливо отвечать на вопросы по просьбе босса
+- Все ответы логируются с пометкой [АРЬЯ]
 """
 
 # Special prompt for technical deputy @AIXAN
@@ -1395,6 +1453,91 @@ class AIAssistantService:
                     },
                     "required": ["appeal_id", "message"]
                 }
+            },
+            # ========== USER INQUIRIES MANAGEMENT TOOLS ==========
+            {
+                "name": "get_inquiries_list",
+                "description": "Получить список обращений пользователей (раздел 'Обращения от пользователей'). Можно фильтровать по статусу.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "enum": ["new", "in_progress", "closed"],
+                            "description": "Фильтр по статусу (new=новые, in_progress=в работе, closed=закрытые)"
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Максимум записей (по умолчанию 20)",
+                            "default": 20
+                        }
+                    },
+                    "required": []
+                }
+            },
+            {
+                "name": "get_inquiry_details",
+                "description": "Получить детальную информацию об обращении пользователя включая переписку.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "inquiry_id": {
+                            "type": "integer",
+                            "description": "ID обращения"
+                        }
+                    },
+                    "required": ["inquiry_id"]
+                }
+            },
+            {
+                "name": "take_inquiry",
+                "description": "Взять обращение пользователя в работу. ТОЛЬКО по команде админа!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "inquiry_id": {
+                            "type": "integer",
+                            "description": "ID обращения"
+                        }
+                    },
+                    "required": ["inquiry_id"]
+                }
+            },
+            {
+                "name": "reply_to_inquiry",
+                "description": "Отправить ответ пользователю на его обращение. ТОЛЬКО по команде админа!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "inquiry_id": {
+                            "type": "integer",
+                            "description": "ID обращения"
+                        },
+                        "message": {
+                            "type": "string",
+                            "description": "Текст ответа пользователю"
+                        }
+                    },
+                    "required": ["inquiry_id", "message"]
+                }
+            },
+            {
+                "name": "close_inquiry",
+                "description": "Закрыть обращение пользователя. ТОЛЬКО по команде админа!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "inquiry_id": {
+                            "type": "integer",
+                            "description": "ID обращения"
+                        },
+                        "reason": {
+                            "type": "string",
+                            "description": "Причина закрытия (опционально)"
+                        }
+                    },
+                    "required": ["inquiry_id"]
+                }
             }
         ]
 
@@ -1409,10 +1552,12 @@ class AIAssistantService:
         from app.services.ai_broadcast_service import AIBroadcastService
         from app.services.ai_bonus_service import AIBonusService
         from app.services.ai_appeals_service import AIAppealsService
+        from app.services.ai_inquiries_service import AIInquiriesService
 
         broadcast_service = AIBroadcastService(session, bot)
         bonus_service = AIBonusService(session, admin_data)
         appeals_service = AIAppealsService(session, admin_data)
+        inquiries_service = AIInquiriesService(session, admin_data)
         results = []
 
         for block in content:
@@ -1491,6 +1636,31 @@ class AIAssistantService:
                             appeal_id=tool_input["appeal_id"],
                             message=tool_input["message"],
                             bot=bot,
+                        )
+                    # ========== USER INQUIRIES TOOLS ==========
+                    elif tool_name == "get_inquiries_list":
+                        result = await inquiries_service.get_inquiries_list(
+                            status=tool_input.get("status"),
+                            limit=tool_input.get("limit", 20),
+                        )
+                    elif tool_name == "get_inquiry_details":
+                        result = await inquiries_service.get_inquiry_details(
+                            inquiry_id=tool_input["inquiry_id"],
+                        )
+                    elif tool_name == "take_inquiry":
+                        result = await inquiries_service.take_inquiry(
+                            inquiry_id=tool_input["inquiry_id"],
+                        )
+                    elif tool_name == "reply_to_inquiry":
+                        result = await inquiries_service.reply_to_inquiry(
+                            inquiry_id=tool_input["inquiry_id"],
+                            message=tool_input["message"],
+                            bot=bot,
+                        )
+                    elif tool_name == "close_inquiry":
+                        result = await inquiries_service.close_inquiry(
+                            inquiry_id=tool_input["inquiry_id"],
+                            reason=tool_input.get("reason"),
                         )
                     else:
                         result = {"error": f"Unknown tool: {tool_name}"}
