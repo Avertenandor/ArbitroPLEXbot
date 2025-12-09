@@ -339,7 +339,7 @@ class BonusService(BaseService):
         day_ago = now - timedelta(hours=24)
 
         all_bonuses = await self.bonus_repo.get_all()
-        active = [b for b in all_bonuses if b.status == "active"]
+        active = [b for b in all_bonuses if b.is_active]
 
         total_granted = sum(b.amount for b in all_bonuses)
         last_24h = sum(
