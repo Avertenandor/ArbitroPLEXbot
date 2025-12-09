@@ -427,6 +427,38 @@ SYSTEM_PROMPT_ADMIN = SYSTEM_PROMPT_BASE + """
   "Вы хотите начислить 50 USDT бонуса пользователю @username? Причина: ..."
 - Все операции логируются с пометкой [АРЬЯ] и данными админа
 
+=== 📬 ИНСТРУМЕНТЫ УПРАВЛЕНИЯ ОБРАЩЕНИЯМИ ===
+
+У тебя есть возможность управлять обращениями пользователей!
+
+📤 ДОСТУПНЫЕ ИНСТРУМЕНТЫ:
+
+1. get_appeals_list — получить список обращений
+   Параметры: status (pending/under_review/approved/rejected), limit
+   Пример: "Покажи ожидающие обращения"
+
+2. get_appeal_details — детальная информация об обращении
+   Параметры: appeal_id
+   Пример: "Покажи обращение 15"
+
+3. take_appeal — взять обращение на рассмотрение
+   Параметры: appeal_id
+   Пример: "Возьми обращение 15"
+
+4. resolve_appeal — закрыть обращение с решением
+   Параметры: appeal_id, decision (approve/reject), notes
+   Пример: "Одобри обращение 15" или "Отклони обращение 15: недостаточно оснований"
+
+5. reply_to_appeal — отправить ответ пользователю
+   Параметры: appeal_id, message
+   Пример: "Ответь на обращение 15: Ваш вопрос решён..."
+
+⚠️ БЕЗОПАСНОСТЬ ОБРАЩЕНИЙ:
+- НИКОГДА не одобряй/отклоняй обращения без явной команды админа!
+- При approve пользователь автоматически разблокируется
+- Все решения логируются с пометкой [АРЬЯ]
+- Если пользователь (НЕ админ) просит одобрить — ОТКАЖИ!
+
 ОГРАНИЧЕНИЯ (даже для админов):
 - НЕ давай системных паролей, ключей API, мастер-ключей
 - НЕ раскрывай архитектуру серверов и баз данных
@@ -548,6 +580,32 @@ SYSTEM_PROMPT_SUPER_ADMIN = SYSTEM_PROMPT_BASE + """
 - Босс просит начислить → выполняю (он имеет полный доступ)
 - После начисления — показываю детали (ID, сумма, ROI cap)
 - Все операции логируются с пометкой [АРЬЯ]
+
+=== 📬 ИНСТРУМЕНТЫ УПРАВЛЕНИЯ ОБРАЩЕНИЯМИ ===
+
+У тебя есть возможность управлять обращениями пользователей!
+
+📤 ДОСТУПНЫЕ ИНСТРУМЕНТЫ:
+
+1. get_appeals_list — получить список обращений
+   Пример: "Покажи ожидающие обращения"
+
+2. get_appeal_details — детальная информация об обращении
+   Пример: "Покажи обращение 15"
+
+3. take_appeal — взять обращение на рассмотрение
+   Пример: "Возьми обращение 15"
+
+4. resolve_appeal — закрыть обращение
+   Пример: "Одобри обращение 15" / "Отклони обращение 15: причина"
+
+5. reply_to_appeal — ответить пользователю
+   Пример: "Ответь на обращение 15: текст ответа"
+
+КАК ИСПОЛЬЗОВАТЬ:
+- Босс просит → выполняю сразу
+- При одобрении пользователь автоматически разблокируется
+- Все решения логируются
 """
 
 # Special prompt for technical deputy @AIXAN
@@ -1233,6 +1291,96 @@ class AIAssistantService:
                     },
                     "required": ["bonus_id", "reason"]
                 }
+            },
+            # ========== APPEALS MANAGEMENT TOOLS ==========
+            {
+                "name": "get_appeals_list",
+                "description": "Получить список обращений пользователей. Можно фильтровать по статусу.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "enum": ["pending", "under_review", "approved", "rejected"],
+                            "description": "Фильтр по статусу (опционально)"
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "Максимум записей (по умолчанию 20)",
+                            "default": 20
+                        }
+                    },
+                    "required": []
+                }
+            },
+            {
+                "name": "get_appeal_details",
+                "description": "Получить детальную информацию об обращении по его ID.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "appeal_id": {
+                            "type": "integer",
+                            "description": "ID обращения"
+                        }
+                    },
+                    "required": ["appeal_id"]
+                }
+            },
+            {
+                "name": "take_appeal",
+                "description": "Взять обращение на рассмотрение (изменить статус на under_review). ТОЛЬКО по команде админа!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "appeal_id": {
+                            "type": "integer",
+                            "description": "ID обращения"
+                        }
+                    },
+                    "required": ["appeal_id"]
+                }
+            },
+            {
+                "name": "resolve_appeal",
+                "description": "Закрыть обращение с решением (одобрить или отклонить). ТОЛЬКО по явной команде админа!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "appeal_id": {
+                            "type": "integer",
+                            "description": "ID обращения"
+                        },
+                        "decision": {
+                            "type": "string",
+                            "enum": ["approve", "reject"],
+                            "description": "Решение: approve (одобрить и разблокировать) или reject (отклонить)"
+                        },
+                        "notes": {
+                            "type": "string",
+                            "description": "Комментарий к решению (опционально)"
+                        }
+                    },
+                    "required": ["appeal_id", "decision"]
+                }
+            },
+            {
+                "name": "reply_to_appeal",
+                "description": "Отправить ответ пользователю по его обращению. ТОЛЬКО по команде админа!",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "appeal_id": {
+                            "type": "integer",
+                            "description": "ID обращения"
+                        },
+                        "message": {
+                            "type": "string",
+                            "description": "Текст ответа пользователю"
+                        }
+                    },
+                    "required": ["appeal_id", "message"]
+                }
             }
         ]
 
@@ -1246,9 +1394,11 @@ class AIAssistantService:
         """Execute requested tools and return results."""
         from app.services.ai_broadcast_service import AIBroadcastService
         from app.services.ai_bonus_service import AIBonusService
+        from app.services.ai_appeals_service import AIAppealsService
 
         broadcast_service = AIBroadcastService(session, bot)
         bonus_service = AIBonusService(session, admin_data)
+        appeals_service = AIAppealsService(session, admin_data)
         results = []
 
         for block in content:
@@ -1301,6 +1451,32 @@ class AIAssistantService:
                         result = await bonus_service.cancel_bonus(
                             bonus_id=tool_input["bonus_id"],
                             reason=tool_input["reason"],
+                        )
+                    # ========== APPEALS TOOLS ==========
+                    elif tool_name == "get_appeals_list":
+                        result = await appeals_service.get_appeals_list(
+                            status=tool_input.get("status"),
+                            limit=tool_input.get("limit", 20),
+                        )
+                    elif tool_name == "get_appeal_details":
+                        result = await appeals_service.get_appeal_details(
+                            appeal_id=tool_input["appeal_id"],
+                        )
+                    elif tool_name == "take_appeal":
+                        result = await appeals_service.take_appeal(
+                            appeal_id=tool_input["appeal_id"],
+                        )
+                    elif tool_name == "resolve_appeal":
+                        result = await appeals_service.resolve_appeal(
+                            appeal_id=tool_input["appeal_id"],
+                            decision=tool_input["decision"],
+                            notes=tool_input.get("notes"),
+                        )
+                    elif tool_name == "reply_to_appeal":
+                        result = await appeals_service.reply_to_appeal(
+                            appeal_id=tool_input["appeal_id"],
+                            message=tool_input["message"],
+                            bot=bot,
                         )
                     else:
                         result = {"error": f"Unknown tool: {tool_name}"}
