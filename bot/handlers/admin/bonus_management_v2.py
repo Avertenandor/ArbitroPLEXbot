@@ -712,9 +712,16 @@ async def show_grant_confirmation(target, state: FSMContext, admin) -> None:
 
     await state.set_state(BonusStates.grant_confirm)
     
-    if hasattr(target, "edit_text"):
+    # Check if target is a callback message that can be edited
+    # For regular messages, always use answer()
+    if hasattr(target, "message") and target.message:
+        # This is a CallbackQuery - edit the message
+        await target.message.edit_text(text, parse_mode="Markdown", reply_markup=confirm_bonus_keyboard())
+    elif hasattr(target, "edit_text") and target.from_user and target.from_user.is_bot:
+        # This is a bot message - can be edited
         await target.edit_text(text, parse_mode="Markdown", reply_markup=confirm_bonus_keyboard())
     else:
+        # Regular user message - send new message
         await target.answer(text, parse_mode="Markdown", reply_markup=confirm_bonus_keyboard())
 
 
