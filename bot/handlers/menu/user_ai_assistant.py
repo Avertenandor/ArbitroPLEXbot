@@ -185,11 +185,13 @@ async def handle_user_chat(
         "Имя": message.from_user.first_name or "Пользователь",
     }
 
-    response = await ai_service.chat(
-        message=sanitized_message,  # Use sanitized input
-        role=UserRole.USER,
+    # Use wallet-enabled chat for users (allows checking balances)
+    response = await ai_service.chat_user_with_wallet(
+        message=sanitized_message,
+        user_telegram_id=message.from_user.id,
         user_data=user_data,
         conversation_history=history,
+        session=session,
     )
 
     history.append({"role": "user", "content": sanitized_message})

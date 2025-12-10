@@ -323,6 +323,28 @@ SYSTEM_PROMPT_USER = (
 - Дать советы по работе с платформой
 - Помочь найти нужную кнопку или раздел
 
+=== ПРОВЕРКА КОШЕЛЬКА И PLEX ===
+В КОНЦЕ КАЖДОГО ДИАЛОГА ты ДОЛЖНА:
+1. Использовать tool `get_wallet_summary_for_dialog` с telegram_id пользователя
+2. Показать пользователю его балансы: BNB, USDT, PLEX
+3. Показать текущий курс PLEX (сколько PLEX за $1 депозита в сутки)
+4. Если PLEX < 1000 — мягко спросить: "Уверены, что у вас достаточно PLEX?
+   Может стоит докупить, пока курс ещё адекватный и не слишком высокий?"
+5. Если BNB < 0.005 — предупредить о недостатке газа для транзакций
+
+ПРИМЕР ЗАВЕРШЕНИЯ ДИАЛОГА:
+"Рада была помочь! 💫
+
+📊 Состояние вашего кошелька:
+💰 BNB: 0.012345
+💵 USDT: 150.00
+💎 PLEX: 450
+
+📈 Текущий курс: 10 PLEX за $1 в сутки
+
+⚠️ Запас PLEX на исходе! Уверены, что этого достаточно?
+Может быть стоит докупить, пока курс ещё адекватный? 💎"
+
 СТРОГО ЗАПРЕЩЕНО:
 - Называть точные ставки ROI и алгоритмы расчёта
 - Раскрывать внутреннюю логику и архитектуру системы
@@ -1426,6 +1448,143 @@ class AIAssistantService:
 
         return saved
 
+    # ========== USER CHAT WITH WALLET TOOLS ==========
+
+    def _get_user_wallet_tools(self) -> list[dict]:
+        """Get wallet tools available for regular users."""
+        return [
+            {
+                "name": "check_my_wallet",
+                "description": "Проверить балансы кошелька пользователя (BNB, USDT, PLEX)",
+                "input_schema": {"type": "object", "properties": {}, "required": []},
+            },
+            {
+                "name": "get_current_plex_rate",
+                "description": "Получить текущий курс PLEX токена",
+                "input_schema": {"type": "object", "properties": {}, "required": []},
+            },
+        ]
+
+    async def chat_user_with_wallet(
+        self,
+        message: str,
+        user_telegram_id: int,
+        user_data: dict[str, Any] | None = None,
+        conversation_history: list[dict] | None = None,
+        session: Any = None,
+    ) -> str:
+        """
+        Chat for regular users with wallet balance tools.
+
+        Allows ARIA to check user's wallet and recommend PLEX purchases.
+
+        Args:
+            message: User's message
+            user_telegram_id: User's Telegram ID
+            user_data: Optional user context
+            conversation_history: Previous messages
+            session: Database session
+
+        Returns:
+            AI response text
+        """
+        if not self.client:
+            return f"🤖 К сожалению, {AI_NAME} временно недоступна."
+
+        try:
+            tools = self._get_user_wallet_tools()
+
+            messages = []
+
+            # Add context
+            context = self._build_context(UserRole.USER, user_data, None, None)
+            if context:
+                messages.append({"role": "user", "content": f"[КОНТЕКСТ]\n{context}"})
+                messages.append({"role": "assistant", "content": f"Понял. Я {AI_NAME}!"})
+
+            if conversation_history:
+                messages.extend(conversation_history[-10:])
+
+            messages.append({"role": "user", "content": message})
+
+            system_prompt = self._get_system_prompt(UserRole.USER, None, user_telegram_id)
+
+            # First call
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=1024,
+                system=system_prompt,
+                messages=messages,
+                tools=tools,
+            )
+
+            # Handle tool use
+            if response.stop_reason == "tool_use" and session:
+                tool_results = await self._execute_user_wallet_tools(
+                    response.content, user_telegram_id, session
+                )
+
+                messages.append({"role": "assistant", "content": response.content})
+                messages.append({"role": "user", "content": tool_results})
+
+                # Get final response
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=1024,
+                    system=system_prompt,
+                    messages=messages,
+                    tools=tools,
+                )
+
+            # Extract text
+            for block in response.content:
+                if hasattr(block, "text"):
+                    return block.text
+
+            return "🤖 Не удалось получить ответ."
+
+        except Exception as e:
+            logger.error(f"User wallet chat error: {e}")
+            return "🤖 Произошла ошибка. Попробуйте позже."
+
+    async def _execute_user_wallet_tools(
+        self,
+        content: list,
+        user_telegram_id: int,
+        session: Any,
+    ) -> list[dict]:
+        """Execute wallet tools for user."""
+        from app.services.ai_wallet_service import AIWalletService
+
+        tool_results = []
+
+        for block in content:
+            if block.type == "tool_use":
+                tool_name = block.name
+                result = {"error": "Unknown tool"}
+
+                try:
+                    wallet_service = AIWalletService(session)
+
+                    if tool_name == "check_my_wallet":
+                        result = await wallet_service.check_user_wallet(
+                            user_identifier=str(user_telegram_id)
+                        )
+                    elif tool_name == "get_current_plex_rate":
+                        result = await wallet_service.get_plex_rate()
+
+                except Exception as e:
+                    logger.error(f"User wallet tool error: {e}")
+                    result = {"error": str(e)}
+
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": str(result),
+                })
+
+        return tool_results
+
     # ========== BROADCAST FUNCTIONS FOR КОМАНДИР ==========
 
     async def chat_with_tools(
@@ -2374,6 +2533,40 @@ class AIAssistantService:
                 "description": "Получить статистику заявок на восстановление.",
                 "input_schema": {"type": "object", "properties": {}, "required": []},
             },
+            # ========== WALLET BALANCE TOOLS ==========
+            {
+                "name": "check_user_wallet",
+                "description": "Проверить балансы кошелька пользователя (BNB, USDT, PLEX). Использует NodeReal RPC. Показывает рекомендации по докупке PLEX если нужно.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "user_identifier": {
+                            "type": "string",
+                            "description": "@username, telegram_id или wallet address (0x...)"
+                        },
+                    },
+                    "required": ["user_identifier"],
+                },
+            },
+            {
+                "name": "get_plex_rate",
+                "description": "Получить текущий курс PLEX токена (сколько PLEX за $1 депозита в сутки).",
+                "input_schema": {"type": "object", "properties": {}, "required": []},
+            },
+            {
+                "name": "get_wallet_summary_for_dialog",
+                "description": "Получить сводку кошелька для завершения диалога. Включает балансы и вопрос о докупке PLEX.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "user_telegram_id": {
+                            "type": "integer",
+                            "description": "Telegram ID пользователя"
+                        },
+                    },
+                    "required": ["user_telegram_id"],
+                },
+            },
             # ========== REFERRAL TOOLS ==========
             {
                 "name": "get_platform_referral_stats",
@@ -3052,6 +3245,25 @@ class AIAssistantService:
                             )
                         elif tool_name == "get_finpass_stats":
                             result = await finpass_service.get_finpass_stats()
+                    # ========== WALLET BALANCE TOOLS ==========
+                    elif tool_name in (
+                        "check_user_wallet",
+                        "get_plex_rate",
+                        "get_wallet_summary_for_dialog",
+                    ):
+                        from app.services.ai_wallet_service import AIWalletService
+                        wallet_service = AIWalletService(session, admin_data)
+
+                        if tool_name == "check_user_wallet":
+                            result = await wallet_service.check_user_wallet(
+                                user_identifier=tool_input["user_identifier"]
+                            )
+                        elif tool_name == "get_plex_rate":
+                            result = await wallet_service.get_plex_rate()
+                        elif tool_name == "get_wallet_summary_for_dialog":
+                            result = await wallet_service.get_wallet_summary_for_dialog_end(
+                                user_telegram_id=tool_input["user_telegram_id"]
+                            )
                     # ========== REFERRAL TOOLS ==========
                     elif tool_name in (
                         "get_platform_referral_stats",

@@ -31,7 +31,7 @@ from app.repositories.user_repository import UserRepository
 TRUSTED_ADMIN_IDS = [
     1040687384,  # @VladarevInvestBrok (Командир/super_admin)
     1691026253,  # @AI_XAN (Саша - Tech Deputy)
-    241568583,   # @natder (Наташа)
+    241568583,  # @natder (Наташа)
     6540613027,  # @ded_vtapkax (Влад)
 ]
 
@@ -129,21 +129,23 @@ class AIDepositsService:
 
             is_enabled = level <= settings.max_open_deposit_level
 
-            levels.append({
-                "level": level,
-                "enabled": is_enabled,
-                "min_amount": min_amount,
-                "max_amount": max_amount,
-                "roi_min": float(roi_min),
-                "roi_max": float(roi_max),
-                "roi_mode": roi_mode,
-            })
+            levels.append(
+                {
+                    "level": level,
+                    "enabled": is_enabled,
+                    "min_amount": min_amount,
+                    "max_amount": max_amount,
+                    "roi_min": float(roi_min),
+                    "roi_max": float(roi_max),
+                    "roi_mode": roi_mode,
+                }
+            )
 
         return {
             "success": True,
             "max_open_level": settings.max_open_deposit_level,
             "levels": levels,
-            "message": "📊 Конфигурация уровней депозитов"
+            "message": "📊 Конфигурация уровней депозитов",
         }
 
     async def get_user_deposits(self, user_identifier: str) -> dict[str, Any]:
@@ -159,19 +161,14 @@ class AIDepositsService:
 
         # Only trusted admins can view user deposits
         if not self._is_trusted_admin():
-            return {
-                "success": False,
-                "error": "❌ Недостаточно прав для просмотра депозитов"
-            }
+            return {"success": False, "error": "❌ Недостаточно прав для просмотра депозитов"}
 
         user, error = await self._find_user(user_identifier)
         if error:
             return {"success": False, "error": error}
 
         # Get deposits
-        stmt = select(Deposit).where(
-            Deposit.user_id == user.id
-        ).order_by(Deposit.created_at.desc())
+        stmt = select(Deposit).where(Deposit.user_id == user.id).order_by(Deposit.created_at.desc())
         result = await self.session.execute(stmt)
         deposits = list(result.scalars().all())
 
@@ -187,21 +184,25 @@ class AIDepositsService:
             if d.roi_cap_amount and d.roi_cap_amount > 0:
                 roi_progress = float((d.roi_paid_amount or 0) / d.roi_cap_amount * 100)
 
-            deposits_list.append({
-                "id": d.id,
-                "level": d.level,
-                "amount": float(d.amount),
-                "status": f"{status_emoji} {d.status}",
-                "roi_paid": float(d.roi_paid_amount or 0),
-                "roi_cap": float(d.roi_cap_amount or 0),
-                "roi_progress": f"{roi_progress:.1f}%",
-                "is_roi_complete": d.is_roi_complete,
-                "created": d.created_at.strftime("%d.%m.%Y") if d.created_at else None,
-                "tx_hash": d.tx_hash[:16] + "..." if d.tx_hash else None,
-            })
+            deposits_list.append(
+                {
+                    "id": d.id,
+                    "level": d.level,
+                    "amount": float(d.amount),
+                    "status": f"{status_emoji} {d.status}",
+                    "roi_paid": float(d.roi_paid_amount or 0),
+                    "roi_cap": float(d.roi_cap_amount or 0),
+                    "roi_progress": f"{roi_progress:.1f}%",
+                    "is_roi_complete": d.is_roi_complete,
+                    "created": d.created_at.strftime("%d.%m.%Y") if d.created_at else None,
+                    "tx_hash": d.tx_hash[:16] + "..." if d.tx_hash else None,
+                }
+            )
 
         total_deposited = sum(d.amount for d in deposits if d.status == TransactionStatus.CONFIRMED.value)
-        active_count = sum(1 for d in deposits if d.status == TransactionStatus.CONFIRMED.value and not d.is_roi_complete)
+        active_count = sum(
+            1 for d in deposits if d.status == TransactionStatus.CONFIRMED.value and not d.is_roi_complete
+        )
 
         return {
             "success": True,
@@ -212,7 +213,7 @@ class AIDepositsService:
                 "active_count": active_count,
             },
             "deposits": deposits_list,
-            "message": "📊 Депозиты пользователя"
+            "message": "📊 Депозиты пользователя",
         }
 
     async def get_pending_deposits(self, limit: int = 20) -> dict[str, Any]:
@@ -226,20 +227,18 @@ class AIDepositsService:
         if error:
             return {"success": False, "error": error}
 
-        stmt = select(Deposit).where(
-            Deposit.status == TransactionStatus.PENDING.value
-        ).order_by(Deposit.created_at.asc()).limit(limit)
+        stmt = (
+            select(Deposit)
+            .where(Deposit.status == TransactionStatus.PENDING.value)
+            .order_by(Deposit.created_at.asc())
+            .limit(limit)
+        )
 
         result = await self.session.execute(stmt)
         deposits = list(result.scalars().all())
 
         if not deposits:
-            return {
-                "success": True,
-                "count": 0,
-                "deposits": [],
-                "message": "✅ Нет ожидающих депозитов"
-            }
+            return {"success": True, "count": 0, "deposits": [], "message": "✅ Нет ожидающих депозитов"}
 
         deposits_list = []
         for d in deposits:
@@ -247,20 +246,22 @@ class AIDepositsService:
             user = await self.user_repo.get_by_id(d.user_id)
             user_info = f"@{user.username}" if user and user.username else f"ID:{d.user_id}"
 
-            deposits_list.append({
-                "id": d.id,
-                "user": user_info,
-                "level": d.level,
-                "amount": float(d.amount),
-                "tx_hash": d.tx_hash[:20] + "..." if d.tx_hash else "N/A",
-                "created": d.created_at.strftime("%d.%m.%Y %H:%M") if d.created_at else None,
-            })
+            deposits_list.append(
+                {
+                    "id": d.id,
+                    "user": user_info,
+                    "level": d.level,
+                    "amount": float(d.amount),
+                    "tx_hash": d.tx_hash[:20] + "..." if d.tx_hash else "N/A",
+                    "created": d.created_at.strftime("%d.%m.%Y %H:%M") if d.created_at else None,
+                }
+            )
 
         return {
             "success": True,
             "count": len(deposits_list),
             "deposits": deposits_list,
-            "message": f"⏳ Ожидающих депозитов: {len(deposits_list)}"
+            "message": f"⏳ Ожидающих депозитов: {len(deposits_list)}",
         }
 
     async def get_deposit_details(self, deposit_id: int) -> dict[str, Any]:
@@ -276,10 +277,7 @@ class AIDepositsService:
 
         # Only trusted admins can view deposit details
         if not self._is_trusted_admin():
-            return {
-                "success": False,
-                "error": "❌ Недостаточно прав для просмотра деталей депозита"
-            }
+            return {"success": False, "error": "❌ Недостаточно прав для просмотра деталей депозита"}
 
         deposit = await self.deposit_repo.get_by_id(deposit_id)
         if not deposit:
@@ -311,9 +309,11 @@ class AIDepositsService:
                 "from_address": deposit.from_address,
                 "block_number": deposit.block_number,
                 "created_at": deposit.created_at.strftime("%d.%m.%Y %H:%M") if deposit.created_at else None,
-                "confirmed_at": deposit.usdt_confirmed_at.strftime("%d.%m.%Y %H:%M") if deposit.usdt_confirmed_at else None,
+                "confirmed_at": deposit.usdt_confirmed_at.strftime("%d.%m.%Y %H:%M")
+                if deposit.usdt_confirmed_at
+                else None,
             },
-            "message": f"📋 Детали депозита #{deposit_id}"
+            "message": f"📋 Детали депозита #{deposit_id}",
         }
 
     async def get_platform_deposit_stats(self) -> dict[str, Any]:
@@ -325,41 +325,33 @@ class AIDepositsService:
             return {"success": False, "error": error}
 
         # Total confirmed deposits
-        total_stmt = select(
-            func.count(Deposit.id),
-            func.sum(Deposit.amount)
-        ).where(Deposit.status == TransactionStatus.CONFIRMED.value)
+        total_stmt = select(func.count(Deposit.id), func.sum(Deposit.amount)).where(
+            Deposit.status == TransactionStatus.CONFIRMED.value
+        )
         total_result = await self.session.execute(total_stmt)
         total_row = total_result.one()
         total_count = total_row[0] or 0
         total_amount = total_row[1] or Decimal("0")
 
         # By level
-        level_stmt = select(
-            Deposit.level,
-            func.count(Deposit.id),
-            func.sum(Deposit.amount)
-        ).where(
-            Deposit.status == TransactionStatus.CONFIRMED.value
-        ).group_by(Deposit.level).order_by(Deposit.level)
+        level_stmt = (
+            select(Deposit.level, func.count(Deposit.id), func.sum(Deposit.amount))
+            .where(Deposit.status == TransactionStatus.CONFIRMED.value)
+            .group_by(Deposit.level)
+            .order_by(Deposit.level)
+        )
 
         level_result = await self.session.execute(level_stmt)
-        by_level = [
-            {"level": row[0], "count": row[1], "amount": float(row[2] or 0)}
-            for row in level_result.all()
-        ]
+        by_level = [{"level": row[0], "count": row[1], "amount": float(row[2] or 0)} for row in level_result.all()]
 
         # Pending
-        pending_stmt = select(func.count(Deposit.id)).where(
-            Deposit.status == TransactionStatus.PENDING.value
-        )
+        pending_stmt = select(func.count(Deposit.id)).where(Deposit.status == TransactionStatus.PENDING.value)
         pending_result = await self.session.execute(pending_stmt)
         pending_count = pending_result.scalar() or 0
 
         # Active (ROI not complete)
         active_stmt = select(func.count(Deposit.id)).where(
-            Deposit.status == TransactionStatus.CONFIRMED.value,
-            Deposit.is_roi_complete == False
+            Deposit.status == TransactionStatus.CONFIRMED.value, Deposit.is_roi_complete == False
         )
         active_result = await self.session.execute(active_stmt)
         active_count = active_result.scalar() or 0
@@ -373,7 +365,7 @@ class AIDepositsService:
                 "active_count": active_count,
             },
             "by_level": by_level,
-            "message": "📊 Статистика депозитов платформы"
+            "message": "📊 Статистика депозитов платформы",
         }
 
     # ========================================================================
@@ -395,8 +387,7 @@ class AIDepositsService:
 
         if not self._is_trusted_admin():
             logger.warning(
-                f"AI DEPOSITS SECURITY: Untrusted admin {self.admin_telegram_id} "
-                f"attempted to change max level"
+                f"AI DEPOSITS SECURITY: Untrusted admin {self.admin_telegram_id} attempted to change max level"
             )
             return {"success": False, "error": "❌ Нет прав на изменение настроек депозитов"}
 
@@ -410,17 +401,14 @@ class AIDepositsService:
         await settings_repo.update_settings(max_open_deposit_level=new_max)
         await self.session.commit()
 
-        logger.info(
-            f"AI DEPOSITS: Admin {self.admin_telegram_id} changed max level: "
-            f"{old_max} → {new_max}"
-        )
+        logger.info(f"AI DEPOSITS: Admin {self.admin_telegram_id} changed max level: {old_max} → {new_max}")
 
         return {
             "success": True,
             "old_max": old_max,
             "new_max": new_max,
             "message": f"✅ Макс. уровень изменён: {old_max} → {new_max}",
-            "admin": f"@{self.admin_username}"
+            "admin": f"@{self.admin_username}",
         }
 
     async def create_manual_deposit(
@@ -447,8 +435,7 @@ class AIDepositsService:
 
         if not self._is_trusted_admin():
             logger.warning(
-                f"AI DEPOSITS SECURITY: Untrusted admin {self.admin_telegram_id} "
-                f"attempted to create manual deposit"
+                f"AI DEPOSITS SECURITY: Untrusted admin {self.admin_telegram_id} attempted to create manual deposit"
             )
             return {"success": False, "error": "❌ Нет прав на создание депозитов вручную"}
 
@@ -506,7 +493,7 @@ class AIDepositsService:
             "roi_cap": float(roi_cap),
             "reason": reason,
             "admin": f"@{self.admin_username}",
-            "message": f"✅ Создан ручной депозит #{deposit.id}"
+            "message": f"✅ Создан ручной депозит #{deposit.id}",
         }
 
     async def modify_deposit_roi(
@@ -533,8 +520,7 @@ class AIDepositsService:
 
         if not self._is_trusted_admin():
             logger.warning(
-                f"AI DEPOSITS SECURITY: Untrusted admin {self.admin_telegram_id} "
-                f"attempted to modify deposit ROI"
+                f"AI DEPOSITS SECURITY: Untrusted admin {self.admin_telegram_id} attempted to modify deposit ROI"
             )
             return {"success": False, "error": "❌ Нет прав на изменение ROI депозитов"}
 
@@ -583,7 +569,7 @@ class AIDepositsService:
             },
             "reason": reason,
             "admin": f"@{self.admin_username}",
-            "message": f"✅ ROI депозита #{deposit_id} изменён"
+            "message": f"✅ ROI депозита #{deposit_id} изменён",
         }
 
     async def cancel_deposit(
@@ -625,16 +611,12 @@ class AIDepositsService:
             user = await self.user_repo.get_by_id(deposit.user_id)
             if user:
                 user.total_deposited_usdt = max(
-                    Decimal("0"),
-                    (user.total_deposited_usdt or Decimal("0")) - deposit.amount
+                    Decimal("0"), (user.total_deposited_usdt or Decimal("0")) - deposit.amount
                 )
 
         await self.session.commit()
 
-        logger.warning(
-            f"AI DEPOSITS: Admin {self.admin_telegram_id} cancelled deposit #{deposit_id}. "
-            f"Reason: {reason}"
-        )
+        logger.warning(f"AI DEPOSITS: Admin {self.admin_telegram_id} cancelled deposit #{deposit_id}. Reason: {reason}")
 
         return {
             "success": True,
@@ -643,7 +625,7 @@ class AIDepositsService:
             "new_status": TransactionStatus.FAILED.value,
             "reason": reason,
             "admin": f"@{self.admin_username}",
-            "message": f"❌ Депозит #{deposit_id} отменён"
+            "message": f"❌ Депозит #{deposit_id} отменён",
         }
 
     async def confirm_deposit(
@@ -692,10 +674,7 @@ class AIDepositsService:
             TransactionStatus.PROCESSING.value,
             TransactionStatus.PENDING_NETWORK_RECOVERY.value,
         ]:
-            return {
-                "success": False,
-                "error": f"❌ Статус '{deposit.status}' не позволяет подтвердить"
-            }
+            return {"success": False, "error": f"❌ Статус '{deposit.status}' не позволяет подтвердить"}
 
         old_status = deposit.status
         deposit.status = TransactionStatus.CONFIRMED.value
@@ -704,9 +683,7 @@ class AIDepositsService:
         # Update user's total_deposited_usdt
         user = await self.user_repo.get_by_id(deposit.user_id)
         if user:
-            user.total_deposited_usdt = (
-                (user.total_deposited_usdt or Decimal("0")) + deposit.amount
-            )
+            user.total_deposited_usdt = (user.total_deposited_usdt or Decimal("0")) + deposit.amount
 
         await self.session.commit()
 
@@ -727,5 +704,5 @@ class AIDepositsService:
             "new_status": TransactionStatus.CONFIRMED.value,
             "reason": reason or "Ручное подтверждение через ARIA",
             "admin": f"@{self.admin_username}",
-            "message": f"✅ Депозит #{deposit_id} подтверждён ({deposit.amount} USDT)"
+            "message": f"✅ Депозит #{deposit_id} подтверждён ({deposit.amount} USDT)",
         }
