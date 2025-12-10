@@ -91,29 +91,20 @@ class AIWalletService:
                 user = await self.user_repo.get_by_username(identifier)
 
             if not user and not wallet_address:
-                return {
-                    "success": False,
-                    "error": f"❌ Пользователь '{identifier}' не найден"
-                }
+                return {"success": False, "error": f"❌ Пользователь '{identifier}' не найден"}
 
             # Get wallet address from user if not provided
             if not wallet_address and user:
                 wallet_address = user.wallet_address
 
             if not wallet_address:
-                return {
-                    "success": False,
-                    "error": "❌ У пользователя не указан кошелёк"
-                }
+                return {"success": False, "error": "❌ У пользователя не указан кошелёк"}
 
             # Get balances from blockchain
             balance = await self.wallet_service.get_wallet_balances(wallet_address)
 
             if not balance:
-                return {
-                    "success": False,
-                    "error": "❌ Не удалось получить балансы кошелька. Попробуйте позже."
-                }
+                return {"success": False, "error": "❌ Не удалось получить балансы кошелька. Попробуйте позже."}
 
             # Get current PLEX rate
             plex_rate_info = await self.get_plex_rate()
@@ -138,10 +129,7 @@ class AIWalletService:
             # Check PLEX balance
             if plex_balance < RECOMMENDED_PLEX_MIN:
                 needed = RECOMMENDED_PLEX_MIN - int(plex_balance)
-                recommendations.append(
-                    f"💎 Рекомендуется докупить минимум {needed:,} PLEX "
-                    f"для комфортной работы"
-                )
+                recommendations.append(f"💎 Рекомендуется докупить минимум {needed:,} PLEX для комфортной работы")
 
             # Calculate potential earnings context
             daily_plex_per_100 = 100 * plex_per_dollar  # PLEX per $100 deposit per day
@@ -192,10 +180,7 @@ class AIWalletService:
 
         except Exception as e:
             logger.error(f"AI WALLET: Error checking wallet: {e}")
-            return {
-                "success": False,
-                "error": f"❌ Ошибка при проверке кошелька: {str(e)}"
-            }
+            return {"success": False, "error": f"❌ Ошибка при проверке кошелька: {str(e)}"}
 
     async def get_plex_rate(self) -> dict[str, Any]:
         """
@@ -234,8 +219,7 @@ class AIWalletService:
                     "monthly_plex_per_100_usd": plex_per_dollar * 100 * 30,
                 },
                 "recommendation": (
-                    "💡 Курс PLEX сейчас выгодный! "
-                    "Рекомендуем накапливать токены, пока цена адекватная."
+                    "💡 Курс PLEX сейчас выгодный! Рекомендуем накапливать токены, пока цена адекватная."
                 ),
                 "message": (
                     f"💎 **Курс PLEX**\n\n"
@@ -304,8 +288,7 @@ class AIWalletService:
 
         if should_buy_more:
             end_message += (
-                "\n❓ **Уверены, что у вас достаточно PLEX?**\n"
-                "Может быть стоит докупить, пока курс ещё адекватный? 💎"
+                "\n❓ **Уверены, что у вас достаточно PLEX?**\nМожет быть стоит докупить, пока курс ещё адекватный? 💎"
             )
 
         return {

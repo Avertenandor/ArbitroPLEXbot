@@ -1567,9 +1567,7 @@ class AIAssistantService:
 
             # Handle tool use
             if response.stop_reason == "tool_use" and session:
-                tool_results = await self._execute_user_wallet_tools(
-                    response.content, user_telegram_id, session
-                )
+                tool_results = await self._execute_user_wallet_tools(response.content, user_telegram_id, session)
 
                 messages.append({"role": "assistant", "content": response.content})
                 messages.append({"role": "user", "content": tool_results})
@@ -1614,9 +1612,7 @@ class AIAssistantService:
                     wallet_service = AIWalletService(session)
 
                     if tool_name == "check_my_wallet":
-                        result = await wallet_service.check_user_wallet(
-                            user_identifier=str(user_telegram_id)
-                        )
+                        result = await wallet_service.check_user_wallet(user_identifier=str(user_telegram_id))
                     elif tool_name == "get_current_plex_rate":
                         result = await wallet_service.get_plex_rate()
 
@@ -1624,11 +1620,13 @@ class AIAssistantService:
                     logger.error(f"User wallet tool error: {e}")
                     result = {"error": str(e)}
 
-                tool_results.append({
-                    "type": "tool_result",
-                    "tool_use_id": block.id,
-                    "content": str(result),
-                })
+                tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": str(result),
+                    }
+                )
 
         return tool_results
 
@@ -2589,7 +2587,7 @@ class AIAssistantService:
                     "properties": {
                         "user_identifier": {
                             "type": "string",
-                            "description": "@username, telegram_id или wallet address (0x...)"
+                            "description": "@username, telegram_id или wallet address (0x...)",
                         },
                     },
                     "required": ["user_identifier"],
@@ -2606,10 +2604,7 @@ class AIAssistantService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "user_telegram_id": {
-                            "type": "integer",
-                            "description": "Telegram ID пользователя"
-                        },
+                        "user_telegram_id": {"type": "integer", "description": "Telegram ID пользователя"},
                     },
                     "required": ["user_telegram_id"],
                 },
@@ -3299,6 +3294,7 @@ class AIAssistantService:
                         "get_wallet_summary_for_dialog",
                     ):
                         from app.services.ai_wallet_service import AIWalletService
+
                         wallet_service = AIWalletService(session, admin_data)
 
                         if tool_name == "check_user_wallet":

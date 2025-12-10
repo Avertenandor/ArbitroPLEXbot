@@ -52,6 +52,10 @@ async def _show_dashboard(message: Message, state: FSMContext) -> None:
 
     # Hot Wallet (Output)
     hot_address = bs.wallet_address
+    if not hot_address:
+        await message.answer("❌ Hot wallet не настроен (TREASURY_ADDRESS).")
+        return
+
     hot_bnb_bal = await bs.get_native_balance(hot_address)
     hot_usdt_bal = await bs.get_usdt_balance(hot_address)
     hot_plex_bal = await bs.get_plex_balance(hot_address)
@@ -62,7 +66,12 @@ async def _show_dashboard(message: Message, state: FSMContext) -> None:
     cold_usdt_bal = Decimal("0")
     cold_plex_bal = Decimal("0")
 
-    has_cold = cold_address and cold_address.lower() != hot_address.lower()
+    # Safe comparison - hot_address already validated above
+    has_cold = (
+        cold_address
+        and hot_address
+        and cold_address.lower() != hot_address.lower()
+    )
 
     if has_cold:
         cold_bnb_bal = await bs.get_native_balance(cold_address) or Decimal("0")

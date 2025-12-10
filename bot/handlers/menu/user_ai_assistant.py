@@ -109,8 +109,7 @@ async def end_user_chat(
     """End user chat."""
     await state.clear()
     await message.answer(
-        "✅ Диалог завершён.\n\n"
-        "Если будут вопросы — обращайся!",
+        "✅ Диалог завершён.\n\nЕсли будут вопросы — обращайся!",
         reply_markup=user_ai_keyboard(),
     )
 
@@ -139,9 +138,7 @@ async def handle_user_chat(
     # Block forwarded messages
     forward_check = check_forwarded_message(message)
     if forward_check["is_forwarded"]:
-        logger.warning(
-            f"SECURITY: User {message.from_user.id} sent forwarded message"
-        )
+        logger.warning(f"SECURITY: User {message.from_user.id} sent forwarded message")
         await message.answer(
             SECURITY_RESPONSE_FORWARDED,
             parse_mode="Markdown",
@@ -159,9 +156,7 @@ async def handle_user_chat(
     )
 
     if not security_check["allow"]:
-        logger.error(
-            f"🚨 SECURITY BLOCK: User {message.from_user.id} message blocked"
-        )
+        logger.error(f"🚨 SECURITY BLOCK: User {message.from_user.id} message blocked")
         await message.answer(
             SECURITY_RESPONSE_BLOCKED,
             parse_mode="Markdown",
