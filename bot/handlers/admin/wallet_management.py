@@ -28,7 +28,8 @@ from bot.utils.admin_utils import clear_state_preserve_admin_token
 router = Router(name="admin_wallet_management")
 
 
-@router.message(F.text == "🔐 Управление кошельком")
+# NOTE: Handler "🔐 Управление кошельком" is in navigation.py with require_super check
+# This function is called from there after permission validation
 async def show_wallet_dashboard(
     message: Message,
     session: AsyncSession,
@@ -87,22 +88,22 @@ async def _show_dashboard(message: Message, state: FSMContext) -> None:
         return f"{int(val):,}".replace(",", " ")
 
     text = (
-        "🔐 **Админ-кошелек (Dashboard)**\n\n"
-        "🔥 **HOT WALLET (Выплатной)**\n"
+        "🔐 *Админ-кошелек* — Dashboard\n\n"
+        "🔥 *HOT WALLET* — Выплатной\n"
         f"Адрес: `{hot_address}`\n"
-        f"🔶 BNB: **{fmt_bnb(hot_bnb_bal)}**\n"
-        f"💵 USDT: **{fmt_usdt(hot_usdt_bal)}**\n"
-        f"💎 PLEX: **{fmt_plex(hot_plex_bal)}**\n"
+        f"🔶 BNB: *{fmt_bnb(hot_bnb_bal)}*\n"
+        f"💵 USDT: *{fmt_usdt(hot_usdt_bal)}*\n"
+        f"💎 PLEX: *{fmt_plex(hot_plex_bal)}*\n"
     )
 
     if has_cold:
         text += (
-            "\n❄️ **INPUT WALLET (Приемный)**\n"
+            "\n❄️ *INPUT WALLET* — Приемный\n"
             f"Адрес: `{cold_address}`\n"
-            f"🔶 BNB: **{fmt_bnb(cold_bnb_bal)}**\n"
-            f"💵 USDT: **{fmt_usdt(cold_usdt_bal)}**\n"
-            f"💎 PLEX: **{fmt_plex(cold_plex_bal)}**\n"
-            "_Только просмотр, ключи не хранятся_\n"
+            f"🔶 BNB: *{fmt_bnb(cold_bnb_bal)}*\n"
+            f"💵 USDT: *{fmt_usdt(cold_usdt_bal)}*\n"
+            f"💎 PLEX: *{fmt_plex(cold_plex_bal)}*\n"
+            "Только просмотр, ключи не хранятся\n"
         )
 
     text += "\n👇 Выберите действие:"
@@ -210,6 +211,9 @@ async def input_address(message: Message, state: FSMContext):
 
     address = message.text.strip()
     bs = get_blockchain_service()
+    if not bs:
+        await message.answer("❌ Сервис блокчейна недоступен.", reply_markup=wallet_back_keyboard())
+        return
 
     if not await bs.validate_wallet_address(address):
         await message.answer("❌ Неверный формат адреса. Попробуйте еще раз:", reply_markup=wallet_back_keyboard())
@@ -309,7 +313,10 @@ async def execute_transaction(message: Message, state: FSMContext):
     # Keep Decimal precision for blockchain transaction
     amount = Decimal(data["send_amount"])
 
-    await message.answer("⏳ **Отправка транзакции...**\nОжидайте подтверждения сети.")
+    await message.answer(
+        "⏳ *Отправка транзакции...*\nОжидайте подтверждения сети.",
+        parse_mode="Markdown",
+    )
 
     bs = get_blockchain_service()
 
@@ -330,12 +337,18 @@ async def execute_transaction(message: Message, state: FSMContext):
             )
         else:
             await message.answer(
-                f"❌ **Ошибка отправки**\n\nПричина: {result['error']}", reply_markup=wallet_back_keyboard()
+                f"❌ *Ошибка отправки*\n\nПричина: {result['error']}",
+                parse_mode="Markdown",
+                reply_markup=wallet_back_keyboard(),
             )
 
     except Exception as e:
         logger.error(f"Wallet send error: {e}")
-        await message.answer(f"❌ **Критическая ошибка**\n{str(e)}", reply_markup=wallet_back_keyboard())
+        await message.answer(
+            f"❌ *Критическая ошибка*\n{str(e)}",
+            parse_mode="Markdown",
+            reply_markup=wallet_back_keyboard(),
+        )
 
 
 @router.message(F.text == "❌ Отменить", WalletManagementStates.confirm_transaction)

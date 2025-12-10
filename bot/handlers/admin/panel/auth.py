@@ -170,8 +170,8 @@ async def handle_master_key_input(
             await handle_admin_withdrawals(message, session, **data)
             return
         elif redirect_message_text == "📢 Рассылка":
-            from bot.handlers.admin.broadcast import handle_broadcast_menu
-            await handle_broadcast_menu(message, session, **data)
+            from bot.handlers.admin.broadcast import handle_start_broadcast
+            await handle_start_broadcast(message, state, **data)
             return
         elif redirect_message_text == "👥 Управление пользователями":
             from bot.handlers.admin.panel.navigation import handle_admin_users_menu

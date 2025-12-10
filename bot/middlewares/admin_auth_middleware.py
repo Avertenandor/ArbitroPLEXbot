@@ -203,6 +203,7 @@ class AdminAuthMiddleware(BaseMiddleware):
 
         # Session is valid, add to data
         data["admin"] = admin_obj
+        data["admin_id"] = admin_obj.id
         data["admin_session"] = session_obj
         data["admin_session_token"] = session_token
         data["is_super_admin"] = admin_obj.is_super_admin

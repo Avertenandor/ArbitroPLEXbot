@@ -163,8 +163,9 @@ async def handle_back_to_main_menu(
     user: User | None = data.get("user")
 
     if state:
-        # Force clear state AND session token to require master key on next entry
-        await state.clear()
+        # Clear state but preserve admin token for smoother UX
+        from bot.utils.admin_utils import clear_state_preserve_admin_token
+        await clear_state_preserve_admin_token(state)
 
     # Remove 'user' and 'state' from data to avoid duplicate arguments
     safe_data = {k: v for k, v in data.items() if k not in ('user', 'state')}
