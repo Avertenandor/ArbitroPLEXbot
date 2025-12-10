@@ -84,6 +84,7 @@ async def cmd_admin_panel(
 
     user: User | None = data.get("user")
     from app.repositories.blacklist_repository import BlacklistRepository
+
     blacklist_repo = BlacklistRepository(session)
     if user:
         await blacklist_repo.find_by_telegram_id(user.telegram_id)
@@ -101,10 +102,7 @@ async def cmd_admin_panel(
     await message.answer(
         text,
         parse_mode="Markdown",
-        reply_markup=admin_keyboard(
-            is_super_admin=admin.is_super_admin,
-            is_extended_admin=admin.is_extended_admin
-        ),
+        reply_markup=admin_keyboard(is_super_admin=admin.is_super_admin, is_extended_admin=admin.is_extended_admin),
     )
 
 
@@ -128,6 +126,7 @@ async def handle_admin_panel_button(
 
     user: User | None = data.get("user")
     from app.repositories.blacklist_repository import BlacklistRepository
+
     blacklist_repo = BlacklistRepository(session)
     if user:
         await blacklist_repo.find_by_telegram_id(user.telegram_id)
@@ -165,8 +164,9 @@ async def handle_back_to_main_menu(
     if state:
         # Clear state but preserve admin token for smoother UX
         from bot.utils.admin_utils import clear_state_preserve_admin_token
+
         await clear_state_preserve_admin_token(state)
 
     # Remove 'user' and 'state' from data to avoid duplicate arguments
-    safe_data = {k: v for k, v in data.items() if k not in ('user', 'state')}
+    safe_data = {k: v for k, v in data.items() if k not in ("user", "state")}
     await show_main_menu(message, session, user, state, **safe_data)

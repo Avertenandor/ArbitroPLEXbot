@@ -53,9 +53,7 @@ class AdminAuthMiddleware(BaseMiddleware):
         # Get session from data (provided by DatabaseMiddleware)
         session: AsyncSession = data.get("session")
         if not session:
-            logger.error(
-                "No session in data - DatabaseMiddleware missing?"
-            )
+            logger.error("No session in data - DatabaseMiddleware missing?")
             return await handler(event, data)
 
         # Get FSM context
@@ -83,22 +81,16 @@ class AdminAuthMiddleware(BaseMiddleware):
 
         # Get admin from database
         admin_service = AdminService(session)
-        admin = await admin_service.get_admin_by_telegram_id(
-            telegram_user.id
-        )
+        admin = await admin_service.get_admin_by_telegram_id(telegram_user.id)
 
         if not admin:
-            logger.warning(
-                f"User {telegram_user.id} marked as admin but not found "
-                f"in Admin table"
-            )
+            logger.warning(f"User {telegram_user.id} marked as admin but not found in Admin table")
             return await handler(event, data)
 
         # R10-3: Check if admin is blocked
         if admin.is_blocked:
             logger.warning(
-                f"R10-3: Blocked admin {admin.id} (telegram_id={telegram_user.id}) "
-                f"attempted to access admin panel"
+                f"R10-3: Blocked admin {admin.id} (telegram_id={telegram_user.id}) attempted to access admin panel"
             )
             if isinstance(event, Message):
                 await event.answer(
@@ -125,19 +117,16 @@ class AdminAuthMiddleware(BaseMiddleware):
         # Check if current state should bypass auth (AI chat, etc.)
         # These are interactive states where interrupting for auth is bad UX
         if current_state and current_state in BYPASS_AUTH_STATES:
-            logger.debug(
-                f"AdminAuthMiddleware: Bypassing auth for state {current_state}"
-            )
+            logger.debug(f"AdminAuthMiddleware: Bypassing auth for state {current_state}")
             data["admin"] = admin
             return await handler(event, data)
 
         # Super admin bypass: ONLY in development mode
         # In production, even super admin must authenticate
         import os
+
         if admin.is_super_admin and os.getenv("ENVIRONMENT", "production") == "development":
-            logger.warning(
-                f"AdminAuthMiddleware: DEV MODE - Super admin {admin.telegram_id} bypass"
-            )
+            logger.warning(f"AdminAuthMiddleware: DEV MODE - Super admin {admin.telegram_id} bypass")
             data["admin"] = admin
             return await handler(event, data)
 
@@ -161,20 +150,15 @@ class AdminAuthMiddleware(BaseMiddleware):
             await state.set_state(AdminStates.awaiting_master_key_input)
             if isinstance(event, Message):
                 await event.answer(
-                    "🔐 **Требуется аутентификация**\n\n"
-                    "Для доступа к админ-панели введите мастер-ключ:",
+                    "🔐 **Требуется аутентификация**\n\nДля доступа к админ-панели введите мастер-ключ:",
                     parse_mode="Markdown",
                 )
             elif isinstance(event, CallbackQuery):
-                await event.answer(
-                    "🔐 Требуется аутентификация. Введите мастер-ключ."
-                )
+                await event.answer("🔐 Требуется аутентификация. Введите мастер-ключ.")
             return
 
         # Validate session
-        admin_obj, session_obj, error = await admin_service.validate_session(
-            session_token
-        )
+        admin_obj, session_obj, error = await admin_service.validate_session(session_token)
 
         if error or not admin_obj or not session_obj:
             # Session invalid, require master key
@@ -191,14 +175,11 @@ class AdminAuthMiddleware(BaseMiddleware):
             await state.update_data(admin_session_token=None)
             if isinstance(event, Message):
                 await event.answer(
-                    f"❌ {error or 'Сессия недействительна'}\n\n"
-                    "Введите мастер-ключ для повторной аутентификации:",
+                    f"❌ {error or 'Сессия недействительна'}\n\nВведите мастер-ключ для повторной аутентификации:",
                     parse_mode="Markdown",
                 )
             elif isinstance(event, CallbackQuery):
-                await event.answer(
-                    f"❌ {error or 'Сессия недействительна'}"
-                )
+                await event.answer(f"❌ {error or 'Сессия недействительна'}")
             return
 
         # Session is valid, add to data

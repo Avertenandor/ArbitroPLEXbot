@@ -96,8 +96,7 @@ async def handle_master_key_input(
 
     if error or not session_obj or not admin_obj:
         await message.answer(
-            f"❌ {error or 'Ошибка аутентификации'}\n\n"
-            "Попробуйте ввести мастер-ключ еще раз:",
+            f"❌ {error or 'Ошибка аутентификации'}\n\nПопробуйте ввести мастер-ключ еще раз:",
             parse_mode="Markdown",
         )
         return
@@ -115,14 +114,10 @@ async def handle_master_key_input(
         # Clean up
         await state.update_data(auth_previous_state=None, auth_redirect_message=None)
 
-        logger.info(
-            f"Admin {telegram_id} authenticated successfully, "
-            f"restoring state {previous_state}"
-        )
+        logger.info(f"Admin {telegram_id} authenticated successfully, restoring state {previous_state}")
 
         await message.answer(
-            "✅ **Аутентификация успешна!**\n\n"
-            "Вы вернулись в предыдущее меню. Пожалуйста, повторите ваше действие.",
+            "✅ **Аутентификация успешна!**\n\nВы вернулись в предыдущее меню. Пожалуйста, повторите ваше действие.",
             parse_mode="Markdown",
         )
         return
@@ -137,58 +132,70 @@ async def handle_master_key_input(
         # Note: Don't modify message.text - aiogram Message objects are frozen
         if redirect_message_text == "🆘 Техподдержка":
             from bot.handlers.admin.support import handle_admin_support_menu
+
             await handle_admin_support_menu(message, state, **data)
             return
         elif redirect_message_text == "💰 Управление депозитами":
             from bot.handlers.admin.deposit_management import (
                 show_deposit_management_menu,
             )
+
             await show_deposit_management_menu(message, session, **data)
             return
         elif redirect_message_text == "⚙️ Настроить уровни депозитов":
             from bot.handlers.admin.deposit_settings import (
                 show_deposit_settings,
             )
+
             await show_deposit_settings(message, session, **data)
             return
         elif redirect_message_text == "👥 Управление админами":
             from bot.handlers.admin.admins import show_admin_management
+
             await show_admin_management(message, session, **data)
             return
         elif redirect_message_text == "🚫 Управление черным списком":
             from bot.handlers.admin.blacklist import show_blacklist
+
             await show_blacklist(message, session, **data)
             return
         elif redirect_message_text == "🔐 Управление кошельком":
             from bot.handlers.admin.wallet_management import (
                 show_wallet_dashboard,
             )
+
             await show_wallet_dashboard(message, session, state, **data)
             return
         elif redirect_message_text == "💸 Заявки на вывод":
             from bot.handlers.admin.panel.navigation import handle_admin_withdrawals
+
             await handle_admin_withdrawals(message, session, **data)
             return
         elif redirect_message_text == "📢 Рассылка":
             from bot.handlers.admin.broadcast import handle_start_broadcast
+
             await handle_start_broadcast(message, state, **data)
             return
         elif redirect_message_text == "👥 Управление пользователями":
             from bot.handlers.admin.panel.navigation import handle_admin_users_menu
+
             await handle_admin_users_menu(message, session, **data)
             return
         elif redirect_message_text == "📊 Статистика":
             from bot.handlers.admin.panel.statistics import handle_admin_stats
+
             await handle_admin_stats(message, session, **data)
             return
         elif redirect_message_text == "🔑 Восстановление пароля":
             from bot.handlers.admin.finpass_recovery import (
                 show_recovery_requests,
             )
+
             await show_recovery_requests(message, session, state, **data)
             return
         elif redirect_message_text and "Финансовая" in redirect_message_text:
             from bot.handlers.admin.financials import show_financial_list
+
             await show_financial_list(message, session, state, **data)
             return
         elif redirect_message_text == "👑 Админ-панель":
@@ -197,10 +204,7 @@ async def handle_master_key_input(
 
     await state.set_state(None)  # Clear state
 
-    logger.info(
-        f"Admin {telegram_id} authenticated successfully, "
-        f"session_id={session_obj.id}"
-    )
+    logger.info(f"Admin {telegram_id} authenticated successfully, session_id={session_obj.id}")
 
     # Show admin panel
     text = """
@@ -213,15 +217,12 @@ async def handle_master_key_input(
 
     # Get admin and super_admin status
     telegram_id = message.from_user.id if message.from_user else None
-    admin, is_super_admin = await get_admin_and_super_status(
-        session, telegram_id, data
-    )
+    admin, is_super_admin = await get_admin_and_super_status(session, telegram_id, data)
 
     await message.answer(
         text,
         parse_mode="Markdown",
         reply_markup=admin_keyboard(
-            is_super_admin=is_super_admin,
-            is_extended_admin=admin.is_extended_admin if admin else False
+            is_super_admin=is_super_admin, is_extended_admin=admin.is_extended_admin if admin else False
         ),
     )

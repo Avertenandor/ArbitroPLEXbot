@@ -1454,17 +1454,34 @@ class AIAssistantService:
             response = self.client.messages.create(
                 model=self.model,
                 max_tokens=1024,
-                system="Ты помощник для извлечения знаний. Отвечай только JSON.",
+                system="Ты помощник для извлечения знаний. Отвечай ТОЛЬКО валидным JSON массивом без дополнительного текста.",
                 messages=messages,
             )
 
             if response.content:
                 import json
+                import re
 
                 text = response.content[0].text.strip()
-                # Try to parse JSON
+
+                # Try to extract JSON array from response
+                # Sometimes Claude adds extra text before/after JSON
+                json_match = re.search(r'\[[\s\S]*\]', text)
+                if json_match:
+                    json_text = json_match.group(0)
+                    try:
+                        return json.loads(json_text)
+                    except json.JSONDecodeError as je:
+                        logger.warning(f"JSON parse error in extracted text: {je}")
+
+                # Fallback: try direct parse if starts with [
                 if text.startswith("["):
-                    return json.loads(text)
+                    try:
+                        return json.loads(text)
+                    except json.JSONDecodeError:
+                        pass
+
+                logger.debug(f"Could not extract JSON from: {text[:200]}")
 
         except Exception as e:
             logger.error(f"Knowledge extraction error: {e}")
