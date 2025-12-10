@@ -123,6 +123,7 @@ def ai_assistant_keyboard() -> Any:
 def chat_keyboard() -> Any:
     """Keyboard for chat mode."""
     builder = ReplyKeyboardBuilder()
+    builder.row(KeyboardButton(text="🧠 Запомнить это"))
     builder.row(KeyboardButton(text="🔚 Завершить диалог"))
     return builder.as_markup(resize_keyboard=True)
 
@@ -253,34 +254,106 @@ async def end_chat(
     state: FSMContext,
     **data: Any,
 ) -> None:
-    """End chat mode and extract knowledge from conversation."""
+    """Завершение чата с автоматическим извлечением знаний для ВСЕХ админов."""
     admin = await get_admin_or_deny(message, session, **data)
 
     # Get conversation history for knowledge extraction
     state_data = await state.get_data()
     history = state_data.get("conversation_history", [])
 
-    # Try to extract knowledge if boss or tech deputy
-    if admin and admin.role in ("super_admin",) and len(history) >= 4:
+    logger.info(f"ARIA: Завершение диалога с @{admin.username if admin else 'unknown'}, history_len={len(history)}")
+
+    # Извлечение знаний для ВСЕХ админов (не только super_admin)
+    if admin and len(history) >= 2:
         ai_service = get_ai_service()
         username = admin.username or str(admin.telegram_id)
 
         await message.answer("🧠 Анализирую диалог для извлечения знаний...")
+        logger.info(f"ARIA: Начинаю извлечение знаний из {len(history)} сообщений")
 
         qa_pairs = await ai_service.extract_knowledge(history, username)
+        logger.info(f"ARIA: Извлечено qa_pairs={qa_pairs}")
+
         if qa_pairs:
             saved = await ai_service.save_learned_knowledge(qa_pairs, username)
+            logger.info(f"ARIA: Сохранено {saved} записей в базу знаний")
             if saved > 0:
                 await message.answer(
                     f"✅ Извлечено {saved} новых записей в базу знаний!\n"
-                    "Они ожидают вашего подтверждения в 📚 База знаний.",
+                    "Они ожидают подтверждения в 📚 База знаний.",
                 )
+            else:
+                await message.answer("ℹ️ Не удалось извлечь новые знания из этого диалога.")
+        else:
+            await message.answer("ℹ️ В этом диалоге не найдено новых знаний для сохранения.")
+    elif admin and len(history) < 2:
+        logger.info(f"ARIA: Слишком короткий диалог ({len(history)} сообщений), пропускаю извлечение")
 
     await clear_state_keep_session(state)
     await message.answer(
         "✅ Диалог завершён.\n\nБыло приятно пообщаться! Возвращайся, если будут вопросы.",
         reply_markup=ai_assistant_keyboard(),
     )
+
+
+@router.message(AIAssistantStates.chatting, F.text == "🧠 Запомнить это")
+async def manual_save_knowledge(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Ручное извлечение и сохранение знаний из текущего диалога."""
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
+        return
+
+    state_data = await state.get_data()
+    history = state_data.get("conversation_history", [])
+
+    logger.info(f"ARIA: Ручное сохранение знаний от @{admin.username}, history_len={len(history)}")
+
+    if len(history) < 2:
+        await message.answer(
+            "ℹ️ Диалог слишком короткий для извлечения знаний.\n"
+            "Продолжи общение и попробуй снова!",
+            reply_markup=chat_keyboard(),
+        )
+        return
+
+    ai_service = get_ai_service()
+    username = admin.username or str(admin.telegram_id)
+
+    await message.answer("🧠 Анализирую диалог и извлекаю знания...")
+
+    qa_pairs = await ai_service.extract_knowledge(history, username)
+    logger.info(f"ARIA: Ручное извлечение - qa_pairs={qa_pairs}")
+
+    if qa_pairs:
+        saved = await ai_service.save_learned_knowledge(qa_pairs, username)
+        logger.info(f"ARIA: Ручное сохранение - saved={saved}")
+        if saved > 0:
+            await message.answer(
+                f"✅ Отлично! Извлечено и сохранено {saved} записей!\n\n"
+                "Они добавлены в базу знаний и ожидают подтверждения.\n"
+                "Продолжай диалог! 💬",
+                reply_markup=chat_keyboard(),
+            )
+        else:
+            await message.answer(
+                "ℹ️ Не удалось сохранить извлечённые знания.\n"
+                "Попробуй сформулировать информацию более чётко.",
+                reply_markup=chat_keyboard(),
+            )
+    else:
+        await message.answer(
+            "ℹ️ Не удалось извлечь полезные знания из диалога.\n\n"
+            "💡 Попробуй:\n"
+            "• Объяснить что-то конкретное о системе\n"
+            "• Дать чёткую инструкцию\n"
+            "• Рассказать о важном правиле",
+            reply_markup=chat_keyboard(),
+        )
 
 
 @router.message(AIAssistantStates.chatting)
