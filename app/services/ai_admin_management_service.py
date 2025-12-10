@@ -114,6 +114,13 @@ class AIAdminManagementService:
         if error:
             return {"success": False, "error": error}
         
+        # Only super_admin can view other admin details
+        if not self._is_super_admin():
+            return {
+                "success": False,
+                "error": "❌ Только Командир может просматривать детали администраторов"
+            }
+        
         admin_repo = AdminRepository(self.session)
         
         # Find target admin

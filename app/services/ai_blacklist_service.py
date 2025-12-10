@@ -74,6 +74,13 @@ class AIBlacklistService:
         if error:
             return {"success": False, "error": error}
         
+        # Only trusted admins can view blacklist
+        if not self._is_trusted_admin():
+            return {
+                "success": False,
+                "error": "❌ Недостаточно прав для просмотра чёрного списка"
+            }
+        
         # Get active entries
         stmt = select(Blacklist).where(
             Blacklist.is_active == True
@@ -140,6 +147,13 @@ class AIBlacklistService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
+        
+        # Only trusted admins can check blacklist
+        if not self._is_trusted_admin():
+            return {
+                "success": False,
+                "error": "❌ Недостаточно прав для проверки чёрного списка"
+            }
         
         identifier = identifier.strip()
         

@@ -156,6 +156,13 @@ class AIDepositsService:
         if error:
             return {"success": False, "error": error}
         
+        # Only trusted admins can view user deposits
+        if not self._is_trusted_admin():
+            return {
+                "success": False,
+                "error": "❌ Недостаточно прав для просмотра депозитов"
+            }
+        
         user, error = await self._find_user(user_identifier)
         if error:
             return {"success": False, "error": error}
@@ -265,6 +272,13 @@ class AIDepositsService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
+        
+        # Only trusted admins can view deposit details
+        if not self._is_trusted_admin():
+            return {
+                "success": False,
+                "error": "❌ Недостаточно прав для просмотра деталей депозита"
+            }
         
         deposit = await self.deposit_repo.get_by_id(deposit_id)
         if not deposit:

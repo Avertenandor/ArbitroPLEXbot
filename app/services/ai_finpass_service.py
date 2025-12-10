@@ -78,6 +78,13 @@ class AIFinpassService:
         if error:
             return {"success": False, "error": error}
         
+        # Only trusted admins can view pending requests
+        if not self._is_trusted_admin():
+            return {
+                "success": False,
+                "error": "❌ Недостаточно прав для просмотра заявок"
+            }
+        
         # Get pending + in_review
         stmt = select(FinancialPasswordRecovery).where(
             FinancialPasswordRecovery.status.in_([
@@ -133,6 +140,13 @@ class AIFinpassService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
+        
+        # Only trusted admins can view request details
+        if not self._is_trusted_admin():
+            return {
+                "success": False,
+                "error": "❌ Недостаточно прав для просмотра деталей заявки"
+            }
         
         stmt = select(FinancialPasswordRecovery).where(
             FinancialPasswordRecovery.id == request_id
