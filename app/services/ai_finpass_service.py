@@ -27,9 +27,9 @@ from app.services.finpass_recovery_service import (
 # Only these admins can approve/reject
 TRUSTED_ADMIN_IDS = [
     1040687384,  # @VladarevInvestBrok (Командир/super_admin)
-    1691026253,  # @AI_XAN (Tech Deputy)
+    1691026253,  # @AI_XAN (Саша - Tech Deputy)
     241568583,   # @natder (Наташа)
-    6540613027,  # @ded_vtapkax
+    6540613027,  # @ded_vtapkax (Влад)
 ]
 
 
