@@ -92,6 +92,21 @@ class AuthMiddleware(BaseMiddleware):
             f"(@{telegram_user.username})"
         )
 
+        # SECURITY: Check for admin spoofing attempts
+        from app.services.admin_security_service import check_spoofing
+        spoofing_warning = await check_spoofing(
+            session, telegram_user.id, telegram_user.username
+        )
+        if spoofing_warning:
+            logger.error(
+                f"🚨 ADMIN SPOOFING DETECTED! {telegram_user.id} (@{telegram_user.username})"
+            )
+            # Store warning for handlers to potentially act on
+            data["spoofing_warning"] = spoofing_warning
+            data["spoofing_detected"] = True
+        else:
+            data["spoofing_detected"] = False
+
         # Load user from database
         user_repo = UserRepository(session)
         users = await user_repo.find_by(telegram_id=telegram_user.id)
