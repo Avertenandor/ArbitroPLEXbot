@@ -85,8 +85,16 @@ class FinpassRecoveryService:
         user_id: int,
         reason: str,
         video_required: bool = True,
+        new_wallet_address: str | None = None,
     ) -> FinancialPasswordRecovery:
-        """Create a new financial password recovery request."""
+        """Create a new financial password recovery request.
+        
+        Args:
+            user_id: User ID
+            reason: Reason for recovery
+            video_required: Whether video verification is required
+            new_wallet_address: New wallet address if user wants to change wallet
+        """
         normalized_reason = reason.strip()
         if len(normalized_reason) < 10:
             raise ValueError(
@@ -114,6 +122,7 @@ class FinpassRecoveryService:
             status=FinancialRecoveryStatus.PENDING.value,
             video_required=video_required,
             video_verified=not video_required,
+            new_wallet_address=new_wallet_address,
         )
 
         # Block earnings immediately upon creating recovery request

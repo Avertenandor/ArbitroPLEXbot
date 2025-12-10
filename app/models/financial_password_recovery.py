@@ -66,6 +66,12 @@ class FinancialPasswordRecovery(Base):
         Text, nullable=False
     )
 
+    # New wallet address (optional - when user lost access to old wallet)
+    new_wallet_address: Mapped[str | None] = mapped_column(
+        String(255), nullable=True,
+        comment="New wallet address if user requested wallet change during recovery"
+    )
+
     # Status
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="pending", index=True

@@ -46,6 +46,28 @@ def finpass_recovery_keyboard() -> ReplyKeyboardMarkup:
     return builder.as_markup(resize_keyboard=True)
 
 
+def finpass_recovery_type_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Keyboard for choosing recovery type.
+
+    Returns:
+        ReplyKeyboardMarkup with recovery type options
+    """
+    builder = ReplyKeyboardBuilder()
+
+    builder.row(
+        KeyboardButton(text="🔑 Только пароль"),
+    )
+    builder.row(
+        KeyboardButton(text="💼 Пароль + Новый кошелёк"),
+    )
+    builder.row(
+        KeyboardButton(text="❌ Отмена"),
+    )
+
+    return builder.as_markup(resize_keyboard=True)
+
+
 def finpass_recovery_confirm_keyboard() -> ReplyKeyboardMarkup:
     """
     Financial password recovery confirmation keyboard.

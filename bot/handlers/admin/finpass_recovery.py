@@ -159,12 +159,24 @@ async def show_request_details(
 
         # Escape user-provided reason to prevent Markdown parsing errors
         safe_reason = escape_markdown(request.reason or "Не указана")
+        
+        # Check if wallet change requested
+        wallet_change_info = ""
+        if request.new_wallet_address:
+            safe_new_wallet = escape_markdown(request.new_wallet_address)
+            old_wallet = escape_markdown(user.wallet_address) if user and user.wallet_address else "Не указан"
+            wallet_change_info = (
+                f"\n💼 *ЗАПРОШЕНА СМЕНА КОШЕЛЬКА:*\n"
+                f"Старый: `{old_wallet}`\n"
+                f"Новый: `{safe_new_wallet}`\n"
+            )
 
         text = (
             f"🔑 *Запрос на восстановление #{request.id}*\n\n"
             f"👤 Пользователь: {user_label}\n"
             f"📱 {telegram_link}\n"
-            f"📅 Создан: {request.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
+            f"📅 Создан: {request.created_at.strftime('%d.%m.%Y %H:%M')}\n"
+            f"{wallet_change_info}\n"
             f"📝 *Причина:*\n{safe_reason}\n\n"
             "Выберите действие:"
         )
@@ -239,20 +251,57 @@ async def approve_request_action(
         # Set financial password using model method
         user.set_financial_password(new_password)
         user.earnings_blocked = True
+        
+        # If wallet change was requested, update wallet too
+        old_wallet = user.wallet_address
+        wallet_changed = False
+        if request.new_wallet_address:
+            # Create wallet history record
+            from app.models.user_wallet_history import UserWalletHistory
+            history = UserWalletHistory(
+                user_id=user.id,
+                old_wallet_address=old_wallet or "",
+                new_wallet_address=request.new_wallet_address,
+            )
+            session.add(history)
+            
+            user.wallet_address = request.new_wallet_address
+            wallet_changed = True
+            logger.info(
+                f"Wallet changed for user {user.id}: {old_wallet} -> {request.new_wallet_address}"
+            )
+        
         session.add(user)
 
         # Notify user
         notification_sent = False
         try:
             logger.info(f"Sending new password to user telegram_id={user.telegram_id}")
+            
+            if wallet_changed:
+                notify_text = (
+                    f"✅ *Ваш запрос на восстановление одобрен!*\n\n"
+                    f"🔑 Новый финансовый пароль: `{new_password}`\n\n"
+                    f"💼 Новый кошелёк:\n`{request.new_wallet_address}`\n\n"
+                    f"⚠️ *Важно:*\n"
+                    f"• Сохраните пароль в надёжном месте\n"
+                    f"• Выплаты заблокированы до первого вывода\n"
+                    f"• Все выводы теперь будут идти на новый кошелёк\n\n"
+                    f"Используйте раздел 'Вывод' для проверки."
+                )
+            else:
+                notify_text = (
+                    f"✅ *Ваш запрос на восстановление пароля одобрен!*\n\n"
+                    f"Новый финансовый пароль: `{new_password}`\n\n"
+                    f"⚠️ *Важно:*\n"
+                    f"• Сохраните этот пароль в надёжном месте\n"
+                    f"• Ваши выплаты заблокированы до первого использования пароля\n\n"
+                    f"Используйте раздел 'Вывод' для проверки."
+                )
+            
             await message.bot.send_message(
                 user.telegram_id,
-                f"✅ *Ваш запрос на восстановление пароля одобрен!*\n\n"
-                f"Новый финансовый пароль: `{new_password}`\n\n"
-                f"⚠️ *Важно:*\n"
-                f"• Сохраните этот пароль в надёжном месте\n"
-                f"• Ваши выплаты заблокированы до первого использования пароля\n\n"
-                f"Используйте раздел 'Вывод' для проверки.",
+                notify_text,
                 parse_mode="Markdown",
             )
             notification_sent = True
@@ -264,6 +313,9 @@ async def approve_request_action(
             "Password sent to user" if notification_sent
             else "Password NOT sent - notification failed"
         )
+        if wallet_changed:
+            admin_notes += f" | Wallet changed to {request.new_wallet_address}"
+            
         await recovery_service.mark_sent(
             request_id=request.id,
             admin_id=admin.id,
@@ -272,10 +324,15 @@ async def approve_request_action(
         await session.commit()
 
         # Always show password to admin for backup
+        wallet_info = ""
+        if wallet_changed:
+            wallet_info = f"\n💼 Кошелёк изменён:\n`{old_wallet}` →\n`{request.new_wallet_address}`\n"
+        
         if notification_sent:
             await message.answer(
                 f"✅ Запрос #{request_id} успешно одобрен.\n"
-                f"Новый пароль отправлен пользователю.\n\n"
+                f"Новый пароль отправлен пользователю.\n"
+                f"{wallet_info}\n"
                 f"📋 *Резервная копия (для админа):*\n"
                 f"Пароль: `{new_password}`",
                 parse_mode="Markdown",
@@ -283,7 +340,8 @@ async def approve_request_action(
             )
         else:
             await message.answer(
-                f"⚠️ Запрос #{request_id} одобрен, но НЕ удалось отправить пользователю!\n\n"
+                f"⚠️ Запрос #{request_id} одобрен, но НЕ удалось отправить пользователю!\n"
+                f"{wallet_info}\n"
                 f"📋 *Передайте пароль вручную:*\n"
                 f"Пароль: `{new_password}`\n"
                 f"Telegram ID: `{user.telegram_id}`",

@@ -42,7 +42,17 @@ class UserWalletMixin:
         if not is_valid:
             return False, error_msg or "Неверный финансовый пароль"
 
-        # 2. Check uniqueness
+        # 2. Check if new wallet is in blacklist
+        from app.repositories.blacklist_repository import BlacklistRepository
+        blacklist_repo = BlacklistRepository(self.session)
+        blacklisted = await blacklist_repo.find_by_wallet(new_wallet_address)
+        if blacklisted:
+            logger.warning(
+                f"User {user_id} tried to change wallet to blacklisted address: {new_wallet_address}"
+            )
+            return False, "Этот адрес кошелька заблокирован в системе"
+
+        # 3. Check uniqueness
         existing = await self.user_repo.get_by_wallet_address(new_wallet_address)
         if existing and existing.id != user_id:
             return False, "Wallet address is already used by another user"
