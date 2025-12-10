@@ -24,11 +24,13 @@ from app.models.admin import Admin
 
 
 # Known admin telegram IDs - authoritative source
+# SECURITY: This is the ONLY source of truth for admin verification
+# Admins are identified ONLY by telegram_id, NEVER by username!
 VERIFIED_ADMIN_IDS = {
-    1040687384: {"username": "VladarevInvestBrok", "role": "super_admin", "name": "Boss"},
-    1691026253: {"username": "AI_XAN", "role": "extended_admin", "name": "Tech Deputy"},
-    241568583: {"username": "natder", "role": "admin", "name": "Наташа"},
-    6540613027: {"username": "ded_vtapkax", "role": "moderator", "name": "Vlad"},
+    1040687384: {"username": "VladarevInvestBrok", "role": "super_admin", "name": "Командир"},
+    1691026253: {"username": "AI_XAN", "role": "extended_admin", "name": "Саша (Tech Deputy)"},
+    241568583: {"username": "natder", "role": "extended_admin", "name": "Наташа"},
+    6540613027: {"username": "ded_vtapkax", "role": "extended_admin", "name": "Влад"},
 }
 
 # Homoglyphs - characters that look similar

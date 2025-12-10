@@ -22,7 +22,7 @@ from app.repositories.admin_repository import AdminRepository
 
 # Only these users can manage admins
 SUPER_ADMIN_IDS = [
-    1040687384,  # @VladarevInvestBrok (Boss/super_admin)
+    1040687384,  # @VladarevInvestBrok (Командир/super_admin)
 ]
 
 
@@ -175,7 +175,7 @@ class AIAdminManagementService:
             )
             return {
                 "success": False,
-                "error": "❌ ТОЛЬКО БОСС может блокировать администраторов!"
+                "error": "❌ ТОЛЬКО КОМАНДИР может блокировать администраторов!"
             }
         
         admin_repo = AdminRepository(self.session)
@@ -228,7 +228,7 @@ class AIAdminManagementService:
         if not self._is_super_admin():
             return {
                 "success": False,
-                "error": "❌ ТОЛЬКО БОСС может разблокировать администраторов!"
+                "error": "❌ ТОЛЬКО КОМАНДИР может разблокировать администраторов!"
             }
         
         admin_repo = AdminRepository(self.session)
@@ -284,7 +284,7 @@ class AIAdminManagementService:
         if not self._is_super_admin():
             return {
                 "success": False,
-                "error": "❌ ТОЛЬКО БОСС может изменять роли администраторов!"
+                "error": "❌ ТОЛЬКО КОМАНДИР может изменять роли администраторов!"
             }
         
         valid_roles = ["admin", "support"]

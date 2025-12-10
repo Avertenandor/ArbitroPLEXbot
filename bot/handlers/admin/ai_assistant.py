@@ -299,6 +299,72 @@ async def handle_chat_message(
     if not user_message.strip():
         return
 
+    # ========== SECURITY CHECKS ==========
+    from app.services.aria_security_defense import (
+        get_security_guard,
+        check_forwarded_message,
+        sanitize_user_input,
+        create_secure_context,
+        SECURITY_RESPONSE_BLOCKED,
+        SECURITY_RESPONSE_FORWARDED,
+    )
+    from app.services.admin_security_service import VERIFIED_ADMIN_IDS
+    
+    # Check for forwarded messages
+    forward_check = check_forwarded_message(message)
+    if forward_check["is_forwarded"]:
+        logger.warning(
+            f"SECURITY: Forwarded message from admin {admin.telegram_id} "
+            f"(@{admin.username}). Original: {forward_check}"
+        )
+        await message.answer(
+            SECURITY_RESPONSE_FORWARDED,
+            parse_mode="Markdown",
+            reply_markup=chat_keyboard(),
+        )
+        return
+    
+    # Check for security threats in message
+    security_guard = get_security_guard()
+    security_check = security_guard.check_message(
+        text=user_message,
+        telegram_id=admin.telegram_id,
+        username=admin.username,
+        is_admin=True,
+    )
+    
+    if not security_check["allow"]:
+        logger.error(
+            f"🚨 SECURITY BLOCK: Admin {admin.telegram_id} message blocked. "
+            f"Reason: {security_check['block_reason']}"
+        )
+        await message.answer(
+            SECURITY_RESPONSE_BLOCKED,
+            parse_mode="Markdown",
+            reply_markup=chat_keyboard(),
+        )
+        return
+    
+    # Add warnings to context if any
+    security_warnings = security_check.get("warnings", [])
+    
+    # Verify admin identity
+    is_verified = admin.telegram_id in VERIFIED_ADMIN_IDS
+    
+    # Sanitize user input
+    sanitized_message = sanitize_user_input(user_message)
+    
+    # Create secure context
+    admin_role = VERIFIED_ADMIN_IDS.get(admin.telegram_id, {}).get("role", admin.role)
+    secure_context = create_secure_context(
+        telegram_id=admin.telegram_id,
+        username=admin.username,
+        is_admin=True,
+        is_verified_admin=is_verified,
+        admin_role=admin_role,
+    )
+    # ========== END SECURITY CHECKS ==========
+
     # Show typing indicator
     await message.answer("🤔 Думаю...")
 
@@ -316,18 +382,24 @@ async def handle_chat_message(
     # Get real-time monitoring data
     monitoring_data = await get_monitoring_data(session)
 
-    # Admin context
+    # Admin context with security info
     admin_data = {
         "Имя": admin.display_name,
         "Роль": admin.role_display,
         "ID": admin.telegram_id,
         "username": getattr(admin, "username", None),
+        "is_verified": is_verified,
+        "security_context": secure_context,
+        "security_warnings": security_warnings,
     }
 
-    # Use chat_with_tools for super admin (Boss) to enable broadcasting
+    # Prepend security context to sanitized message
+    message_with_context = secure_context + sanitized_message
+
+    # Use chat_with_tools for super admin (Командир) to enable broadcasting
     if role == UserRole.SUPER_ADMIN:
         response = await ai_service.chat_with_tools(
-            message=user_message,
+            message=message_with_context,
             role=role,
             user_data=admin_data,
             platform_stats=platform_stats,
@@ -339,7 +411,7 @@ async def handle_chat_message(
     elif role in (UserRole.ADMIN, UserRole.EXTENDED_ADMIN):
         # Admins also get tool access (with limits)
         response = await ai_service.chat_with_tools(
-            message=user_message,
+            message=message_with_context,
             role=role,
             user_data=admin_data,
             platform_stats=platform_stats,
@@ -351,7 +423,7 @@ async def handle_chat_message(
     else:
         # Regular chat for users (should not happen in admin handler)
         response = await ai_service.chat(
-            message=user_message,
+            message=message_with_context,
             role=role,
             user_data=admin_data,
             platform_stats=platform_stats,
@@ -359,8 +431,8 @@ async def handle_chat_message(
             conversation_history=history,
         )
 
-    # Update history
-    history.append({"role": "user", "content": user_message})
+    # Update history (save original message without security context)
+    history.append({"role": "user", "content": sanitized_message})
     history.append({"role": "assistant", "content": response})
 
     # Keep only last 20 messages
@@ -389,7 +461,7 @@ async def handle_chat_message(
             await activity_service.log_ai_conversation_safe(
                 telegram_id=admin.telegram_id,
                 admin_name=admin.display_name or admin.username or "Unknown",
-                question=user_message,
+                question=sanitized_message,  # Log sanitized version
                 answer=response,
             )
             await log_session.commit()

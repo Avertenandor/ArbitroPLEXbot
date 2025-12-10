@@ -24,10 +24,10 @@ from app.repositories.deposit_level_config_repository import DepositLevelConfigR
 
 # Whitelist of admin telegram IDs who can modify settings
 TRUSTED_ADMIN_IDS = [
-    1040687384,  # @VladarevInvestBrok (Boss/super_admin)
-    1691026253,  # @AI_XAN (Tech Deputy)
+    1040687384,  # @VladarevInvestBrok (Командир/super_admin)
+    1691026253,  # @AI_XAN (Саша - Tech Deputy)
     241568583,   # @natder (Наташа)
-    6540613027,  # @ded_vtapkax
+    6540613027,  # @ded_vtapkax (Влад)
 ]
 
 
@@ -461,8 +461,8 @@ class AISettingsService:
             return error
 
         # Only super_admin can create admins
-        if self.admin_telegram_id != 1040687384:  # Boss
-            return "❌ Только владелец платформы может создавать администраторов"
+        if self.admin_telegram_id != 1040687384:  # Командир
+            return "❌ Только Командир может создавать администраторов"
 
         valid_roles = ["moderator", "admin", "extended_admin"]
         if role not in valid_roles:
@@ -510,8 +510,8 @@ class AISettingsService:
             return error
 
         # Only super_admin can delete admins
-        if self.admin_telegram_id != 1040687384:  # Boss
-            return "❌ Только владелец платформы может удалять администраторов"
+        if self.admin_telegram_id != 1040687384:  # Командир
+            return "❌ Только Командир может удалять администраторов"
 
         if telegram_id == 1040687384:
             return "❌ Нельзя удалить владельца платформы"

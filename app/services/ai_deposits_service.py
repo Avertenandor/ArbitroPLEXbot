@@ -28,7 +28,7 @@ from app.repositories.user_repository import UserRepository
 
 # Only these admins can modify deposits
 TRUSTED_ADMIN_IDS = [
-    1040687384,  # @VladarevInvestBrok (Boss/super_admin)
+    1040687384,  # @VladarevInvestBrok (Командир/super_admin)
     1691026253,  # @AI_XAN (Tech Deputy)
     241568583,   # @natder (Наташа)
     6540613027,  # @ded_vtapkax

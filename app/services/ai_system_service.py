@@ -23,15 +23,15 @@ from app.repositories.global_settings_repository import GlobalSettingsRepository
 
 # Only these users can control emergency stops
 SUPER_ADMIN_IDS = [
-    1040687384,  # @VladarevInvestBrok (Boss/super_admin)
+    1040687384,  # @VladarevInvestBrok (Командир/super_admin)
 ]
 
 # Trusted admins can view but not change critical settings
 TRUSTED_ADMIN_IDS = [
-    1040687384,  # @VladarevInvestBrok (Boss/super_admin)
-    1691026253,  # @AI_XAN (Tech Deputy)
+    1040687384,  # @VladarevInvestBrok (Командир/super_admin)
+    1691026253,  # @AI_XAN (Саша - Tech Deputy)
     241568583,   # @natder (Наташа)
-    6540613027,  # @ded_vtapkax
+    6540613027,  # @ded_vtapkax (Влад)
 ]
 
 
