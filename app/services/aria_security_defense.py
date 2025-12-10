@@ -552,18 +552,18 @@ class ToolRateLimiter:
         
         # Limits per tool per hour
         self._limits = {
-            "grant_bonus": 50,
-            "broadcast_to_group": 5,
-            "send_message_to_user": 100,
-            "mass_invite_to_dialog": 10,
-            "approve_withdrawal": 100,
-            "reject_withdrawal": 50,
-            "add_to_blacklist": 20,
-            "emergency_full_stop": 3,
-            "emergency_full_resume": 3,
-            "block_admin": 5,
-            "change_admin_role": 5,
-            "default": 200,  # Default for unlisted tools
+            "grant_bonus": 100,
+            "broadcast_to_group": 10,
+            "send_message_to_user": 200,
+            "mass_invite_to_dialog": 20,
+            "approve_withdrawal": 200,
+            "reject_withdrawal": 100,
+            "add_to_blacklist": 40,
+            "emergency_full_stop": 6,
+            "emergency_full_resume": 6,
+            "block_admin": 10,
+            "change_admin_role": 10,
+            "default": 400,  # Default for unlisted tools
         }
     
     def check_limit(self, admin_id: int, tool_name: str) -> tuple[bool, str]:
