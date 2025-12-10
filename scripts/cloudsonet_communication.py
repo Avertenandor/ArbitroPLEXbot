@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, '/app')
 
-from aiogram import Bot
+from aiogram import Bot  # noqa: E402
 
 
 # Конфигурация админов
@@ -41,14 +41,13 @@ def get_signature():
 def format_greeting(admin_id: int) -> str:
     """Персональное приветствие для админа."""
     admin = ADMINS.get(admin_id, {})
-    name = admin.get("name", "Уважаемый администратор")
-    
+
     if admin.get("tech"):
-        return f"🔧 *Александр, как технический заместитель,* вы наверняка оцените следующее:\n\n"
+        return "🔧 *Александр, как технический заместитель,* вы наверняка оцените следующее:\n\n"
     elif admin.get("role") == "super_admin":
-        return f"👑 *Уважаемый руководитель проекта!*\n\n"
+        return "👑 *Уважаемый руководитель проекта!*\n\n"
     else:
-        return f"👋 *Уважаемый коллега!*\n\n"
+        return "👋 *Уважаемый коллега!*\n\n"
 
 
 async def send_to_all_admins(message: str, category: str = "info"):
@@ -58,7 +57,7 @@ async def send_to_all_admins(message: str, category: str = "info"):
         print('❌ TELEGRAM_BOT_TOKEN not set!')
         return
     bot = Bot(token=token)
-    
+
     # Иконки категорий
     icons = {
         "info": "ℹ️",
@@ -69,9 +68,9 @@ async def send_to_all_admins(message: str, category: str = "info"):
         "monitor": "📊",
     }
     icon = icons.get(category, "📢")
-    
+
     timestamp = datetime.now().strftime("%H:%M")
-    
+
     for admin_id, admin_info in ADMINS.items():
         try:
             greeting = format_greeting(admin_id)
@@ -85,7 +84,7 @@ async def send_to_all_admins(message: str, category: str = "info"):
             print(f"✅ Отправлено: {admin_info['name']}")
         except Exception as e:
             print(f"❌ Ошибка {admin_info['name']}: {e}")
-    
+
     await bot.session.close()
 
 
@@ -96,38 +95,38 @@ async def send_to_tech_lead(message: str):
         print('❌ TELEGRAM_BOT_TOKEN not set!')
         return
     bot = Bot(token=token)
-    
+
     # Александр - технический заместитель
     tech_lead_id = 1691026253
-    
+
     timestamp = datetime.now().strftime("%H:%M")
     full_message = (
         f"🔧 *CloudSonet 4.5 → Тех. отдел* [{timestamp}]\n\n"
-        f"Александр, как технический специалист, прошу обратить внимание:\n\n"
+        "Александр, как технический специалист, прошу обратить внимание:\n\n"
         f"{message}"
         f"{get_signature()}"
     )
-    
+
     try:
         await bot.send_message(tech_lead_id, full_message, parse_mode='Markdown')
-        print(f"✅ Отправлено техническому заместителю")
+        print("✅ Отправлено техническому заместителю")
     except Exception as e:
         print(f"❌ Ошибка: {e}")
-    
+
     await bot.session.close()
 
 
 def save_admin_message(admin_id: int, message: str):
     """Сохранить сообщение от админа для CloudSonet."""
     MESSAGES_FILE.parent.mkdir(parents=True, exist_ok=True)
-    
+
     messages = []
     if MESSAGES_FILE.exists():
         try:
             messages = json.loads(MESSAGES_FILE.read_text())
         except Exception:
             messages = []
-    
+
     admin_info = ADMINS.get(admin_id, {"name": f"Admin {admin_id}"})
     messages.append({
         "timestamp": datetime.now().isoformat(),
@@ -136,7 +135,7 @@ def save_admin_message(admin_id: int, message: str):
         "message": message,
         "read": False,
     })
-    
+
     MESSAGES_FILE.write_text(json.dumps(messages, ensure_ascii=False, indent=2))
     return len([m for m in messages if not m.get("read")])
 
@@ -145,7 +144,7 @@ def get_unread_messages() -> list:
     """Получить непрочитанные сообщения от админов."""
     if not MESSAGES_FILE.exists():
         return []
-    
+
     try:
         messages = json.loads(MESSAGES_FILE.read_text())
         return [m for m in messages if not m.get("read")]
@@ -157,7 +156,7 @@ def mark_messages_read():
     """Пометить все сообщения как прочитанные."""
     if not MESSAGES_FILE.exists():
         return
-    
+
     try:
         messages = json.loads(MESSAGES_FILE.read_text())
         for m in messages:
@@ -221,18 +220,18 @@ async def main():
         print("  python cloudsonet_communication.py error 'component' 'description'")
         print("  python cloudsonet_communication.py fixed 'component'")
         return
-    
+
     command = sys.argv[1]
-    
+
     if command == "send" and len(sys.argv) > 2:
         message = sys.argv[2]
         category = sys.argv[3] if len(sys.argv) > 3 else "info"
         await send_to_all_admins(message, category)
-    
+
     elif command == "send_tech" and len(sys.argv) > 2:
         message = sys.argv[2]
         await send_to_tech_lead(message)
-    
+
     elif command == "read":
         messages = get_unread_messages()
         if not messages:
@@ -243,21 +242,21 @@ async def main():
                 print(f"[{m['timestamp']}] {m['admin_name']}:")
                 print(f"  {m['message']}\n")
             mark_messages_read()
-    
+
     elif command == "status":
         await send_to_all_admins(MESSAGES["status_ok"], "monitor")
-    
+
     elif command == "error" and len(sys.argv) > 3:
         component = sys.argv[2]
         description = sys.argv[3]
         msg = MESSAGES["error_detected"].format(component=component, description=description)
         await send_to_all_admins(msg, "error")
-    
+
     elif command == "fixed" and len(sys.argv) > 2:
         component = sys.argv[2]
         msg = MESSAGES["error_fixed"].format(component=component)
         await send_to_all_admins(msg, "fix")
-    
+
     else:
         print(f"Неизвестная команда: {command}")
 
