@@ -255,15 +255,18 @@ class UserActivityRepository(BaseRepository[UserActivity]):
         """
         since = datetime.now(UTC) - timedelta(hours=hours)
 
+        # Create a labeled expression for GROUP BY
+        hour_expr = func.date_trunc("hour", UserActivity.created_at)
+
         query = (
             select(
-                func.date_trunc("hour", UserActivity.created_at).label("hour"),
+                hour_expr.label("hour"),
                 func.count(UserActivity.id).label("count"),
                 func.count(func.distinct(UserActivity.telegram_id)).label("users"),
             )
             .where(UserActivity.created_at >= since)
-            .group_by(func.date_trunc("hour", UserActivity.created_at))
-            .order_by(func.date_trunc("hour", UserActivity.created_at))
+            .group_by(hour_expr)
+            .order_by(hour_expr)
         )
 
         result = await self.session.execute(query)

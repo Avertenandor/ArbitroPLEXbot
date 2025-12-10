@@ -131,7 +131,7 @@ async def get_platform_stats(session: AsyncSession) -> dict[str, Any]:
     """Get platform statistics for AI context."""
     try:
         user_repo = UserRepository(session)
-        total_users = await user_repo.count_all()
+        total_users = await user_repo.count()
         active_users = await user_repo.count_active()
 
         return {

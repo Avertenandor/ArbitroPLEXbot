@@ -106,7 +106,7 @@ async def _show_dashboard(message: Message, state: FSMContext) -> None:
             f"🔶 BNB: **{fmt_bnb(cold_bnb_bal)}**\n"
             f"💵 USDT: **{fmt_usdt(cold_usdt_bal)}**\n"
             f"💎 PLEX: **{fmt_plex(cold_plex_bal)}**\n"
-            "_(Только просмотр, ключи не хранятся)_\n"
+            "_Только просмотр, ключи не хранятся_\n"
         )
 
     text += "\n👇 Выберите действие:"

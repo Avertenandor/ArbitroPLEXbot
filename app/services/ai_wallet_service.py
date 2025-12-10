@@ -192,7 +192,7 @@ class AIWalletService:
         try:
             # Get from deposit level config
             config_repo = DepositLevelConfigRepository(self.session)
-            configs = await config_repo.get_all()
+            configs = await config_repo.find_all()
 
             plex_per_dollar = PLEX_PER_DOLLAR_DAILY  # default
 
