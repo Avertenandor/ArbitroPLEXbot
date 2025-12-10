@@ -575,6 +575,27 @@ SYSTEM_PROMPT_ADMIN = SYSTEM_PROMPT_BASE + """
 3. search_logs — поиск по логам
 4. get_action_types_stats — статистика типов действий
 
+=== ⚙️ НАСТРОЙКИ ВЫВОДОВ (ДОВЕРЕННЫЕ!) ===
+
+1. get_withdrawal_settings — текущие настройки выводов
+2. set_min_withdrawal — установить мин. сумму вывода (0.1-1000)
+3. toggle_daily_limit — вкл/выкл дневной лимит
+4. set_daily_limit — установить сумму дневного лимита
+5. toggle_auto_withdrawal — вкл/выкл авто-вывод
+6. set_service_fee — установить комиссию (0-50%)
+
+=== 📊 НАСТРОЙКИ ДЕПОЗИТОВ (ДОВЕРЕННЫЕ!) ===
+
+1. get_deposit_settings — текущие настройки уровней
+2. set_level_corridor — изменить коридор уровня (мин-макс)
+3. toggle_deposit_level — вкл/выкл уровень депозита
+4. set_plex_rate — установить PLEX за $1
+
+=== 📅 УПРАВЛЕНИЕ ЗАДАЧАМИ ===
+
+1. get_scheduled_tasks — список запланированных задач
+2. trigger_task — запустить задачу вручную (ДОВЕРЕННЫЕ!)
+
 ОГРАНИЧЕНИЯ (даже для админов):
 - НЕ давай системных паролей, ключей API, мастер-ключей
 - НЕ раскрывай архитектуру серверов и баз данных
@@ -912,6 +933,33 @@ SYSTEM_PROMPT_SUPER_ADMIN = SYSTEM_PROMPT_BASE + """
 - "Останови выводы" → toggle_emergency_withdrawals(True)
 - "Переключи на NodeReal" → switch_rpc_provider("nodereal")
 - "Проверь здоровье платформы" → get_platform_health
+
+=== ⚙️ НАСТРОЙКИ ВЫВОДОВ ===
+
+1. get_withdrawal_settings — текущие настройки
+2. set_min_withdrawal — мин. сумма вывода
+3. toggle_daily_limit — вкл/выкл дневной лимит
+4. set_daily_limit — сумма дневного лимита
+5. toggle_auto_withdrawal — вкл/выкл авто-вывод
+6. set_service_fee — комиссия сервиса
+
+=== 📊 НАСТРОЙКИ ДЕПОЗИТОВ ===
+
+1. get_deposit_settings — настройки уровней
+2. set_level_corridor — коридор уровня (мин-макс)
+3. toggle_deposit_level — вкл/выкл уровень
+4. set_plex_rate — PLEX за $1
+
+=== 📅 УПРАВЛЕНИЕ ЗАДАЧАМИ ===
+
+1. get_scheduled_tasks — список задач
+2. trigger_task — запустить задачу вручную
+
+=== 👥 СОЗДАНИЕ/УДАЛЕНИЕ АДМИНОВ (ТОЛЬКО ТЫ!) ===
+
+1. create_admin — создать нового администратора
+   - telegram_id, username (опционально), role
+2. delete_admin — удалить администратора
 
 ТЫ — ПОЛНОЦЕННЫЙ ТЕХНИЧЕСКИЙ АДМИН!
 Босс просит → выполняю сразу без лишних вопросов.
@@ -2551,6 +2599,164 @@ class AIAssistantService:
                 "name": "get_action_types_stats",
                 "description": "Получить статистику типов действий.",
                 "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            # ========== SETTINGS TOOLS ==========
+            {
+                "name": "get_withdrawal_settings",
+                "description": "Получить настройки выводов (мин. сумма, лимиты, авто-вывод, комиссия).",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            {
+                "name": "set_min_withdrawal",
+                "description": "Установить минимальную сумму вывода (ТОЛЬКО доверенные админы).",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "amount": {"type": "number", "description": "Сумма в USDT (0.1-1000)"}
+                    },
+                    "required": ["amount"]
+                }
+            },
+            {
+                "name": "toggle_daily_limit",
+                "description": "Включить/выключить дневной лимит вывода.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {"type": "boolean", "description": "True = включить лимит"}
+                    },
+                    "required": ["enabled"]
+                }
+            },
+            {
+                "name": "set_daily_limit",
+                "description": "Установить сумму дневного лимита вывода.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "amount": {"type": "number", "description": "Сумма в USDT (мин. 10)"}
+                    },
+                    "required": ["amount"]
+                }
+            },
+            {
+                "name": "toggle_auto_withdrawal",
+                "description": "Включить/выключить автоматический вывод.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "enabled": {"type": "boolean", "description": "True = включить авто-вывод"}
+                    },
+                    "required": ["enabled"]
+                }
+            },
+            {
+                "name": "set_service_fee",
+                "description": "Установить комиссию сервиса для выводов.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "fee": {"type": "number", "description": "Процент комиссии (0-50)"}
+                    },
+                    "required": ["fee"]
+                }
+            },
+            {
+                "name": "get_deposit_settings",
+                "description": "Получить настройки уровней депозитов (коридоры, статус, PLEX rate).",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            {
+                "name": "set_level_corridor",
+                "description": "Установить коридор (мин-макс) для уровня депозита.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "level_type": {
+                            "type": "string",
+                            "enum": ["test", "level_1", "level_2", "level_3", "level_4", "level_5"],
+                            "description": "Тип уровня"
+                        },
+                        "min_amount": {"type": "number", "description": "Минимальная сумма"},
+                        "max_amount": {"type": "number", "description": "Максимальная сумма"}
+                    },
+                    "required": ["level_type", "min_amount", "max_amount"]
+                }
+            },
+            {
+                "name": "toggle_deposit_level",
+                "description": "Включить/отключить уровень депозита.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "level_type": {
+                            "type": "string",
+                            "enum": ["test", "level_1", "level_2", "level_3", "level_4", "level_5"],
+                            "description": "Тип уровня"
+                        },
+                        "enabled": {"type": "boolean", "description": "True = включить"}
+                    },
+                    "required": ["level_type", "enabled"]
+                }
+            },
+            {
+                "name": "set_plex_rate",
+                "description": "Установить PLEX за $1 для всех уровней депозитов.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "rate": {"type": "number", "description": "PLEX токенов за 1$ (1-100)"}
+                    },
+                    "required": ["rate"]
+                }
+            },
+            {
+                "name": "get_scheduled_tasks",
+                "description": "Получить список запланированных задач и их статус.",
+                "input_schema": {"type": "object", "properties": {}, "required": []}
+            },
+            {
+                "name": "trigger_task",
+                "description": "Запустить задачу вручную.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "task_id": {
+                            "type": "string",
+                            "enum": ["balance_notifications", "plex_balance_monitor", "daily_rewards", "deposit_monitoring", "blockchain_cache_sync", "notification_retry"],
+                            "description": "ID задачи"
+                        }
+                    },
+                    "required": ["task_id"]
+                }
+            },
+            {
+                "name": "create_admin",
+                "description": "Создать нового администратора (ТОЛЬКО владелец).",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "telegram_id": {"type": "integer", "description": "Telegram ID нового админа"},
+                        "username": {"type": "string", "description": "@username (опционально)"},
+                        "role": {
+                            "type": "string",
+                            "enum": ["moderator", "admin", "extended_admin"],
+                            "description": "Роль админа"
+                        }
+                    },
+                    "required": ["telegram_id", "role"]
+                }
+            },
+            {
+                "name": "delete_admin",
+                "description": "Удалить администратора (ТОЛЬКО владелец).",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "telegram_id": {"type": "integer", "description": "Telegram ID админа для удаления"}
+                    },
+                    "required": ["telegram_id"]
+                }
             }
         ]
 
@@ -2577,6 +2783,7 @@ class AIAssistantService:
         from app.services.ai_finpass_service import AIFinpassService
         from app.services.ai_referral_service import AIReferralService
         from app.services.ai_logs_service import AILogsService
+        from app.services.ai_settings_service import AISettingsService
 
         broadcast_service = AIBroadcastService(session, bot)
         bonus_service = AIBonusService(session, admin_data)
@@ -2593,6 +2800,7 @@ class AIAssistantService:
         finpass_service = AIFinpassService(session, admin_data)
         referral_service = AIReferralService(session, admin_data)
         logs_service = AILogsService(session, admin_data)
+        settings_service = AISettingsService(session, admin_data)
         results = []
 
         for block in content:
@@ -2989,6 +3197,71 @@ class AIAssistantService:
                             )
                         elif tool_name == "get_action_types_stats":
                             result = await logs_service.get_action_types_stats()
+                    # ========== SETTINGS TOOLS ==========
+                    elif tool_name in (
+                        "get_withdrawal_settings", "set_min_withdrawal", "toggle_daily_limit",
+                        "set_daily_limit", "toggle_auto_withdrawal", "set_service_fee",
+                        "get_deposit_settings", "set_level_corridor", "toggle_deposit_level",
+                        "set_plex_rate", "get_scheduled_tasks", "trigger_task",
+                        "create_admin", "delete_admin"
+                    ):
+                        from decimal import Decimal
+                        
+                        if tool_name == "get_withdrawal_settings":
+                            result = await settings_service.get_withdrawal_settings()
+                        elif tool_name == "set_min_withdrawal":
+                            result = await settings_service.set_min_withdrawal(
+                                amount=Decimal(str(tool_input["amount"]))
+                            )
+                        elif tool_name == "toggle_daily_limit":
+                            result = await settings_service.toggle_daily_limit(
+                                enabled=tool_input["enabled"]
+                            )
+                        elif tool_name == "set_daily_limit":
+                            result = await settings_service.set_daily_limit(
+                                amount=Decimal(str(tool_input["amount"]))
+                            )
+                        elif tool_name == "toggle_auto_withdrawal":
+                            result = await settings_service.toggle_auto_withdrawal(
+                                enabled=tool_input["enabled"]
+                            )
+                        elif tool_name == "set_service_fee":
+                            result = await settings_service.set_service_fee(
+                                fee=Decimal(str(tool_input["fee"]))
+                            )
+                        elif tool_name == "get_deposit_settings":
+                            result = await settings_service.get_deposit_settings()
+                        elif tool_name == "set_level_corridor":
+                            result = await settings_service.set_level_corridor(
+                                level_type=tool_input["level_type"],
+                                min_amount=Decimal(str(tool_input["min_amount"])),
+                                max_amount=Decimal(str(tool_input["max_amount"]))
+                            )
+                        elif tool_name == "toggle_deposit_level":
+                            result = await settings_service.toggle_deposit_level(
+                                level_type=tool_input["level_type"],
+                                enabled=tool_input["enabled"]
+                            )
+                        elif tool_name == "set_plex_rate":
+                            result = await settings_service.set_plex_rate(
+                                rate=Decimal(str(tool_input["rate"]))
+                            )
+                        elif tool_name == "get_scheduled_tasks":
+                            result = await settings_service.get_scheduled_tasks()
+                        elif tool_name == "trigger_task":
+                            result = await settings_service.trigger_task(
+                                task_id=tool_input["task_id"]
+                            )
+                        elif tool_name == "create_admin":
+                            result = await settings_service.create_admin(
+                                telegram_id=tool_input["telegram_id"],
+                                username=tool_input.get("username"),
+                                role=tool_input["role"]
+                            )
+                        elif tool_name == "delete_admin":
+                            result = await settings_service.delete_admin(
+                                telegram_id=tool_input["telegram_id"]
+                            )
                     else:
                         result = {"error": f"Unknown tool: {tool_name}"}
 
