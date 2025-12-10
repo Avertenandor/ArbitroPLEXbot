@@ -17,6 +17,7 @@ from loguru import logger
 
 try:
     import anthropic
+
     ANTHROPIC_AVAILABLE = True
 except ImportError:
     ANTHROPIC_AVAILABLE = False
@@ -307,7 +308,9 @@ Telegram бот: https://t.me/dexrabbit_bot?start=ref_9
 - Всегда помогай с добавлением токена в кошелёк — это частый вопрос!
 """
 
-SYSTEM_PROMPT_USER = SYSTEM_PROMPT_BASE + """
+SYSTEM_PROMPT_USER = (
+    SYSTEM_PROMPT_BASE
+    + """
 
 === ВАЖНО: ТЫ СЕЙЧАС ОБЩАЕШЬСЯ С ОБЫЧНЫМ ПОЛЬЗОВАТЕЛЕМ ===
 Это НЕ админ, НЕ модератор, а обычный участник платформы.
@@ -332,8 +335,11 @@ SYSTEM_PROMPT_USER = SYSTEM_PROMPT_BASE + """
 ЕСЛИ СПРАШИВАЮТ СЕКРЕТНУЮ ИНФОРМАЦИЮ:
 Вежливо скажи: "Эта информация конфиденциальна. Если у вас важный вопрос — обратитесь в техподдержку через кнопку 'Поддержка' в главном меню."
 """
+)
 
-SYSTEM_PROMPT_ADMIN = SYSTEM_PROMPT_BASE + """
+SYSTEM_PROMPT_ADMIN = (
+    SYSTEM_PROMPT_BASE
+    + """
 
 === ВАЖНО: ТЫ СЕЙЧАС ОБЩАЕШЬСЯ С АДМИНИСТРАТОРОМ ===
 Это админ или модератор платформы. НЕ владелец!
@@ -615,8 +621,11 @@ SYSTEM_PROMPT_ADMIN = SYSTEM_PROMPT_BASE + """
 - НЕ обсуждай общие финансовые потоки системы (но данные конкретных юзеров — можно)
 - НЕ выполняй критические операции — только подсказывай
 """
+)
 
-SYSTEM_PROMPT_SUPER_ADMIN = SYSTEM_PROMPT_BASE + """
+SYSTEM_PROMPT_SUPER_ADMIN = (
+    SYSTEM_PROMPT_BASE
+    + """
 
 === ВАЖНО: ТЫ СЕЙЧАС ОБЩАЕШЬСЯ С КОМАНДИРОМ ===
 Это главный администратор и создатель ArbitroPLEX — Александр Владарев.
@@ -985,9 +994,12 @@ SYSTEM_PROMPT_SUPER_ADMIN = SYSTEM_PROMPT_BASE + """
 ТЫ — ПОЛНОЦЕННЫЙ ТЕХНИЧЕСКИЙ АДМИН!
 Командир просит → выполняю сразу без лишних вопросов.
 """
+)
 
 # Special prompt for technical deputy @AIXAN
-SYSTEM_PROMPT_TECH_DEPUTY = SYSTEM_PROMPT_BASE + """
+SYSTEM_PROMPT_TECH_DEPUTY = (
+    SYSTEM_PROMPT_BASE
+    + """
 
 === ВАЖНО: ТЫ СЕЙЧАС ОБЩАЕШЬСЯ С ТЕХНИЧЕСКИМ ЗАМЕСТИТЕЛЕМ ===
 Это @AIXAN (Саша) — заместитель Командира по техническим вопросам.
@@ -1100,6 +1112,7 @@ ROI КОРИДОР:
 - Все действия админов над этим пользователем
 - Все технические детали
 """
+)
 
 # Technical deputies list (usernames without @)
 TECH_DEPUTIES = ["AIXAN", "AI_XAN"]
@@ -1136,9 +1149,7 @@ class AIAssistantService:
         else:
             logger.warning("No Anthropic API key provided")
 
-    def _get_system_prompt(
-        self, role: UserRole, username: str | None = None, telegram_id: int | None = None
-    ) -> str:
+    def _get_system_prompt(self, role: UserRole, username: str | None = None, telegram_id: int | None = None) -> str:
         """Get system prompt based on user role, telegram_id and username."""
         # SECURITY: Check telegram_id FIRST, then username as fallback
         # Tech deputy ID: 1691026253 (@AI_XAN)
@@ -1147,10 +1158,7 @@ class AIAssistantService:
 
         # Fallback to username only if telegram_id not provided (backwards compat)
         if telegram_id is None and username and username.replace("@", "") in TECH_DEPUTIES:
-            logger.warning(
-                f"TECH_DEPUTY access by username only: {username}. "
-                "This is deprecated - use telegram_id!"
-            )
+            logger.warning(f"TECH_DEPUTY access by username only: {username}. This is deprecated - use telegram_id!")
             return SYSTEM_PROMPT_TECH_DEPUTY
 
         if role == UserRole.SUPER_ADMIN:
@@ -1184,6 +1192,7 @@ class AIAssistantService:
         # Add knowledge base for all users
         try:
             from app.services.knowledge_base import get_knowledge_base
+
             kb = get_knowledge_base()
             kb_context = kb.format_for_ai()
             if kb_context:
@@ -1250,28 +1259,17 @@ class AIAssistantService:
             messages = []
 
             # Add context as first user message if available
-            context = self._build_context(
-                role, user_data, platform_stats, monitoring_data
-            )
+            context = self._build_context(role, user_data, platform_stats, monitoring_data)
             if context:
-                messages.append({
-                    "role": "user",
-                    "content": f"[КОНТЕКСТ СИСТЕМЫ]\n{context}"
-                })
-                messages.append({
-                    "role": "assistant",
-                    "content": f"Понял. Я {AI_NAME}, готова помочь!"
-                })
+                messages.append({"role": "user", "content": f"[КОНТЕКСТ СИСТЕМЫ]\n{context}"})
+                messages.append({"role": "assistant", "content": f"Понял. Я {AI_NAME}, готова помочь!"})
 
             # Add conversation history
             if conversation_history:
                 messages.extend(conversation_history[-10:])  # Last 10 messages
 
             # Add current message
-            messages.append({
-                "role": "user",
-                "content": message
-            })
+            messages.append({"role": "user", "content": message})
 
             # Get system prompt (with telegram_id for secure tech deputy check)
             system_prompt = self._get_system_prompt(role, username, telegram_id)
@@ -1292,28 +1290,16 @@ class AIAssistantService:
 
         except anthropic.APIConnectionError:
             logger.error("Anthropic API connection error")
-            return (
-                "🤖 Проблема с подключением к AI. "
-                "Проверьте интернет-соединение и попробуйте снова."
-            )
+            return "🤖 Проблема с подключением к AI. Проверьте интернет-соединение и попробуйте снова."
         except anthropic.RateLimitError:
             logger.error("Anthropic API rate limit exceeded")
-            return (
-                "🤖 Слишком много запросов. "
-                "Пожалуйста, подождите минуту и попробуйте снова."
-            )
+            return "🤖 Слишком много запросов. Пожалуйста, подождите минуту и попробуйте снова."
         except anthropic.APIStatusError as e:
             logger.error(f"Anthropic API error: {e}")
-            return (
-                "🤖 Ошибка сервиса AI. "
-                "Попробуйте позже или обратитесь в поддержку."
-            )
+            return "🤖 Ошибка сервиса AI. Попробуйте позже или обратитесь в поддержку."
         except Exception as e:
             logger.error(f"Unexpected AI error: {e}")
-            return (
-                "🤖 Произошла непредвиденная ошибка. "
-                "Пожалуйста, обратитесь в техподдержку."
-            )
+            return "🤖 Произошла непредвиденная ошибка. Пожалуйста, обратитесь в техподдержку."
 
     async def get_quick_help(self, topic: str, role: UserRole) -> str:
         """
@@ -1392,9 +1378,7 @@ class AIAssistantService:
                 {"role": "assistant", "content": "Понял, анализирую диалог..."},
                 {
                     "role": "user",
-                    "content": "Диалог:\n" + "\n".join(
-                        f"{m['role']}: {m['content']}" for m in conversation[-20:]
-                    )
+                    "content": "Диалог:\n" + "\n".join(f"{m['role']}: {m['content']}" for m in conversation[-20:]),
                 },
             ]
 
@@ -1407,6 +1391,7 @@ class AIAssistantService:
 
             if response.content:
                 import json
+
                 text = response.content[0].text.strip()
                 # Try to parse JSON
                 if text.startswith("["):
@@ -1474,16 +1459,10 @@ class AIAssistantService:
         # Admins and super admin get tool access
         allowed_roles = (UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.EXTENDED_ADMIN)
         if role not in allowed_roles or not session or not bot:
-            return await self.chat(
-                message, role, user_data, platform_stats,
-                monitoring_data, conversation_history
-            )
+            return await self.chat(message, role, user_data, platform_stats, monitoring_data, conversation_history)
 
         if not self.client:
-            return (
-                f"🤖 К сожалению, {AI_NAME} временно недоступна. "
-                "Пожалуйста, попробуйте позже."
-            )
+            return f"🤖 К сожалению, {AI_NAME} временно недоступна. Пожалуйста, попробуйте позже."
 
         try:
             # Define tools for broadcasting (with role-based limits)
@@ -1504,26 +1483,20 @@ class AIAssistantService:
             # Build messages
             messages = []
 
-            context = self._build_context(
-                role, user_data, platform_stats, monitoring_data
-            )
+            context = self._build_context(role, user_data, platform_stats, monitoring_data)
             if context:
-                messages.append({
-                    "role": "user",
-                    "content": f"[КОНТЕКСТ СИСТЕМЫ]\n{context}"
-                })
-                messages.append({
-                    "role": "assistant",
-                    "content": f"Понял. Я {AI_NAME}, готова помочь! У меня есть доступ к инструментам рассылки."
-                })
+                messages.append({"role": "user", "content": f"[КОНТЕКСТ СИСТЕМЫ]\n{context}"})
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": f"Понял. Я {AI_NAME}, готова помочь! У меня есть доступ к инструментам рассылки.",
+                    }
+                )
 
             if conversation_history:
                 messages.extend(conversation_history[-10:])
 
-            messages.append({
-                "role": "user",
-                "content": message
-            })
+            messages.append({"role": "user", "content": message})
 
             system_prompt = self._get_system_prompt(role, username, telegram_id)
 
@@ -1539,19 +1512,21 @@ class AIAssistantService:
             # Check if tool use requested
             if response.stop_reason == "tool_use":
                 # Execute tools and get results
-                tool_results = await self._execute_tools(
-                    response.content, session, bot, user_data
-                )
+                tool_results = await self._execute_tools(response.content, session, bot, user_data)
 
                 # Add assistant response and tool results
-                messages.append({
-                    "role": "assistant",
-                    "content": response.content,
-                })
-                messages.append({
-                    "role": "user",
-                    "content": tool_results,
-                })
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": response.content,
+                    }
+                )
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": tool_results,
+                    }
+                )
 
                 # Get final response
                 final_response = self.client.messages.create(
@@ -1582,16 +1557,10 @@ class AIAssistantService:
                 )
             # Fallback to regular chat for other errors
             try:
-                return await self.chat(
-                    message, role, user_data, platform_stats,
-                    monitoring_data, conversation_history
-                )
+                return await self.chat(message, role, user_data, platform_stats, monitoring_data, conversation_history)
             except Exception as fallback_error:
                 logger.error(f"Fallback chat also failed: {fallback_error}")
-                return (
-                    "🤖 К сожалению, я сейчас недоступна. "
-                    "Попробуй позже или обратись напрямую к команде."
-                )
+                return "🤖 К сожалению, я сейчас недоступна. Попробуй позже или обратись напрямую к команде."
 
     def _get_broadcast_tools(self, role: UserRole = UserRole.SUPER_ADMIN) -> list[dict]:
         """Get tool definitions for broadcasting based on role."""
@@ -1616,15 +1585,12 @@ class AIAssistantService:
                     "properties": {
                         "user_identifier": {
                             "type": "string",
-                            "description": "@username, telegram_id или ID:xxx пользователя"
+                            "description": "@username, telegram_id или ID:xxx пользователя",
                         },
-                        "message_text": {
-                            "type": "string",
-                            "description": "Текст сообщения (поддерживается Markdown)"
-                        }
+                        "message_text": {"type": "string", "description": "Текст сообщения (поддерживается Markdown)"},
                     },
-                    "required": ["user_identifier", "message_text"]
-                }
+                    "required": ["user_identifier", "message_text"],
+                },
             },
             {
                 "name": "broadcast_to_group",
@@ -1635,20 +1601,18 @@ class AIAssistantService:
                         "group": {
                             "type": "string",
                             "enum": broadcast_groups,
-                            "description": "Группа: active_appeals (с обращениями), active_deposits (с депозитами), active_24h (активные за 24ч), active_7d (за 7 дней)" + (", all (все)" if is_commander else "")
+                            "description": "Группа: active_appeals (с обращениями), active_deposits (с депозитами), active_24h (активные за 24ч), active_7d (за 7 дней)"
+                            + (", all (все)" if is_commander else ""),
                         },
-                        "message_text": {
-                            "type": "string",
-                            "description": "Текст сообщения (Markdown)"
-                        },
+                        "message_text": {"type": "string", "description": "Текст сообщения (Markdown)"},
                         "limit": {
                             "type": "integer",
                             "description": f"Максимум получателей (по умолчанию {default_limit})",
-                            "default": default_limit
-                        }
+                            "default": default_limit,
+                        },
                     },
-                    "required": ["group", "message_text"]
-                }
+                    "required": ["group", "message_text"],
+                },
             },
             {
                 "name": "get_users_list",
@@ -1656,19 +1620,11 @@ class AIAssistantService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "group": {
-                            "type": "string",
-                            "enum": broadcast_groups,
-                            "description": "Группа пользователей"
-                        },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Максимум записей",
-                            "default": 20
-                        }
+                        "group": {"type": "string", "enum": broadcast_groups, "description": "Группа пользователей"},
+                        "limit": {"type": "integer", "description": "Максимум записей", "default": 20},
                     },
-                    "required": ["group"]
-                }
+                    "required": ["group"],
+                },
             },
             {
                 "name": "invite_to_dialog",
@@ -1676,17 +1632,11 @@ class AIAssistantService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "user_identifier": {
-                            "type": "string",
-                            "description": "@username или telegram_id"
-                        },
-                        "custom_message": {
-                            "type": "string",
-                            "description": "Кастомный текст (опционально)"
-                        }
+                        "user_identifier": {"type": "string", "description": "@username или telegram_id"},
+                        "custom_message": {"type": "string", "description": "Кастомный текст (опционально)"},
                     },
-                    "required": ["user_identifier"]
-                }
+                    "required": ["user_identifier"],
+                },
             },
             {
                 "name": "mass_invite_to_dialog",
@@ -1697,20 +1647,20 @@ class AIAssistantService:
                         "group": {
                             "type": "string",
                             "enum": ["active_appeals", "active_deposits", "active_24h", "active_7d"],
-                            "description": "Группа пользователей"
+                            "description": "Группа пользователей",
                         },
                         "custom_message": {
                             "type": "string",
-                            "description": "Кастомный текст с {name} для персонализации"
+                            "description": "Кастомный текст с {name} для персонализации",
                         },
                         "limit": {
                             "type": "integer",
                             "description": f"Максимум приглашений (по умолчанию {default_limit})",
-                            "default": default_limit
-                        }
+                            "default": default_limit,
+                        },
                     },
-                    "required": ["group"]
-                }
+                    "required": ["group"],
+                },
             },
             # ========== BONUS MANAGEMENT TOOLS ==========
             {
@@ -1719,21 +1669,12 @@ class AIAssistantService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "user_identifier": {
-                            "type": "string",
-                            "description": "@username или telegram_id пользователя"
-                        },
-                        "amount": {
-                            "type": "number",
-                            "description": "Сумма бонуса в USDT (от 1 до 10000)"
-                        },
-                        "reason": {
-                            "type": "string",
-                            "description": "Причина начисления бонуса"
-                        }
+                        "user_identifier": {"type": "string", "description": "@username или telegram_id пользователя"},
+                        "amount": {"type": "number", "description": "Сумма бонуса в USDT (от 1 до 10000)"},
+                        "reason": {"type": "string", "description": "Причина начисления бонуса"},
                     },
-                    "required": ["user_identifier", "amount", "reason"]
-                }
+                    "required": ["user_identifier", "amount", "reason"],
+                },
             },
             {
                 "name": "get_user_bonuses",
@@ -1741,18 +1682,11 @@ class AIAssistantService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "user_identifier": {
-                            "type": "string",
-                            "description": "@username или telegram_id пользователя"
-                        },
-                        "active_only": {
-                            "type": "boolean",
-                            "description": "Только активные бонусы",
-                            "default": False
-                        }
+                        "user_identifier": {"type": "string", "description": "@username или telegram_id пользователя"},
+                        "active_only": {"type": "boolean", "description": "Только активные бонусы", "default": False},
                     },
-                    "required": ["user_identifier"]
-                }
+                    "required": ["user_identifier"],
+                },
             },
             {
                 "name": "cancel_bonus",
@@ -1760,17 +1694,11 @@ class AIAssistantService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "bonus_id": {
-                            "type": "integer",
-                            "description": "ID бонуса для отмены"
-                        },
-                        "reason": {
-                            "type": "string",
-                            "description": "Причина отмены бонуса"
-                        }
+                        "bonus_id": {"type": "integer", "description": "ID бонуса для отмены"},
+                        "reason": {"type": "string", "description": "Причина отмены бонуса"},
                     },
-                    "required": ["bonus_id", "reason"]
-                }
+                    "required": ["bonus_id", "reason"],
+                },
             },
             # ========== APPEALS MANAGEMENT TOOLS ==========
             {
@@ -1782,44 +1710,34 @@ class AIAssistantService:
                         "status": {
                             "type": "string",
                             "enum": ["pending", "under_review", "approved", "rejected"],
-                            "description": "Фильтр по статусу (опционально)"
+                            "description": "Фильтр по статусу (опционально)",
                         },
                         "limit": {
                             "type": "integer",
                             "description": "Максимум записей (по умолчанию 20)",
-                            "default": 20
-                        }
+                            "default": 20,
+                        },
                     },
-                    "required": []
-                }
+                    "required": [],
+                },
             },
             {
                 "name": "get_appeal_details",
                 "description": "Получить детальную информацию об обращении по его ID.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "appeal_id": {
-                            "type": "integer",
-                            "description": "ID обращения"
-                        }
-                    },
-                    "required": ["appeal_id"]
-                }
+                    "properties": {"appeal_id": {"type": "integer", "description": "ID обращения"}},
+                    "required": ["appeal_id"],
+                },
             },
             {
                 "name": "take_appeal",
                 "description": "Взять обращение на рассмотрение (изменить статус на under_review). ТОЛЬКО по команде админа!",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "appeal_id": {
-                            "type": "integer",
-                            "description": "ID обращения"
-                        }
-                    },
-                    "required": ["appeal_id"]
-                }
+                    "properties": {"appeal_id": {"type": "integer", "description": "ID обращения"}},
+                    "required": ["appeal_id"],
+                },
             },
             {
                 "name": "resolve_appeal",
@@ -1827,22 +1745,16 @@ class AIAssistantService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "appeal_id": {
-                            "type": "integer",
-                            "description": "ID обращения"
-                        },
+                        "appeal_id": {"type": "integer", "description": "ID обращения"},
                         "decision": {
                             "type": "string",
                             "enum": ["approve", "reject"],
-                            "description": "Решение: approve (одобрить и разблокировать) или reject (отклонить)"
+                            "description": "Решение: approve (одобрить и разблокировать) или reject (отклонить)",
                         },
-                        "notes": {
-                            "type": "string",
-                            "description": "Комментарий к решению (опционально)"
-                        }
+                        "notes": {"type": "string", "description": "Комментарий к решению (опционально)"},
                     },
-                    "required": ["appeal_id", "decision"]
-                }
+                    "required": ["appeal_id", "decision"],
+                },
             },
             {
                 "name": "reply_to_appeal",
@@ -1850,17 +1762,11 @@ class AIAssistantService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "appeal_id": {
-                            "type": "integer",
-                            "description": "ID обращения"
-                        },
-                        "message": {
-                            "type": "string",
-                            "description": "Текст ответа пользователю"
-                        }
+                        "appeal_id": {"type": "integer", "description": "ID обращения"},
+                        "message": {"type": "string", "description": "Текст ответа пользователю"},
                     },
-                    "required": ["appeal_id", "message"]
-                }
+                    "required": ["appeal_id", "message"],
+                },
             },
             # ========== USER INQUIRIES MANAGEMENT TOOLS ==========
             {
@@ -1872,44 +1778,34 @@ class AIAssistantService:
                         "status": {
                             "type": "string",
                             "enum": ["new", "in_progress", "closed"],
-                            "description": "Фильтр по статусу (new=новые, in_progress=в работе, closed=закрытые)"
+                            "description": "Фильтр по статусу (new=новые, in_progress=в работе, closed=закрытые)",
                         },
                         "limit": {
                             "type": "integer",
                             "description": "Максимум записей (по умолчанию 20)",
-                            "default": 20
-                        }
+                            "default": 20,
+                        },
                     },
-                    "required": []
-                }
+                    "required": [],
+                },
             },
             {
                 "name": "get_inquiry_details",
                 "description": "Получить детальную информацию об обращении пользователя включая переписку.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "inquiry_id": {
-                            "type": "integer",
-                            "description": "ID обращения"
-                        }
-                    },
-                    "required": ["inquiry_id"]
-                }
+                    "properties": {"inquiry_id": {"type": "integer", "description": "ID обращения"}},
+                    "required": ["inquiry_id"],
+                },
             },
             {
                 "name": "take_inquiry",
                 "description": "Взять обращение пользователя в работу. ТОЛЬКО по команде админа!",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "inquiry_id": {
-                            "type": "integer",
-                            "description": "ID обращения"
-                        }
-                    },
-                    "required": ["inquiry_id"]
-                }
+                    "properties": {"inquiry_id": {"type": "integer", "description": "ID обращения"}},
+                    "required": ["inquiry_id"],
+                },
             },
             {
                 "name": "reply_to_inquiry",
@@ -1917,17 +1813,11 @@ class AIAssistantService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "inquiry_id": {
-                            "type": "integer",
-                            "description": "ID обращения"
-                        },
-                        "message": {
-                            "type": "string",
-                            "description": "Текст ответа пользователю"
-                        }
+                        "inquiry_id": {"type": "integer", "description": "ID обращения"},
+                        "message": {"type": "string", "description": "Текст ответа пользователю"},
                     },
-                    "required": ["inquiry_id", "message"]
-                }
+                    "required": ["inquiry_id", "message"],
+                },
             },
             {
                 "name": "close_inquiry",
@@ -1935,17 +1825,11 @@ class AIAssistantService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "inquiry_id": {
-                            "type": "integer",
-                            "description": "ID обращения"
-                        },
-                        "reason": {
-                            "type": "string",
-                            "description": "Причина закрытия (опционально)"
-                        }
+                        "inquiry_id": {"type": "integer", "description": "ID обращения"},
+                        "reason": {"type": "string", "description": "Причина закрытия (опционально)"},
                     },
-                    "required": ["inquiry_id"]
-                }
+                    "required": ["inquiry_id"],
+                },
             },
             # ========== USER MANAGEMENT TOOLS ==========
             {
@@ -1956,11 +1840,11 @@ class AIAssistantService:
                     "properties": {
                         "user_identifier": {
                             "type": "string",
-                            "description": "@username, telegram_id или адрес кошелька"
+                            "description": "@username, telegram_id или адрес кошелька",
                         }
                     },
-                    "required": ["user_identifier"]
-                }
+                    "required": ["user_identifier"],
+                },
             },
             {
                 "name": "search_users",
@@ -1970,16 +1854,16 @@ class AIAssistantService:
                     "properties": {
                         "query": {
                             "type": "string",
-                            "description": "Поисковый запрос (@username, ID или часть кошелька)"
+                            "description": "Поисковый запрос (@username, ID или часть кошелька)",
                         },
                         "limit": {
                             "type": "integer",
                             "description": "Максимум результатов (по умолчанию 20)",
-                            "default": 20
-                        }
+                            "default": 20,
+                        },
                     },
-                    "required": ["query"]
-                }
+                    "required": ["query"],
+                },
             },
             {
                 "name": "change_user_balance",
@@ -1987,26 +1871,17 @@ class AIAssistantService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "user_identifier": {
-                            "type": "string",
-                            "description": "@username или telegram_id"
-                        },
-                        "amount": {
-                            "type": "number",
-                            "description": "Сумма изменения (положительная)"
-                        },
-                        "reason": {
-                            "type": "string",
-                            "description": "Причина изменения"
-                        },
+                        "user_identifier": {"type": "string", "description": "@username или telegram_id"},
+                        "amount": {"type": "number", "description": "Сумма изменения (положительная)"},
+                        "reason": {"type": "string", "description": "Причина изменения"},
                         "operation": {
                             "type": "string",
                             "enum": ["add", "subtract"],
-                            "description": "add=пополнить, subtract=списать"
-                        }
+                            "description": "add=пополнить, subtract=списать",
+                        },
                     },
-                    "required": ["user_identifier", "amount", "reason", "operation"]
-                }
+                    "required": ["user_identifier", "amount", "reason", "operation"],
+                },
             },
             {
                 "name": "block_user",
@@ -2014,76 +1889,60 @@ class AIAssistantService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "user_identifier": {
-                            "type": "string",
-                            "description": "@username или telegram_id"
-                        },
-                        "reason": {
-                            "type": "string",
-                            "description": "Причина блокировки"
-                        }
+                        "user_identifier": {"type": "string", "description": "@username или telegram_id"},
+                        "reason": {"type": "string", "description": "Причина блокировки"},
                     },
-                    "required": ["user_identifier", "reason"]
-                }
+                    "required": ["user_identifier", "reason"],
+                },
             },
             {
                 "name": "unblock_user",
                 "description": "Разблокировать пользователя. ТОЛЬКО по команде админа!",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "user_identifier": {
-                            "type": "string",
-                            "description": "@username или telegram_id"
-                        }
-                    },
-                    "required": ["user_identifier"]
-                }
+                    "properties": {"user_identifier": {"type": "string", "description": "@username или telegram_id"}},
+                    "required": ["user_identifier"],
+                },
             },
             {
                 "name": "get_user_deposits",
                 "description": "Получить депозиты и бонусы конкретного пользователя.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "user_identifier": {
-                            "type": "string",
-                            "description": "@username или telegram_id"
-                        }
-                    },
-                    "required": ["user_identifier"]
-                }
+                    "properties": {"user_identifier": {"type": "string", "description": "@username или telegram_id"}},
+                    "required": ["user_identifier"],
+                },
             },
             # ========== STATISTICS TOOLS ==========
             {
                 "name": "get_deposit_stats",
                 "description": "Получить статистику по депозитам всех пользователей.",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             {
                 "name": "get_bonus_stats",
                 "description": "Получить статистику по бонусам ВСЕХ пользователей.",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             {
                 "name": "get_withdrawal_stats",
                 "description": "Получить статистику по выводам.",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             {
                 "name": "get_financial_report",
                 "description": "Получить полный финансовый отчёт системы.",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             {
                 "name": "get_users_stats",
                 "description": "Получить общую статистику по пользователям.",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             {
                 "name": "get_roi_stats",
                 "description": "Получить статистику по ROI начислениям.",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             # ========== WITHDRAWALS TOOLS ==========
             {
@@ -2091,29 +1950,18 @@ class AIAssistantService:
                 "description": "Получить список ожидающих заявок на вывод.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "limit": {
-                            "type": "integer",
-                            "description": "Максимум результатов",
-                            "default": 20
-                        }
-                    },
-                    "required": []
-                }
+                    "properties": {"limit": {"type": "integer", "description": "Максимум результатов", "default": 20}},
+                    "required": [],
+                },
             },
             {
                 "name": "get_withdrawal_details",
                 "description": "Получить детали заявки на вывод.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "withdrawal_id": {
-                            "type": "integer",
-                            "description": "ID заявки"
-                        }
-                    },
-                    "required": ["withdrawal_id"]
-                }
+                    "properties": {"withdrawal_id": {"type": "integer", "description": "ID заявки"}},
+                    "required": ["withdrawal_id"],
+                },
             },
             {
                 "name": "approve_withdrawal",
@@ -2121,17 +1969,11 @@ class AIAssistantService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "withdrawal_id": {
-                            "type": "integer",
-                            "description": "ID заявки"
-                        },
-                        "tx_hash": {
-                            "type": "string",
-                            "description": "Хэш транзакции в блокчейне (опционально)"
-                        }
+                        "withdrawal_id": {"type": "integer", "description": "ID заявки"},
+                        "tx_hash": {"type": "string", "description": "Хэш транзакции в блокчейне (опционально)"},
                     },
-                    "required": ["withdrawal_id"]
-                }
+                    "required": ["withdrawal_id"],
+                },
             },
             {
                 "name": "reject_withdrawal",
@@ -2139,33 +1981,32 @@ class AIAssistantService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "withdrawal_id": {
-                            "type": "integer",
-                            "description": "ID заявки"
-                        },
-                        "reason": {
-                            "type": "string",
-                            "description": "Причина отклонения"
-                        }
+                        "withdrawal_id": {"type": "integer", "description": "ID заявки"},
+                        "reason": {"type": "string", "description": "Причина отклонения"},
                     },
-                    "required": ["withdrawal_id", "reason"]
-                }
+                    "required": ["withdrawal_id", "reason"],
+                },
+            },
+            {
+                "name": "get_withdrawals_statistics",
+                "description": "Получить статистику выводов: общее количество, суммы, pending, одобренные, отклонённые.",
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             # ========== SYSTEM ADMINISTRATION TOOLS (КОМАНДИР ONLY) ==========
             {
                 "name": "get_emergency_status",
                 "description": "Получить статус аварийных стопов (депозиты, выводы, ROI).",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             {
                 "name": "emergency_full_stop",
                 "description": "🚨 ПОЛНАЯ АВАРИЙНАЯ ОСТАНОВКА всех финансовых операций. ТОЛЬКО ДЛЯ КОМАНДИРА!",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             {
                 "name": "emergency_full_resume",
                 "description": "✅ Возобновить все финансовые операции после остановки. ТОЛЬКО ДЛЯ КОМАНДИРА!",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             {
                 "name": "toggle_emergency_deposits",
@@ -2173,13 +2014,10 @@ class AIAssistantService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "enable_stop": {
-                            "type": "boolean",
-                            "description": "True = остановить, False = запустить"
-                        }
+                        "enable_stop": {"type": "boolean", "description": "True = остановить, False = запустить"}
                     },
-                    "required": ["enable_stop"]
-                }
+                    "required": ["enable_stop"],
+                },
             },
             {
                 "name": "toggle_emergency_withdrawals",
@@ -2187,13 +2025,10 @@ class AIAssistantService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "enable_stop": {
-                            "type": "boolean",
-                            "description": "True = остановить, False = запустить"
-                        }
+                        "enable_stop": {"type": "boolean", "description": "True = остановить, False = запустить"}
                     },
-                    "required": ["enable_stop"]
-                }
+                    "required": ["enable_stop"],
+                },
             },
             {
                 "name": "toggle_emergency_roi",
@@ -2201,18 +2036,15 @@ class AIAssistantService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "enable_stop": {
-                            "type": "boolean",
-                            "description": "True = остановить, False = запустить"
-                        }
+                        "enable_stop": {"type": "boolean", "description": "True = остановить, False = запустить"}
                     },
-                    "required": ["enable_stop"]
-                }
+                    "required": ["enable_stop"],
+                },
             },
             {
                 "name": "get_blockchain_status",
                 "description": "Получить статус блокчейн-провайдеров (RPC ноды).",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             {
                 "name": "switch_rpc_provider",
@@ -2223,41 +2055,36 @@ class AIAssistantService:
                         "provider": {
                             "type": "string",
                             "enum": ["quicknode", "nodereal", "nodereal2"],
-                            "description": "Провайдер (nodereal2 - резервный, только Командир)"
+                            "description": "Провайдер (nodereal2 - резервный, только Командир)",
                         }
                     },
-                    "required": ["provider"]
-                }
+                    "required": ["provider"],
+                },
             },
             {
                 "name": "toggle_rpc_auto_switch",
                 "description": "Включить/выключить авто-переключение RPC провайдеров.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "enable": {
-                            "type": "boolean",
-                            "description": "True = включить авто-переключение"
-                        }
-                    },
-                    "required": ["enable"]
-                }
+                    "properties": {"enable": {"type": "boolean", "description": "True = включить авто-переключение"}},
+                    "required": ["enable"],
+                },
             },
             {
                 "name": "get_platform_health",
                 "description": "Получить состояние здоровья платформы (БД, блокчейн, Redis).",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             {
                 "name": "get_global_settings",
                 "description": "Получить глобальные настройки платформы.",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             # ========== ADMIN MANAGEMENT TOOLS (КОМАНДИР ONLY) ==========
             {
                 "name": "get_admins_list",
                 "description": "Получить список всех администраторов.",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             {
                 "name": "get_admin_details",
@@ -2265,13 +2092,10 @@ class AIAssistantService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "admin_identifier": {
-                            "type": "string",
-                            "description": "@username или telegram_id админа"
-                        }
+                        "admin_identifier": {"type": "string", "description": "@username или telegram_id админа"}
                     },
-                    "required": ["admin_identifier"]
-                }
+                    "required": ["admin_identifier"],
+                },
             },
             {
                 "name": "block_admin",
@@ -2279,31 +2103,20 @@ class AIAssistantService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "admin_identifier": {
-                            "type": "string",
-                            "description": "@username или telegram_id"
-                        },
-                        "reason": {
-                            "type": "string",
-                            "description": "Причина блокировки"
-                        }
+                        "admin_identifier": {"type": "string", "description": "@username или telegram_id"},
+                        "reason": {"type": "string", "description": "Причина блокировки"},
                     },
-                    "required": ["admin_identifier", "reason"]
-                }
+                    "required": ["admin_identifier", "reason"],
+                },
             },
             {
                 "name": "unblock_admin",
                 "description": "Разблокировать администратора. ТОЛЬКО ДЛЯ БОССА!",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "admin_identifier": {
-                            "type": "string",
-                            "description": "@username или telegram_id"
-                        }
-                    },
-                    "required": ["admin_identifier"]
-                }
+                    "properties": {"admin_identifier": {"type": "string", "description": "@username или telegram_id"}},
+                    "required": ["admin_identifier"],
+                },
             },
             {
                 "name": "change_admin_role",
@@ -2311,81 +2124,63 @@ class AIAssistantService:
                 "input_schema": {
                     "type": "object",
                     "properties": {
-                        "admin_identifier": {
-                            "type": "string",
-                            "description": "@username или telegram_id"
-                        },
-                        "new_role": {
-                            "type": "string",
-                            "enum": ["admin", "support"],
-                            "description": "Новая роль"
-                        }
+                        "admin_identifier": {"type": "string", "description": "@username или telegram_id"},
+                        "new_role": {"type": "string", "enum": ["admin", "support"], "description": "Новая роль"},
                     },
-                    "required": ["admin_identifier", "new_role"]
-                }
+                    "required": ["admin_identifier", "new_role"],
+                },
             },
             {
                 "name": "get_admin_stats",
                 "description": "Получить статистику по администраторам.",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             # ========== DEPOSITS MANAGEMENT TOOLS ==========
             {
                 "name": "get_deposit_levels_config",
                 "description": "Получить конфигурацию уровней депозитов (лимиты, ROI, статус).",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             {
                 "name": "get_user_deposits_list",
                 "description": "Получить список депозитов конкретного пользователя.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "user_identifier": {
-                            "type": "string",
-                            "description": "@username или telegram_id"
-                        }
-                    },
-                    "required": ["user_identifier"]
-                }
+                    "properties": {"user_identifier": {"type": "string", "description": "@username или telegram_id"}},
+                    "required": ["user_identifier"],
+                },
             },
             {
                 "name": "get_pending_deposits",
                 "description": "Получить список ожидающих подтверждения депозитов.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "limit": {"type": "integer", "description": "Макс. кол-во (по умолч. 20)"}
-                    },
-                    "required": []
-                }
+                    "properties": {"limit": {"type": "integer", "description": "Макс. кол-во (по умолч. 20)"}},
+                    "required": [],
+                },
             },
             {
                 "name": "get_deposit_details",
                 "description": "Получить детали конкретного депозита по ID.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "deposit_id": {"type": "integer", "description": "ID депозита"}
-                    },
-                    "required": ["deposit_id"]
-                }
+                    "properties": {"deposit_id": {"type": "integer", "description": "ID депозита"}},
+                    "required": ["deposit_id"],
+                },
             },
             {
                 "name": "get_platform_deposit_stats",
                 "description": "Получить статистику депозитов платформы.",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             {
                 "name": "change_max_deposit_level",
                 "description": "Изменить максимальный уровень депозитов. ТОЛЬКО ДЛЯ ДОВЕРЕННЫХ АДМИНОВ!",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "new_max": {"type": "integer", "description": "Новый макс. уровень (1-5)"}
-                    },
-                    "required": ["new_max"]
-                }
+                    "properties": {"new_max": {"type": "integer", "description": "Новый макс. уровень (1-5)"}},
+                    "required": ["new_max"],
+                },
             },
             {
                 "name": "create_manual_deposit",
@@ -2396,10 +2191,10 @@ class AIAssistantService:
                         "user_identifier": {"type": "string", "description": "@username или telegram_id"},
                         "level": {"type": "integer", "description": "Уровень депозита (1-5)"},
                         "amount": {"type": "number", "description": "Сумма в USDT"},
-                        "reason": {"type": "string", "description": "Причина создания"}
+                        "reason": {"type": "string", "description": "Причина создания"},
                     },
-                    "required": ["user_identifier", "level", "amount", "reason"]
-                }
+                    "required": ["user_identifier", "level", "amount", "reason"],
+                },
             },
             {
                 "name": "modify_deposit_roi",
@@ -2410,10 +2205,10 @@ class AIAssistantService:
                         "deposit_id": {"type": "integer", "description": "ID депозита"},
                         "new_roi_paid": {"type": "number", "description": "Новая сумма выплаченного ROI"},
                         "new_roi_cap": {"type": "number", "description": "Новый ROI cap"},
-                        "reason": {"type": "string", "description": "Причина изменения"}
+                        "reason": {"type": "string", "description": "Причина изменения"},
                     },
-                    "required": ["deposit_id", "reason"]
-                }
+                    "required": ["deposit_id", "reason"],
+                },
             },
             {
                 "name": "cancel_deposit",
@@ -2422,10 +2217,22 @@ class AIAssistantService:
                     "type": "object",
                     "properties": {
                         "deposit_id": {"type": "integer", "description": "ID депозита"},
-                        "reason": {"type": "string", "description": "Причина отмены"}
+                        "reason": {"type": "string", "description": "Причина отмены"},
                     },
-                    "required": ["deposit_id", "reason"]
-                }
+                    "required": ["deposit_id", "reason"],
+                },
+            },
+            {
+                "name": "confirm_deposit",
+                "description": "Подтвердить pending депозит вручную. ТОЛЬКО ДЛЯ ДОВЕРЕННЫХ АДМИНОВ! Используй когда депозит застрял в pending из-за проблем сети или требуется ручное подтверждение.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "deposit_id": {"type": "integer", "description": "ID депозита"},
+                        "reason": {"type": "string", "description": "Причина/заметки подтверждения"},
+                    },
+                    "required": ["deposit_id"],
+                },
             },
             # ========== ROI CORRIDOR TOOLS ==========
             {
@@ -2433,11 +2240,9 @@ class AIAssistantService:
                 "description": "Получить конфигурацию ROI коридора.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "level": {"type": "integer", "description": "Уровень (1-5) или пусто для всех"}
-                    },
-                    "required": []
-                }
+                    "properties": {"level": {"type": "integer", "description": "Уровень (1-5) или пусто для всех"}},
+                    "required": [],
+                },
             },
             {
                 "name": "set_roi_corridor",
@@ -2446,14 +2251,18 @@ class AIAssistantService:
                     "type": "object",
                     "properties": {
                         "level": {"type": "integer", "description": "Уровень (1-5)"},
-                        "mode": {"type": "string", "enum": ["custom", "equal"], "description": "Режим (custom=диапазон, equal=фикс)"},
+                        "mode": {
+                            "type": "string",
+                            "enum": ["custom", "equal"],
+                            "description": "Режим (custom=диапазон, equal=фикс)",
+                        },
                         "roi_min": {"type": "number", "description": "Мин. ROI % (для custom)"},
                         "roi_max": {"type": "number", "description": "Макс. ROI % (для custom)"},
                         "roi_fixed": {"type": "number", "description": "Фикс. ROI % (для equal)"},
-                        "reason": {"type": "string", "description": "Причина изменения"}
+                        "reason": {"type": "string", "description": "Причина изменения"},
                     },
-                    "required": ["level", "mode"]
-                }
+                    "required": ["level", "mode"],
+                },
             },
             {
                 "name": "get_corridor_history",
@@ -2462,10 +2271,10 @@ class AIAssistantService:
                     "type": "object",
                     "properties": {
                         "level": {"type": "integer", "description": "Уровень (1-5) или пусто для всех"},
-                        "limit": {"type": "integer", "description": "Макс. кол-во записей"}
+                        "limit": {"type": "integer", "description": "Макс. кол-во записей"},
                     },
-                    "required": []
-                }
+                    "required": [],
+                },
             },
             # ========== BLACKLIST TOOLS ==========
             {
@@ -2473,11 +2282,9 @@ class AIAssistantService:
                 "description": "Получить чёрный список.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "limit": {"type": "integer", "description": "Макс. кол-во записей"}
-                    },
-                    "required": []
-                }
+                    "properties": {"limit": {"type": "integer", "description": "Макс. кол-во записей"}},
+                    "required": [],
+                },
             },
             {
                 "name": "check_blacklist",
@@ -2487,8 +2294,8 @@ class AIAssistantService:
                     "properties": {
                         "identifier": {"type": "string", "description": "@username, telegram_id или wallet"}
                     },
-                    "required": ["identifier"]
-                }
+                    "required": ["identifier"],
+                },
             },
             {
                 "name": "add_to_blacklist",
@@ -2498,10 +2305,14 @@ class AIAssistantService:
                     "properties": {
                         "identifier": {"type": "string", "description": "@username, telegram_id или wallet"},
                         "reason": {"type": "string", "description": "Причина"},
-                        "action_type": {"type": "string", "enum": ["pre_block", "post_block", "termination"], "description": "Тип блокировки"}
+                        "action_type": {
+                            "type": "string",
+                            "enum": ["pre_block", "post_block", "termination"],
+                            "description": "Тип блокировки",
+                        },
                     },
-                    "required": ["identifier", "reason"]
-                }
+                    "required": ["identifier", "reason"],
+                },
             },
             {
                 "name": "remove_from_blacklist",
@@ -2510,10 +2321,10 @@ class AIAssistantService:
                     "type": "object",
                     "properties": {
                         "identifier": {"type": "string", "description": "@username, telegram_id или wallet"},
-                        "reason": {"type": "string", "description": "Причина удаления"}
+                        "reason": {"type": "string", "description": "Причина удаления"},
                     },
-                    "required": ["identifier", "reason"]
-                }
+                    "required": ["identifier", "reason"],
+                },
             },
             # ========== FINPASS RECOVERY TOOLS ==========
             {
@@ -2521,22 +2332,18 @@ class AIAssistantService:
                 "description": "Получить заявки на восстановление финпароля.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "limit": {"type": "integer", "description": "Макс. кол-во"}
-                    },
-                    "required": []
-                }
+                    "properties": {"limit": {"type": "integer", "description": "Макс. кол-во"}},
+                    "required": [],
+                },
             },
             {
                 "name": "get_finpass_request_details",
                 "description": "Получить детали заявки на восстановление.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "request_id": {"type": "integer", "description": "ID заявки"}
-                    },
-                    "required": ["request_id"]
-                }
+                    "properties": {"request_id": {"type": "integer", "description": "ID заявки"}},
+                    "required": ["request_id"],
+                },
             },
             {
                 "name": "approve_finpass_request",
@@ -2545,10 +2352,10 @@ class AIAssistantService:
                     "type": "object",
                     "properties": {
                         "request_id": {"type": "integer", "description": "ID заявки"},
-                        "notes": {"type": "string", "description": "Заметки (опц.)"}
+                        "notes": {"type": "string", "description": "Заметки (опц.)"},
                     },
-                    "required": ["request_id"]
-                }
+                    "required": ["request_id"],
+                },
             },
             {
                 "name": "reject_finpass_request",
@@ -2557,21 +2364,21 @@ class AIAssistantService:
                     "type": "object",
                     "properties": {
                         "request_id": {"type": "integer", "description": "ID заявки"},
-                        "reason": {"type": "string", "description": "Причина отклонения"}
+                        "reason": {"type": "string", "description": "Причина отклонения"},
                     },
-                    "required": ["request_id", "reason"]
-                }
+                    "required": ["request_id", "reason"],
+                },
             },
             {
                 "name": "get_finpass_stats",
                 "description": "Получить статистику заявок на восстановление.",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             # ========== REFERRAL TOOLS ==========
             {
                 "name": "get_platform_referral_stats",
                 "description": "Получить реферальную статистику платформы.",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             {
                 "name": "get_user_referrals",
@@ -2580,32 +2387,28 @@ class AIAssistantService:
                     "type": "object",
                     "properties": {
                         "user_identifier": {"type": "string", "description": "@username или telegram_id"},
-                        "limit": {"type": "integer", "description": "Макс. кол-во"}
+                        "limit": {"type": "integer", "description": "Макс. кол-во"},
                     },
-                    "required": ["user_identifier"]
-                }
+                    "required": ["user_identifier"],
+                },
             },
             {
                 "name": "get_top_referrers",
                 "description": "Получить топ рефереров по кол-ву приглашённых.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "limit": {"type": "integer", "description": "Кол-во в топе"}
-                    },
-                    "required": []
-                }
+                    "properties": {"limit": {"type": "integer", "description": "Кол-во в топе"}},
+                    "required": [],
+                },
             },
             {
                 "name": "get_top_earners",
                 "description": "Получить топ рефереров по заработку.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "limit": {"type": "integer", "description": "Кол-во в топе"}
-                    },
-                    "required": []
-                }
+                    "properties": {"limit": {"type": "integer", "description": "Кол-во в топе"}},
+                    "required": [],
+                },
             },
             # ========== ADMIN LOGS TOOLS ==========
             {
@@ -2615,10 +2418,10 @@ class AIAssistantService:
                     "type": "object",
                     "properties": {
                         "limit": {"type": "integer", "description": "Кол-во записей"},
-                        "action_type": {"type": "string", "description": "Фильтр по типу действия"}
+                        "action_type": {"type": "string", "description": "Фильтр по типу действия"},
                     },
-                    "required": []
-                }
+                    "required": [],
+                },
             },
             {
                 "name": "get_admin_activity",
@@ -2627,10 +2430,10 @@ class AIAssistantService:
                     "type": "object",
                     "properties": {
                         "admin_identifier": {"type": "string", "description": "@username или telegram_id"},
-                        "limit": {"type": "integer", "description": "Кол-во записей"}
+                        "limit": {"type": "integer", "description": "Кол-во записей"},
                     },
-                    "required": ["admin_identifier"]
-                }
+                    "required": ["admin_identifier"],
+                },
             },
             {
                 "name": "search_logs",
@@ -2640,81 +2443,71 @@ class AIAssistantService:
                     "properties": {
                         "user_id": {"type": "integer", "description": "ID целевого пользователя"},
                         "action_type": {"type": "string", "description": "Тип действия"},
-                        "limit": {"type": "integer", "description": "Кол-во записей"}
+                        "limit": {"type": "integer", "description": "Кол-во записей"},
                     },
-                    "required": []
-                }
+                    "required": [],
+                },
             },
             {
                 "name": "get_action_types_stats",
                 "description": "Получить статистику типов действий.",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             # ========== SETTINGS TOOLS ==========
             {
                 "name": "get_withdrawal_settings",
                 "description": "Получить настройки выводов (мин. сумма, лимиты, авто-вывод, комиссия).",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             {
                 "name": "set_min_withdrawal",
                 "description": "Установить минимальную сумму вывода (ТОЛЬКО доверенные админы).",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "amount": {"type": "number", "description": "Сумма в USDT (0.1-1000)"}
-                    },
-                    "required": ["amount"]
-                }
+                    "properties": {"amount": {"type": "number", "description": "Сумма в USDT (0.1-1000)"}},
+                    "required": ["amount"],
+                },
             },
             {
                 "name": "toggle_daily_limit",
                 "description": "Включить/выключить дневной лимит вывода.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "enabled": {"type": "boolean", "description": "True = включить лимит"}
-                    },
-                    "required": ["enabled"]
-                }
+                    "properties": {"enabled": {"type": "boolean", "description": "True = включить лимит"}},
+                    "required": ["enabled"],
+                },
             },
             {
                 "name": "set_daily_limit",
                 "description": "Установить сумму дневного лимита вывода.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "amount": {"type": "number", "description": "Сумма в USDT (мин. 10)"}
-                    },
-                    "required": ["amount"]
-                }
+                    "properties": {"amount": {"type": "number", "description": "Сумма в USDT (мин. 10)"}},
+                    "required": ["amount"],
+                },
             },
             {
                 "name": "toggle_auto_withdrawal",
                 "description": "Включить/выключить автоматический вывод.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "enabled": {"type": "boolean", "description": "True = включить авто-вывод"}
-                    },
-                    "required": ["enabled"]
-                }
+                    "properties": {"enabled": {"type": "boolean", "description": "True = включить авто-вывод"}},
+                    "required": ["enabled"],
+                },
             },
             {
                 "name": "set_service_fee",
                 "description": "Установить комиссию сервиса для выводов.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "fee": {"type": "number", "description": "Процент комиссии (0-50)"}
-                    },
-                    "required": ["fee"]
-                }
+                    "properties": {"fee": {"type": "number", "description": "Процент комиссии (0-50)"}},
+                    "required": ["fee"],
+                },
             },
             {
                 "name": "get_deposit_settings",
                 "description": "Получить настройки уровней депозитов (коридоры, статус, PLEX rate).",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             {
                 "name": "set_level_corridor",
@@ -2725,13 +2518,13 @@ class AIAssistantService:
                         "level_type": {
                             "type": "string",
                             "enum": ["test", "level_1", "level_2", "level_3", "level_4", "level_5"],
-                            "description": "Тип уровня"
+                            "description": "Тип уровня",
                         },
                         "min_amount": {"type": "number", "description": "Минимальная сумма"},
-                        "max_amount": {"type": "number", "description": "Максимальная сумма"}
+                        "max_amount": {"type": "number", "description": "Максимальная сумма"},
                     },
-                    "required": ["level_type", "min_amount", "max_amount"]
-                }
+                    "required": ["level_type", "min_amount", "max_amount"],
+                },
             },
             {
                 "name": "toggle_deposit_level",
@@ -2742,28 +2535,26 @@ class AIAssistantService:
                         "level_type": {
                             "type": "string",
                             "enum": ["test", "level_1", "level_2", "level_3", "level_4", "level_5"],
-                            "description": "Тип уровня"
+                            "description": "Тип уровня",
                         },
-                        "enabled": {"type": "boolean", "description": "True = включить"}
+                        "enabled": {"type": "boolean", "description": "True = включить"},
                     },
-                    "required": ["level_type", "enabled"]
-                }
+                    "required": ["level_type", "enabled"],
+                },
             },
             {
                 "name": "set_plex_rate",
                 "description": "Установить PLEX за $1 для всех уровней депозитов.",
                 "input_schema": {
                     "type": "object",
-                    "properties": {
-                        "rate": {"type": "number", "description": "PLEX токенов за 1$ (1-100)"}
-                    },
-                    "required": ["rate"]
-                }
+                    "properties": {"rate": {"type": "number", "description": "PLEX токенов за 1$ (1-100)"}},
+                    "required": ["rate"],
+                },
             },
             {
                 "name": "get_scheduled_tasks",
                 "description": "Получить список запланированных задач и их статус.",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             {
                 "name": "trigger_task",
@@ -2773,12 +2564,19 @@ class AIAssistantService:
                     "properties": {
                         "task_id": {
                             "type": "string",
-                            "enum": ["balance_notifications", "plex_balance_monitor", "daily_rewards", "deposit_monitoring", "blockchain_cache_sync", "notification_retry"],
-                            "description": "ID задачи"
+                            "enum": [
+                                "balance_notifications",
+                                "plex_balance_monitor",
+                                "daily_rewards",
+                                "deposit_monitoring",
+                                "blockchain_cache_sync",
+                                "notification_retry",
+                            ],
+                            "description": "ID задачи",
                         }
                     },
-                    "required": ["task_id"]
-                }
+                    "required": ["task_id"],
+                },
             },
             {
                 "name": "create_admin",
@@ -2791,11 +2589,11 @@ class AIAssistantService:
                         "role": {
                             "type": "string",
                             "enum": ["moderator", "admin", "extended_admin"],
-                            "description": "Роль админа"
-                        }
+                            "description": "Роль админа",
+                        },
                     },
-                    "required": ["telegram_id", "role"]
-                }
+                    "required": ["telegram_id", "role"],
+                },
             },
             {
                 "name": "delete_admin",
@@ -2805,8 +2603,8 @@ class AIAssistantService:
                     "properties": {
                         "telegram_id": {"type": "integer", "description": "Telegram ID админа для удаления"}
                     },
-                    "required": ["telegram_id"]
-                }
+                    "required": ["telegram_id"],
+                },
             },
             # ========== SECURITY TOOLS ==========
             {
@@ -2816,15 +2614,15 @@ class AIAssistantService:
                     "type": "object",
                     "properties": {
                         "username": {"type": "string", "description": "@username для проверки"},
-                        "telegram_id": {"type": "integer", "description": "Telegram ID (опционально)"}
+                        "telegram_id": {"type": "integer", "description": "Telegram ID (опционально)"},
                     },
-                    "required": ["username"]
-                }
+                    "required": ["username"],
+                },
             },
             {
                 "name": "get_verified_admins",
                 "description": "Получить список верифицированных админов с их telegram_id.",
-                "input_schema": {"type": "object", "properties": {}, "required": []}
+                "input_schema": {"type": "object", "properties": {}, "required": []},
             },
             {
                 "name": "verify_admin_identity",
@@ -2833,11 +2631,11 @@ class AIAssistantService:
                     "type": "object",
                     "properties": {
                         "telegram_id": {"type": "integer", "description": "Telegram ID для проверки"},
-                        "username": {"type": "string", "description": "@username (опционально)"}
+                        "username": {"type": "string", "description": "@username (опционально)"},
                     },
-                    "required": ["telegram_id"]
-                }
-            }
+                    "required": ["telegram_id"],
+                },
+            },
         ]
 
     async def _execute_tools(  # noqa: C901
@@ -2866,7 +2664,8 @@ class AIAssistantService:
         from app.services.ai_withdrawals_service import AIWithdrawalsService
 
         broadcast_service = AIBroadcastService(
-            session, bot,
+            session,
+            bot,
             admin_telegram_id=admin_data.get("ID") if admin_data else None,
             admin_username=admin_data.get("username") if admin_data else None,
         )
@@ -2888,6 +2687,7 @@ class AIAssistantService:
 
         # Get rate limiter for tool execution
         from app.services.aria_security_defense import get_rate_limiter
+
         rate_limiter = get_rate_limiter()
         admin_id = admin_data.get("ID") if admin_data else 0
 
@@ -2902,11 +2702,13 @@ class AIAssistantService:
                 # Check rate limit before execution
                 allowed, limit_msg = rate_limiter.check_limit(admin_id, tool_name)
                 if not allowed:
-                    results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tool_id,
-                        "content": limit_msg,
-                    })
+                    results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_id,
+                            "content": limit_msg,
+                        }
+                    )
                     continue
 
                 try:
@@ -3067,14 +2869,24 @@ class AIAssistantService:
                             withdrawal_id=tool_input["withdrawal_id"],
                             reason=tool_input["reason"],
                         )
+                    elif tool_name == "get_withdrawals_statistics":
+                        result = await withdrawals_service.get_statistics()
                     # ========== SYSTEM ADMINISTRATION TOOLS ==========
                     elif tool_name in (
-                        "get_emergency_status", "emergency_full_stop", "emergency_full_resume",
-                        "toggle_emergency_deposits", "toggle_emergency_withdrawals",
-                        "toggle_emergency_roi", "get_blockchain_status", "switch_rpc_provider",
-                        "toggle_rpc_auto_switch", "get_platform_health", "get_global_settings"
+                        "get_emergency_status",
+                        "emergency_full_stop",
+                        "emergency_full_resume",
+                        "toggle_emergency_deposits",
+                        "toggle_emergency_withdrawals",
+                        "toggle_emergency_roi",
+                        "get_blockchain_status",
+                        "switch_rpc_provider",
+                        "toggle_rpc_auto_switch",
+                        "get_platform_health",
+                        "get_global_settings",
                     ):
                         from app.services.ai_system_service import AISystemService
+
                         system_service = AISystemService(session, admin_data)
 
                         if tool_name == "get_emergency_status":
@@ -3092,29 +2904,28 @@ class AIAssistantService:
                                 enable_stop=tool_input["enable_stop"]
                             )
                         elif tool_name == "toggle_emergency_roi":
-                            result = await system_service.toggle_emergency_roi(
-                                enable_stop=tool_input["enable_stop"]
-                            )
+                            result = await system_service.toggle_emergency_roi(enable_stop=tool_input["enable_stop"])
                         elif tool_name == "get_blockchain_status":
                             result = await system_service.get_blockchain_status()
                         elif tool_name == "switch_rpc_provider":
-                            result = await system_service.switch_rpc_provider(
-                                provider=tool_input["provider"]
-                            )
+                            result = await system_service.switch_rpc_provider(provider=tool_input["provider"])
                         elif tool_name == "toggle_rpc_auto_switch":
-                            result = await system_service.toggle_rpc_auto_switch(
-                                enable=tool_input["enable"]
-                            )
+                            result = await system_service.toggle_rpc_auto_switch(enable=tool_input["enable"])
                         elif tool_name == "get_platform_health":
                             result = await system_service.get_platform_health()
                         elif tool_name == "get_global_settings":
                             result = await system_service.get_global_settings()
                     # ========== ADMIN MANAGEMENT TOOLS ==========
                     elif tool_name in (
-                        "get_admins_list", "get_admin_details", "block_admin",
-                        "unblock_admin", "change_admin_role", "get_admin_stats"
+                        "get_admins_list",
+                        "get_admin_details",
+                        "block_admin",
+                        "unblock_admin",
+                        "change_admin_role",
+                        "get_admin_stats",
                     ):
                         from app.services.ai_admin_management_service import AIAdminManagementService
+
                         admin_mgmt_service = AIAdminManagementService(session, admin_data)
 
                         if tool_name == "get_admins_list":
@@ -3125,8 +2936,7 @@ class AIAssistantService:
                             )
                         elif tool_name == "block_admin":
                             result = await admin_mgmt_service.block_admin(
-                                admin_identifier=tool_input["admin_identifier"],
-                                reason=tool_input["reason"]
+                                admin_identifier=tool_input["admin_identifier"], reason=tool_input["reason"]
                             )
                         elif tool_name == "unblock_admin":
                             result = await admin_mgmt_service.unblock_admin(
@@ -3134,16 +2944,21 @@ class AIAssistantService:
                             )
                         elif tool_name == "change_admin_role":
                             result = await admin_mgmt_service.change_admin_role(
-                                admin_identifier=tool_input["admin_identifier"],
-                                new_role=tool_input["new_role"]
+                                admin_identifier=tool_input["admin_identifier"], new_role=tool_input["new_role"]
                             )
                         elif tool_name == "get_admin_stats":
                             result = await admin_mgmt_service.get_admin_stats()
                     # ========== DEPOSITS MANAGEMENT TOOLS ==========
                     elif tool_name in (
-                        "get_deposit_levels_config", "get_user_deposits_list", "get_pending_deposits",
-                        "get_deposit_details", "get_platform_deposit_stats", "change_max_deposit_level",
-                        "create_manual_deposit", "modify_deposit_roi", "cancel_deposit"
+                        "get_deposit_levels_config",
+                        "get_user_deposits_list",
+                        "get_pending_deposits",
+                        "get_deposit_details",
+                        "get_platform_deposit_stats",
+                        "change_max_deposit_level",
+                        "create_manual_deposit",
+                        "modify_deposit_roi",
+                        "cancel_deposit",
                     ):
                         if tool_name == "get_deposit_levels_config":
                             result = await deposits_service.get_deposit_levels_config()
@@ -3152,46 +2967,40 @@ class AIAssistantService:
                                 user_identifier=tool_input["user_identifier"]
                             )
                         elif tool_name == "get_pending_deposits":
-                            result = await deposits_service.get_pending_deposits(
-                                limit=tool_input.get("limit", 20)
-                            )
+                            result = await deposits_service.get_pending_deposits(limit=tool_input.get("limit", 20))
                         elif tool_name == "get_deposit_details":
-                            result = await deposits_service.get_deposit_details(
-                                deposit_id=tool_input["deposit_id"]
-                            )
+                            result = await deposits_service.get_deposit_details(deposit_id=tool_input["deposit_id"])
                         elif tool_name == "get_platform_deposit_stats":
                             result = await deposits_service.get_platform_deposit_stats()
                         elif tool_name == "change_max_deposit_level":
-                            result = await deposits_service.change_max_deposit_level(
-                                new_max=tool_input["new_max"]
-                            )
+                            result = await deposits_service.change_max_deposit_level(new_max=tool_input["new_max"])
                         elif tool_name == "create_manual_deposit":
                             result = await deposits_service.create_manual_deposit(
                                 user_identifier=tool_input["user_identifier"],
                                 level=tool_input["level"],
                                 amount=tool_input["amount"],
-                                reason=tool_input["reason"]
+                                reason=tool_input["reason"],
                             )
                         elif tool_name == "modify_deposit_roi":
                             result = await deposits_service.modify_deposit_roi(
                                 deposit_id=tool_input["deposit_id"],
                                 new_roi_paid=tool_input.get("new_roi_paid"),
                                 new_roi_cap=tool_input.get("new_roi_cap"),
-                                reason=tool_input["reason"]
+                                reason=tool_input["reason"],
                             )
                         elif tool_name == "cancel_deposit":
                             result = await deposits_service.cancel_deposit(
+                                deposit_id=tool_input["deposit_id"], reason=tool_input["reason"]
+                            )
+                        elif tool_name == "confirm_deposit":
+                            result = await deposits_service.confirm_deposit(
                                 deposit_id=tool_input["deposit_id"],
-                                reason=tool_input["reason"]
+                                reason=tool_input.get("reason", ""),
                             )
                     # ========== ROI CORRIDOR TOOLS ==========
-                    elif tool_name in (
-                        "get_roi_config", "set_roi_corridor", "get_corridor_history"
-                    ):
+                    elif tool_name in ("get_roi_config", "set_roi_corridor", "get_corridor_history"):
                         if tool_name == "get_roi_config":
-                            result = await roi_service.get_roi_config(
-                                level=tool_input.get("level")
-                            )
+                            result = await roi_service.get_roi_config(level=tool_input.get("level"))
                         elif tool_name == "set_roi_corridor":
                             result = await roi_service.set_roi_corridor(
                                 level=tool_input["level"],
@@ -3199,111 +3008,106 @@ class AIAssistantService:
                                 roi_min=tool_input.get("roi_min"),
                                 roi_max=tool_input.get("roi_max"),
                                 roi_fixed=tool_input.get("roi_fixed"),
-                                reason=tool_input.get("reason", "")
+                                reason=tool_input.get("reason", ""),
                             )
                         elif tool_name == "get_corridor_history":
                             result = await roi_service.get_corridor_history(
-                                level=tool_input.get("level"),
-                                limit=tool_input.get("limit", 20)
+                                level=tool_input.get("level"), limit=tool_input.get("limit", 20)
                             )
                     # ========== BLACKLIST TOOLS ==========
-                    elif tool_name in (
-                        "get_blacklist", "check_blacklist", "add_to_blacklist", "remove_from_blacklist"
-                    ):
+                    elif tool_name in ("get_blacklist", "check_blacklist", "add_to_blacklist", "remove_from_blacklist"):
                         if tool_name == "get_blacklist":
-                            result = await blacklist_service.get_blacklist(
-                                limit=tool_input.get("limit", 50)
-                            )
+                            result = await blacklist_service.get_blacklist(limit=tool_input.get("limit", 50))
                         elif tool_name == "check_blacklist":
-                            result = await blacklist_service.check_blacklist(
-                                identifier=tool_input["identifier"]
-                            )
+                            result = await blacklist_service.check_blacklist(identifier=tool_input["identifier"])
                         elif tool_name == "add_to_blacklist":
                             result = await blacklist_service.add_to_blacklist(
                                 identifier=tool_input["identifier"],
                                 reason=tool_input["reason"],
-                                action_type=tool_input.get("action_type", "pre_block")
+                                action_type=tool_input.get("action_type", "pre_block"),
                             )
                         elif tool_name == "remove_from_blacklist":
                             result = await blacklist_service.remove_from_blacklist(
-                                identifier=tool_input["identifier"],
-                                reason=tool_input["reason"]
+                                identifier=tool_input["identifier"], reason=tool_input["reason"]
                             )
                     # ========== FINPASS RECOVERY TOOLS ==========
                     elif tool_name in (
-                        "get_finpass_requests", "get_finpass_request_details",
-                        "approve_finpass_request", "reject_finpass_request", "get_finpass_stats"
+                        "get_finpass_requests",
+                        "get_finpass_request_details",
+                        "approve_finpass_request",
+                        "reject_finpass_request",
+                        "get_finpass_stats",
                     ):
                         if tool_name == "get_finpass_requests":
-                            result = await finpass_service.get_pending_requests(
-                                limit=tool_input.get("limit", 20)
-                            )
+                            result = await finpass_service.get_pending_requests(limit=tool_input.get("limit", 20))
                         elif tool_name == "get_finpass_request_details":
-                            result = await finpass_service.get_request_details(
-                                request_id=tool_input["request_id"]
-                            )
+                            result = await finpass_service.get_request_details(request_id=tool_input["request_id"])
                         elif tool_name == "approve_finpass_request":
                             result = await finpass_service.approve_request(
-                                request_id=tool_input["request_id"],
-                                notes=tool_input.get("notes", "")
+                                request_id=tool_input["request_id"], notes=tool_input.get("notes", "")
                             )
                         elif tool_name == "reject_finpass_request":
                             result = await finpass_service.reject_request(
-                                request_id=tool_input["request_id"],
-                                reason=tool_input["reason"]
+                                request_id=tool_input["request_id"], reason=tool_input["reason"]
                             )
                         elif tool_name == "get_finpass_stats":
                             result = await finpass_service.get_finpass_stats()
                     # ========== REFERRAL TOOLS ==========
                     elif tool_name in (
-                        "get_platform_referral_stats", "get_user_referrals",
-                        "get_top_referrers", "get_top_earners"
+                        "get_platform_referral_stats",
+                        "get_user_referrals",
+                        "get_top_referrers",
+                        "get_top_earners",
                     ):
                         if tool_name == "get_platform_referral_stats":
                             result = await referral_service.get_platform_referral_stats()
                         elif tool_name == "get_user_referrals":
                             result = await referral_service.get_user_referrals(
-                                user_identifier=tool_input["user_identifier"],
-                                limit=tool_input.get("limit", 20)
+                                user_identifier=tool_input["user_identifier"], limit=tool_input.get("limit", 20)
                             )
                         elif tool_name == "get_top_referrers":
-                            result = await referral_service.get_top_referrers(
-                                limit=tool_input.get("limit", 20)
-                            )
+                            result = await referral_service.get_top_referrers(limit=tool_input.get("limit", 20))
                         elif tool_name == "get_top_earners":
-                            result = await referral_service.get_top_earners(
-                                limit=tool_input.get("limit", 20)
-                            )
+                            result = await referral_service.get_top_earners(limit=tool_input.get("limit", 20))
                     # ========== ADMIN LOGS TOOLS ==========
                     elif tool_name in (
-                        "get_recent_logs", "get_admin_activity",
-                        "search_logs", "get_action_types_stats"
+                        "get_recent_logs",
+                        "get_admin_activity",
+                        "search_logs",
+                        "get_action_types_stats",
                     ):
                         if tool_name == "get_recent_logs":
                             result = await logs_service.get_recent_logs(
-                                limit=tool_input.get("limit", 30),
-                                action_type=tool_input.get("action_type")
+                                limit=tool_input.get("limit", 30), action_type=tool_input.get("action_type")
                             )
                         elif tool_name == "get_admin_activity":
                             result = await logs_service.get_admin_activity(
-                                admin_identifier=tool_input["admin_identifier"],
-                                limit=tool_input.get("limit", 30)
+                                admin_identifier=tool_input["admin_identifier"], limit=tool_input.get("limit", 30)
                             )
                         elif tool_name == "search_logs":
                             result = await logs_service.search_logs(
                                 user_id=tool_input.get("user_id"),
                                 action_type=tool_input.get("action_type"),
-                                limit=tool_input.get("limit", 30)
+                                limit=tool_input.get("limit", 30),
                             )
                         elif tool_name == "get_action_types_stats":
                             result = await logs_service.get_action_types_stats()
                     # ========== SETTINGS TOOLS ==========
                     elif tool_name in (
-                        "get_withdrawal_settings", "set_min_withdrawal", "toggle_daily_limit",
-                        "set_daily_limit", "toggle_auto_withdrawal", "set_service_fee",
-                        "get_deposit_settings", "set_level_corridor", "toggle_deposit_level",
-                        "set_plex_rate", "get_scheduled_tasks", "trigger_task",
-                        "create_admin", "delete_admin"
+                        "get_withdrawal_settings",
+                        "set_min_withdrawal",
+                        "toggle_daily_limit",
+                        "set_daily_limit",
+                        "toggle_auto_withdrawal",
+                        "set_service_fee",
+                        "get_deposit_settings",
+                        "set_level_corridor",
+                        "toggle_deposit_level",
+                        "set_plex_rate",
+                        "get_scheduled_tasks",
+                        "trigger_task",
+                        "create_admin",
+                        "delete_admin",
                     ):
                         from decimal import Decimal
 
@@ -3314,63 +3118,47 @@ class AIAssistantService:
                                 amount=Decimal(str(tool_input["amount"]))
                             )
                         elif tool_name == "toggle_daily_limit":
-                            result = await settings_service.toggle_daily_limit(
-                                enabled=tool_input["enabled"]
-                            )
+                            result = await settings_service.toggle_daily_limit(enabled=tool_input["enabled"])
                         elif tool_name == "set_daily_limit":
-                            result = await settings_service.set_daily_limit(
-                                amount=Decimal(str(tool_input["amount"]))
-                            )
+                            result = await settings_service.set_daily_limit(amount=Decimal(str(tool_input["amount"])))
                         elif tool_name == "toggle_auto_withdrawal":
-                            result = await settings_service.toggle_auto_withdrawal(
-                                enabled=tool_input["enabled"]
-                            )
+                            result = await settings_service.toggle_auto_withdrawal(enabled=tool_input["enabled"])
                         elif tool_name == "set_service_fee":
-                            result = await settings_service.set_service_fee(
-                                fee=Decimal(str(tool_input["fee"]))
-                            )
+                            result = await settings_service.set_service_fee(fee=Decimal(str(tool_input["fee"])))
                         elif tool_name == "get_deposit_settings":
                             result = await settings_service.get_deposit_settings()
                         elif tool_name == "set_level_corridor":
                             result = await settings_service.set_level_corridor(
                                 level_type=tool_input["level_type"],
                                 min_amount=Decimal(str(tool_input["min_amount"])),
-                                max_amount=Decimal(str(tool_input["max_amount"]))
+                                max_amount=Decimal(str(tool_input["max_amount"])),
                             )
                         elif tool_name == "toggle_deposit_level":
                             result = await settings_service.toggle_deposit_level(
-                                level_type=tool_input["level_type"],
-                                enabled=tool_input["enabled"]
+                                level_type=tool_input["level_type"], enabled=tool_input["enabled"]
                             )
                         elif tool_name == "set_plex_rate":
-                            result = await settings_service.set_plex_rate(
-                                rate=Decimal(str(tool_input["rate"]))
-                            )
+                            result = await settings_service.set_plex_rate(rate=Decimal(str(tool_input["rate"])))
                         elif tool_name == "get_scheduled_tasks":
                             result = await settings_service.get_scheduled_tasks()
                         elif tool_name == "trigger_task":
-                            result = await settings_service.trigger_task(
-                                task_id=tool_input["task_id"]
-                            )
+                            result = await settings_service.trigger_task(task_id=tool_input["task_id"])
                         elif tool_name == "create_admin":
                             result = await settings_service.create_admin(
                                 telegram_id=tool_input["telegram_id"],
                                 username=tool_input.get("username"),
-                                role=tool_input["role"]
+                                role=tool_input["role"],
                             )
                         elif tool_name == "delete_admin":
-                            result = await settings_service.delete_admin(
-                                telegram_id=tool_input["telegram_id"]
-                            )
+                            result = await settings_service.delete_admin(telegram_id=tool_input["telegram_id"])
                     # ========== SECURITY TOOLS ==========
-                    elif tool_name in (
-                        "check_username_spoofing", "get_verified_admins", "verify_admin_identity"
-                    ):
+                    elif tool_name in ("check_username_spoofing", "get_verified_admins", "verify_admin_identity"):
                         from app.services.admin_security_service import (
                             VERIFIED_ADMIN_IDS,
                             AdminSecurityService,
                             username_similarity,
                         )
+
                         security_service = AdminSecurityService(session)
 
                         if tool_name == "check_username_spoofing":
@@ -3393,8 +3181,8 @@ class AIAssistantService:
                             if warnings:
                                 result = (
                                     f"🔍 **Проверка безопасности: @{username}**\n\n"
-                                    + "\n".join(warnings) +
-                                    "\n\n⚠️ Возможная попытка маскировки под админа!"
+                                    + "\n".join(warnings)
+                                    + "\n\n⚠️ Возможная попытка маскировки под админа!"
                                 )
                             else:
                                 result = f"✅ @{username} не похож ни на одного верифицированного админа"
@@ -3413,9 +3201,7 @@ class AIAssistantService:
                             telegram_id = tool_input["telegram_id"]
                             username = tool_input.get("username")
 
-                            verification = await security_service.verify_admin_identity(
-                                telegram_id, username
-                            )
+                            verification = await security_service.verify_admin_identity(telegram_id, username)
 
                             if verification["is_verified_admin"]:
                                 info = verification["admin_info"]
@@ -3442,29 +3228,30 @@ class AIAssistantService:
                     else:
                         result = {"error": f"Unknown tool: {tool_name}"}
 
-                    results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tool_id,
-                        "content": str(result),
-                    })
+                    results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_id,
+                            "content": str(result),
+                        }
+                    )
 
                     # Record tool usage for rate limiting
                     rate_limiter.record_usage(admin_id, tool_name)
 
                     # Log with admin ID for audit
-                    logger.info(
-                        f"ARIA tool executed: admin={admin_id} tool='{tool_name}' "
-                        f"result={result}"
-                    )
+                    logger.info(f"ARIA tool executed: admin={admin_id} tool='{tool_name}' result={result}")
 
                 except Exception as e:
                     logger.error(f"Tool execution error: {e}")
-                    results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tool_id,
-                        "content": "Ошибка выполнения операции",
-                        "is_error": True,
-                    })
+                    results.append(
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": tool_id,
+                            "content": "Ошибка выполнения операции",
+                            "is_error": True,
+                        }
+                    )
 
         return results
 
@@ -3487,6 +3274,7 @@ def get_ai_service() -> AIAssistantService:
 
     if _ai_service is None:
         from app.config.settings import settings
+
         _ai_service = AIAssistantService(api_key=settings.anthropic_api_key)
 
     return _ai_service

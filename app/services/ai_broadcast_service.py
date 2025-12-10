@@ -17,7 +17,7 @@ from app.repositories.user_repository import UserRepository
 TRUSTED_ADMIN_IDS = [
     1040687384,  # @VladarevInvestBrok (Командир/super_admin)
     1691026253,  # @AI_XAN (Саша - Tech Deputy)
-    241568583,   # @natder (Наташа)
+    241568583,  # @natder (Наташа)
     6540613027,  # @ded_vtapkax (Влад)
 ]
 
@@ -61,10 +61,7 @@ class AIBroadcastService:
         """
         # Security check
         if not self._is_trusted_admin():
-            logger.warning(
-                f"BROADCAST DENIED: Untrusted admin {self.admin_telegram_id} "
-                f"attempted to send message"
-            )
+            logger.warning(f"BROADCAST DENIED: Untrusted admin {self.admin_telegram_id} attempted to send message")
             return {
                 "success": False,
                 "error": "❌ Недостаточно прав для отправки сообщений",
@@ -87,8 +84,7 @@ class AIBroadcastService:
             )
 
             logger.info(
-                f"ARIA (admin {self.admin_telegram_id}) sent message to user "
-                f"{user.telegram_id} (@{user.username})"
+                f"ARIA (admin {self.admin_telegram_id}) sent message to user {user.telegram_id} (@{user.username})"
             )
 
             return {
@@ -131,8 +127,7 @@ class AIBroadcastService:
         # Security check
         if not self._is_trusted_admin():
             logger.warning(
-                f"BROADCAST DENIED: Untrusted admin {self.admin_telegram_id} "
-                f"attempted broadcast to group '{group}'"
+                f"BROADCAST DENIED: Untrusted admin {self.admin_telegram_id} attempted broadcast to group '{group}'"
             )
             return {
                 "success": False,
@@ -176,9 +171,7 @@ class AIBroadcastService:
                     failed += 1
                     failed_users.append({"user_id": user_id, "error": str(e)})
 
-            logger.info(
-                f"ARIA broadcast to '{group}': {success} sent, {failed} failed"
-            )
+            logger.info(f"ARIA broadcast to '{group}': {success} sent, {failed} failed")
 
             return {
                 "success": True,
@@ -326,9 +319,7 @@ class AIBroadcastService:
                 except Exception:
                     failed += 1
 
-            logger.info(
-                f"ARIA mass invite to '{group}': {success} sent, {failed} failed"
-            )
+            logger.info(f"ARIA mass invite to '{group}': {success} sent, {failed} failed")
 
             return {
                 "success": True,
@@ -375,9 +366,7 @@ class AIBroadcastService:
         # Try username without @
         return await self.user_repo.get_by_username(identifier)
 
-    async def _get_users_by_group(
-        self, group: str, limit: int
-    ) -> list[int]:
+    async def _get_users_by_group(self, group: str, limit: int) -> list[int]:
         """Get telegram_ids for a user group."""
         now = datetime.utcnow()
 
@@ -393,6 +382,7 @@ class AIBroadcastService:
         elif group == "active_deposits":
             # Users with active deposits
             from app.models import Deposit
+
             stmt = (
                 select(User.telegram_id)
                 .join(Deposit, Deposit.user_id == User.id)
@@ -403,24 +393,16 @@ class AIBroadcastService:
         elif group == "active_24h":
             # Users active in last 24 hours
             cutoff = now - timedelta(hours=24)
-            stmt = (
-                select(User.telegram_id)
-                .where(User.last_activity >= cutoff)
-                .limit(limit)
-            )
+            stmt = select(User.telegram_id).where(User.last_activity >= cutoff).limit(limit)
         elif group == "active_7d":
             # Users active in last 7 days
             cutoff = now - timedelta(days=7)
-            stmt = (
-                select(User.telegram_id)
-                .where(User.last_activity >= cutoff)
-                .limit(limit)
-            )
+            stmt = select(User.telegram_id).where(User.last_activity >= cutoff).limit(limit)
         elif group == "all":
-            # All users
+            # All users (not banned)
             stmt = (
                 select(User.telegram_id)
-                .where(User.is_blocked == False)  # noqa
+                .where(User.is_banned == False)  # noqa: E712
                 .limit(limit)
             )
         else:
@@ -429,9 +411,7 @@ class AIBroadcastService:
         result = await self.session.execute(stmt)
         return [row[0] for row in result.fetchall()]
 
-    async def _get_users_details_by_group(
-        self, group: str, limit: int
-    ) -> list[dict]:
+    async def _get_users_details_by_group(self, group: str, limit: int) -> list[dict]:
         """Get user details for a group."""
         now = datetime.utcnow()
 
@@ -445,6 +425,7 @@ class AIBroadcastService:
             )
         elif group == "active_deposits":
             from app.models import Deposit
+
             stmt = (
                 select(User)
                 .join(Deposit, Deposit.user_id == User.id)
@@ -454,22 +435,14 @@ class AIBroadcastService:
             )
         elif group == "active_24h":
             cutoff = now - timedelta(hours=24)
-            stmt = (
-                select(User)
-                .where(User.last_activity >= cutoff)
-                .limit(limit)
-            )
+            stmt = select(User).where(User.last_activity >= cutoff).limit(limit)
         elif group == "active_7d":
             cutoff = now - timedelta(days=7)
-            stmt = (
-                select(User)
-                .where(User.last_activity >= cutoff)
-                .limit(limit)
-            )
+            stmt = select(User).where(User.last_activity >= cutoff).limit(limit)
         elif group == "all":
             stmt = (
                 select(User)
-                .where(User.is_blocked == False)  # noqa
+                .where(User.is_banned == False)  # noqa: E712
                 .limit(limit)
             )
         else:

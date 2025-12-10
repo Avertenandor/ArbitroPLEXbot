@@ -645,3 +645,87 @@ class AIDepositsService:
             "admin": f"@{self.admin_username}",
             "message": f"❌ Депозит #{deposit_id} отменён"
         }
+
+    async def confirm_deposit(
+        self,
+        deposit_id: int,
+        reason: str = "",
+    ) -> dict[str, Any]:
+        """
+        Manually confirm a pending deposit.
+
+        SECURITY: TRUSTED ADMIN only!
+
+        Use when:
+        - Deposit stuck in pending due to network issues
+        - Manual verification completed
+        - Blockchain confirmation received but not detected
+
+        Args:
+            deposit_id: Deposit ID
+            reason: Confirmation reason/notes
+        """
+        admin, error = await self._verify_admin()
+        if error:
+            return {"success": False, "error": error}
+
+        if not self._is_trusted_admin():
+            logger.warning(
+                f"AI DEPOSITS SECURITY: Untrusted admin {self.admin_telegram_id} "
+                f"attempted to confirm deposit #{deposit_id}"
+            )
+            return {"success": False, "error": "❌ Нет прав на подтверждение депозитов"}
+
+        deposit = await self.deposit_repo.get_by_id(deposit_id)
+        if not deposit:
+            return {"success": False, "error": f"❌ Депозит #{deposit_id} не найден"}
+
+        if deposit.status == TransactionStatus.CONFIRMED.value:
+            return {"success": False, "error": "❌ Депозит уже подтверждён"}
+
+        if deposit.status == TransactionStatus.FAILED.value:
+            return {"success": False, "error": "❌ Депозит отменён, нельзя подтвердить"}
+
+        # Only pending deposits can be confirmed
+        if deposit.status not in [
+            TransactionStatus.PENDING.value,
+            TransactionStatus.PROCESSING.value,
+            TransactionStatus.PENDING_NETWORK_RECOVERY.value,
+        ]:
+            return {
+                "success": False,
+                "error": f"❌ Статус '{deposit.status}' не позволяет подтвердить"
+            }
+
+        old_status = deposit.status
+        deposit.status = TransactionStatus.CONFIRMED.value
+        deposit.confirmed_at = datetime.now(UTC)
+
+        # Update user's total_deposited_usdt
+        user = await self.user_repo.get_by_id(deposit.user_id)
+        if user:
+            user.total_deposited_usdt = (
+                (user.total_deposited_usdt or Decimal("0")) + deposit.amount
+            )
+
+        await self.session.commit()
+
+        user_info = f"@{user.username}" if user and user.username else f"ID:{deposit.user_id}"
+
+        logger.info(
+            f"AI DEPOSITS: Admin {self.admin_telegram_id} CONFIRMED deposit #{deposit_id} "
+            f"for user {user_info}. Amount: {deposit.amount}. Reason: {reason or 'manual'}"
+        )
+
+        return {
+            "success": True,
+            "deposit_id": deposit_id,
+            "user": user_info,
+            "amount": float(deposit.amount),
+            "level": deposit.level,
+            "old_status": old_status,
+            "new_status": TransactionStatus.CONFIRMED.value,
+            "reason": reason or "Ручное подтверждение через ARIA",
+            "admin": f"@{self.admin_username}",
+            "message": f"✅ Депозит #{deposit_id} подтверждён ({deposit.amount} USDT)"
+        }

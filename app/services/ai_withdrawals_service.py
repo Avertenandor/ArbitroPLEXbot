@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import Any
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
@@ -344,4 +344,76 @@ class AIWithdrawalsService:
             "refunded": True,
             "admin": f"@{admin.username}",
             "message": f"❌ Вывод #{withdrawal_id} отклонён, средства возвращены на баланс"
+        }
+
+    async def get_statistics(self) -> dict[str, Any]:
+        """
+        Get comprehensive withdrawal statistics.
+
+        Returns:
+            Statistics including totals, counts by status, averages
+        """
+        admin, error = await self._verify_admin()
+        if error:
+            return {"success": False, "error": error}
+
+        # Total stats by status
+        status_stmt = (
+            select(
+                Transaction.status,
+                func.count(Transaction.id).label("count"),
+                func.sum(Transaction.amount).label("total"),
+            )
+            .where(Transaction.type == TransactionType.WITHDRAWAL.value)
+            .group_by(Transaction.status)
+        )
+        status_result = await self.session.execute(status_stmt)
+        status_rows = status_result.all()
+
+        status_stats = {}
+        for row in status_rows:
+            status_stats[row.status] = {
+                "count": row.count,
+                "total": float(row.total or 0),
+            }
+
+        # Overall totals
+        total_count = sum(s["count"] for s in status_stats.values())
+        total_amount = sum(s["total"] for s in status_stats.values())
+
+        # Pending stats
+        pending = status_stats.get(TransactionStatus.PENDING.value, {"count": 0, "total": 0})
+        processing = status_stats.get(TransactionStatus.PROCESSING.value, {"count": 0, "total": 0})
+        confirmed = status_stats.get(TransactionStatus.CONFIRMED.value, {"count": 0, "total": 0})
+        failed = status_stats.get(TransactionStatus.FAILED.value, {"count": 0, "total": 0})
+
+        # Average withdrawal amount
+        avg_stmt = (
+            select(func.avg(Transaction.amount))
+            .where(Transaction.type == TransactionType.WITHDRAWAL.value)
+            .where(Transaction.status == TransactionStatus.CONFIRMED.value)
+        )
+        avg_result = await self.session.execute(avg_stmt)
+        avg_amount = avg_result.scalar() or 0
+
+        return {
+            "success": True,
+            "statistics": {
+                "total_withdrawals": total_count,
+                "total_amount": round(total_amount, 2),
+                "pending": {
+                    "count": pending["count"] + processing["count"],
+                    "amount": round(pending["total"] + processing["total"], 2),
+                },
+                "completed": {
+                    "count": confirmed["count"],
+                    "amount": round(confirmed["total"], 2),
+                },
+                "rejected": {
+                    "count": failed["count"],
+                    "amount": round(failed["total"], 2),
+                },
+                "average_amount": round(float(avg_amount), 2),
+            },
+            "message": "📊 Статистика выводов"
         }
