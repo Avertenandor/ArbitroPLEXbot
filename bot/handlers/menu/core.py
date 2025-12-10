@@ -91,17 +91,17 @@ async def show_main_menu(
 
     # Get deposits info from user model (primary source)
     total_deposited = float(user.total_deposited_usdt or Decimal("0"))
-    
+
     # Build deposits summary section
     if total_deposited > 0:
         # Check for ROI data from deposits table
         deposit_service = DepositService(session)
         active_deposits = await deposit_service.get_active_deposits(user.id)
-        
+
         if active_deposits:
             total_roi_paid = sum(float(d.roi_paid_amount or 0) for d in active_deposits)
             total_roi_cap = sum(float(d.roi_cap_amount or 0) for d in active_deposits)
-            
+
             if total_roi_cap > 0:
                 overall_progress = (total_roi_paid / total_roi_cap) * 100
                 deposits_section = (

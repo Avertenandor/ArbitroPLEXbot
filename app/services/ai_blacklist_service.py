@@ -50,13 +50,13 @@ class AIBlacklistService:
         """Verify admin credentials."""
         if not self.admin_telegram_id:
             return None, "❌ Не удалось определить администратора"
-        
+
         admin_repo = AdminRepository(self.session)
         admin = await admin_repo.get_by_telegram_id(self.admin_telegram_id)
-        
+
         if not admin or admin.is_blocked:
             return None, "❌ Администратор не найден или заблокирован"
-        
+
         return admin, None
 
     def _is_trusted_admin(self) -> bool:
@@ -73,22 +73,22 @@ class AIBlacklistService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         # Only trusted admins can view blacklist
         if not self._is_trusted_admin():
             return {
                 "success": False,
                 "error": "❌ Недостаточно прав для просмотра чёрного списка"
             }
-        
+
         # Get active entries
         stmt = select(Blacklist).where(
             Blacklist.is_active == True
         ).order_by(Blacklist.created_at.desc()).limit(limit)
-        
+
         result = await self.session.execute(stmt)
         entries = list(result.scalars().all())
-        
+
         if not entries:
             return {
                 "success": True,
@@ -96,7 +96,7 @@ class AIBlacklistService:
                 "entries": [],
                 "message": "✅ Чёрный список пуст"
             }
-        
+
         entries_list = []
         for e in entries:
             action_emoji = {
@@ -104,7 +104,7 @@ class AIBlacklistService:
                 BlacklistActionType.POST_BLOCK: "⛔",
                 BlacklistActionType.TERMINATION: "💀",
             }.get(e.action_type, "❓")
-            
+
             identifier = None
             if e.telegram_id:
                 identifier = f"TG: {e.telegram_id}"
@@ -112,7 +112,7 @@ class AIBlacklistService:
                 identifier = f"@{e.username}"
             elif e.wallet_address:
                 identifier = f"Wallet: {e.wallet_address[:10]}..."
-            
+
             entries_list.append({
                 "id": e.id,
                 "identifier": identifier,
@@ -123,12 +123,12 @@ class AIBlacklistService:
                 "reason": e.reason,
                 "created": e.created_at.strftime("%d.%m.%Y %H:%M") if e.created_at else None,
             })
-        
+
         # Count total
         count_stmt = select(func.count(Blacklist.id)).where(Blacklist.is_active == True)
         count_result = await self.session.execute(count_stmt)
         total = count_result.scalar() or 0
-        
+
         return {
             "success": True,
             "count": len(entries_list),
@@ -147,19 +147,19 @@ class AIBlacklistService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         # Only trusted admins can check blacklist
         if not self._is_trusted_admin():
             return {
                 "success": False,
                 "error": "❌ Недостаточно прав для проверки чёрного списка"
             }
-        
+
         identifier = identifier.strip()
-        
+
         # Build query based on identifier type
         stmt = select(Blacklist).where(Blacklist.is_active == True)
-        
+
         if identifier.startswith("@"):
             username = identifier[1:]
             stmt = stmt.where(Blacklist.username == username)
@@ -170,10 +170,10 @@ class AIBlacklistService:
             stmt = stmt.where(Blacklist.wallet_address == identifier)
         else:
             return {"success": False, "error": "❌ Укажите @username, telegram_id или wallet"}
-        
+
         result = await self.session.execute(stmt)
         entry = result.scalar_one_or_none()
-        
+
         if entry:
             return {
                 "success": True,
@@ -186,7 +186,7 @@ class AIBlacklistService:
                 },
                 "message": f"🚫 {identifier} В ЧЁРНОМ СПИСКЕ"
             }
-        
+
         return {
             "success": True,
             "is_blacklisted": False,
@@ -212,19 +212,19 @@ class AIBlacklistService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         if not self._is_trusted_admin():
             logger.warning(
                 f"AI BLACKLIST SECURITY: Untrusted admin {self.admin_telegram_id} "
                 f"attempted to add to blacklist"
             )
             return {"success": False, "error": "❌ Нет прав на добавление в чёрный список"}
-        
+
         identifier = identifier.strip()
-        
+
         if not reason or len(reason) < 5:
             return {"success": False, "error": "❌ Укажите причину (минимум 5 символов)"}
-        
+
         # Validate action type
         action_map = {
             "pre_block": BlacklistActionType.PRE_BLOCK,
@@ -236,12 +236,12 @@ class AIBlacklistService:
                 "success": False,
                 "error": f"❌ Неверный action_type. Допустимые: {', '.join(action_map.keys())}"
             }
-        
+
         # Determine identifier type
         telegram_id = None
         username = None
         wallet_address = None
-        
+
         if identifier.startswith("@"):
             username = identifier[1:]
         elif identifier.isdigit():
@@ -250,12 +250,12 @@ class AIBlacklistService:
             wallet_address = identifier
         else:
             return {"success": False, "error": "❌ Укажите @username, telegram_id или wallet"}
-        
+
         # Check if already blacklisted
         check_result = await self.check_blacklist(identifier)
         if check_result.get("is_blacklisted"):
             return {"success": False, "error": f"❌ {identifier} уже в чёрном списке"}
-        
+
         # Create entry
         entry = Blacklist(
             telegram_id=telegram_id,
@@ -268,12 +268,12 @@ class AIBlacklistService:
         )
         self.session.add(entry)
         await self.session.commit()
-        
+
         logger.warning(
             f"AI BLACKLIST: Admin {self.admin_telegram_id} added {identifier} to blacklist. "
             f"Reason: {reason}, Action: {action_type}"
         )
-        
+
         return {
             "success": True,
             "identifier": identifier,
@@ -300,22 +300,22 @@ class AIBlacklistService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         if not self._is_trusted_admin():
             logger.warning(
                 f"AI BLACKLIST SECURITY: Untrusted admin {self.admin_telegram_id} "
                 f"attempted to remove from blacklist"
             )
             return {"success": False, "error": "❌ Нет прав на удаление из чёрного списка"}
-        
+
         identifier = identifier.strip()
-        
+
         if not reason or len(reason) < 5:
             return {"success": False, "error": "❌ Укажите причину (минимум 5 символов)"}
-        
+
         # Find entry
         stmt = select(Blacklist).where(Blacklist.is_active == True)
-        
+
         if identifier.startswith("@"):
             username = identifier[1:]
             stmt = stmt.where(Blacklist.username == username)
@@ -326,22 +326,22 @@ class AIBlacklistService:
             stmt = stmt.where(Blacklist.wallet_address == identifier)
         else:
             return {"success": False, "error": "❌ Укажите @username, telegram_id или wallet"}
-        
+
         result = await self.session.execute(stmt)
         entry = result.scalar_one_or_none()
-        
+
         if not entry:
             return {"success": False, "error": f"❌ {identifier} не найден в чёрном списке"}
-        
+
         # Deactivate
         entry.is_active = False
         await self.session.commit()
-        
+
         logger.info(
             f"AI BLACKLIST: Admin {self.admin_telegram_id} removed {identifier} from blacklist. "
             f"Reason: {reason}"
         )
-        
+
         return {
             "success": True,
             "identifier": identifier,

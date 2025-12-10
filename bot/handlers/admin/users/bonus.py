@@ -8,7 +8,7 @@ Handles admin-initiated bonus credit operations:
 """
 
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
@@ -28,6 +28,9 @@ from bot.utils.formatters import format_usdt
 from bot.utils.text_utils import escape_markdown
 
 router = Router(name="admin_users_bonus")
+
+if TYPE_CHECKING:
+    from aiogram.types import ReplyKeyboardMarkup
 
 
 class BonusStates(StatesGroup):
@@ -83,7 +86,7 @@ async def show_bonus_menu(
     stats = await bonus_service.get_user_bonus_stats(user_id)
 
     safe_username = escape_markdown(user.username) if user.username else str(user.telegram_id)
-    
+
     # SIMPLIFIED FLOW: Go directly to grant bonus
     # Show user info and ask for amount immediately
     text = (
@@ -98,7 +101,7 @@ async def show_bonus_menu(
         f"ℹ️ Бонус будет участвовать в начислении ROI "
         f"с теми же ставками, что и обычные депозиты (до 500%)."
     )
-    
+
     await state.set_state(BonusStates.waiting_amount)
 
     await message.answer(
@@ -242,7 +245,7 @@ async def process_bonus_reason(
         return
 
     await session.commit()
-    
+
     # Keep selected_user_id for navigation but clear bonus state
     await state.set_state(None)
 
@@ -332,19 +335,19 @@ async def list_user_bonuses(
 def cancel_reason_keyboard() -> "ReplyKeyboardMarkup":
     """Keyboard for selecting cancel reason."""
     from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
-    
+
     buttons = []
     for emoji_name, _ in CANCEL_REASON_TEMPLATES:
         buttons.append([KeyboardButton(text=emoji_name)])
     buttons.append([KeyboardButton(text="◀️ Назад")])
-    
+
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 
 def cancel_confirm_keyboard() -> "ReplyKeyboardMarkup":
     """Keyboard for confirming cancellation."""
     from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
-    
+
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="✅ Подтвердить отмену")],
@@ -409,7 +412,7 @@ async def start_cancel_bonus(
         reason_short = (bonus.reason or "")[:30]
         if len(bonus.reason or "") > 30:
             reason_short += "..."
-        
+
         text += (
             f"🔹 **ID {bonus.id}**\n"
             f"   💰 Сумма: `{format_usdt(bonus.amount)} USDT`\n"
@@ -420,9 +423,9 @@ async def start_cancel_bonus(
         )
 
     text += (
-        f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-        f"⚠️ **Введите ID бонуса для отмены:**\n\n"
-        f"_При отмене бонус становится неактивным, ROI начисления прекращаются._"
+        "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        "⚠️ **Введите ID бонуса для отмены:**\n\n"
+        "_При отмене бонус становится неактивным, ROI начисления прекращаются._"
     )
 
     await state.set_state(BonusStates.cancel_select_bonus)
@@ -553,11 +556,11 @@ async def process_cancel_select_reason(
                 )
                 return
             break
-    
+
     # If not a template, use as custom reason
     if not reason:
         reason = message.text.strip()
-        
+
         if len(reason) < 3:
             await message.answer(
                 "❌ Причина слишком короткая. Введите минимум 3 символа.",
@@ -616,9 +619,9 @@ async def process_cancel_confirm(
         state_data = await state.get_data()
         bonus_id = state_data.get("cancel_bonus_id")
         bonus_amount = state_data.get("cancel_bonus_amount", "0")
-        
+
         await state.set_state(BonusStates.cancel_select_reason)
-        
+
         text = (
             f"📝 **Шаг 2 из 3: Причина отмены**\n"
             f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -626,7 +629,7 @@ async def process_cancel_confirm(
             f"💰 Сумма: `{format_usdt(bonus_amount)} USDT`\n\n"
             f"Выберите причину отмены или введите свою:"
         )
-        
+
         await message.answer(
             text,
             parse_mode="Markdown",

@@ -126,7 +126,7 @@ def main_menu_reply_keyboard(
                 f"[KEYBOARD] Super admin check: telegram_id={telegram_id}, "
                 f"super_admin_id={super_admin_id}, is_super={is_super}"
             )
-            
+
             if is_super:
                 logger.info(
                     f"[KEYBOARD] Adding master key button for super admin {telegram_id}"

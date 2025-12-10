@@ -7,6 +7,7 @@ next_accrual_at timestamp and corridor settings.
 
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from sqlalchemy import select
@@ -16,6 +17,9 @@ from app.models.deposit import Deposit
 from app.repositories.deposit_repository import DepositRepository
 from app.repositories.deposit_reward_repository import DepositRewardRepository
 from app.services.reward.reward_calculator import RewardCalculator
+
+if TYPE_CHECKING:
+    from app.services.reward.reward_balance_handler import RewardBalanceHandler
 
 
 class IndividualRewardProcessor:

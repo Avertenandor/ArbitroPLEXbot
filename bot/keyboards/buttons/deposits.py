@@ -53,7 +53,7 @@ class DepositButtons:
         """
         level = cls.LEVELS.get(level_type)
         if not level:
-            return f"❓ Неизвестный уровень"
+            return "❓ Неизвестный уровень"
 
         base_text = f"{level.emoji} {level.name} (${level.min_amount} - ${level.max_amount})"
 

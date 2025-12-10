@@ -16,7 +16,7 @@ Permissions:
 """
 
 from decimal import Decimal, InvalidOperation
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from aiogram import F, Router
 from aiogram.filters import StateFilter
@@ -42,6 +42,9 @@ from bot.handlers.admin.utils.admin_checks import (
 from bot.keyboards.reply import get_admin_keyboard_from_data
 from bot.utils.formatters import format_usdt
 from bot.utils.text_utils import escape_markdown
+
+if TYPE_CHECKING:
+    from app.models.bonus_credit import BonusCredit
 
 router = Router(name="admin_bonus_management_v2")
 
@@ -74,22 +77,22 @@ def get_bonus_status_emoji(bonus: "BonusCredit") -> str:
 
 class BonusStates(StatesGroup):
     """States for bonus management."""
-    
+
     menu = State()                    # Главное меню бонусов
     select_action = State()           # Выбор действия
-    
+
     # Начисление бонуса
     grant_user = State()              # Ввод пользователя
     grant_amount = State()            # Ввод суммы
     grant_reason = State()            # Ввод/выбор причины
     grant_confirm = State()           # Подтверждение
-    
+
     # Поиск пользователя
     search_user = State()             # Поиск бонусов пользователя
-    
+
     # Просмотр бонуса
     view_bonus = State()              # Детали бонуса
-    
+
     # Отмена бонуса
     cancel_bonus = State()            # Отмена бонуса
     cancel_reason = State()           # Причина отмены
@@ -122,29 +125,29 @@ def bonus_main_menu_keyboard(role: str) -> ReplyKeyboardMarkup:
     Супер-админ: полный доступ
     """
     buttons = []
-    
+
     # Все роли могут видеть статистику и историю
     buttons.append([
         KeyboardButton(text="📊 Статистика"),
         KeyboardButton(text="📋 История"),
     ])
-    
+
     # Админы и выше могут начислять
     if role in ("super_admin", "extended_admin", "admin"):
         buttons.append([KeyboardButton(text="➕ Начислить бонус")])
-    
+
     # Поиск доступен всем
     buttons.append([
         KeyboardButton(text="🔍 Найти пользователя"),
         KeyboardButton(text="📑 Мои начисления"),
     ])
-    
+
     # Супер-админ может отменять бонусы
     if role == "super_admin":
         buttons.append([KeyboardButton(text="⚠️ Отмена бонусов")])
-    
+
     buttons.append([KeyboardButton(text="◀️ Назад в админку")])
-    
+
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 
@@ -191,7 +194,7 @@ def confirm_bonus_keyboard() -> InlineKeyboardMarkup:
 def bonus_details_keyboard(bonus_id: int, can_cancel: bool) -> InlineKeyboardMarkup:
     """Клавиатура деталей бонуса."""
     buttons = []
-    
+
     if can_cancel:
         buttons.append([
             InlineKeyboardButton(
@@ -199,11 +202,11 @@ def bonus_details_keyboard(bonus_id: int, can_cancel: bool) -> InlineKeyboardMar
                 callback_data=f"bonus_cancel:{bonus_id}"
             )
         ])
-    
+
     buttons.append([
         InlineKeyboardButton(text="◀️ Назад", callback_data="bonus_back_to_menu")
     ])
-    
+
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -280,13 +283,13 @@ async def open_bonus_menu(
         return
 
     await state.set_state(BonusStates.menu)
-    
+
     bonus_service = BonusService(session)
     stats = await bonus_service.get_global_bonus_stats()
-    
+
     role_display = get_role_display(admin.role)
     permissions = get_role_permissions(admin.role)
-    
+
     # Формируем подсказку по правам
     perm_text = []
     if permissions["can_grant"]:
@@ -297,7 +300,7 @@ async def open_bonus_menu(
         perm_text.append("✅ отмена своих")
     if permissions["can_view"]:
         perm_text.append("✅ просмотр")
-    
+
     text = (
         f"🎁 **Управление бонусами**\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -333,15 +336,15 @@ async def show_detailed_stats(
 
     bonus_service = BonusService(session)
     stats = await bonus_service.get_global_bonus_stats()
-    
+
     # Получаем недавние бонусы для анализа
     recent = await bonus_service.get_recent_bonuses(limit=50)
-    
+
     # Считаем по статусам
     active_sum = sum(b.amount for b in recent if get_bonus_status(b) == "active")
     completed_sum = sum(b.amount for b in recent if get_bonus_status(b) == "completed")
     cancelled_sum = sum(b.amount for b in recent if get_bonus_status(b) == "cancelled")
-    
+
     text = (
         f"📊 **Детальная статистика бонусов**\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -388,18 +391,18 @@ async def show_bonus_history(
     for b in recent:
         # Статус
         status = get_bonus_status_emoji(b)
-        
+
         # Данные
         admin_name = b.admin.username if b.admin else "система"
         user_name = b.user.username if b.user else f"ID:{b.user_id}"
         safe_user = escape_markdown(user_name) if user_name else str(b.user_id)
         safe_admin = escape_markdown(admin_name) if admin_name else "система"
-        
+
         # ROI прогресс для активных
         progress = ""
         if get_bonus_status(b) == "active" and hasattr(b, "roi_progress_percent"):
             progress = f" ({b.roi_progress_percent:.0f}%)"
-        
+
         reason_short = (b.reason or "")[:25]
         if len(b.reason or "") > 25:
             reason_short += "..."
@@ -411,7 +414,7 @@ async def show_bonus_history(
         )
 
     text += "_Нажмите на ID чтобы увидеть детали бонуса_"
-    
+
     await message.answer(text, parse_mode="Markdown")
 
 
@@ -430,10 +433,10 @@ async def show_my_bonuses(
 
     bonus_service = BonusService(session)
     recent = await bonus_service.get_recent_bonuses(limit=50)
-    
+
     # Фильтруем по админу
     my_bonuses = [b for b in recent if b.admin_id == admin.id]
-    
+
     if not my_bonuses:
         await message.answer(
             "📑 **Ваши начисления**\n\n"
@@ -441,25 +444,25 @@ async def show_my_bonuses(
             parse_mode="Markdown",
         )
         return
-    
+
     # Статистика
     total = sum(b.amount for b in my_bonuses)
     active = [b for b in my_bonuses if get_bonus_status(b) == "active"]
-    
+
     text = (
         f"📑 **Ваши начисления**\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"📊 Всего: **{len(my_bonuses)}** бонусов на **{format_usdt(total)}** USDT\n"
         f"🟢 Активных: **{len(active)}**\n\n"
     )
-    
+
     for b in my_bonuses[:10]:
         status = get_bonus_status_emoji(b)
         user_name = b.user.username if b.user else f"ID:{b.user_id}"
         safe_user = escape_markdown(user_name)
-        
+
         text += f"{status} **{format_usdt(b.amount)}** → @{safe_user}\n"
-    
+
     if len(my_bonuses) > 10:
         text += f"\n_...и ещё {len(my_bonuses) - 10} бонусов_"
 
@@ -515,7 +518,7 @@ async def process_grant_user(
 ) -> None:
     """Обработать ввод пользователя."""
     logger.info(f"process_grant_user called with text: {message.text}")
-    
+
     admin = await get_admin_or_deny(message, session, **data)
     if not admin:
         logger.warning("process_grant_user: admin check failed")
@@ -523,10 +526,10 @@ async def process_grant_user(
 
     user_input = message.text.strip() if message.text else ""
     logger.info(f"process_grant_user: user_input='{user_input}'")
-    
+
     user_service = UserService(session)
     user = None
-    
+
     # Поиск по разным форматам
     if user_input.startswith("@"):
         user = await user_service.get_by_username(user_input[1:])
@@ -556,9 +559,9 @@ async def process_grant_user(
     # Получаем статистику пользователя
     bonus_service = BonusService(session)
     user_stats = await bonus_service.get_user_bonus_stats(user.id)
-    
+
     safe_username = escape_markdown(user.username) if user.username else "не указан"
-    
+
     await state.update_data(
         target_user_id=user.id,
         target_username=user.username or str(user.telegram_id),
@@ -595,7 +598,7 @@ async def process_grant_amount(
 ) -> None:
     """Обработать выбор/ввод суммы."""
     logger.info(f"process_grant_amount called with text: {message.text}")
-    
+
     admin = await get_admin_or_deny(message, session, **data)
     if not admin:
         logger.warning("process_grant_amount: admin check failed")
@@ -603,7 +606,7 @@ async def process_grant_amount(
 
     text_input = message.text.strip() if message.text else ""
     logger.info(f"process_grant_amount: text_input='{text_input}'")
-    
+
     # Обработка быстрого выбора
     if text_input == "💵 Ввести сумму вручную":
         await message.answer(
@@ -616,11 +619,11 @@ async def process_grant_amount(
             reply_markup=cancel_keyboard(),
         )
         return
-    
+
     # Парсим сумму
     amount_str = text_input.replace("USDT", "").replace(",", ".").strip()
     logger.info(f"process_grant_amount: amount_str='{amount_str}'")
-    
+
     try:
         amount = Decimal(amount_str)
         if amount < 1:
@@ -639,9 +642,9 @@ async def process_grant_amount(
 
     logger.info(f"process_grant_amount: amount={amount}")
     await state.update_data(amount=str(amount))
-    
+
     roi_cap = amount * 5  # 500%
-    
+
     await state.set_state(BonusStates.grant_reason)
     await message.answer(
         f"💰 **Сумма:** {format_usdt(amount)} USDT\n"
@@ -667,7 +670,7 @@ async def process_reason_template(
         return
 
     reason_data = callback.data.split(":", 1)[1]
-    
+
     if reason_data == "custom":
         await callback.message.answer(
             "📝 **Введите причину вручную:**\n\n"
@@ -677,7 +680,7 @@ async def process_reason_template(
         )
         await callback.answer()
         return
-    
+
     # Get reason text from index
     try:
         reason_idx = int(reason_data)
@@ -690,7 +693,7 @@ async def process_reason_template(
                 return
     except ValueError:
         pass
-    
+
     # Fallback: use raw data as reason (backward compatibility)
     await state.update_data(reason=reason_data)
     await show_grant_confirmation(callback.message, state, admin)
@@ -710,11 +713,11 @@ async def process_custom_reason(
         return
 
     reason = message.text.strip()
-    
+
     if len(reason) < 5:
         await message.answer("❌ Причина слишком короткая. Минимум 5 символов.")
         return
-    
+
     if len(reason) > 200:
         await message.answer("❌ Причина слишком длинная. Максимум 200 символов.")
         return
@@ -726,11 +729,11 @@ async def process_custom_reason(
 async def show_grant_confirmation(target, state: FSMContext, admin) -> None:
     """Показать подтверждение начисления."""
     state_data = await state.get_data()
-    
+
     amount = Decimal(state_data["amount"])
     roi_cap = amount * 5
     safe_username = escape_markdown(state_data.get("target_username", ""))
-    
+
     text = (
         f"🎁 **Подтверждение начисления**\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -745,7 +748,7 @@ async def show_grant_confirmation(target, state: FSMContext, admin) -> None:
     )
 
     await state.set_state(BonusStates.grant_confirm)
-    
+
     # Check if target is a callback message that can be edited
     # For regular messages, always use answer()
     if hasattr(target, "message") and target.message:
@@ -772,7 +775,7 @@ async def execute_grant_bonus(
         return
 
     state_data = await state.get_data()
-    
+
     user_id = state_data["target_user_id"]
     amount = Decimal(state_data["amount"])
     reason = state_data["reason"]
@@ -868,7 +871,7 @@ async def start_search_user(
 ) -> None:
     """Начать поиск бонусов пользователя."""
     await state.set_state(BonusStates.search_user)
-    
+
     await message.answer(
         "🔍 **Поиск бонусов пользователя**\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -893,7 +896,7 @@ async def process_search_user(
     user_input = message.text.strip()
     user_service = UserService(session)
     user = None
-    
+
     if user_input.startswith("@"):
         user = await user_service.get_by_username(user_input[1:])
     elif user_input.isdigit():
@@ -910,9 +913,9 @@ async def process_search_user(
 
     bonus_service = BonusService(session)
     user_stats = await bonus_service.get_user_bonus_stats(user.id)
-    
+
     safe_username = escape_markdown(user.username) if user.username else str(user.telegram_id)
-    
+
     text = (
         f"👤 **Бонусы пользователя @{safe_username}**\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -921,7 +924,7 @@ async def process_search_user(
         f"🟢 Активных: **{user_stats['active_bonuses_count']}**\n"
         f"📋 Всего: **{user_stats['total_bonuses_count']}**\n\n"
     )
-    
+
     if user_stats.get("active_bonuses"):
         text += "**Активные бонусы:**\n"
         for bonus in user_stats["active_bonuses"][:5]:
@@ -930,7 +933,7 @@ async def process_search_user(
                 f"• ID `{bonus.id}`: {format_usdt(bonus.amount)} USDT "
                 f"(ROI: {progress:.0f}%)\n"
             )
-    
+
     await state.set_state(BonusStates.menu)
     await message.answer(
         text,
@@ -954,7 +957,7 @@ async def handle_cancel(
     """Обработать отмену на любом шаге."""
     admin = await get_admin_or_deny(message, session, **data)
     role = admin.role if admin else "admin"
-    
+
     await state.set_state(BonusStates.menu)
     await message.answer(
         "❌ Операция отменена.",
@@ -988,7 +991,7 @@ async def callback_back_to_menu(
     """Вернуться в меню бонусов."""
     admin = await get_admin_or_deny_callback(callback, session, **data)
     role = admin.role if admin else "admin"
-    
+
     await state.set_state(BonusStates.menu)
     await callback.message.edit_text("◀️ Возврат в меню бонусов...")
     await callback.message.answer(
@@ -1024,7 +1027,7 @@ async def start_cancel_bonus(
     bonus_service = BonusService(session)
     recent = await bonus_service.get_recent_bonuses(limit=20)
     active_bonuses = [b for b in recent if get_bonus_status(b) == "active"]
-    
+
     if not active_bonuses:
         await message.answer(
             "⚠️ **Отмена бонусов**\n\n"
@@ -1032,35 +1035,35 @@ async def start_cancel_bonus(
             parse_mode="Markdown",
         )
         return
-    
+
     text = (
         "⚠️ **Отмена бонусов**\n"
         "━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         "**Активные бонусы:**\n\n"
     )
-    
+
     buttons = []
     for b in active_bonuses[:10]:
         user_name = b.user.username if b.user else f"ID:{b.user_id}"
         safe_user = escape_markdown(user_name)
         progress = b.roi_progress_percent if hasattr(b, "roi_progress_percent") else 0
-        
+
         text += (
             f"🟢 **ID {b.id}:** {format_usdt(b.amount)} USDT → @{safe_user}\n"
             f"   ROI: {progress:.0f}% | _{(b.reason or '')[:20]}..._\n\n"
         )
-        
+
         buttons.append([
             InlineKeyboardButton(
                 text=f"❌ Отменить #{b.id} ({format_usdt(b.amount)})",
                 callback_data=f"bonus_do_cancel:{b.id}"
             )
         ])
-    
+
     buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="bonus_back_to_menu")])
-    
+
     text += "\n⚠️ _Выберите бонус для отмены:_"
-    
+
     await message.answer(
         text,
         parse_mode="Markdown",
@@ -1082,25 +1085,25 @@ async def confirm_cancel_bonus(
         return
 
     bonus_id = int(callback.data.split(":")[1])
-    
+
     bonus_service = BonusService(session)
     bonuses = await bonus_service.get_recent_bonuses(limit=100)
     bonus = next((b for b in bonuses if b.id == bonus_id), None)
-    
+
     if not bonus:
         await callback.answer("❌ Бонус не найден", show_alert=True)
         return
-    
+
     if get_bonus_status(bonus) != "active":
         await callback.answer("❌ Бонус уже неактивен", show_alert=True)
         return
-    
+
     await state.update_data(cancel_bonus_id=bonus_id)
     await state.set_state(BonusStates.cancel_reason)
-    
+
     user_name = bonus.user.username if bonus.user else f"ID:{bonus.user_id}"
     safe_user = escape_markdown(user_name)
-    
+
     await callback.message.edit_text(
         f"⚠️ **Отмена бонуса #{bonus_id}**\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -1137,7 +1140,7 @@ async def execute_cancel_bonus(
 
     state_data = await state.get_data()
     bonus_id = state_data.get("cancel_bonus_id")
-    
+
     if not bonus_id:
         await message.answer("❌ ID бонуса не найден. Попробуйте заново.")
         await state.set_state(BonusStates.menu)
@@ -1185,7 +1188,7 @@ async def cancel_cancel_bonus(
     """Отменить процесс отмены бонуса."""
     admin = await get_admin_or_deny(message, session, **data)
     role = admin.role if admin else "super_admin"
-    
+
     await state.set_state(BonusStates.menu)
     await message.answer(
         "❌ Отмена бонуса прервана.",
@@ -1208,15 +1211,15 @@ async def view_bonus_details(
         return
 
     bonus_id = int(message.text.split(":")[1])
-    
+
     bonus_service = BonusService(session)
     bonuses = await bonus_service.get_recent_bonuses(limit=100)
     bonus = next((b for b in bonuses if b.id == bonus_id), None)
-    
+
     if not bonus:
         await message.answer(f"❌ Бонус #{bonus_id} не найден.")
         return
-    
+
     # Статус
     bonus_status = get_bonus_status(bonus)
     status_text = {
@@ -1224,15 +1227,15 @@ async def view_bonus_details(
         "completed": "✅ Завершён (ROI выплачен)",
         "cancelled": "❌ Отменён",
     }.get(bonus_status, bonus_status)
-    
+
     user_name = bonus.user.username if bonus.user else f"ID:{bonus.user_id}"
     admin_name = bonus.admin.username if bonus.admin else "система"
     safe_user = escape_markdown(user_name)
     safe_admin = escape_markdown(admin_name)
-    
+
     progress = bonus.roi_progress_percent if hasattr(bonus, "roi_progress_percent") else 0
     remaining = bonus.roi_remaining if hasattr(bonus, "roi_remaining") else bonus.roi_cap_amount
-    
+
     text = (
         f"🎁 **Бонус #{bonus.id}**\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -1246,10 +1249,10 @@ async def view_bonus_details(
         f"👤 **Начислил:** @{safe_admin}\n"
         f"📅 **Дата:** {bonus.created_at.strftime('%d.%m.%Y %H:%M') if bonus.created_at else 'н/д'}"
     )
-    
+
     # Кнопка отмены только для супер-админа и активных бонусов
     can_cancel = admin.role == "super_admin" and get_bonus_status(bonus) == "active"
-    
+
     await message.answer(
         text,
         parse_mode="Markdown",
@@ -1273,7 +1276,7 @@ async def callback_start_cancel(
     bonus_id = int(callback.data.split(":")[1])
     await state.update_data(cancel_bonus_id=bonus_id)
     await state.set_state(BonusStates.cancel_reason)
-    
+
     await callback.message.edit_text(
         f"⚠️ **Отмена бонуса #{bonus_id}**\n\n"
         f"Введите причину отмены:",

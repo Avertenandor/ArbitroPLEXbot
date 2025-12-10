@@ -58,16 +58,16 @@ class AIUsersService:
         """Verify admin credentials."""
         if not self.admin_telegram_id:
             return None, "❌ Не удалось определить администратора"
-        
+
         admin_repo = AdminRepository(self.session)
         admin = await admin_repo.get_by_telegram_id(self.admin_telegram_id)
-        
+
         if not admin:
             return None, "❌ Администратор не найден"
-        
+
         if admin.is_blocked:
             return None, "❌ Администратор заблокирован"
-        
+
         return admin, None
 
     def _is_trusted_admin(self) -> bool:
@@ -77,7 +77,7 @@ class AIUsersService:
     async def _find_user(self, identifier: str) -> tuple[User | None, str | None]:
         """Find user by @username, telegram_id, or wallet address."""
         identifier = identifier.strip()
-        
+
         # By username
         if identifier.startswith("@"):
             username = identifier[1:]
@@ -85,7 +85,7 @@ class AIUsersService:
             if user:
                 return user, None
             return None, f"❌ Пользователь @{username} не найден"
-        
+
         # By telegram ID
         if identifier.isdigit():
             telegram_id = int(identifier)
@@ -93,7 +93,7 @@ class AIUsersService:
             if user:
                 return user, None
             return None, f"❌ Пользователь с ID {telegram_id} не найден"
-        
+
         # By wallet address
         if identifier.startswith("0x") and len(identifier) == 42:
             stmt = select(User).where(User.wallet_address == identifier)
@@ -102,7 +102,7 @@ class AIUsersService:
             if user:
                 return user, None
             return None, f"❌ Пользователь с кошельком {identifier[:10]}... не найден"
-        
+
         return None, "❌ Укажите @username, telegram_id или адрес кошелька"
 
     async def get_user_profile(self, user_identifier: str) -> dict[str, Any]:
@@ -118,16 +118,16 @@ class AIUsersService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         user, error = await self._find_user(user_identifier)
         if error:
             return {"success": False, "error": error}
-        
+
         # Get balance data
         balance = getattr(user, 'balance', Decimal("0")) or Decimal("0")
         bonus_balance = getattr(user, 'bonus_balance', Decimal("0")) or Decimal("0")
         bonus_roi = getattr(user, 'bonus_roi_earned', Decimal("0")) or Decimal("0")
-        
+
         # Calculate total earnings from transactions
         tx_stmt = select(func.sum(Transaction.amount)).where(
             Transaction.user_id == user.id,
@@ -136,7 +136,7 @@ class AIUsersService:
         )
         tx_result = await self.session.execute(tx_stmt)
         total_earnings = tx_result.scalar() or Decimal("0")
-        
+
         # Get pending withdrawals
         pending_stmt = select(func.sum(Transaction.amount)).where(
             Transaction.user_id == user.id,
@@ -145,7 +145,7 @@ class AIUsersService:
         )
         pending_result = await self.session.execute(pending_stmt)
         pending_withdrawals = pending_result.scalar() or Decimal("0")
-        
+
         # Get completed withdrawals
         completed_stmt = select(func.sum(Transaction.amount)).where(
             Transaction.user_id == user.id,
@@ -154,12 +154,12 @@ class AIUsersService:
         )
         completed_result = await self.session.execute(completed_stmt)
         total_withdrawals = completed_result.scalar() or Decimal("0")
-        
+
         # PLEX calculation
         total_investment = user.total_deposited_usdt + bonus_balance
         plex_daily = int(total_investment * 10)
         plex_balance = getattr(user, 'plex_balance', 0) or 0
-        
+
         profile = {
             "success": True,
             "user": {
@@ -196,7 +196,7 @@ class AIUsersService:
                 ),
             },
         }
-        
+
         return profile
 
     async def search_users(
@@ -217,10 +217,10 @@ class AIUsersService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         query = query.strip()
         users = []
-        
+
         # Search by different criteria
         if query.startswith("@"):
             # Username search
@@ -244,10 +244,10 @@ class AIUsersService:
                 (User.username.ilike(f"%{query}%")) |
                 (User.first_name.ilike(f"%{query}%"))
             ).limit(limit)
-        
+
         result = await self.session.execute(stmt)
         users = list(result.scalars().all())
-        
+
         if not users:
             return {
                 "success": True,
@@ -255,7 +255,7 @@ class AIUsersService:
                 "users": [],
                 "message": f"❌ Пользователи по запросу '{query}' не найдены"
             }
-        
+
         users_list = []
         for u in users:
             users_list.append({
@@ -266,7 +266,7 @@ class AIUsersService:
                 "bonus": float(getattr(u, 'bonus_balance', 0) or 0),
                 "is_banned": u.is_banned,
             })
-        
+
         return {
             "success": True,
             "count": len(users_list),
@@ -295,7 +295,7 @@ class AIUsersService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         # Security check
         if not self._is_trusted_admin():
             logger.warning(
@@ -306,19 +306,19 @@ class AIUsersService:
                 "success": False,
                 "error": "❌ У вас нет прав на изменение баланса. Обратитесь к владельцу."
             }
-        
+
         user, error = await self._find_user(user_identifier)
         if error:
             return {"success": False, "error": error}
-        
+
         if amount <= 0:
             return {"success": False, "error": "❌ Сумма должна быть положительной"}
-        
+
         if not reason or len(reason) < 5:
             return {"success": False, "error": "❌ Укажите причину (минимум 5 символов)"}
-        
+
         old_balance = user.balance or Decimal("0")
-        
+
         if operation == "add":
             user.balance = old_balance + Decimal(str(amount))
             tx_type = TransactionType.ADJUSTMENT
@@ -330,7 +330,7 @@ class AIUsersService:
                 }
             user.balance = old_balance - Decimal(str(amount))
             tx_type = TransactionType.ADJUSTMENT
-        
+
         # Create transaction record
         tx = Transaction(
             user_id=user.id,
@@ -344,12 +344,12 @@ class AIUsersService:
         )
         self.session.add(tx)
         await self.session.commit()
-        
+
         logger.info(
             f"AI USERS: Admin {admin.telegram_id} changed balance for "
             f"user {user.telegram_id}: {operation} {amount} USDT. Reason: {reason}"
         )
-        
+
         return {
             "success": True,
             "user": f"@{user.username}" if user.username else f"ID:{user.telegram_id}",
@@ -377,27 +377,27 @@ class AIUsersService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         user, error = await self._find_user(user_identifier)
         if error:
             return {"success": False, "error": error}
-        
+
         if user.is_banned:
             return {"success": False, "error": "❌ Пользователь уже заблокирован"}
-        
+
         if not reason or len(reason) < 5:
             return {"success": False, "error": "❌ Укажите причину блокировки"}
-        
+
         user.is_banned = True
         # Note: ban_reason, banned_at, banned_by_admin_id are logged but not stored in User model
-        
+
         await self.session.commit()
-        
+
         logger.info(
             f"AI USERS: Admin {admin.telegram_id} blocked user "
             f"{user.telegram_id} (@{user.username}): {reason}"
         )
-        
+
         return {
             "success": True,
             "user": f"@{user.username}" if user.username else f"ID:{user.telegram_id}",
@@ -419,23 +419,23 @@ class AIUsersService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         user, error = await self._find_user(user_identifier)
         if error:
             return {"success": False, "error": error}
-        
+
         if not user.is_banned:
             return {"success": False, "error": "❌ Пользователь не заблокирован"}
-        
+
         user.is_banned = False
-        
+
         await self.session.commit()
-        
+
         logger.info(
             f"AI USERS: Admin {admin.telegram_id} unblocked user "
             f"{user.telegram_id} (@{user.username})"
         )
-        
+
         return {
             "success": True,
             "user": f"@{user.username}" if user.username else f"ID:{user.telegram_id}",
@@ -456,18 +456,18 @@ class AIUsersService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         user, error = await self._find_user(user_identifier)
         if error:
             return {"success": False, "error": error}
-        
+
         # Get blockchain deposits
         deposit_stmt = select(Deposit).where(
             Deposit.user_id == user.id
         ).order_by(Deposit.created_at.desc())
         deposit_result = await self.session.execute(deposit_stmt)
         deposits = list(deposit_result.scalars().all())
-        
+
         deposits_list = []
         for d in deposits:
             deposits_list.append({
@@ -477,14 +477,14 @@ class AIUsersService:
                 "status": d.status,
                 "created": d.created_at.strftime("%d.%m.%Y") if d.created_at else None,
             })
-        
+
         # Get bonus credits
         bonus_stmt = select(BonusCredit).where(
             BonusCredit.user_id == user.id
         ).order_by(BonusCredit.created_at.desc())
         bonus_result = await self.session.execute(bonus_stmt)
         bonuses = list(bonus_result.scalars().all())
-        
+
         bonuses_list = []
         for b in bonuses:
             bonuses_list.append({
@@ -496,10 +496,10 @@ class AIUsersService:
                 "reason": b.reason,
                 "created": b.created_at.strftime("%d.%m.%Y") if b.created_at else None,
             })
-        
+
         total_deposits = sum(d.amount for d in deposits if d.status == TransactionStatus.CONFIRMED.value)
         total_bonuses = sum(b.amount for b in bonuses if b.is_active)
-        
+
         return {
             "success": True,
             "user": f"@{user.username}" if user.username else f"ID:{user.telegram_id}",
@@ -524,50 +524,50 @@ class AIUsersService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         # Total users
         total_stmt = select(func.count(User.id))
         total_result = await self.session.execute(total_stmt)
         total_users = total_result.scalar() or 0
-        
+
         # Verified users (with wallet)
         verified_stmt = select(func.count(User.id)).where(
             User.wallet_address.isnot(None)
         )
         verified_result = await self.session.execute(verified_stmt)
         verified_users = verified_result.scalar() or 0
-        
+
         # Active depositors
         active_stmt = select(func.count(User.id)).where(
             User.total_deposited_usdt >= 30
         )
         active_result = await self.session.execute(active_stmt)
         active_depositors = active_result.scalar() or 0
-        
+
         # Banned users
         banned_stmt = select(func.count(User.id)).where(User.is_banned == True)
         banned_result = await self.session.execute(banned_stmt)
         banned_users = banned_result.scalar() or 0
-        
+
         # Total deposits
         deposits_stmt = select(func.sum(User.total_deposited_usdt))
         deposits_result = await self.session.execute(deposits_stmt)
         total_deposits = deposits_result.scalar() or Decimal("0")
-        
+
         # Total bonuses
         bonuses_stmt = select(func.sum(User.bonus_balance)).where(
             User.bonus_balance > 0
         )
         bonuses_result = await self.session.execute(bonuses_stmt)
         total_bonuses = bonuses_result.scalar() or Decimal("0")
-        
+
         # Users with bonuses
         with_bonus_stmt = select(func.count(User.id)).where(
             User.bonus_balance > 0
         )
         with_bonus_result = await self.session.execute(with_bonus_stmt)
         users_with_bonus = with_bonus_result.scalar() or 0
-        
+
         return {
             "success": True,
             "stats": {

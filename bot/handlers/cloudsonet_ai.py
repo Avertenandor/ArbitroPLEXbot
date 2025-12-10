@@ -60,14 +60,14 @@ _Спасибо за обращение!_"""
 def save_message(admin_id: int, admin_name: str, message: str) -> int:
     """Сохранить сообщение от админа."""
     MESSAGES_FILE.parent.mkdir(parents=True, exist_ok=True)
-    
+
     messages = []
     if MESSAGES_FILE.exists():
         try:
             messages = json.loads(MESSAGES_FILE.read_text())
         except Exception:
             messages = []
-    
+
     messages.append({
         "timestamp": datetime.now().isoformat(),
         "admin_id": admin_id,
@@ -75,7 +75,7 @@ def save_message(admin_id: int, admin_name: str, message: str) -> int:
         "message": message,
         "read": False,
     })
-    
+
     MESSAGES_FILE.write_text(json.dumps(messages, ensure_ascii=False, indent=2))
     return len([m for m in messages if not m.get("read")])
 
@@ -84,7 +84,7 @@ def save_message(admin_id: int, admin_name: str, message: str) -> int:
 async def handle_ai_command(message: Message):
     """Обработка команды /ai для взаимодействия с CloudSonet 4.5."""
     user_id = message.from_user.id
-    
+
     # Проверка что пользователь - админ
     if user_id not in ADMIN_IDS:
         await message.answer(
@@ -92,7 +92,7 @@ async def handle_ai_command(message: Message):
             parse_mode="Markdown"
         )
         return
-    
+
     # Получаем текст после /ai
     text = message.text
     if text.startswith("/ai "):
@@ -101,17 +101,17 @@ async def handle_ai_command(message: Message):
         text = ""
     else:
         text = text.replace("/ai", "").strip()
-    
+
     # Если пустое сообщение - показываем справку
     if not text:
         await message.answer(HELP_TEXT, parse_mode="Markdown")
         return
-    
+
     # Обработка специальных команд
     if text.lower() in ("help", "помощь", "?"):
         await message.answer(HELP_TEXT, parse_mode="Markdown")
         return
-    
+
     if text.lower() in ("status", "статус"):
         save_message(
             user_id,
@@ -120,11 +120,11 @@ async def handle_ai_command(message: Message):
         )
         await message.answer(STATUS_TEXT, parse_mode="Markdown")
         return
-    
+
     # Сохраняем обычное сообщение
     admin_name = message.from_user.full_name or message.from_user.username or str(user_id)
     unread_count = save_message(user_id, admin_name, text)
-    
+
     await message.answer(
         f"✅ *Сообщение принято*\n\n"
         f"Ваше сообщение сохранено и будет обработано CloudSonet 4.5.\n\n"

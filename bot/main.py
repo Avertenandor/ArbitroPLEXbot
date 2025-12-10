@@ -153,7 +153,6 @@ async def main() -> None:  # noqa: C901
         logger.warning(f"Failed to start health check server: {e}")
 
     # Graceful shutdown event
-    shutdown_event = asyncio.Event()
 
     try:
         logger.info("Starting polling...")

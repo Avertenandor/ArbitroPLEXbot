@@ -6,8 +6,13 @@ Provides utilities for working with blockchain blocks.
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from typing import TYPE_CHECKING
 
 from web3 import Web3
+
+if TYPE_CHECKING:
+    from app.services.blockchain.rpc_rate_limiter import RPCRateLimiter
+    from app.services.blockchain.sync_provider_manager import SyncProviderManager
 
 
 class BlockOperations:

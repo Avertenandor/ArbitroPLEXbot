@@ -7,6 +7,7 @@ including ROI cap enforcement, user status validation, and statistical aggregati
 
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from loguru import logger
 from sqlalchemy import case, func, select
@@ -21,6 +22,9 @@ from app.repositories.deposit_repository import DepositRepository
 from app.repositories.deposit_reward_repository import DepositRewardRepository
 from app.repositories.reward_session_repository import RewardSessionRepository
 from app.services.reward.reward_calculator import RewardCalculator
+
+if TYPE_CHECKING:
+    from app.services.reward.reward_balance_handler import RewardBalanceHandler
 
 
 class SessionRewardProcessor:

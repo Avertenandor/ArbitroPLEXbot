@@ -124,7 +124,7 @@ class BlockchainRealtimeSyncService:
         """
         try:
             user_wallet_lower = user_wallet.lower()
-            
+
             result = await self.session.execute(
                 select(BlockchainTxCache)
                 .where(
@@ -244,11 +244,11 @@ class BlockchainRealtimeSyncService:
             return 0
 
         state = await self.get_or_create_sync_state(token_type)
-        
+
         current_block = self.w3.eth.block_number
         from_block = state.last_synced_block + 1 if state.last_synced_block > 0 else current_block - 100
         to_block = min(from_block + max_blocks, current_block)
-        
+
         if from_block >= current_block:
             logger.debug(f"[RT Sync] {token_type}: Already synced to current block")
             return 0
@@ -379,7 +379,7 @@ class BlockchainRealtimeSyncService:
             Number of transactions linked
         """
         wallet_lower = wallet_address.lower()
-        
+
         # Find all transactions from/to this wallet that aren't linked
         result = await self.session.execute(
             select(BlockchainTxCache)

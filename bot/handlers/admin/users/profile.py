@@ -154,7 +154,7 @@ async def show_user_profile(
         f"• Всего внесено: `{user.total_deposited_usdt:.2f} USDT`\n"
         f"• Статус: {user.deposit_status_text}\n"
     )
-    
+
     # Show PLEX breakdown - every dollar requires 10 PLEX/day
     if bonus_balance > 0:
         text += (
@@ -163,7 +163,7 @@ async def show_user_profile(
         )
     else:
         text += f"• PLEX в сутки: `{total_plex:,}`\n"
-    
+
     text += f"• Транзакций: `{user.deposit_tx_count}`\n"
 
     # Add last scan date

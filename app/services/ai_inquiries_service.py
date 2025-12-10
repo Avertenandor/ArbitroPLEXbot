@@ -39,7 +39,7 @@ class AIInquiriesService:
     ):
         self.session = session
         self.admin_data = admin_data or {}
-        
+
         # Extract admin info for security logging
         self.admin_telegram_id = self.admin_data.get("ID")
         self.admin_username = (
@@ -50,24 +50,24 @@ class AIInquiriesService:
         """Verify admin credentials from session data."""
         if not self.admin_telegram_id:
             return None, "❌ ОШИБКА БЕЗОПАСНОСТИ: Не удалось определить администратора"
-        
+
         admin_repo = AdminRepository(self.session)
         admin = await admin_repo.get_by_telegram_id(self.admin_telegram_id)
-        
+
         if not admin:
             logger.warning(
                 f"AI INQUIRIES SECURITY: Unauthorized attempt "
                 f"from telegram_id={self.admin_telegram_id}"
             )
             return None, "❌ ОШИБКА БЕЗОПАСНОСТИ: Администратор не найден"
-        
+
         if admin.is_blocked:
             logger.warning(
                 f"AI INQUIRIES SECURITY: Blocked admin attempt: "
                 f"{admin.telegram_id} (@{admin.username})"
             )
             return None, "❌ ОШИБКА: Администратор заблокирован"
-        
+
         return admin, None
 
     async def get_inquiries_list(
@@ -89,7 +89,7 @@ class AIInquiriesService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         # Build query with relationships
         stmt = (
             select(UserInquiry)
@@ -98,7 +98,7 @@ class AIInquiriesService:
             .order_by(UserInquiry.created_at.desc())
             .limit(limit)
         )
-        
+
         if status:
             valid_statuses = ["new", "in_progress", "closed"]
             if status.lower() not in valid_statuses:
@@ -107,10 +107,10 @@ class AIInquiriesService:
                     "error": f"❌ Неверный статус. Допустимые: {', '.join(valid_statuses)}"
                 }
             stmt = stmt.where(UserInquiry.status == status.lower())
-        
+
         result = await self.session.execute(stmt)
         inquiries = list(result.scalars().unique().all())
-        
+
         if not inquiries:
             status_text = f" со статусом '{status}'" if status else ""
             return {
@@ -118,7 +118,7 @@ class AIInquiriesService:
                 "inquiries": [],
                 "message": f"ℹ️ Обращений{status_text} не найдено"
             }
-        
+
         # Format inquiries
         inquiries_list = []
         for inq in inquiries:
@@ -130,7 +130,7 @@ class AIInquiriesService:
                     if inq.user.username
                     else f"ID:{inq.user.telegram_id}"
                 )
-            
+
             # Get admin info
             admin_info = None
             if inq.assigned_admin:
@@ -139,13 +139,13 @@ class AIInquiriesService:
                     if inq.assigned_admin.username
                     else f"Admin#{inq.assigned_admin_id}"
                 )
-            
+
             status_emoji = {
                 "new": "🆕",
                 "in_progress": "🔵",
                 "closed": "✅"
             }.get(inq.status, "⚪")
-            
+
             inquiries_list.append({
                 "id": inq.id,
                 "user": user_info,
@@ -162,7 +162,7 @@ class AIInquiriesService:
                     if inq.created_at else "—"
                 ),
             })
-        
+
         # Count by status
         count_stmt = (
             select(UserInquiry.status, func.count(UserInquiry.id))
@@ -170,7 +170,7 @@ class AIInquiriesService:
         )
         count_result = await self.session.execute(count_stmt)
         counts = {row[0]: row[1] for row in count_result.all()}
-        
+
         return {
             "success": True,
             "total_count": len(inquiries_list),
@@ -200,7 +200,7 @@ class AIInquiriesService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         # Get inquiry with relationships
         stmt = (
             select(UserInquiry)
@@ -211,13 +211,13 @@ class AIInquiriesService:
         )
         result = await self.session.execute(stmt)
         inquiry = result.scalar_one_or_none()
-        
+
         if not inquiry:
             return {
                 "success": False,
                 "error": f"❌ Обращение ID {inquiry_id} не найдено"
             }
-        
+
         # Get user info
         user_info = "Неизвестен"
         if inquiry.user:
@@ -226,7 +226,7 @@ class AIInquiriesService:
                 if inquiry.user.username
                 else f"ID:{inquiry.user.telegram_id}"
             )
-        
+
         # Get admin info
         admin_info = None
         if inquiry.assigned_admin:
@@ -235,13 +235,13 @@ class AIInquiriesService:
                 if inquiry.assigned_admin.username
                 else f"Admin#{inquiry.assigned_admin_id}"
             )
-        
+
         status_emoji = {
             "new": "🆕 Новое",
             "in_progress": "🔵 В работе",
             "closed": "✅ Закрыто"
         }.get(inquiry.status, inquiry.status)
-        
+
         # Format messages
         messages_list = []
         for msg in (inquiry.messages or []):
@@ -251,7 +251,7 @@ class AIInquiriesService:
                 "text": msg.message_text[:200] + ("..." if len(msg.message_text) > 200 else ""),
                 "time": msg.created_at.strftime("%d.%m %H:%M") if msg.created_at else "—",
             })
-        
+
         return {
             "success": True,
             "inquiry": {
@@ -297,7 +297,7 @@ class AIInquiriesService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         # Get inquiry
         stmt = (
             select(UserInquiry)
@@ -306,32 +306,32 @@ class AIInquiriesService:
         )
         result = await self.session.execute(stmt)
         inquiry = result.scalar_one_or_none()
-        
+
         if not inquiry:
             return {
                 "success": False,
                 "error": f"❌ Обращение ID {inquiry_id} не найдено"
             }
-        
+
         if inquiry.status == InquiryStatus.CLOSED:
             return {
                 "success": False,
                 "error": "❌ Это обращение уже закрыто"
             }
-        
+
         if inquiry.assigned_admin_id and inquiry.assigned_admin_id != admin.id:
             return {
                 "success": False,
-                "error": f"❌ Обращение уже назначено другому админу"
+                "error": "❌ Обращение уже назначено другому админу"
             }
-        
+
         # Assign to admin
         inquiry.status = InquiryStatus.IN_PROGRESS
         inquiry.assigned_admin_id = admin.id
         inquiry.assigned_at = datetime.now(UTC)
-        
+
         await self.session.commit()
-        
+
         # Get user info
         user_info = "Неизвестен"
         if inquiry.user:
@@ -340,12 +340,12 @@ class AIInquiriesService:
                 if inquiry.user.username
                 else f"ID:{inquiry.user.telegram_id}"
             )
-        
+
         logger.info(
             f"AI INQUIRIES: Admin {admin.telegram_id} (@{admin.username}) "
             f"took inquiry {inquiry_id} from {user_info}"
         )
-        
+
         return {
             "success": True,
             "inquiry_id": inquiry_id,
@@ -376,16 +376,16 @@ class AIInquiriesService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         if not bot:
             return {"success": False, "error": "❌ Бот не инициализирован"}
-        
+
         if not message or len(message) < 3:
             return {
                 "success": False,
                 "error": "❌ Сообщение должно содержать минимум 3 символа"
             }
-        
+
         # Get inquiry
         stmt = (
             select(UserInquiry)
@@ -394,25 +394,25 @@ class AIInquiriesService:
         )
         result = await self.session.execute(stmt)
         inquiry = result.scalar_one_or_none()
-        
+
         if not inquiry:
             return {
                 "success": False,
                 "error": f"❌ Обращение ID {inquiry_id} не найдено"
             }
-        
+
         if inquiry.status == InquiryStatus.CLOSED:
             return {
                 "success": False,
                 "error": "❌ Нельзя ответить на закрытое обращение"
             }
-        
+
         # Auto-assign if not assigned
         if not inquiry.assigned_admin_id:
             inquiry.status = InquiryStatus.IN_PROGRESS
             inquiry.assigned_admin_id = admin.id
             inquiry.assigned_at = datetime.now(UTC)
-        
+
         # Create message record
         new_message = InquiryMessage(
             inquiry_id=inquiry_id,
@@ -422,9 +422,9 @@ class AIInquiriesService:
             created_at=datetime.now(UTC),
         )
         self.session.add(new_message)
-        
+
         await self.session.commit()
-        
+
         # Send message to user
         admin_name = f"@{admin.username}" if admin.username else "Администратор"
         formatted_message = (
@@ -434,7 +434,7 @@ class AIInquiriesService:
             f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"_От: {admin_name}_"
         )
-        
+
         try:
             await bot.send_message(
                 chat_id=inquiry.telegram_id,
@@ -447,7 +447,7 @@ class AIInquiriesService:
                 "success": False,
                 "error": f"❌ Не удалось отправить: {str(e)}"
             }
-        
+
         # Get user info
         user_info = "Неизвестен"
         if inquiry.user:
@@ -456,12 +456,12 @@ class AIInquiriesService:
                 if inquiry.user.username
                 else f"ID:{inquiry.user.telegram_id}"
             )
-        
+
         logger.info(
             f"AI INQUIRIES: Admin {admin.telegram_id} replied to "
             f"inquiry {inquiry_id}: {message[:50]}..."
         )
-        
+
         return {
             "success": True,
             "inquiry_id": inquiry_id,
@@ -489,7 +489,7 @@ class AIInquiriesService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         # Get inquiry
         stmt = (
             select(UserInquiry)
@@ -498,24 +498,24 @@ class AIInquiriesService:
         )
         result = await self.session.execute(stmt)
         inquiry = result.scalar_one_or_none()
-        
+
         if not inquiry:
             return {
                 "success": False,
                 "error": f"❌ Обращение ID {inquiry_id} не найдено"
             }
-        
+
         if inquiry.status == InquiryStatus.CLOSED:
             return {
                 "success": False,
                 "error": "❌ Обращение уже закрыто"
             }
-        
+
         # Close inquiry
         inquiry.status = InquiryStatus.CLOSED
         inquiry.closed_at = datetime.now(UTC)
         inquiry.closed_by = "admin"
-        
+
         # Add closing message if reason provided
         if reason:
             new_message = InquiryMessage(
@@ -526,9 +526,9 @@ class AIInquiriesService:
                 created_at=datetime.now(UTC),
             )
             self.session.add(new_message)
-        
+
         await self.session.commit()
-        
+
         # Get user info
         user_info = "Неизвестен"
         if inquiry.user:
@@ -537,12 +537,12 @@ class AIInquiriesService:
                 if inquiry.user.username
                 else f"ID:{inquiry.user.telegram_id}"
             )
-        
+
         logger.info(
             f"AI INQUIRIES: Admin {admin.telegram_id} closed "
             f"inquiry {inquiry_id}: {reason or 'no reason'}"
         )
-        
+
         return {
             "success": True,
             "inquiry_id": inquiry_id,

@@ -31,7 +31,7 @@ class BlockchainSyncState(Base):
     token_type: Mapped[str] = mapped_column(
         String(20), nullable=False, unique=True, index=True
     )  # USDT, PLEX, BNB
-    
+
     # Sync range
     first_synced_block: Mapped[int] = mapped_column(
         BigInteger, nullable=False, default=0
@@ -39,7 +39,7 @@ class BlockchainSyncState(Base):
     last_synced_block: Mapped[int] = mapped_column(
         BigInteger, nullable=False, default=0, index=True
     )
-    
+
     # Statistics
     total_transactions: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0
@@ -50,7 +50,7 @@ class BlockchainSyncState(Base):
     outgoing_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0
     )
-    
+
     # Full sync status
     full_sync_completed: Mapped[bool] = mapped_column(
         default=False, nullable=False
@@ -61,7 +61,7 @@ class BlockchainSyncState(Base):
     full_sync_completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    
+
     # Error tracking
     last_error: Mapped[str | None] = mapped_column(
         Text, nullable=True
@@ -69,7 +69,7 @@ class BlockchainSyncState(Base):
     error_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0
     )
-    
+
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

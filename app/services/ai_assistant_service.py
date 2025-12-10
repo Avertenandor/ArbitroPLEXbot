@@ -1122,7 +1122,7 @@ class AIAssistantService:
         self.api_key = api_key
         self.client = None
         self.model = "claude-sonnet-4-20250514"  # Latest Claude Sonnet
-        
+
         if api_key and ANTHROPIC_AVAILABLE:
             try:
                 self.client = anthropic.Anthropic(api_key=api_key)
@@ -1143,7 +1143,7 @@ class AIAssistantService:
         # Tech deputy ID: 1691026253 (@AI_XAN)
         if telegram_id == 1691026253:
             return SYSTEM_PROMPT_TECH_DEPUTY
-        
+
         # Fallback to username only if telegram_id not provided (backwards compat)
         if telegram_id is None and username and username.replace("@", "") in TECH_DEPUTIES:
             logger.warning(
@@ -1286,7 +1286,7 @@ class AIAssistantService:
             # Extract text response
             if response.content and len(response.content) > 0:
                 return response.content[0].text
-            
+
             return "🤖 Не удалось получить ответ. Попробуйте переформулировать вопрос."
 
         except anthropic.APIConnectionError:
@@ -1333,7 +1333,7 @@ class AIAssistantService:
             "plex": "Объясни кратко зачем нужны токены PLEX",
             "roi": "Объясни кратко как начисляется доход",
         }
-        
+
         prompt = prompts.get(topic, f"Дай краткую справку по теме: {topic}")
         return await self.chat(prompt, role=role)
 
@@ -1596,7 +1596,7 @@ class AIAssistantService:
         """Get tool definitions for broadcasting based on role."""
         # Admins can't broadcast to "all" - only specific groups
         is_commander = role == UserRole.SUPER_ADMIN
-        
+
         # Groups available for broadcast
         if is_commander:
             broadcast_groups = ["active_appeals", "active_deposits", "active_24h", "active_7d", "all"]
@@ -1605,7 +1605,7 @@ class AIAssistantService:
             # Admins limited to specific groups, no "all"
             broadcast_groups = ["active_appeals", "active_deposits", "active_24h", "active_7d"]
             default_limit = 50  # Lower limit for admins
-        
+
         return [
             {
                 "name": "send_message_to_user",
@@ -2884,12 +2884,12 @@ class AIAssistantService:
         referral_service = AIReferralService(session, admin_data)
         logs_service = AILogsService(session, admin_data)
         settings_service = AISettingsService(session, admin_data)
-        
+
         # Get rate limiter for tool execution
         from app.services.aria_security_defense import get_rate_limiter
         rate_limiter = get_rate_limiter()
         admin_id = admin_data.get("ID") if admin_data else 0
-        
+
         results = []
 
         for block in content:
@@ -2897,7 +2897,7 @@ class AIAssistantService:
                 tool_name = block.name
                 tool_input = block.input
                 tool_id = block.id
-                
+
                 # Check rate limit before execution
                 allowed, limit_msg = rate_limiter.check_limit(admin_id, tool_name)
                 if not allowed:
@@ -3075,7 +3075,7 @@ class AIAssistantService:
                     ):
                         from app.services.ai_system_service import AISystemService
                         system_service = AISystemService(session, admin_data)
-                        
+
                         if tool_name == "get_emergency_status":
                             result = await system_service.get_emergency_status()
                         elif tool_name == "emergency_full_stop":
@@ -3115,7 +3115,7 @@ class AIAssistantService:
                     ):
                         from app.services.ai_admin_management_service import AIAdminManagementService
                         admin_mgmt_service = AIAdminManagementService(session, admin_data)
-                        
+
                         if tool_name == "get_admins_list":
                             result = await admin_mgmt_service.get_admins_list()
                         elif tool_name == "get_admin_details":
@@ -3305,7 +3305,7 @@ class AIAssistantService:
                         "create_admin", "delete_admin"
                     ):
                         from decimal import Decimal
-                        
+
                         if tool_name == "get_withdrawal_settings":
                             result = await settings_service.get_withdrawal_settings()
                         elif tool_name == "set_min_withdrawal":
@@ -3369,11 +3369,11 @@ class AIAssistantService:
                             AdminSecurityService, username_similarity, VERIFIED_ADMIN_IDS
                         )
                         security_service = AdminSecurityService(session)
-                        
+
                         if tool_name == "check_username_spoofing":
                             username = tool_input["username"].lstrip("@")
                             telegram_id = tool_input.get("telegram_id", 0)
-                            
+
                             # Check against all verified admins
                             warnings = []
                             for admin_id, admin_info in VERIFIED_ADMIN_IDS.items():
@@ -3386,7 +3386,7 @@ class AIAssistantService:
                                         f"{level}: @{username} похож на админа "
                                         f"@{admin_info['username']} ({sim*100:.0f}%)"
                                     )
-                            
+
                             if warnings:
                                 result = (
                                     f"🔍 **Проверка безопасности: @{username}**\n\n"
@@ -3395,7 +3395,7 @@ class AIAssistantService:
                                 )
                             else:
                                 result = f"✅ @{username} не похож ни на одного верифицированного админа"
-                        
+
                         elif tool_name == "get_verified_admins":
                             admins = await security_service.get_all_verified_admins()
                             lines = ["🛡️ **Верифицированные администраторы:**\n"]
@@ -3405,15 +3405,15 @@ class AIAssistantService:
                                     f"  Роль: {a['role']}, Имя: {a['name']}"
                                 )
                             result = "\n".join(lines)
-                        
+
                         elif tool_name == "verify_admin_identity":
                             telegram_id = tool_input["telegram_id"]
                             username = tool_input.get("username")
-                            
+
                             verification = await security_service.verify_admin_identity(
                                 telegram_id, username
                             )
-                            
+
                             if verification["is_verified_admin"]:
                                 info = verification["admin_info"]
                                 result = (
@@ -3447,7 +3447,7 @@ class AIAssistantService:
 
                     # Record tool usage for rate limiting
                     rate_limiter.record_usage(admin_id, tool_name)
-                    
+
                     # Log with admin ID for audit
                     logger.info(
                         f"ARIA tool executed: admin={admin_id} tool='{tool_name}' "

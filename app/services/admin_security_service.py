@@ -78,17 +78,17 @@ def normalize_username(username: str) -> str:
     """
     if not username:
         return ""
-    
+
     result = username.lower()
-    
+
     # Replace homoglyphs
     for base_char, similar_chars in HOMOGLYPHS.items():
         for similar in similar_chars:
             result = result.replace(similar.lower(), base_char.lower())
-    
+
     # Remove special characters
     result = re.sub(r'[^a-z0-9]', '', result)
-    
+
     return result
 
 
@@ -120,22 +120,22 @@ def username_similarity(username1: str, username2: str) -> float:
     """
     if not username1 or not username2:
         return 0.0
-    
+
     # Normalize both usernames
     norm1 = normalize_username(username1)
     norm2 = normalize_username(username2)
-    
+
     if norm1 == norm2:
         return 1.0
-    
+
     # Calculate Levenshtein distance on normalized versions
     max_len = max(len(norm1), len(norm2))
     if max_len == 0:
         return 0.0
-    
+
     distance = levenshtein_distance(norm1, norm2)
     similarity = 1.0 - (distance / max_len)
-    
+
     return similarity
 
 
@@ -164,7 +164,7 @@ class AdminSecurityService:
             "spoofing_detected": False,
             "similar_to_admin": None,
         }
-        
+
         # Check if telegram_id is in verified admin list
         if telegram_id in VERIFIED_ADMIN_IDS:
             admin_info = VERIFIED_ADMIN_IDS[telegram_id]
@@ -175,7 +175,7 @@ class AdminSecurityService:
                 "role": admin_info["role"],
                 "name": admin_info["name"],
             }
-            
+
             # Check if username matches expected
             if username:
                 expected = admin_info["username"].lower()
@@ -197,13 +197,13 @@ class AdminSecurityService:
                     result["spoofing_detected"] = True
                     result["similar_to_admin"] = spoof_check["similar_to"]
                     result["warnings"].append(spoof_check["warning"])
-                    
+
                     logger.error(
                         f"🚨 SPOOFING ATTEMPT DETECTED! "
                         f"User {telegram_id} (@{username}) trying to impersonate "
                         f"admin @{spoof_check['similar_to']}"
                     )
-        
+
         return result
 
     def _check_username_spoofing(
@@ -218,15 +218,15 @@ class AdminSecurityService:
             "similarity": 0.0,
             "warning": None,
         }
-        
+
         # Check against all known admin usernames
         for admin_id, admin_info in VERIFIED_ADMIN_IDS.items():
             if admin_id == telegram_id:
                 continue  # Skip self
-            
+
             admin_username = admin_info["username"]
             similarity = username_similarity(username, admin_username)
-            
+
             # Threshold for spoofing detection
             # 0.7 = 70% similarity triggers warning
             # 0.9 = 90% similarity is almost certain spoofing
@@ -234,7 +234,7 @@ class AdminSecurityService:
                 result["is_spoofing"] = True
                 result["similar_to"] = admin_username
                 result["similarity"] = similarity
-                
+
                 if similarity >= 0.9:
                     result["warning"] = (
                         f"🚨 КРИТИЧНО: Username @{username} почти идентичен "
@@ -246,7 +246,7 @@ class AdminSecurityService:
                         f"админа @{admin_username} (сходство: {similarity*100:.0f}%)"
                     )
                 break
-        
+
         return result
 
     async def get_all_verified_admins(self) -> list[dict[str, Any]]:
@@ -269,12 +269,12 @@ class AdminSecurityService:
         """
         if not username:
             return None
-        
+
         verification = await self.verify_admin_identity(telegram_id, username)
-        
+
         if verification["spoofing_detected"]:
             return verification["warnings"][0] if verification["warnings"] else None
-        
+
         return None
 
     def format_secure_admin_display(
@@ -288,11 +288,11 @@ class AdminSecurityService:
         if telegram_id in VERIFIED_ADMIN_IDS:
             admin_info = VERIFIED_ADMIN_IDS[telegram_id]
             return f"✅ @{admin_info['username']} (ID: {telegram_id})"
-        
+
         # Unknown user - show with warning
         if username:
             return f"❓ @{username} (ID: {telegram_id}) [НЕ ВЕРИФИЦИРОВАН]"
-        
+
         return f"❓ ID: {telegram_id} [НЕ ВЕРИФИЦИРОВАН]"
 
 
@@ -323,7 +323,7 @@ def test_similarity():
         ("VladarevInvestBrok", "V1adarevInvestBrok", "l vs 1"),
         ("natder", "nаtder", "Cyrillic а"),  # а is Cyrillic!
     ]
-    
+
     print("Username Similarity Tests:")
     print("-" * 60)
     for original, spoofed, description in test_cases:

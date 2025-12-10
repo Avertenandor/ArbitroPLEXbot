@@ -161,11 +161,6 @@ async def process_tx_hash(
         },
     )
 
-    # Get system wallet address
-    from app.config.settings import settings
-
-    system_wallet = settings.system_wallet_address
-
     # Show deposit created confirmation
     confirmation_text = (
         f"✅ **Депозит создан!**\n\n"

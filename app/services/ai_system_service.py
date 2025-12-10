@@ -59,13 +59,13 @@ class AISystemService:
         """Verify admin credentials."""
         if not self.admin_telegram_id:
             return None, "❌ Не удалось определить администратора"
-        
+
         admin_repo = AdminRepository(self.session)
         admin = await admin_repo.get_by_telegram_id(self.admin_telegram_id)
-        
+
         if not admin or admin.is_blocked:
             return None, "❌ Администратор не найден или заблокирован"
-        
+
         return admin, None
 
     def _is_super_admin(self) -> bool:
@@ -90,13 +90,13 @@ class AISystemService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         if not self._is_trusted_admin():
             return {"success": False, "error": "❌ Нет доступа к системным настройкам"}
-        
+
         repo = GlobalSettingsRepository(self.session)
         settings = await repo.get_settings()
-        
+
         return {
             "success": True,
             "emergency_status": {
@@ -124,7 +124,7 @@ class AISystemService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         if not self._is_super_admin():
             logger.warning(
                 f"AI SYSTEM SECURITY: Non-superadmin {self.admin_telegram_id} "
@@ -134,17 +134,17 @@ class AISystemService:
                 "success": False,
                 "error": "❌ ТОЛЬКО БОСС может управлять аварийными стопами!"
             }
-        
+
         repo = GlobalSettingsRepository(self.session)
         await repo.update_settings(emergency_stop_deposits=enable_stop)
         await self.session.commit()
-        
+
         action = "ОСТАНОВЛЕНЫ" if enable_stop else "ЗАПУЩЕНЫ"
         logger.warning(
             f"AI SYSTEM: EMERGENCY - Deposits {action} by super_admin "
             f"{self.admin_telegram_id} (@{self.admin_username})"
         )
-        
+
         return {
             "success": True,
             "action": action,
@@ -161,7 +161,7 @@ class AISystemService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         if not self._is_super_admin():
             logger.warning(
                 f"AI SYSTEM SECURITY: Non-superadmin {self.admin_telegram_id} "
@@ -171,17 +171,17 @@ class AISystemService:
                 "success": False,
                 "error": "❌ ТОЛЬКО БОСС может управлять аварийными стопами!"
             }
-        
+
         repo = GlobalSettingsRepository(self.session)
         await repo.update_settings(emergency_stop_withdrawals=enable_stop)
         await self.session.commit()
-        
+
         action = "ОСТАНОВЛЕНЫ" if enable_stop else "ЗАПУЩЕНЫ"
         logger.warning(
             f"AI SYSTEM: EMERGENCY - Withdrawals {action} by super_admin "
             f"{self.admin_telegram_id} (@{self.admin_username})"
         )
-        
+
         return {
             "success": True,
             "action": action,
@@ -198,7 +198,7 @@ class AISystemService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         if not self._is_super_admin():
             logger.warning(
                 f"AI SYSTEM SECURITY: Non-superadmin {self.admin_telegram_id} "
@@ -208,17 +208,17 @@ class AISystemService:
                 "success": False,
                 "error": "❌ ТОЛЬКО БОСС может управлять аварийными стопами!"
             }
-        
+
         repo = GlobalSettingsRepository(self.session)
         await repo.update_settings(emergency_stop_roi=enable_stop)
         await self.session.commit()
-        
+
         action = "ОСТАНОВЛЕНО" if enable_stop else "ЗАПУЩЕНО"
         logger.warning(
             f"AI SYSTEM: EMERGENCY - ROI {action} by super_admin "
             f"{self.admin_telegram_id} (@{self.admin_username})"
         )
-        
+
         return {
             "success": True,
             "action": action,
@@ -235,13 +235,13 @@ class AISystemService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         if not self._is_super_admin():
             return {
                 "success": False,
                 "error": "❌ ТОЛЬКО БОСС может выполнить полную остановку!"
             }
-        
+
         repo = GlobalSettingsRepository(self.session)
         await repo.update_settings(
             emergency_stop_deposits=True,
@@ -249,12 +249,12 @@ class AISystemService:
             emergency_stop_roi=True,
         )
         await self.session.commit()
-        
+
         logger.critical(
             f"AI SYSTEM: FULL EMERGENCY STOP activated by super_admin "
             f"{self.admin_telegram_id} (@{self.admin_username})"
         )
-        
+
         return {
             "success": True,
             "message": "🚨🚨🚨 ПОЛНАЯ ОСТАНОВКА АКТИВИРОВАНА!\n\n"
@@ -273,13 +273,13 @@ class AISystemService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         if not self._is_super_admin():
             return {
                 "success": False,
                 "error": "❌ ТОЛЬКО БОСС может возобновить все операции!"
             }
-        
+
         repo = GlobalSettingsRepository(self.session)
         await repo.update_settings(
             emergency_stop_deposits=False,
@@ -287,12 +287,12 @@ class AISystemService:
             emergency_stop_roi=False,
         )
         await self.session.commit()
-        
+
         logger.warning(
             f"AI SYSTEM: All operations RESUMED by super_admin "
             f"{self.admin_telegram_id} (@{self.admin_username})"
         )
-        
+
         return {
             "success": True,
             "message": "✅ ВСЕ ОПЕРАЦИИ ВОЗОБНОВЛЕНЫ!\n\n"
@@ -316,24 +316,24 @@ class AISystemService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         if not self._is_trusted_admin():
             return {"success": False, "error": "❌ Нет доступа к системным настройкам"}
-        
+
         try:
             from app.services.blockchain_service import get_blockchain_service
             bs = get_blockchain_service()
             await bs.force_refresh_settings()
-            
+
             status = await bs.get_providers_status()
-            
+
             providers_text = ""
             for name, data in status.items():
                 icon = "✅" if data.get("connected") else "❌"
                 active_mark = " 🔵" if data.get("active") else ""
                 block = data.get("block", "N/A")
                 providers_text += f"{icon} {name.upper()}{active_mark}: Block {block}\n"
-            
+
             return {
                 "success": True,
                 "blockchain": {
@@ -368,19 +368,19 @@ class AISystemService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         if not self._is_trusted_admin():
             return {"success": False, "error": "❌ Нет прав на переключение провайдера"}
-        
+
         provider = provider.lower().strip()
         valid_providers = ["quicknode", "nodereal", "nodereal2"]
-        
+
         if provider not in valid_providers:
             return {
                 "success": False,
                 "error": f"❌ Неверный провайдер. Допустимые: {', '.join(valid_providers)}"
             }
-        
+
         # NodeReal2 - only for super_admin
         if provider == "nodereal2" and not self._is_super_admin():
             logger.warning(
@@ -391,21 +391,21 @@ class AISystemService:
                 "success": False,
                 "error": "❌ NodeReal2 (резерв) доступен ТОЛЬКО Боссу!"
             }
-        
+
         try:
             from app.services.blockchain_service import get_blockchain_service
             repo = GlobalSettingsRepository(self.session)
             bs = get_blockchain_service()
-            
+
             await repo.update_settings(active_rpc_provider=provider)
             await self.session.commit()
             await bs.force_refresh_settings()
-            
+
             logger.info(
                 f"AI SYSTEM: RPC switched to {provider.upper()} by admin "
                 f"{self.admin_telegram_id} (@{self.admin_username})"
             )
-            
+
             return {
                 "success": True,
                 "provider": provider.upper(),
@@ -425,25 +425,25 @@ class AISystemService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         if not self._is_trusted_admin():
             return {"success": False, "error": "❌ Нет прав на изменение настроек"}
-        
+
         try:
             from app.services.blockchain_service import get_blockchain_service
             repo = GlobalSettingsRepository(self.session)
             bs = get_blockchain_service()
-            
+
             await repo.update_settings(rpc_auto_switch=enable)
             await self.session.commit()
             await bs.force_refresh_settings()
-            
+
             status = "включено" if enable else "выключено"
             logger.info(
                 f"AI SYSTEM: RPC auto-switch {status} by admin "
                 f"{self.admin_telegram_id} (@{self.admin_username})"
             )
-            
+
             return {
                 "success": True,
                 "auto_switch": enable,
@@ -467,13 +467,13 @@ class AISystemService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         if not self._is_trusted_admin():
             return {"success": False, "error": "❌ Нет доступа к настройкам"}
-        
+
         repo = GlobalSettingsRepository(self.session)
         settings = await repo.get_settings()
-        
+
         return {
             "success": True,
             "settings": {
@@ -502,37 +502,37 @@ class AISystemService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         if not self._is_trusted_admin():
             return {"success": False, "error": "❌ Нет доступа к мониторингу"}
-        
+
         health = {
             "database": "✅ OK",
             "blockchain": "⏳ Проверяем...",
             "redis": "✅ OK",
             "scheduler": "✅ OK",
         }
-        
+
         # Check blockchain
         try:
             from app.services.blockchain_service import get_blockchain_service
             bs = get_blockchain_service()
             status = await bs.get_providers_status()
-            
+
             active_ok = False
             for name, data in status.items():
                 if data.get("active") and data.get("connected"):
                     active_ok = True
                     break
-            
+
             health["blockchain"] = "✅ OK" if active_ok else "⚠️ Проблемы с RPC"
         except Exception as e:
             health["blockchain"] = f"❌ Ошибка: {str(e)[:50]}"
-        
+
         # Overall status
         has_errors = any("❌" in v or "⚠️" in v for v in health.values())
         overall = "⚠️ ЕСТЬ ПРОБЛЕМЫ" if has_errors else "✅ ВСЁ В НОРМЕ"
-        
+
         return {
             "success": True,
             "health": health,

@@ -54,7 +54,7 @@ async def show_deposit_menu(
     # Build text with statuses and corridors
     text = "💰 *Выберите уровень депозита:*\n\n"
     text += "_Депозиты открываются последовательно, начиная с тестового._\n\n"
-    
+
     # All levels including test (0)
     for level in [0, 1, 2, 3, 4, 5]:
         if level in levels_status:
@@ -78,7 +78,7 @@ async def show_deposit_menu(
                     text += f"✅ {display_name}: `{corridor}` - Уже куплен\n"
                 else:
                     text += f"🔒 {display_name}: `{corridor}`\n"
-    
+
     text += "\n_📋 Правило PLEX: 10 монет за каждый $1 депозита ежедневно._"
 
     logger.info(f"[MENU] Sending deposit menu response to user {telegram_id}")

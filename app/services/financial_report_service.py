@@ -110,19 +110,19 @@ class PlatformFinancialStatsDTO:
     total_users: int
     verified_users: int
     users_with_deposits: int
-    
+
     # Deposit stats
     total_deposits_count: int
     total_deposited_amount: Decimal
     active_deposits_count: int
     active_deposits_amount: Decimal
-    
+
     # Withdrawal stats
     total_withdrawals_count: int
     total_withdrawn_amount: Decimal
     pending_withdrawals_count: int
     pending_withdrawals_amount: Decimal
-    
+
     # Earnings stats
     total_roi_paid: Decimal
     total_pending_balance: Decimal
@@ -147,14 +147,14 @@ class FinancialReportService:
         # User statistics
         total_users_stmt = select(func.count(User.id))
         total_users = (await self.session.execute(total_users_stmt)).scalar() or 0
-        
+
         verified_users_stmt = select(func.count(User.id)).where(User.is_verified.is_(True))
         verified_users = (await self.session.execute(verified_users_stmt)).scalar() or 0
-        
+
         # Users with deposits
         users_with_deposits_stmt = select(func.count(func.distinct(Deposit.user_id)))
         users_with_deposits = (await self.session.execute(users_with_deposits_stmt)).scalar() or 0
-        
+
         # Deposit statistics
         deposit_stats_stmt = select(
             func.count(Deposit.id).label('total_count'),
@@ -162,14 +162,14 @@ class FinancialReportService:
             func.coalesce(func.sum(Deposit.roi_paid_amount), 0).label('total_roi_paid'),
         )
         deposit_stats = (await self.session.execute(deposit_stats_stmt)).one()
-        
+
         # Active deposits (not completed)
         active_deposits_stmt = select(
             func.count(Deposit.id).label('count'),
             func.coalesce(func.sum(Deposit.amount), 0).label('amount'),
         ).where(Deposit.is_roi_completed.is_(False))
         active_deposits = (await self.session.execute(active_deposits_stmt)).one()
-        
+
         # Withdrawal statistics - confirmed
         confirmed_wd_stmt = select(
             func.count(Transaction.id).label('count'),
@@ -179,7 +179,7 @@ class FinancialReportService:
             (Transaction.status == TransactionStatus.CONFIRMED)
         )
         confirmed_wd = (await self.session.execute(confirmed_wd_stmt)).one()
-        
+
         # Pending withdrawals
         pending_wd_stmt = select(
             func.count(Transaction.id).label('count'),
@@ -189,13 +189,13 @@ class FinancialReportService:
             (Transaction.status == TransactionStatus.PENDING)
         )
         pending_wd = (await self.session.execute(pending_wd_stmt)).one()
-        
+
         # Total pending balance across all users
         pending_balance_stmt = select(
             func.coalesce(func.sum(User.balance), 0)
         )
         total_pending_balance = (await self.session.execute(pending_balance_stmt)).scalar() or Decimal("0")
-        
+
         return PlatformFinancialStatsDTO(
             total_users=total_users,
             verified_users=verified_users,

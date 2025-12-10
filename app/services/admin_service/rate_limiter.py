@@ -191,7 +191,7 @@ class RateLimiter:
 
             # Create bot instance
             bot = Bot(token=settings.telegram_bot_token)
-            
+
             try:
                 notification_text = (
                     f"🚨 **Автоматическая блокировка**\n\n"

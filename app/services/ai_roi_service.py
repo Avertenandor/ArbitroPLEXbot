@@ -50,13 +50,13 @@ class AIRoiService:
         """Verify admin credentials."""
         if not self.admin_telegram_id:
             return None, "❌ Не удалось определить администратора"
-        
+
         admin_repo = AdminRepository(self.session)
         admin = await admin_repo.get_by_telegram_id(self.admin_telegram_id)
-        
+
         if not admin or admin.is_blocked:
             return None, "❌ Администратор не найден или заблокирован"
-        
+
         return admin, None
 
     def _is_trusted_admin(self) -> bool:
@@ -73,27 +73,27 @@ class AIRoiService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         settings_repo = GlobalSettingsRepository(self.session)
         settings = await settings_repo.get_settings()
-        
+
         levels_to_check = [level] if level else range(1, 6)
         configs = []
-        
+
         for lvl in levels_to_check:
             if lvl < 1 or lvl > 5:
                 continue
-                
+
             roi_mode = settings.roi_settings.get(f"LEVEL_{lvl}_ROI_MODE", "custom")
             roi_min = settings.roi_settings.get(f"LEVEL_{lvl}_ROI_MIN", "0.8")
             roi_max = settings.roi_settings.get(f"LEVEL_{lvl}_ROI_MAX", "10.0")
             roi_fixed = settings.roi_settings.get(f"LEVEL_{lvl}_ROI_FIXED", "5.0")
-            
+
             mode_desc = {
                 "custom": f"Коридор {roi_min}% - {roi_max}%",
                 "equal": f"Фиксированный {roi_fixed}%",
             }.get(roi_mode, roi_mode)
-            
+
             configs.append({
                 "level": lvl,
                 "mode": roi_mode,
@@ -102,11 +102,11 @@ class AIRoiService:
                 "roi_max": float(roi_max),
                 "roi_fixed": float(roi_fixed),
             })
-        
+
         return {
             "success": True,
             "configs": configs,
-            "message": f"📊 ROI конфигурация" + (f" уровня {level}" if level else " всех уровней")
+            "message": "📊 ROI конфигурация" + (f" уровня {level}" if level else " всех уровней")
         }
 
     async def set_roi_corridor(
@@ -134,20 +134,20 @@ class AIRoiService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         if not self._is_trusted_admin():
             logger.warning(
                 f"AI ROI SECURITY: Untrusted admin {self.admin_telegram_id} "
                 f"attempted to modify ROI corridor"
             )
             return {"success": False, "error": "❌ Нет прав на изменение ROI коридора"}
-        
+
         if level < 1 or level > 5:
             return {"success": False, "error": "❌ Уровень должен быть от 1 до 5"}
-        
+
         if mode not in ["custom", "equal"]:
             return {"success": False, "error": "❌ Режим должен быть 'custom' или 'equal'"}
-        
+
         if mode == "custom":
             if roi_min is None or roi_max is None:
                 return {"success": False, "error": "❌ Для режима custom укажите roi_min и roi_max"}
@@ -155,33 +155,33 @@ class AIRoiService:
                 return {"success": False, "error": "❌ ROI не может быть отрицательным"}
             if roi_min >= roi_max:
                 return {"success": False, "error": "❌ roi_min должен быть меньше roi_max"}
-        
+
         if mode == "equal":
             if roi_fixed is None:
                 return {"success": False, "error": "❌ Для режима equal укажите roi_fixed"}
             if roi_fixed < 0:
                 return {"success": False, "error": "❌ ROI не может быть отрицательным"}
-        
+
         settings_repo = GlobalSettingsRepository(self.session)
         settings = await settings_repo.get_settings()
-        
+
         # Save old values for logging
         old_mode = settings.roi_settings.get(f"LEVEL_{level}_ROI_MODE", "custom")
         old_min = settings.roi_settings.get(f"LEVEL_{level}_ROI_MIN", "0.8")
         old_max = settings.roi_settings.get(f"LEVEL_{level}_ROI_MAX", "10.0")
-        
+
         # Update settings
         new_roi_settings = dict(settings.roi_settings)
         new_roi_settings[f"LEVEL_{level}_ROI_MODE"] = mode
-        
+
         if mode == "custom":
             new_roi_settings[f"LEVEL_{level}_ROI_MIN"] = str(roi_min)
             new_roi_settings[f"LEVEL_{level}_ROI_MAX"] = str(roi_max)
         elif mode == "equal":
             new_roi_settings[f"LEVEL_{level}_ROI_FIXED"] = str(roi_fixed)
-        
+
         await settings_repo.update_settings(roi_settings=new_roi_settings)
-        
+
         # Log to corridor history
         try:
             history_repo = DepositCorridorHistoryRepository(self.session)
@@ -194,15 +194,15 @@ class AIRoiService:
             )
         except Exception as e:
             logger.warning(f"Failed to log corridor history: {e}")
-        
+
         await self.session.commit()
-        
+
         logger.info(
             f"AI ROI: Admin {self.admin_telegram_id} changed level {level} ROI: "
             f"mode {old_mode} → {mode}, min {old_min} → {roi_min}, max {old_max} → {roi_max}. "
             f"Reason: {reason}"
         )
-        
+
         return {
             "success": True,
             "level": level,
@@ -233,29 +233,27 @@ class AIRoiService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
-        history_repo = DepositCorridorHistoryRepository(self.session)
-        
+
         # Get history entries
         from app.models.deposit_corridor_history import DepositCorridorHistory
-        
+
         stmt = select(DepositCorridorHistory).order_by(
             DepositCorridorHistory.created_at.desc()
         ).limit(limit)
-        
+
         if level:
             stmt = stmt.where(DepositCorridorHistory.deposit_level == level)
-        
+
         result = await self.session.execute(stmt)
         entries = list(result.scalars().all())
-        
+
         if not entries:
             return {
                 "success": True,
                 "history": [],
                 "message": "ℹ️ История изменений пуста"
             }
-        
+
         history_list = []
         for entry in entries:
             history_list.append({
@@ -266,10 +264,10 @@ class AIRoiService:
                 "reason": entry.reason,
                 "created": entry.created_at.strftime("%d.%m.%Y %H:%M") if entry.created_at else None,
             })
-        
+
         return {
             "success": True,
             "count": len(history_list),
             "history": history_list,
-            "message": f"📜 История изменений ROI" + (f" уровня {level}" if level else "")
+            "message": "📜 История изменений ROI" + (f" уровня {level}" if level else "")
         }

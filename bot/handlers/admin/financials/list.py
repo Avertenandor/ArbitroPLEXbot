@@ -66,19 +66,19 @@ async def show_financial_list(
         "📊 **Общая статистика платформы:**\n"
         f"👥 Пользователей: `{platform_stats.total_users}` \\(✅ {platform_stats.verified_users} верифиц\\.\\)\n"
         f"👛 С депозитами: `{platform_stats.users_with_deposits}`\n\n"
-        
+
         "💵 **Депозиты:**\n"
         f"📥 Всего: `{platform_stats.total_deposits_count}` на `{fmt(platform_stats.total_deposited_amount)}` USDT\n"
         f"🔄 Активных: `{platform_stats.active_deposits_count}` на `{fmt(platform_stats.active_deposits_amount)}` USDT\n\n"
-        
+
         "💸 **Выводы:**\n"
         f"📤 Выведено: `{platform_stats.total_withdrawals_count}` на `{fmt(platform_stats.total_withdrawn_amount)}` USDT\n"
         f"⏳ Ожидают: `{platform_stats.pending_withdrawals_count}` на `{fmt(platform_stats.pending_withdrawals_amount)}` USDT\n\n"
-        
+
         "📈 **Начисления:**\n"
         f"💎 ROI выплачено: `{fmt(platform_stats.total_roi_paid)}` USDT\n"
         f"💰 Балансы польз\\.: `{fmt(platform_stats.total_pending_balance)}` USDT\n\n"
-        
+
         "━━━━━━━━━━━━━━━━━━━━\n"
         f"📋 Пользователей: `{total_count}` \\| Стр\\. `{page}/{total_pages}`\n"
         "Выберите пользователя для детальной информации:"

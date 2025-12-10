@@ -38,13 +38,13 @@ class AILogsService:
         """Verify admin credentials."""
         if not self.admin_telegram_id:
             return None, "❌ Не удалось определить администратора"
-        
+
         admin_repo = AdminRepository(self.session)
         admin = await admin_repo.get_by_telegram_id(self.admin_telegram_id)
-        
+
         if not admin or admin.is_blocked:
             return None, "❌ Администратор не найден или заблокирован"
-        
+
         return admin, None
 
     async def get_recent_logs(
@@ -62,17 +62,17 @@ class AILogsService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         stmt = select(AdminAction).order_by(
             AdminAction.created_at.desc()
         ).limit(limit)
-        
+
         if action_type:
             stmt = stmt.where(AdminAction.action_type == action_type)
-        
+
         result = await self.session.execute(stmt)
         logs = list(result.scalars().all())
-        
+
         if not logs:
             return {
                 "success": True,
@@ -80,10 +80,10 @@ class AILogsService:
                 "logs": [],
                 "message": "ℹ️ Логи не найдены"
             }
-        
+
         # Get admin info
         admin_repo = AdminRepository(self.session)
-        
+
         logs_list = []
         for log in logs:
             admin_info = None
@@ -91,7 +91,7 @@ class AILogsService:
                 adm = await admin_repo.get_by_id(log.admin_id)
                 if adm:
                     admin_info = f"@{adm.username}" if adm.username else f"ID:{adm.telegram_id}"
-            
+
             logs_list.append({
                 "id": log.id,
                 "admin": admin_info,
@@ -100,7 +100,7 @@ class AILogsService:
                 "details": log.details,
                 "created": log.created_at.strftime("%d.%m.%Y %H:%M") if log.created_at else None,
             })
-        
+
         return {
             "success": True,
             "count": len(logs_list),
@@ -123,9 +123,9 @@ class AILogsService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         admin_repo = AdminRepository(self.session)
-        
+
         # Find target admin
         target = None
         if isinstance(admin_identifier, int) or (isinstance(admin_identifier, str) and admin_identifier.isdigit()):
@@ -135,18 +135,18 @@ class AILogsService:
             stmt = select(Admin).where(Admin.username == username)
             result = await self.session.execute(stmt)
             target = result.scalar_one_or_none()
-        
+
         if not target:
             return {"success": False, "error": f"❌ Администратор '{admin_identifier}' не найден"}
-        
+
         # Get logs for this admin
         stmt = select(AdminAction).where(
             AdminAction.admin_id == target.id
         ).order_by(AdminAction.created_at.desc()).limit(limit)
-        
+
         result = await self.session.execute(stmt)
         logs = list(result.scalars().all())
-        
+
         logs_list = []
         for log in logs:
             logs_list.append({
@@ -156,7 +156,7 @@ class AILogsService:
                 "details": log.details,
                 "created": log.created_at.strftime("%d.%m.%Y %H:%M") if log.created_at else None,
             })
-        
+
         # Count by action type
         count_stmt = select(
             AdminAction.action_type,
@@ -164,17 +164,17 @@ class AILogsService:
         ).where(
             AdminAction.admin_id == target.id
         ).group_by(AdminAction.action_type)
-        
+
         count_result = await self.session.execute(count_stmt)
         action_counts = {row[0]: row[1] for row in count_result.all()}
-        
+
         return {
             "success": True,
             "admin": f"@{target.username}" if target.username else f"ID:{target.telegram_id}",
             "total_actions": sum(action_counts.values()),
             "by_action_type": action_counts,
             "recent_logs": logs_list,
-            "message": f"📊 Активность администратора"
+            "message": "📊 Активность администратора"
         }
 
     async def search_logs(
@@ -194,20 +194,20 @@ class AILogsService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         stmt = select(AdminAction).order_by(
             AdminAction.created_at.desc()
         ).limit(limit)
-        
+
         if user_id:
             stmt = stmt.where(AdminAction.target_user_id == user_id)
-        
+
         if action_type:
             stmt = stmt.where(AdminAction.action_type == action_type)
-        
+
         result = await self.session.execute(stmt)
         logs = list(result.scalars().all())
-        
+
         if not logs:
             return {
                 "success": True,
@@ -215,9 +215,9 @@ class AILogsService:
                 "logs": [],
                 "message": "ℹ️ Логи не найдены по заданным критериям"
             }
-        
+
         admin_repo = AdminRepository(self.session)
-        
+
         logs_list = []
         for log in logs:
             admin_info = None
@@ -225,7 +225,7 @@ class AILogsService:
                 adm = await admin_repo.get_by_id(log.admin_id)
                 if adm:
                     admin_info = f"@{adm.username}" if adm.username else f"ID:{adm.telegram_id}"
-            
+
             logs_list.append({
                 "id": log.id,
                 "admin": admin_info,
@@ -234,7 +234,7 @@ class AILogsService:
                 "details": log.details,
                 "created": log.created_at.strftime("%d.%m.%Y %H:%M") if log.created_at else None,
             })
-        
+
         return {
             "success": True,
             "count": len(logs_list),
@@ -253,17 +253,17 @@ class AILogsService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         stmt = select(
             AdminAction.action_type,
             func.count(AdminAction.id)
         ).group_by(AdminAction.action_type).order_by(
             func.count(AdminAction.id).desc()
         )
-        
+
         result = await self.session.execute(stmt)
         stats = {row[0]: row[1] for row in result.all()}
-        
+
         return {
             "success": True,
             "stats": stats,

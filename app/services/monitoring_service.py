@@ -71,7 +71,7 @@ class MonitoringService:
             )
             total_admins = total_result.scalar() or 0
             logger.debug(f"MonitoringService: total_admins={total_admins}")
-            
+
             # Active admins (have session in last N hours)
             active_result = await self.session.execute(
                 select(func.count(func.distinct(AdminSession.admin_id)))
@@ -79,14 +79,14 @@ class MonitoringService:
                 .where(AdminSession.is_active == True)  # noqa: E712
             )
             active_admins = active_result.scalar() or 0
-            
+
             # Admin actions count
             actions_result = await self.session.execute(
                 select(func.count(AdminAction.id))
                 .where(AdminAction.created_at >= since)
             )
             total_actions = actions_result.scalar() or 0
-            
+
             # Top actions by type
             top_actions_result = await self.session.execute(
                 select(
@@ -102,7 +102,7 @@ class MonitoringService:
                 {"type": row[0], "count": row[1]}
                 for row in top_actions_result.fetchall()
             ]
-            
+
             # Get admin list with their roles
             admins_result = await self.session.execute(
                 select(Admin.username, Admin.role, Admin.is_blocked)
@@ -116,7 +116,7 @@ class MonitoringService:
                 }
                 for row in admins_result.fetchall()
             ]
-            
+
             return {
                 "total_admins": total_admins,
                 "active_admins_last_hours": active_admins,
@@ -142,7 +142,7 @@ class MonitoringService:
                 select(func.count(User.id))
             )
             total_users = total_result.scalar() or 0
-            
+
             # Active users (last 24h)
             since_24h = datetime.now(UTC) - timedelta(hours=24)
             active_result = await self.session.execute(
@@ -158,7 +158,7 @@ class MonitoringService:
                 .where(User.updated_at >= since_7d)
             )
             active_7d = active_7d_result.scalar() or 0
-            
+
             # New users today
             today_start = datetime.now(UTC).replace(
                 hour=0, minute=0, second=0, microsecond=0
@@ -183,7 +183,7 @@ class MonitoringService:
                 .where(User.is_verified == True)  # noqa: E712
             )
             verified_users = verified_result.scalar() or 0
-            
+
             return {
                 "total_users": total_users,
                 "active_24h": active_24h,
@@ -212,28 +212,28 @@ class MonitoringService:
         """
         try:
             since = datetime.now(UTC) - timedelta(hours=hours)
-            
+
             # Total deposits (all time)
             total_deposits_result = await self.session.execute(
                 select(func.sum(Deposit.amount))
                 .where(Deposit.status == "active")
             )
             total_deposits = total_deposits_result.scalar() or Decimal("0")
-            
+
             # Deposits count
             deposits_count_result = await self.session.execute(
                 select(func.count(Deposit.id))
                 .where(Deposit.status == "active")
             )
             deposits_count = deposits_count_result.scalar() or 0
-            
+
             # Recent deposits (period)
             recent_deposits_result = await self.session.execute(
                 select(func.sum(Deposit.amount))
                 .where(Deposit.created_at >= since)
             )
             recent_deposits = recent_deposits_result.scalar() or Decimal("0")
-            
+
             # Recent deposits count
             recent_count_result = await self.session.execute(
                 select(func.count(Deposit.id))
@@ -265,7 +265,7 @@ class MonitoringService:
             pending_row = pending_result.fetchone()
             pending_count = pending_row[0] or 0
             pending_amount = pending_row[1] or Decimal("0")
-            
+
             return {
                 "hours_period": hours,
                 "total_active_deposits": float(total_deposits),
@@ -345,10 +345,10 @@ class MonitoringService:
                 await self.session.execute(text("SELECT 1"))
             except Exception:
                 db_ok = False
-            
+
             # Get some basic metrics
             now = datetime.now(UTC)
-            
+
             return {
                 "database": "OK" if db_ok else "ERROR",
                 "timestamp": now.isoformat(),
@@ -481,8 +481,6 @@ class MonitoringService:
             Dict with withdrawal details
         """
         try:
-            since = datetime.now(UTC) - timedelta(hours=hours)
-
             # Withdrawals by status
             status_result = await self.session.execute(
                 select(Transaction.status, func.count(Transaction.id), func.sum(Transaction.amount))
@@ -866,7 +864,7 @@ class MonitoringService:
         lines = ["=== РЕАЛЬНЫЕ ДАННЫЕ ПЛАТФОРМЫ ==="]
         lines.append(f"Время: {data.get('generated_at', 'N/A')}")
         lines.append("")
-        
+
         # Admin stats
         admin = data.get("admin", {})
         lines.append("📊 АДМИНИСТРАТОРЫ:")
@@ -876,7 +874,7 @@ class MonitoringService:
             f"{admin.get('active_admins_last_hours', 0)}"
         )
         lines.append(f"  Действий: {admin.get('total_actions', 0)}")
-        
+
         # Admin list
         admins_list = admin.get("admins_list", [])
         if admins_list:
@@ -884,16 +882,16 @@ class MonitoringService:
             for a in admins_list:
                 status = "🚫" if a.get("blocked") else "✅"
                 lines.append(f"    {status} @{a.get('username')} ({a.get('role')})")
-        
+
         # Top actions
         top_actions = admin.get("top_action_types", [])
         if top_actions:
             lines.append("  Топ действий:")
             for action in top_actions[:3]:
                 lines.append(f"    - {action['type']}: {action['count']}")
-        
+
         lines.append("")
-        
+
         # User stats
         users = data.get("users", {})
         lines.append("👥 ПОЛЬЗОВАТЕЛИ:")
@@ -906,7 +904,7 @@ class MonitoringService:
             f"({users.get('verification_rate', 0)}%)"
         )
         lines.append("")
-        
+
         # Financial stats
         fin = data.get("financial", {})
         lines.append("💰 ФИНАНСЫ:")
@@ -929,7 +927,7 @@ class MonitoringService:
             f"(${fin.get('pending_withdrawals_amount', 0):,.2f})"
         )
         lines.append("")
-        
+
         # Recent actions
         actions = data.get("recent_actions", [])
         if actions:

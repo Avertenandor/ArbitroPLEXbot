@@ -83,9 +83,6 @@ async def show_rules(
     **data: Any,
 ) -> None:
     """Show platform rules (brief version with 'Read more' button)."""
-    user: User | None = data.get("user")
-    is_admin = data.get("is_admin", False)
-
     await state.clear()
 
     # Show brief version with "Read more" button
@@ -99,17 +96,6 @@ async def show_rules(
         parse_mode="Markdown",
         disable_web_page_preview=True
     )
-
-    # Get blacklist info for back button
-    blacklist_entry = None
-    try:
-        blacklist_repo = BlacklistRepository(session)
-        if message.from_user:
-            blacklist_entry = await blacklist_repo.find_by_telegram_id(
-                message.from_user.id
-            )
-    except Exception as e:
-        logger.warning(f"Failed to get blacklist entry: {e}")
 
     # Send back button with reply keyboard
     await message.answer(

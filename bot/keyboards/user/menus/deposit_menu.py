@@ -37,7 +37,7 @@ def deposit_menu_keyboard(
 
     # Level emoji mapping (including test level)
     level_emojis = {0: "🎯", 1: "💰", 2: "💎", 3: "🏆", 4: "👑", 5: "🚀"}
-    
+
     # Level display names
     level_names = {0: "Тестовый", 1: "Уровень 1", 2: "Уровень 2", 3: "Уровень 3", 4: "Уровень 4", 5: "Уровень 5"}
 

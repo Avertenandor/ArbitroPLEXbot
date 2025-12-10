@@ -139,7 +139,7 @@ async def handle_set_nodereal2(
             parse_mode="Markdown"
         )
         return
-    
+
     repo = GlobalSettingsRepository(session)
     bs = get_blockchain_service()
 

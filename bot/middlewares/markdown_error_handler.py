@@ -43,7 +43,7 @@ class MarkdownErrorHandlerMiddleware(BaseMiddleware):
                 logger.warning(
                     f"Markdown parse error caught by middleware: {error_msg}"
                 )
-                
+
                 # Try to send error notification to user
                 if isinstance(event, Message):
                     try:
@@ -53,9 +53,9 @@ class MarkdownErrorHandlerMiddleware(BaseMiddleware):
                         )
                     except Exception:
                         pass
-                
+
                 # Don't re-raise - error is handled
                 return None
-            
+
             # Re-raise non-parsing errors
             raise

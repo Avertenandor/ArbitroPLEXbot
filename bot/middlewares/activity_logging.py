@@ -142,7 +142,7 @@ class ActivityLoggingMiddleware(BaseMiddleware):
         if activity_type == ActivityType.START:
             return "Нажал /start"
         elif activity_type == ActivityType.START_REFERRAL:
-            return f"Пришёл по реферальной ссылке"
+            return "Пришёл по реферальной ссылке"
         elif activity_type == ActivityType.MENU_OPEN:
             return "Открыл главное меню"
         elif activity_type == ActivityType.BALANCE_VIEW:

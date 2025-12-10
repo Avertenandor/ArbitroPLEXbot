@@ -33,23 +33,23 @@ PLEX_CONTRACT = "0xdf179b6cadbc61ffd86a3d2e55f6d6e083ade6c1"
 @dataclass
 class WalletBalance:
     """Wallet balance data."""
-    
+
     address: str
     bnb_balance: Decimal
     usdt_balance: Decimal
     plex_balance: Decimal
     last_updated: datetime
-    
+
     @property
     def bnb_formatted(self) -> str:
         """Format BNB balance with 6 decimals."""
         return f"{self.bnb_balance:.6f}"
-    
+
     @property
     def usdt_formatted(self) -> str:
         """Format USDT balance with 2 decimals."""
         return f"{self.usdt_balance:.2f}"
-    
+
     @property
     def plex_formatted(self) -> str:
         """Format PLEX balance as integer."""
@@ -59,7 +59,7 @@ class WalletBalance:
 @dataclass
 class TokenTransaction:
     """Token transaction data."""
-    
+
     tx_hash: str
     block_number: int
     timestamp: datetime
@@ -69,17 +69,17 @@ class TokenTransaction:
     token_symbol: str
     token_name: str
     direction: str  # "in" or "out"
-    
+
     @property
     def short_hash(self) -> str:
         """Get shortened tx hash for display."""
         return f"{self.tx_hash[:10]}...{self.tx_hash[-8:]}"
-    
+
     @property
     def bscscan_url(self) -> str:
         """Get BSCScan URL for transaction."""
         return f"https://bscscan.com/tx/{self.tx_hash}"
-    
+
     @property
     def formatted_value(self) -> str:
         """Format value based on token."""
@@ -89,7 +89,7 @@ class TokenTransaction:
             return f"{self.value:.6f}"
         else:
             return f"{self.value:.2f}"
-    
+
     @property
     def direction_emoji(self) -> str:
         """Get emoji for direction."""
@@ -104,21 +104,21 @@ class WalletInfoService:
     - BlockchainService for balance queries (RPC)
     - eth_getLogs for token transfer history (standard RPC method)
     """
-    
+
     # ERC-20 Transfer event signature
     TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
-    
+
     def __init__(self) -> None:
         """Initialize wallet info service."""
         self.rpc_url = settings.rpc_url
         self._session: aiohttp.ClientSession | None = None
-    
+
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session."""
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession()
         return self._session
-    
+
     async def _rpc_call(self, method: str, params: list) -> Any:
         """
         Make JSON-RPC call.
@@ -136,7 +136,7 @@ class WalletInfoService:
             "method": method,
             "params": params,
         }
-        
+
         try:
             session = await self._get_session()
             async with session.post(
@@ -157,7 +157,7 @@ class WalletInfoService:
         except Exception as e:
             logger.error(f"RPC request failed: {e}")
             return None
-    
+
     async def get_wallet_balances(self, wallet_address: str) -> WalletBalance | None:
         """
         Get all token balances for wallet.
@@ -170,22 +170,22 @@ class WalletInfoService:
         """
         try:
             blockchain = get_blockchain_service()
-            
+
             # Get all balances in parallel
             bnb_task = blockchain.get_native_balance(wallet_address)
             usdt_task = blockchain.get_usdt_balance(wallet_address)
             plex_task = blockchain.get_plex_balance(wallet_address)
-            
+
             bnb, usdt, plex = await asyncio.gather(
                 bnb_task, usdt_task, plex_task,
                 return_exceptions=True
             )
-            
+
             # Handle exceptions
             bnb_balance = bnb if isinstance(bnb, Decimal) else Decimal("0")
             usdt_balance = usdt if isinstance(usdt, Decimal) else Decimal("0")
             plex_balance = plex if isinstance(plex, Decimal) else Decimal("0")
-            
+
             return WalletBalance(
                 address=wallet_address,
                 bnb_balance=bnb_balance,
@@ -193,18 +193,18 @@ class WalletInfoService:
                 plex_balance=plex_balance,
                 last_updated=datetime.now(UTC),
             )
-            
+
         except Exception as e:
             logger.error(f"Failed to get wallet balances for {mask_address(wallet_address)}: {e}")
             return None
-    
+
     async def _get_current_block(self) -> int:
         """Get current block number."""
         result = await self._rpc_call("eth_blockNumber", [])
         if result:
             return int(result, 16)
         return 0
-    
+
     async def get_token_transactions(
         self,
         wallet_address: str,
@@ -229,17 +229,17 @@ class WalletInfoService:
             List of TokenTransaction
         """
         wallet_padded = "0x" + wallet_address.lower()[2:].zfill(64)
-        
+
         # Get current block
         current_block = await self._get_current_block()
         if current_block == 0:
             return []
-        
+
         # Search last ~100k blocks (~3-4 days)
         from_block = max(0, current_block - 100000)
-        
+
         transactions = []
-        
+
         # Get incoming transfers (to wallet)
         incoming_logs = await self._rpc_call("eth_getLogs", [{
             "fromBlock": hex(from_block),
@@ -247,7 +247,7 @@ class WalletInfoService:
             "address": contract_address,
             "topics": [self.TRANSFER_TOPIC, None, wallet_padded],
         }])
-        
+
         if incoming_logs:
             for log in incoming_logs[-limit:]:
                 try:
@@ -256,7 +256,7 @@ class WalletInfoService:
                         transactions.append(tx)
                 except Exception as e:
                     logger.debug(f"Failed to parse incoming tx: {e}")
-        
+
         # Get outgoing transfers (from wallet)
         outgoing_logs = await self._rpc_call("eth_getLogs", [{
             "fromBlock": hex(from_block),
@@ -264,7 +264,7 @@ class WalletInfoService:
             "address": contract_address,
             "topics": [self.TRANSFER_TOPIC, wallet_padded, None],
         }])
-        
+
         if outgoing_logs:
             for log in outgoing_logs[-limit:]:
                 try:
@@ -273,11 +273,11 @@ class WalletInfoService:
                         transactions.append(tx)
                 except Exception as e:
                     logger.debug(f"Failed to parse outgoing tx: {e}")
-        
+
         # Sort by block number descending and limit
         transactions.sort(key=lambda x: x.block_number, reverse=True)
         return transactions[:limit]
-    
+
     def _parse_transfer_log(
         self,
         log: dict,
@@ -291,17 +291,17 @@ class WalletInfoService:
             topics = log.get("topics", [])
             if len(topics) < 3:
                 return None
-            
+
             from_addr = "0x" + topics[1][-40:]
             to_addr = "0x" + topics[2][-40:]
-            
+
             value_hex = log.get("data", "0x0")
             value_raw = int(value_hex, 16) if value_hex else 0
             value = Decimal(value_raw) / Decimal(10**decimals)
-            
+
             block_hex = log.get("blockNumber", "0x0")
             block_num = int(block_hex, 16) if block_hex else 0
-            
+
             return TokenTransaction(
                 tx_hash=log.get("transactionHash", ""),
                 block_number=block_num,
@@ -316,7 +316,7 @@ class WalletInfoService:
         except Exception as e:
             logger.debug(f"Failed to parse transfer log: {e}")
             return None
-    
+
     async def get_bnb_transactions(
         self,
         wallet_address: str,
@@ -331,7 +331,7 @@ class WalletInfoService:
         # BNB native transfers are not logged as events
         # Would need to scan all blocks which is too expensive
         return []
-    
+
     async def get_usdt_transactions(
         self,
         wallet_address: str,
@@ -346,7 +346,7 @@ class WalletInfoService:
             decimals=18,
             limit=limit,
         )
-    
+
     async def get_plex_transactions(
         self,
         wallet_address: str,
@@ -361,7 +361,7 @@ class WalletInfoService:
             decimals=9,
             limit=limit,
         )
-    
+
     async def get_all_transactions(
         self,
         wallet_address: str,
@@ -380,12 +380,12 @@ class WalletInfoService:
         # Fetch token transfers in parallel
         usdt_task = self.get_usdt_transactions(wallet_address, limit_per_token)
         plex_task = self.get_plex_transactions(wallet_address, limit_per_token)
-        
+
         usdt_txs, plex_txs = await asyncio.gather(
             usdt_task, plex_task,
             return_exceptions=True
         )
-        
+
         return {
             "BNB": [],  # Not available via RPC logs
             "USDT": usdt_txs if isinstance(usdt_txs, list) else [],

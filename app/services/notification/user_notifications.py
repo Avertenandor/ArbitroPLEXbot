@@ -38,7 +38,6 @@ class UserNotificationMixin:
         Returns:
             True if notification sent successfully
         """
-        from aiogram import Bot
         from aiogram.client.default import DefaultBotProperties
         from aiogram.enums import ParseMode
 
@@ -103,7 +102,6 @@ class UserNotificationMixin:
         Returns:
             True if notification sent successfully
         """
-        from aiogram import Bot
         from aiogram.client.default import DefaultBotProperties
         from aiogram.enums import ParseMode
 

@@ -234,9 +234,9 @@ async def handle_confirm_cancel_withdrawal(
             )
             await callback.answer(f"❌ {error_msg or 'Ошибка отмены'}")
 
-    except Exception as e:
+    except Exception:
         await callback.message.edit_text(
-            f"❌ *Системная ошибка*\n\nНе удалось отменить вывод. Попробуйте позже.",
+            "❌ *Системная ошибка*\n\nНе удалось отменить вывод. Попробуйте позже.",
             parse_mode="Markdown"
         )
         await callback.answer("❌ Системная ошибка")

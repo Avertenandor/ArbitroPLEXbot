@@ -38,11 +38,11 @@ class AIBonusService:
     ):
         self.session = session
         self.admin_data = admin_data or {}
-        
+
         # Extract admin info for security logging
         self.admin_telegram_id = self.admin_data.get("ID")
         self.admin_username = self.admin_data.get("username") or self.admin_data.get("Имя")
-        
+
     async def _verify_admin(self) -> tuple[Any | None, str | None]:
         """
         Verify admin credentials from session data.
@@ -52,22 +52,22 @@ class AIBonusService:
         """
         if not self.admin_telegram_id:
             return None, "❌ ОШИБКА БЕЗОПАСНОСТИ: Не удалось определить администратора"
-        
+
         admin_repo = AdminRepository(self.session)
         admin = await admin_repo.get_by_telegram_id(self.admin_telegram_id)
-        
+
         if not admin:
             logger.warning(
                 f"AI BONUS SECURITY: Unauthorized attempt from telegram_id={self.admin_telegram_id}"
             )
             return None, "❌ ОШИБКА БЕЗОПАСНОСТИ: Администратор не найден"
-        
+
         if admin.is_blocked:
             logger.warning(
                 f"AI BONUS SECURITY: Blocked admin attempt: {admin.telegram_id} (@{admin.username})"
             )
             return None, "❌ ОШИБКА: Администратор заблокирован"
-        
+
         return admin, None
 
     async def _find_user(self, user_identifier: str) -> tuple[Any | None, str | None]:
@@ -81,7 +81,7 @@ class AIBonusService:
             Tuple of (user_model, error_message)
         """
         user_repo = UserRepository(self.session)
-        
+
         # Try by username
         if user_identifier.startswith("@"):
             username = user_identifier[1:]
@@ -89,7 +89,7 @@ class AIBonusService:
             if user:
                 return user, None
             return None, f"❌ Пользователь @{username} не найден"
-        
+
         # Try by telegram_id
         try:
             telegram_id = int(user_identifier)
@@ -98,7 +98,7 @@ class AIBonusService:
                 return user, None
             return None, f"❌ Пользователь с ID {telegram_id} не найден"
         except ValueError:
-            return None, f"❌ Неверный формат: укажите @username или telegram_id"
+            return None, "❌ Неверный формат: укажите @username или telegram_id"
 
     async def grant_bonus(
         self,
@@ -123,22 +123,22 @@ class AIBonusService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         # Validate amount
         if amount < 1:
             return {"success": False, "error": "❌ Минимальная сумма бонуса: 1 USDT"}
         if amount > 10000:
             return {"success": False, "error": "❌ Максимальная сумма бонуса: 10,000 USDT"}
-        
+
         # Validate reason
         if not reason or len(reason) < 5:
             return {"success": False, "error": "❌ Укажите причину начисления (минимум 5 символов)"}
-        
+
         # Find user
         user, error = await self._find_user(user_identifier)
         if error:
             return {"success": False, "error": error}
-        
+
         # Grant bonus
         bonus_service = BonusService(self.session)
         bonus, error = await bonus_service.grant_bonus(
@@ -147,18 +147,18 @@ class AIBonusService:
             reason=f"[АРЬЯ] {reason}",
             admin_id=admin.id,
         )
-        
+
         if error:
             return {"success": False, "error": f"❌ Ошибка: {error}"}
-        
+
         await self.session.commit()
-        
+
         # Log action
         logger.info(
             f"AI BONUS GRANT: Admin {admin.telegram_id} (@{admin.username}) "
             f"granted {amount} USDT to user {user.id} (@{user.username}): {reason}"
         )
-        
+
         return {
             "success": True,
             "bonus_id": bonus.id,
@@ -189,16 +189,16 @@ class AIBonusService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         # Find user
         user, error = await self._find_user(user_identifier)
         if error:
             return {"success": False, "error": error}
-        
+
         # Get bonuses
         bonus_service = BonusService(self.session)
         bonuses = await bonus_service.get_user_bonuses(user.id, active_only=active_only)
-        
+
         if not bonuses:
             status = "активных " if active_only else ""
             return {
@@ -207,7 +207,7 @@ class AIBonusService:
                 "bonuses": [],
                 "message": f"ℹ️ У пользователя нет {status}бонусов"
             }
-        
+
         # Format bonuses
         bonuses_list = []
         for b in bonuses:
@@ -222,7 +222,7 @@ class AIBonusService:
                 "reason": b.reason[:50] if b.reason else "—",
                 "created": b.created_at.strftime("%d.%m.%Y") if b.created_at else "—",
             })
-        
+
         return {
             "success": True,
             "user": f"@{user.username}" if user.username else f"ID:{user.telegram_id}",
@@ -253,11 +253,11 @@ class AIBonusService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         # Validate reason
         if not reason or len(reason) < 5:
             return {"success": False, "error": "❌ Укажите причину отмены (минимум 5 символов)"}
-        
+
         # Cancel bonus
         bonus_service = BonusService(self.session)
         success, error = await bonus_service.cancel_bonus(
@@ -265,18 +265,18 @@ class AIBonusService:
             admin_id=admin.id,
             reason=f"[АРЬЯ] {reason}",
         )
-        
+
         if not success:
             return {"success": False, "error": f"❌ Ошибка: {error}"}
-        
+
         await self.session.commit()
-        
+
         # Log action
         logger.info(
             f"AI BONUS CANCEL: Admin {admin.telegram_id} (@{admin.username}) "
             f"cancelled bonus {bonus_id}: {reason}"
         )
-        
+
         return {
             "success": True,
             "bonus_id": bonus_id,

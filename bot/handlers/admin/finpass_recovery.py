@@ -159,7 +159,7 @@ async def show_request_details(
 
         # Escape user-provided reason to prevent Markdown parsing errors
         safe_reason = escape_markdown(request.reason or "Не указана")
-        
+
         # Check if wallet change requested
         wallet_change_info = ""
         if request.new_wallet_address:
@@ -251,7 +251,7 @@ async def approve_request_action(
         # Set financial password using model method
         user.set_financial_password(new_password)
         user.earnings_blocked = True
-        
+
         # If wallet change was requested, update wallet too
         old_wallet = user.wallet_address
         wallet_changed = False
@@ -264,20 +264,20 @@ async def approve_request_action(
                 new_wallet_address=request.new_wallet_address,
             )
             session.add(history)
-            
+
             user.wallet_address = request.new_wallet_address
             wallet_changed = True
             logger.info(
                 f"Wallet changed for user {user.id}: {old_wallet} -> {request.new_wallet_address}"
             )
-        
+
         session.add(user)
 
         # Notify user
         notification_sent = False
         try:
             logger.info(f"Sending new password to user telegram_id={user.telegram_id}")
-            
+
             if wallet_changed:
                 notify_text = (
                     f"✅ *Ваш запрос на восстановление одобрен!*\n\n"
@@ -298,7 +298,7 @@ async def approve_request_action(
                     f"• Ваши выплаты заблокированы до первого использования пароля\n\n"
                     f"Используйте раздел 'Вывод' для проверки."
                 )
-            
+
             await message.bot.send_message(
                 user.telegram_id,
                 notify_text,
@@ -315,7 +315,7 @@ async def approve_request_action(
         )
         if wallet_changed:
             admin_notes += f" | Wallet changed to {request.new_wallet_address}"
-            
+
         await recovery_service.mark_sent(
             request_id=request.id,
             admin_id=admin.id,
@@ -327,7 +327,7 @@ async def approve_request_action(
         wallet_info = ""
         if wallet_changed:
             wallet_info = f"\n💼 Кошелёк изменён:\n`{old_wallet}` →\n`{request.new_wallet_address}`\n"
-        
+
         if notification_sent:
             await message.answer(
                 f"✅ Запрос #{request_id} успешно одобрен.\n"

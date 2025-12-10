@@ -115,26 +115,26 @@ class SessionMiddleware(BaseMiddleware):
                 # Import auth states
                 from bot.states.auth import AuthStates
                 from bot.states.registration import RegistrationStates
-                
+
                 auth_state_names = {
                     AuthStates.waiting_for_wallet.state,
                     AuthStates.waiting_for_payment.state,
                     AuthStates.waiting_for_payment_wallet.state,
                 }
-                
+
                 # Also allow registration states for new users completing registration
                 registration_state_names = {
                     RegistrationStates.waiting_for_financial_password.state,
                     RegistrationStates.waiting_for_password_confirmation.state,
                 }
-                
+
                 if current_state in auth_state_names:
                     logger.info(
                         f"SessionMiddleware: auth FSM state '{current_state}', "
                         f"passing through for user {user_id}"
                     )
                     return await handler(event, data)
-                
+
                 if current_state in registration_state_names:
                     logger.info(
                         f"SessionMiddleware: registration FSM state '{current_state}', "

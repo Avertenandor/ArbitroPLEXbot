@@ -52,13 +52,13 @@ class AISettingsService:
         """Verify admin credentials."""
         if not self.admin_telegram_id:
             return None, "❌ Не удалось определить администратора"
-        
+
         admin_repo = AdminRepository(self.session)
         admin = await admin_repo.get_by_telegram_id(self.admin_telegram_id)
-        
+
         if not admin or admin.is_blocked:
             return None, "❌ Администратор не найден или заблокирован"
-        
+
         return admin, None
 
     def _is_trusted_admin(self) -> bool:
@@ -432,10 +432,10 @@ class AISettingsService:
         try:
             # Import and run the task
             module_path, func_name = valid_tasks[task_id].rsplit(":", 1)
-            
+
             # Log the manual trigger
             logger.info(f"[АРЬЯ] Admin {self.admin_telegram_id} triggered task: {task_id}")
-            
+
             return (
                 f"⚠️ Ручной запуск задачи `{task_id}` запрошен.\n\n"
                 f"Для немедленного выполнения используйте:\n"
@@ -470,7 +470,7 @@ class AISettingsService:
 
         try:
             admin_repo = AdminRepository(self.session)
-            
+
             # Check if already exists
             existing = await admin_repo.get_by_telegram_id(telegram_id)
             if existing:

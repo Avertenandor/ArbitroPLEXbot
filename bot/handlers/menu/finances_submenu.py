@@ -72,11 +72,11 @@ async def show_finances_submenu(
         # Check for ROI data from deposits table
         deposit_service = DepositService(session)
         active_deposits = await deposit_service.get_active_deposits(user.id)
-        
+
         if active_deposits:
             total_roi_paid = sum(float(d.roi_paid_amount or 0) for d in active_deposits)
             total_roi_cap = sum(float(d.roi_cap_amount or 0) for d in active_deposits)
-            
+
             if total_roi_cap > 0:
                 overall_progress = (total_roi_paid / total_roi_cap) * 100
                 deposits_section = (
@@ -190,22 +190,22 @@ async def show_funds_overview(
     if active_deposits:
         text += "\n━━━━━━━━━━━━━━━━━\n"
         text += "*📦 Активные депозиты:*\n\n"
-        
+
         level_names = {0: "🎯 Тестовый", 1: "💰 Уровень 1", 2: "💎 Уровень 2", 
                        3: "🏆 Уровень 3", 4: "👑 Уровень 4", 5: "🚀 Уровень 5"}
-        
+
         total_deposited = 0
         total_roi_paid = 0
-        
+
         for dep in active_deposits:
             level_name = level_names.get(dep.level, f"Level {dep.level}")
             amount = float(dep.amount or 0)
             roi_paid = float(dep.roi_paid_amount or 0)
             roi_cap = float(dep.roi_cap_amount or 0)
-            
+
             total_deposited += amount
             total_roi_paid += roi_paid
-            
+
             # Calculate progress
             if roi_cap > 0:
                 progress = (roi_paid / roi_cap) * 100
@@ -215,7 +215,7 @@ async def show_funds_overview(
                 )
             else:
                 text += f"{level_name}: `{amount:.0f} USDT`\n"
-        
+
         text += f"\n💎 Всего в депозитах: `{total_deposited:.0f} USDT`\n"
         text += f"✅ Заработано ROI: `{total_roi_paid:.2f} USDT`\n"
     else:
@@ -232,7 +232,7 @@ async def show_funds_overview(
 
     # Use funds overview keyboard with wallet button
     from bot.keyboards.user.menus.financial_menu import funds_overview_keyboard
-    
+
     await message.answer(
         text,
         reply_markup=funds_overview_keyboard(),

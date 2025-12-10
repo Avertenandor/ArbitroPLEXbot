@@ -507,7 +507,7 @@ async def process_recovery_confirmation(
                 wallet_info = ""
                 if new_wallet:
                     wallet_info = f"\n💼 ЗАПРОШЕНА СМЕНА КОШЕЛЬКА!\nНовый: {new_wallet[:20]}..."
-                
+
                 await notify_admins(
                     message.bot,
                     admin_ids,

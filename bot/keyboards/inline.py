@@ -17,14 +17,14 @@ def deposit_status_keyboard(deposit_id: int) -> InlineKeyboardMarkup:
         InlineKeyboardMarkup with refresh option
     """
     builder = InlineKeyboardBuilder()
-    
+
     builder.row(
         InlineKeyboardButton(
             text="🔄 Обновить статус",
             callback_data=f"refresh_deposit_{deposit_id}"
         )
     )
-    
+
     return builder.as_markup()
 
 

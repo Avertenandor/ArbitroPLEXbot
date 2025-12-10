@@ -135,7 +135,7 @@ async def handle_user_chat(
         SECURITY_RESPONSE_BLOCKED,
         SECURITY_RESPONSE_FORWARDED,
     )
-    
+
     # Block forwarded messages
     forward_check = check_forwarded_message(message)
     if forward_check["is_forwarded"]:
@@ -148,7 +148,7 @@ async def handle_user_chat(
             reply_markup=user_chat_keyboard(),
         )
         return
-    
+
     # Check for security threats
     security_guard = get_security_guard()
     security_check = security_guard.check_message(
@@ -157,7 +157,7 @@ async def handle_user_chat(
         username=message.from_user.username,
         is_admin=False,
     )
-    
+
     if not security_check["allow"]:
         logger.error(
             f"🚨 SECURITY BLOCK: User {message.from_user.id} message blocked"
@@ -168,7 +168,7 @@ async def handle_user_chat(
             reply_markup=user_chat_keyboard(),
         )
         return
-    
+
     # Sanitize user input
     sanitized_message = sanitize_user_input(user_message)
     # ========== END SECURITY CHECKS ==========

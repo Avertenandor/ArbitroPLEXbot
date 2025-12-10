@@ -40,11 +40,11 @@ class AIAppealsService:
     ):
         self.session = session
         self.admin_data = admin_data or {}
-        
+
         # Extract admin info for security logging
         self.admin_telegram_id = self.admin_data.get("ID")
         self.admin_username = self.admin_data.get("username") or self.admin_data.get("Имя")
-        
+
     async def _verify_admin(self) -> tuple[Any | None, str | None]:
         """
         Verify admin credentials from session data.
@@ -54,22 +54,22 @@ class AIAppealsService:
         """
         if not self.admin_telegram_id:
             return None, "❌ ОШИБКА БЕЗОПАСНОСТИ: Не удалось определить администратора"
-        
+
         admin_repo = AdminRepository(self.session)
         admin = await admin_repo.get_by_telegram_id(self.admin_telegram_id)
-        
+
         if not admin:
             logger.warning(
                 f"AI APPEALS SECURITY: Unauthorized attempt from telegram_id={self.admin_telegram_id}"
             )
             return None, "❌ ОШИБКА БЕЗОПАСНОСТИ: Администратор не найден"
-        
+
         if admin.is_blocked:
             logger.warning(
                 f"AI APPEALS SECURITY: Blocked admin attempt: {admin.telegram_id} (@{admin.username})"
             )
             return None, "❌ ОШИБКА: Администратор заблокирован"
-        
+
         return admin, None
 
     async def get_appeals_list(
@@ -91,14 +91,14 @@ class AIAppealsService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         # Build query - no joinedload since Appeal doesn't have user relationship
         stmt = (
             select(Appeal)
             .order_by(Appeal.created_at.desc())
             .limit(limit)
         )
-        
+
         if status:
             valid_statuses = ["pending", "under_review", "approved", "rejected"]
             if status.lower() not in valid_statuses:
@@ -107,10 +107,10 @@ class AIAppealsService:
                     "error": f"❌ Неверный статус. Допустимые: {', '.join(valid_statuses)}"
                 }
             stmt = stmt.where(Appeal.status == status.lower())
-        
+
         result = await self.session.execute(stmt)
         appeals = list(result.scalars().all())
-        
+
         if not appeals:
             status_text = f" со статусом '{status}'" if status else ""
             return {
@@ -118,7 +118,7 @@ class AIAppealsService:
                 "appeals": [],
                 "message": f"ℹ️ Обращений{status_text} не найдено"
             }
-        
+
         # Collect user_ids and fetch users in batch
         user_ids = [a.user_id for a in appeals if a.user_id]
         users_map = {}
@@ -127,7 +127,7 @@ class AIAppealsService:
             user_result = await self.session.execute(user_stmt)
             for u in user_result.scalars().all():
                 users_map[u.id] = u
-        
+
         # Format appeals
         appeals_list = []
         for a in appeals:
@@ -137,14 +137,14 @@ class AIAppealsService:
                 user_info = f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
             else:
                 user_info = f"User#{a.user_id}"
-            
+
             status_emoji = {
                 "pending": "🟡",
                 "under_review": "🔵", 
                 "approved": "✅",
                 "rejected": "❌"
             }.get(a.status, "⚪")
-            
+
             appeals_list.append({
                 "id": a.id,
                 "user": user_info,
@@ -154,12 +154,12 @@ class AIAppealsService:
                 "created": a.created_at.strftime("%d.%m.%Y %H:%M") if a.created_at else "—",
                 "reviewed_at": a.reviewed_at.strftime("%d.%m.%Y %H:%M") if a.reviewed_at else None,
             })
-        
+
         # Count by status
         count_stmt = select(Appeal.status, func.count(Appeal.id)).group_by(Appeal.status)
         count_result = await self.session.execute(count_stmt)
         counts = {row[0]: row[1] for row in count_result.all()}
-        
+
         return {
             "success": True,
             "total_count": len(appeals_list),
@@ -190,15 +190,15 @@ class AIAppealsService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         # Get appeal
         stmt = select(Appeal).where(Appeal.id == appeal_id)
         result = await self.session.execute(stmt)
         appeal = result.scalar_one_or_none()
-        
+
         if not appeal:
             return {"success": False, "error": f"❌ Обращение ID {appeal_id} не найдено"}
-        
+
         # Get user info separately
         user_info = f"User#{appeal.user_id}"
         user_telegram = None
@@ -209,14 +209,14 @@ class AIAppealsService:
             if user:
                 user_info = f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
                 user_telegram = user.telegram_id
-        
+
         status_emoji = {
             "pending": "🟡 Ожидает",
             "under_review": "🔵 На рассмотрении",
             "approved": "✅ Одобрено",
             "rejected": "❌ Отклонено"
         }.get(appeal.status, appeal.status)
-        
+
         # Get reviewer info if reviewed
         reviewer_info = None
         if appeal.reviewed_by_admin_id:
@@ -224,7 +224,7 @@ class AIAppealsService:
             reviewer = await admin_repo.get_by_id(appeal.reviewed_by_admin_id)
             if reviewer:
                 reviewer_info = f"@{reviewer.username}" if reviewer.username else f"Admin #{reviewer.id}"
-        
+
         return {
             "success": True,
             "appeal": {
@@ -260,32 +260,32 @@ class AIAppealsService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         # Get appeal
         stmt = select(Appeal).where(Appeal.id == appeal_id)
         result = await self.session.execute(stmt)
         appeal = result.scalar_one_or_none()
-        
+
         if not appeal:
             return {"success": False, "error": f"❌ Обращение ID {appeal_id} не найдено"}
-        
+
         if appeal.status != AppealStatus.PENDING:
             return {
                 "success": False, 
                 "error": f"❌ Обращение уже имеет статус '{appeal.status}'. Взять можно только 'pending'."
             }
-        
+
         # Update appeal
         appeal.status = AppealStatus.UNDER_REVIEW
         appeal.reviewed_by_admin_id = admin.id
-        
+
         await self.session.commit()
-        
+
         logger.info(
             f"AI APPEALS: Admin {admin.telegram_id} (@{admin.username}) "
             f"took appeal {appeal_id} for review"
         )
-        
+
         return {
             "success": True,
             "appeal_id": appeal_id,
@@ -317,46 +317,46 @@ class AIAppealsService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         if decision not in ["approve", "reject"]:
             return {
                 "success": False,
                 "error": "❌ Решение должно быть 'approve' (одобрить) или 'reject' (отклонить)"
             }
-        
+
         # Get appeal
         stmt = select(Appeal).where(Appeal.id == appeal_id)
         result = await self.session.execute(stmt)
         appeal = result.scalar_one_or_none()
-        
+
         if not appeal:
             return {"success": False, "error": f"❌ Обращение ID {appeal_id} не найдено"}
-        
+
         if appeal.status in [AppealStatus.APPROVED, AppealStatus.REJECTED]:
             return {
                 "success": False,
                 "error": f"❌ Обращение уже закрыто со статусом '{appeal.status}'"
             }
-        
+
         # Update appeal
         new_status = AppealStatus.APPROVED if decision == "approve" else AppealStatus.REJECTED
         appeal.status = new_status
         appeal.reviewed_by_admin_id = admin.id
         appeal.reviewed_at = datetime.now(UTC)
         appeal.review_notes = f"[АРЬЯ] {notes}" if notes else "[АРЬЯ] Решение принято через AI-ассистента"
-        
+
         # If approved, unblock user from blacklist
         if decision == "approve" and appeal.blacklist_id:
             bl_stmt = select(Blacklist).where(Blacklist.id == appeal.blacklist_id)
             bl_result = await self.session.execute(bl_stmt)
             blacklist = bl_result.scalar_one_or_none()
-            
+
             if blacklist:
                 blacklist.is_active = False
                 blacklist.notes = (blacklist.notes or "") + f"\n[АРЬЯ] Разблокирован по обращению #{appeal_id}"
-        
+
         await self.session.commit()
-        
+
         # Get user info for logging
         user_info = f"User#{appeal.user_id}"
         if appeal.user_id:
@@ -365,19 +365,19 @@ class AIAppealsService:
             user = user_result.scalar_one_or_none()
             if user:
                 user_info = f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
-        
+
         decision_emoji = "✅" if decision == "approve" else "❌"
         decision_text = "одобрено" if decision == "approve" else "отклонено"
-        
+
         logger.info(
             f"AI APPEALS: Admin {admin.telegram_id} (@{admin.username}) "
             f"{decision_text} appeal {appeal_id} for user {user_info}"
         )
-        
+
         result_msg = f"{decision_emoji} Обращение #{appeal_id} {decision_text}"
         if decision == "approve":
             result_msg += "\n🔓 Пользователь разблокирован"
-        
+
         return {
             "success": True,
             "appeal_id": appeal_id,
@@ -410,31 +410,31 @@ class AIAppealsService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         if not bot:
             return {"success": False, "error": "❌ Бот не инициализирован"}
-        
+
         if not message or len(message) < 5:
             return {"success": False, "error": "❌ Сообщение должно содержать минимум 5 символов"}
-        
+
         # Get appeal
         stmt = select(Appeal).where(Appeal.id == appeal_id)
         result = await self.session.execute(stmt)
         appeal = result.scalar_one_or_none()
-        
+
         if not appeal:
             return {"success": False, "error": f"❌ Обращение ID {appeal_id} не найдено"}
-        
+
         # Get user separately
         user = None
         if appeal.user_id:
             user_stmt = select(User).where(User.id == appeal.user_id)
             user_result = await self.session.execute(user_stmt)
             user = user_result.scalar_one_or_none()
-        
+
         if not user or not user.telegram_id:
             return {"success": False, "error": "❌ Не удалось найти пользователя для отправки"}
-        
+
         # Format message
         admin_name = f"@{admin.username}" if admin.username else "Администратор"
         formatted_message = (
@@ -444,7 +444,7 @@ class AIAppealsService:
             f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"_От: {admin_name}_"
         )
-        
+
         # Send message
         try:
             await bot.send_message(
@@ -455,13 +455,13 @@ class AIAppealsService:
         except Exception as e:
             logger.error(f"Failed to send reply to appeal {appeal_id}: {e}")
             return {"success": False, "error": f"❌ Не удалось отправить: {str(e)}"}
-        
+
         user_info = f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
-        
+
         logger.info(
             f"AI APPEALS: Admin {admin.telegram_id} replied to appeal {appeal_id}: {message[:50]}..."
         )
-        
+
         return {
             "success": True,
             "appeal_id": appeal_id,

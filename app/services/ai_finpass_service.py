@@ -54,13 +54,13 @@ class AIFinpassService:
         """Verify admin credentials."""
         if not self.admin_telegram_id:
             return None, "❌ Не удалось определить администратора"
-        
+
         admin_repo = AdminRepository(self.session)
         admin = await admin_repo.get_by_telegram_id(self.admin_telegram_id)
-        
+
         if not admin or admin.is_blocked:
             return None, "❌ Администратор не найден или заблокирован"
-        
+
         return admin, None
 
     def _is_trusted_admin(self) -> bool:
@@ -77,14 +77,14 @@ class AIFinpassService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         # Only trusted admins can view pending requests
         if not self._is_trusted_admin():
             return {
                 "success": False,
                 "error": "❌ Недостаточно прав для просмотра заявок"
             }
-        
+
         # Get pending + in_review
         stmt = select(FinancialPasswordRecovery).where(
             FinancialPasswordRecovery.status.in_([
@@ -92,10 +92,10 @@ class AIFinpassService:
                 FinancialRecoveryStatus.IN_REVIEW.value,
             ])
         ).order_by(FinancialPasswordRecovery.created_at.asc()).limit(limit)
-        
+
         result = await self.session.execute(stmt)
         requests = list(result.scalars().all())
-        
+
         if not requests:
             return {
                 "success": True,
@@ -103,17 +103,17 @@ class AIFinpassService:
                 "requests": [],
                 "message": "✅ Нет ожидающих заявок на восстановление"
             }
-        
+
         requests_list = []
         for r in requests:
             user = await self.user_repo.get_by_id(r.user_id)
             user_info = f"@{user.username}" if user and user.username else f"ID:{r.user_id}"
-            
+
             status_emoji = {
                 FinancialRecoveryStatus.PENDING.value: "⏳",
                 FinancialRecoveryStatus.IN_REVIEW.value: "🔍",
             }.get(r.status, "❓")
-            
+
             requests_list.append({
                 "id": r.id,
                 "user": user_info,
@@ -122,7 +122,7 @@ class AIFinpassService:
                 "reason": r.reason[:100] + "..." if len(r.reason) > 100 else r.reason,
                 "created": r.created_at.strftime("%d.%m.%Y %H:%M") if r.created_at else None,
             })
-        
+
         return {
             "success": True,
             "count": len(requests_list),
@@ -140,26 +140,26 @@ class AIFinpassService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         # Only trusted admins can view request details
         if not self._is_trusted_admin():
             return {
                 "success": False,
                 "error": "❌ Недостаточно прав для просмотра деталей заявки"
             }
-        
+
         stmt = select(FinancialPasswordRecovery).where(
             FinancialPasswordRecovery.id == request_id
         )
         result = await self.session.execute(stmt)
         request = result.scalar_one_or_none()
-        
+
         if not request:
             return {"success": False, "error": f"❌ Заявка #{request_id} не найдена"}
-        
+
         user = await self.user_repo.get_by_id(request.user_id)
         user_info = f"@{user.username}" if user and user.username else f"ID:{request.user_id}"
-        
+
         return {
             "success": True,
             "request": {
@@ -194,23 +194,23 @@ class AIFinpassService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         if not self._is_trusted_admin():
             logger.warning(
                 f"AI FINPASS SECURITY: Untrusted admin {self.admin_telegram_id} "
                 f"attempted to approve finpass request"
             )
             return {"success": False, "error": "❌ Нет прав на одобрение заявок"}
-        
+
         stmt = select(FinancialPasswordRecovery).where(
             FinancialPasswordRecovery.id == request_id
         )
         result = await self.session.execute(stmt)
         request = result.scalar_one_or_none()
-        
+
         if not request:
             return {"success": False, "error": f"❌ Заявка #{request_id} не найдена"}
-        
+
         if request.status not in [
             FinancialRecoveryStatus.PENDING.value,
             FinancialRecoveryStatus.IN_REVIEW.value,
@@ -219,22 +219,22 @@ class AIFinpassService:
                 "success": False,
                 "error": f"❌ Заявка уже обработана (статус: {request.status})"
             }
-        
+
         # Approve
         request.status = FinancialRecoveryStatus.APPROVED.value
         request.reviewed_by_admin_id = admin.id if admin else None
         request.updated_at = datetime.now(UTC)
-        
+
         await self.session.commit()
-        
+
         user = await self.user_repo.get_by_id(request.user_id)
         user_info = f"@{user.username}" if user and user.username else f"ID:{request.user_id}"
-        
+
         logger.info(
             f"AI FINPASS: Admin {self.admin_telegram_id} approved request #{request_id} "
             f"for user {request.user_id}. Notes: {notes}"
         )
-        
+
         return {
             "success": True,
             "request_id": request_id,
@@ -261,26 +261,26 @@ class AIFinpassService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         if not self._is_trusted_admin():
             logger.warning(
                 f"AI FINPASS SECURITY: Untrusted admin {self.admin_telegram_id} "
                 f"attempted to reject finpass request"
             )
             return {"success": False, "error": "❌ Нет прав на отклонение заявок"}
-        
+
         if not reason or len(reason) < 5:
             return {"success": False, "error": "❌ Укажите причину отклонения"}
-        
+
         stmt = select(FinancialPasswordRecovery).where(
             FinancialPasswordRecovery.id == request_id
         )
         result = await self.session.execute(stmt)
         request = result.scalar_one_or_none()
-        
+
         if not request:
             return {"success": False, "error": f"❌ Заявка #{request_id} не найдена"}
-        
+
         if request.status not in [
             FinancialRecoveryStatus.PENDING.value,
             FinancialRecoveryStatus.IN_REVIEW.value,
@@ -289,23 +289,23 @@ class AIFinpassService:
                 "success": False,
                 "error": f"❌ Заявка уже обработана (статус: {request.status})"
             }
-        
+
         # Reject
         request.status = FinancialRecoveryStatus.REJECTED.value
         request.reviewed_by_admin_id = admin.id if admin else None
         request.reject_reason = f"[АРЬЯ] {reason}"
         request.updated_at = datetime.now(UTC)
-        
+
         await self.session.commit()
-        
+
         user = await self.user_repo.get_by_id(request.user_id)
         user_info = f"@{user.username}" if user and user.username else f"ID:{request.user_id}"
-        
+
         logger.info(
             f"AI FINPASS: Admin {self.admin_telegram_id} rejected request #{request_id} "
             f"for user {request.user_id}. Reason: {reason}"
         )
-        
+
         return {
             "success": True,
             "request_id": request_id,
@@ -322,7 +322,7 @@ class AIFinpassService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-        
+
         # Count by status
         stats = {}
         for status in FinancialRecoveryStatus:
@@ -331,7 +331,7 @@ class AIFinpassService:
             )
             result = await self.session.execute(stmt)
             stats[status.value] = result.scalar() or 0
-        
+
         return {
             "success": True,
             "stats": stats,

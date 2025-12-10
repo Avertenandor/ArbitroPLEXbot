@@ -73,11 +73,11 @@ def entries_list_keyboard(
 ) -> InlineKeyboardMarkup:
     """Generate inline keyboard with entries list for navigation."""
     buttons = []
-    
+
     start = page * per_page
     end = start + per_page
     page_entries = entries[start:end]
-    
+
     for e in page_entries:
         verified = "✅" if e.get("verified_by_boss") else "⚠️"
         learned = "🧠" if e.get("learned_from_dialog") else ""
@@ -86,31 +86,31 @@ def entries_list_keyboard(
             text=label,
             callback_data=f"kb_view:{e['id']}"
         )])
-    
+
     # Pagination
     nav_row = []
     total_pages = (len(entries) + per_page - 1) // per_page
-    
+
     if page > 0:
         nav_row.append(InlineKeyboardButton(
             text="⬅️ Назад",
             callback_data=f"kb_page:{list_type}:{page - 1}"
         ))
-    
+
     nav_row.append(InlineKeyboardButton(
         text=f"{page + 1}/{total_pages}",
         callback_data="kb_noop"
     ))
-    
+
     if end < len(entries):
         nav_row.append(InlineKeyboardButton(
             text="Вперёд ➡️",
             callback_data=f"kb_page:{list_type}:{page + 1}"
         ))
-    
+
     if nav_row:
         buttons.append(nav_row)
-    
+
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
@@ -955,7 +955,7 @@ async def view_entry_global(
     match = re.match(r"^/kb_(\d+)$", message.text)
     if not match:
         return
-    
+
     entry_id = int(match.group(1))
     kb = get_knowledge_base()
     entry = next((e for e in kb.entries if e.get("id") == entry_id), None)
@@ -982,9 +982,9 @@ async def view_entry_global(
     if c := entry.get("clarification"):
         text += f"\n📝 **Уточнение:**\n{c}\n"
 
-    text += f"\n━━━━━━━━━━━━━━━━━━\n"
+    text += "\n━━━━━━━━━━━━━━━━━━\n"
     text += f"👤 Добавил: @{entry.get('added_by', 'system')}\n"
-    
+
     if source := entry.get("source_user"):
         text += f"💬 Источник: @{source}\n"
 

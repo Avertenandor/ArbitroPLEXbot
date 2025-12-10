@@ -58,15 +58,12 @@ class ErrorHandlerMiddleware(BaseMiddleware):
         data: dict[str, Any],
     ) -> Any:
         """Execute middleware with retry logic for network errors."""
-        last_exception = None
-
         for attempt in range(self.MAX_RETRIES):
             try:
                 return await handler(event, data)
 
             except TelegramNetworkError as e:
                 # Network errors (SSL, timeout) - retry with backoff
-                last_exception = e
                 if attempt < self.MAX_RETRIES - 1:
                     delay = self.RETRY_DELAYS[attempt]
                     logger.warning(

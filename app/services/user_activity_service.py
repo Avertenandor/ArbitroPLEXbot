@@ -115,7 +115,7 @@ class UserActivityService:
             telegram_id=telegram_id,
             activity_type=activity_type,
             user_id=user_id,
-            description=f"Started bot" + (f" via referral {referral_code}" if referral_code else ""),
+            description="Started bot" + (f" via referral {referral_code}" if referral_code else ""),
             extra_data={"referral_code": referral_code, "username": username},
         )
 

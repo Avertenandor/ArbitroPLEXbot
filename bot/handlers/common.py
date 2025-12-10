@@ -57,7 +57,7 @@ async def cancel_handler(
                 f"Common cancel_handler skipping admin state: {current_state}"
             )
             return  # Let admin-specific handlers process this
-        
+
         logger.info(
             f"User {user.id if user else 'unknown'} cancelled operation from state: {current_state}"
         )

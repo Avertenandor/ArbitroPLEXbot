@@ -309,7 +309,7 @@ async def handle_chat_message(
         SECURITY_RESPONSE_FORWARDED,
     )
     from app.services.admin_security_service import VERIFIED_ADMIN_IDS
-    
+
     # Check for forwarded messages
     forward_check = check_forwarded_message(message)
     if forward_check["is_forwarded"]:
@@ -323,7 +323,7 @@ async def handle_chat_message(
             reply_markup=chat_keyboard(),
         )
         return
-    
+
     # Check for security threats in message
     security_guard = get_security_guard()
     security_check = security_guard.check_message(
@@ -332,7 +332,7 @@ async def handle_chat_message(
         username=admin.username,
         is_admin=True,
     )
-    
+
     if not security_check["allow"]:
         logger.error(
             f"🚨 SECURITY BLOCK: Admin {admin.telegram_id} message blocked. "
@@ -344,16 +344,16 @@ async def handle_chat_message(
             reply_markup=chat_keyboard(),
         )
         return
-    
+
     # Add warnings to context if any
     security_warnings = security_check.get("warnings", [])
-    
+
     # Verify admin identity
     is_verified = admin.telegram_id in VERIFIED_ADMIN_IDS
-    
+
     # Sanitize user input
     sanitized_message = sanitize_user_input(user_message)
-    
+
     # Create secure context
     admin_role = VERIFIED_ADMIN_IDS.get(admin.telegram_id, {}).get("role", admin.role)
     secure_context = create_secure_context(
