@@ -127,6 +127,52 @@ async def handle_user_chat(
     if not user_message.strip():
         return
 
+    # ========== SECURITY CHECKS ==========
+    from app.services.aria_security_defense import (
+        get_security_guard,
+        check_forwarded_message,
+        sanitize_user_input,
+        SECURITY_RESPONSE_BLOCKED,
+        SECURITY_RESPONSE_FORWARDED,
+    )
+    
+    # Block forwarded messages
+    forward_check = check_forwarded_message(message)
+    if forward_check["is_forwarded"]:
+        logger.warning(
+            f"SECURITY: User {message.from_user.id} sent forwarded message"
+        )
+        await message.answer(
+            SECURITY_RESPONSE_FORWARDED,
+            parse_mode="Markdown",
+            reply_markup=user_chat_keyboard(),
+        )
+        return
+    
+    # Check for security threats
+    security_guard = get_security_guard()
+    security_check = security_guard.check_message(
+        text=user_message,
+        telegram_id=message.from_user.id,
+        username=message.from_user.username,
+        is_admin=False,
+    )
+    
+    if not security_check["allow"]:
+        logger.error(
+            f"🚨 SECURITY BLOCK: User {message.from_user.id} message blocked"
+        )
+        await message.answer(
+            SECURITY_RESPONSE_BLOCKED,
+            parse_mode="Markdown",
+            reply_markup=user_chat_keyboard(),
+        )
+        return
+    
+    # Sanitize user input
+    sanitized_message = sanitize_user_input(user_message)
+    # ========== END SECURITY CHECKS ==========
+
     await message.answer("🤔 Секунду...")
 
     state_data = await state.get_data()
@@ -140,13 +186,13 @@ async def handle_user_chat(
     }
 
     response = await ai_service.chat(
-        message=user_message,
+        message=sanitized_message,  # Use sanitized input
         role=UserRole.USER,
         user_data=user_data,
         conversation_history=history,
     )
 
-    history.append({"role": "user", "content": user_message})
+    history.append({"role": "user", "content": sanitized_message})
     history.append({"role": "assistant", "content": response})
 
     if len(history) > 16:

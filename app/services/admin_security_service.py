@@ -66,7 +66,8 @@ HOMOGLYPHS = {
     'T': ['Т', 'Τ'],  # Latin T, Cyrillic Т, Greek Τ
     'X': ['Х', 'Χ'],  # Latin X, Cyrillic Х, Greek Χ
     'Y': ['У', 'Υ'],  # Latin Y, Cyrillic У, Greek Υ
-    '_': ['-', '.', ''],  # Underscore variations
+    'r': ['р'],  # Latin r, Cyrillic р (ADDED)
+    '_': ['-', '.'],  # Underscore variations (FIXED: removed empty string)
 }
 
 

@@ -53,7 +53,10 @@ def format_greeting(admin_id: int) -> str:
 
 async def send_to_all_admins(message: str, category: str = "info"):
     """Отправить сообщение всем админам."""
-    token = os.getenv('TELEGRAM_BOT_TOKEN', '8506414714:AAGO6CM338MuzxZT8xO8WfSoRomnqczS2d4')
+    token = os.getenv('TELEGRAM_BOT_TOKEN')
+    if not token:
+        print('❌ TELEGRAM_BOT_TOKEN not set!')
+        return
     bot = Bot(token=token)
     
     # Иконки категорий
@@ -88,7 +91,10 @@ async def send_to_all_admins(message: str, category: str = "info"):
 
 async def send_to_tech_lead(message: str):
     """Отправить сообщение только техническому заместителю (Александру)."""
-    token = os.getenv('TELEGRAM_BOT_TOKEN', '8506414714:AAGO6CM338MuzxZT8xO8WfSoRomnqczS2d4')
+    token = os.getenv('TELEGRAM_BOT_TOKEN')
+    if not token:
+        print('❌ TELEGRAM_BOT_TOKEN not set!')
+        return
     bot = Bot(token=token)
     
     # Александр - технический заместитель

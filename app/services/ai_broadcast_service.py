@@ -13,13 +13,34 @@ from app.models import User, Appeal
 from app.repositories.user_repository import UserRepository
 
 
+# Only these admins can use broadcast functions
+TRUSTED_ADMIN_IDS = [
+    1040687384,  # @VladarevInvestBrok (Командир/super_admin)
+    1691026253,  # @AI_XAN (Саша - Tech Deputy)
+    241568583,   # @natder (Наташа)
+    6540613027,  # @ded_vtapkax (Влад)
+]
+
+
 class AIBroadcastService:
     """Service for ARIA to send messages and broadcasts."""
 
-    def __init__(self, session: AsyncSession, bot: Bot):
+    def __init__(
+        self,
+        session: AsyncSession,
+        bot: Bot,
+        admin_telegram_id: int | None = None,
+        admin_username: str | None = None,
+    ):
         self.session = session
         self.bot = bot
+        self.admin_telegram_id = admin_telegram_id
+        self.admin_username = admin_username
         self.user_repo = UserRepository(session)
+
+    def _is_trusted_admin(self) -> bool:
+        """Check if current admin is trusted for broadcasts."""
+        return self.admin_telegram_id in TRUSTED_ADMIN_IDS
 
     async def send_message_to_user(
         self,
@@ -38,6 +59,17 @@ class AIBroadcastService:
         Returns:
             Result dict with status
         """
+        # Security check
+        if not self._is_trusted_admin():
+            logger.warning(
+                f"BROADCAST DENIED: Untrusted admin {self.admin_telegram_id} "
+                f"attempted to send message"
+            )
+            return {
+                "success": False,
+                "error": "❌ Недостаточно прав для отправки сообщений",
+            }
+
         try:
             # Find user
             user = await self._find_user(user_identifier)
@@ -55,8 +87,8 @@ class AIBroadcastService:
             )
 
             logger.info(
-                f"ARIA sent message to user {user.telegram_id} "
-                f"(@{user.username})"
+                f"ARIA (admin {self.admin_telegram_id}) sent message to user "
+                f"{user.telegram_id} (@{user.username})"
             )
 
             return {
@@ -70,7 +102,7 @@ class AIBroadcastService:
             logger.error(f"Failed to send message: {e}")
             return {
                 "success": False,
-                "error": str(e),
+                "error": "Ошибка отправки сообщения",
             }
 
     async def broadcast_to_group(
@@ -96,6 +128,24 @@ class AIBroadcastService:
         Returns:
             Result dict with stats
         """
+        # Security check
+        if not self._is_trusted_admin():
+            logger.warning(
+                f"BROADCAST DENIED: Untrusted admin {self.admin_telegram_id} "
+                f"attempted broadcast to group '{group}'"
+            )
+            return {
+                "success": False,
+                "error": "❌ Недостаточно прав для рассылки",
+            }
+
+        # Only super_admin can broadcast to "all"
+        if group == "all" and self.admin_telegram_id != 1040687384:
+            return {
+                "success": False,
+                "error": "❌ Рассылка на 'all' доступна только Командиру",
+            }
+
         try:
             # Get user IDs based on group
             user_ids = await self._get_users_by_group(group, limit)

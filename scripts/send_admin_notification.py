@@ -14,7 +14,10 @@ from aiogram import Bot
 
 async def send_notification(message: str):
     """Send notification to all admins."""
-    token = os.getenv('TELEGRAM_BOT_TOKEN', '8506414714:AAGO6CM338MuzxZT8xO8WfSoRomnqczS2d4')
+    token = os.getenv('TELEGRAM_BOT_TOKEN')
+    if not token:
+        print('❌ TELEGRAM_BOT_TOKEN not set!')
+        return
     bot = Bot(token=token)
     
     # Admin IDs

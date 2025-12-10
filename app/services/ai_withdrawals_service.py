@@ -159,6 +159,11 @@ class AIWithdrawalsService:
             TransactionStatus.FAILED.value: "❌ Отклонена",
         }
 
+        # Mask wallet address for security
+        masked_address = withdrawal.to_address
+        if masked_address and len(masked_address) > 20:
+            masked_address = masked_address[:10] + "..." + masked_address[-8:]
+
         return {
             "success": True,
             "withdrawal": {
@@ -167,7 +172,7 @@ class AIWithdrawalsService:
                 "user_id": withdrawal.user_id,
                 "user_balance": float(user.balance) if user else 0,
                 "amount": float(withdrawal.amount),
-                "to_address": withdrawal.to_address,
+                "to_address": masked_address,  # MASKED for security
                 "status": status_emoji.get(withdrawal.status, withdrawal.status),
                 "created": withdrawal.created_at.strftime("%d.%m.%Y %H:%M") if withdrawal.created_at else None,
                 "description": withdrawal.description,
