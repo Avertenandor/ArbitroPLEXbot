@@ -50,9 +50,7 @@ class AIInterviewService:
         interview = cls._active_interviews.get(target_admin_id)
         if interview and interview.status == "active":
             # Check timeout
-            if datetime.utcnow() - interview.last_activity > timedelta(
-                minutes=cls.RESPONSE_TIMEOUT_MINUTES
-            ):
+            if datetime.utcnow() - interview.last_activity > timedelta(minutes=cls.RESPONSE_TIMEOUT_MINUTES):
                 interview.status = "cancelled"
                 logger.info(f"Interview with {target_admin_id} timed out")
                 return None
@@ -114,8 +112,7 @@ class AIInterviewService:
         await self._send_next_question(interview)
 
         logger.info(
-            f"ARIA started interview with @{target_admin_username} "
-            f"on topic '{topic}', {len(questions)} questions"
+            f"ARIA started interview with @{target_admin_username} on topic '{topic}', {len(questions)} questions"
         )
 
         return {
@@ -178,10 +175,12 @@ class AIInterviewService:
 
         # Save the answer
         question = interview.questions[interview.current_question_idx]
-        interview.answers.append({
-            "question": question,
-            "answer": answer_text,
-        })
+        interview.answers.append(
+            {
+                "question": question,
+                "answer": answer_text,
+            }
+        )
 
         # Move to next question
         interview.current_question_idx += 1
@@ -192,8 +191,7 @@ class AIInterviewService:
             # Send confirmation and next question
             await self.bot.send_message(
                 target_admin_id,
-                "✅ Ответ записан!\n\n"
-                "Продолжаем интервью...",
+                "✅ Ответ записан!\n\nПродолжаем интервью...",
                 parse_mode="Markdown",
             )
             await asyncio.sleep(1)
@@ -232,10 +230,7 @@ class AIInterviewService:
         """Notify the interviewer that interview is complete."""
         try:
             # Format answers for display
-            answers_text = "\n\n".join([
-                f"**Q:** {qa['question']}\n**A:** {qa['answer']}"
-                for qa in interview.answers
-            ])
+            answers_text = "\n\n".join([f"**Q:** {qa['question']}\n**A:** {qa['answer']}" for qa in interview.answers])
 
             message = (
                 f"📋 **Интервью завершено!**\n\n"

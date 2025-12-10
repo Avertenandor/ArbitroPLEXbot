@@ -27,20 +27,12 @@ from app.repositories.global_settings_repository import GlobalSettingsRepository
 from app.repositories.user_repository import UserRepository
 
 
-# Only these admins can modify deposits
-TRUSTED_ADMIN_IDS = [
-    1040687384,  # @VladarevInvestBrok (Командир/super_admin)
-    1691026253,  # @AI_XAN (Саша - Tech Deputy)
-    241568583,  # @natder (Наташа)
-    6540613027,  # @ded_vtapkax (Влад)
-]
-
-
 class AIDepositsService:
     """
     AI-powered deposits management service.
 
     Provides full deposit management for ARIA.
+    ALL ADMINS are now trusted to manage deposits via ARIA.
     """
 
     def __init__(
@@ -69,8 +61,9 @@ class AIDepositsService:
         return admin, None
 
     def _is_trusted_admin(self) -> bool:
-        """Check if current admin can modify deposits."""
-        return self.admin_telegram_id in TRUSTED_ADMIN_IDS
+        """Check if current admin can modify deposits. ALL admins are trusted."""
+        # Все админы доверенные — просто проверяем что есть telegram_id
+        return self.admin_telegram_id is not None
 
     async def _find_user(self, identifier: str) -> tuple[User | None, str | None]:
         """Find user by @username or telegram_id."""
@@ -156,8 +149,11 @@ class AIDepositsService:
             user_identifier: @username or telegram_id
         """
         from loguru import logger
-        logger.info(f"AI_DEPOSITS: get_user_deposits called by admin_telegram_id={self.admin_telegram_id}, admin_data={self.admin_data}")
-        
+
+        logger.info(
+            f"AI_DEPOSITS: get_user_deposits called by admin_telegram_id={self.admin_telegram_id}, admin_data={self.admin_data}"
+        )
+
         admin, error = await self._verify_admin()
         if error:
             logger.warning(f"AI_DEPOSITS: verify_admin failed: {error}")

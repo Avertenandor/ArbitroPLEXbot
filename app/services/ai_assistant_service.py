@@ -3032,14 +3032,14 @@ class AIAssistantService:
     ) -> dict[str, Any] | None:
         """Resolve admin identifier to telegram_id and username."""
         from app.repositories.admin_repository import AdminRepository
-        
+
         admin_repo = AdminRepository(session)
-        
+
         if isinstance(identifier, int):
             admin = await admin_repo.get_by(telegram_id=identifier)
         else:
             identifier = str(identifier).strip()
-            
+
             # @username
             if identifier.startswith("@"):
                 username = identifier[1:]
@@ -3050,7 +3050,7 @@ class AIAssistantService:
             else:
                 # Try username without @
                 admin = await admin_repo.get_by(username=identifier)
-        
+
         if admin:
             return {
                 "telegram_id": admin.telegram_id,
@@ -3163,16 +3163,13 @@ class AIAssistantService:
                     # ========== INTERVIEW TOOLS ==========
                     elif tool_name == "start_interview":
                         from app.services.ai_interview_service import get_interview_service, init_interview_service
-                        
+
                         interview_service = get_interview_service(bot)
                         if not interview_service:
                             interview_service = init_interview_service(bot)
-                        
+
                         # Find admin by identifier
-                        admin_id = await self._resolve_admin_id(
-                            tool_input["admin_identifier"], 
-                            session
-                        )
+                        admin_id = await self._resolve_admin_id(tool_input["admin_identifier"], session)
                         if not admin_id:
                             result = {
                                 "success": False,
@@ -3188,15 +3185,12 @@ class AIAssistantService:
                             )
                     elif tool_name == "get_interview_status":
                         from app.services.ai_interview_service import get_interview_service
-                        
+
                         interview_service = get_interview_service(bot)
                         if not interview_service:
                             result = {"success": False, "error": "Сервис интервью не инициализирован"}
                         else:
-                            admin_id = await self._resolve_admin_id(
-                                tool_input["admin_identifier"], 
-                                session
-                            )
+                            admin_id = await self._resolve_admin_id(tool_input["admin_identifier"], session)
                             if not admin_id:
                                 result = {"success": False, "error": "Админ не найден"}
                             else:
@@ -3204,15 +3198,12 @@ class AIAssistantService:
                                 result = status if status else {"success": False, "error": "Нет активного интервью"}
                     elif tool_name == "cancel_interview":
                         from app.services.ai_interview_service import get_interview_service
-                        
+
                         interview_service = get_interview_service(bot)
                         if not interview_service:
                             result = {"success": False, "error": "Сервис интервью не инициализирован"}
                         else:
-                            admin_id = await self._resolve_admin_id(
-                                tool_input["admin_identifier"], 
-                                session
-                            )
+                            admin_id = await self._resolve_admin_id(tool_input["admin_identifier"], session)
                             if not admin_id:
                                 result = {"success": False, "error": "Админ не найден"}
                             else:

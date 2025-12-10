@@ -379,31 +379,30 @@ async def handle_chat_message(
             target_admin_id=admin.telegram_id,
             answer_text=user_message,
         )
-        
+
         if result.get("completed"):
             # Interview completed - save to knowledge base
             ai_service = get_ai_service()
             answers = result.get("answers", [])
             topic = result.get("topic", "")
-            
+
             if answers:
                 # Convert to QA pairs for knowledge base
                 qa_pairs = []
                 for qa in answers:
-                    qa_pairs.append({
-                        "question": qa["question"],
-                        "answer": qa["answer"],
-                        "category": topic,
-                    })
-                
+                    qa_pairs.append(
+                        {
+                            "question": qa["question"],
+                            "answer": qa["answer"],
+                            "category": topic,
+                        }
+                    )
+
                 # Save to knowledge base
-                saved = await ai_service.save_learned_knowledge(
-                    qa_pairs, 
-                    result.get("target", "interview")
-                )
-                
+                saved = await ai_service.save_learned_knowledge(qa_pairs, result.get("target", "interview"))
+
                 logger.info(f"Interview completed: saved {saved} entries from @{result.get('target')}")
-        
+
         # Don't process as regular message - interview handler took care of it
         return
 
