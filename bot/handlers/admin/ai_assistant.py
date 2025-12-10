@@ -44,7 +44,7 @@ def sanitize_markdown(text: str) -> str:
     if bold_count % 2 != 0:
         # Remove the last unpaired **
         last_idx = text.rfind("**")
-        text = text[:last_idx] + text[last_idx + 2:]
+        text = text[:last_idx] + text[last_idx + 2 :]
 
     # Fix unclosed single asterisks (italic)
     # First, temporarily replace ** with placeholder
@@ -53,7 +53,7 @@ def sanitize_markdown(text: str) -> str:
     if asterisk_count % 2 != 0:
         # Remove the last unpaired *
         last_idx = text.rfind("*")
-        text = text[:last_idx] + text[last_idx + 1:]
+        text = text[:last_idx] + text[last_idx + 1 :]
     # Restore bold markers
     text = text.replace("\x00BOLD\x00", "**")
 
@@ -63,7 +63,7 @@ def sanitize_markdown(text: str) -> str:
     underscore_count = text.count("_")
     if underscore_count % 2 != 0:
         last_idx = text.rfind("_")
-        text = text[:last_idx] + text[last_idx + 1:]
+        text = text[:last_idx] + text[last_idx + 1 :]
     text = text.replace("\x00UNDER\x00", "__")
 
     # Fix unclosed backticks
@@ -77,7 +77,7 @@ def sanitize_markdown(text: str) -> str:
     backtick_count = text.count("`")
     if backtick_count % 2 != 0:
         last_idx = text.rfind("`")
-        text = text[:last_idx] + text[last_idx + 1:]
+        text = text[:last_idx] + text[last_idx + 1 :]
     text = text.replace("\x00CODE\x00", "```")
 
     # Fix unclosed square brackets (links)
@@ -132,11 +132,11 @@ async def get_platform_stats(session: AsyncSession) -> dict[str, Any]:
     try:
         user_repo = UserRepository(session)
         total_users = await user_repo.count()
-        active_users = await user_repo.count_active()
+        verified_users = await user_repo.count_verified_users()
 
         return {
             "Всего пользователей": total_users,
-            "Активных пользователей": active_users,
+            "Верифицированных пользователей": verified_users,
         }
     except Exception as e:
         logger.error(f"Error getting platform stats: {e}")
@@ -278,8 +278,7 @@ async def end_chat(
 
     await clear_state_keep_session(state)
     await message.answer(
-        "✅ Диалог завершён.\n\n"
-        "Было приятно пообщаться! Возвращайся, если будут вопросы.",
+        "✅ Диалог завершён.\n\nБыло приятно пообщаться! Возвращайся, если будут вопросы.",
         reply_markup=ai_assistant_keyboard(),
     )
 
@@ -315,8 +314,7 @@ async def handle_chat_message(
     forward_check = check_forwarded_message(message)
     if forward_check["is_forwarded"]:
         logger.warning(
-            f"SECURITY: Forwarded message from admin {admin.telegram_id} "
-            f"(@{admin.username}). Original: {forward_check}"
+            f"SECURITY: Forwarded message from admin {admin.telegram_id} (@{admin.username}). Original: {forward_check}"
         )
         await message.answer(
             SECURITY_RESPONSE_FORWARDED,
@@ -336,8 +334,7 @@ async def handle_chat_message(
 
     if not security_check["allow"]:
         logger.error(
-            f"🚨 SECURITY BLOCK: Admin {admin.telegram_id} message blocked. "
-            f"Reason: {security_check['block_reason']}"
+            f"🚨 SECURITY BLOCK: Admin {admin.telegram_id} message blocked. Reason: {security_check['block_reason']}"
         )
         await message.answer(
             SECURITY_RESPONSE_BLOCKED,

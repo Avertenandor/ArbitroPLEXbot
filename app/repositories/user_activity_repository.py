@@ -122,9 +122,7 @@ class UserActivityRepository(BaseRepository[UserActivity]):
         if since:
             conditions.append(UserActivity.created_at >= since)
 
-        query = select(
-            func.count(func.distinct(UserActivity.telegram_id))
-        ).where(and_(*conditions))
+        query = select(func.count(func.distinct(UserActivity.telegram_id))).where(and_(*conditions))
         result = await self.session.execute(query)
         return result.scalar() or 0
 
@@ -172,9 +170,9 @@ class UserActivityRepository(BaseRepository[UserActivity]):
             stats["total_actions"] += row.count
 
         # Get total unique users for period
-        unique_query = select(
-            func.count(func.distinct(UserActivity.telegram_id))
-        ).where(UserActivity.created_at >= since)
+        unique_query = select(func.count(func.distinct(UserActivity.telegram_id))).where(
+            UserActivity.created_at >= since
+        )
         unique_result = await self.session.execute(unique_query)
         stats["total_unique_users"] = unique_result.scalar() or 0
 
@@ -227,15 +225,9 @@ class UserActivityRepository(BaseRepository[UserActivity]):
 
         funnel = {
             "starts": await self.count_unique_users_by_type(ActivityType.START, since),
-            "wallets_entered": await self.count_unique_users_by_type(
-                ActivityType.WALLET_ENTERED, since
-            ),
-            "plex_paid": await self.count_unique_users_by_type(
-                ActivityType.PLEX_PAID, since
-            ),
-            "first_deposits": await self.count_unique_users_by_type(
-                ActivityType.DEPOSIT_CONFIRMED, since
-            ),
+            "wallets_entered": await self.count_unique_users_by_type(ActivityType.WALLET_ENTERED, since),
+            "plex_paid": await self.count_unique_users_by_type(ActivityType.PLEX_PAID, since),
+            "first_deposits": await self.count_unique_users_by_type(ActivityType.DEPOSIT_CONFIRMED, since),
         }
 
         return funnel
@@ -270,10 +262,7 @@ class UserActivityRepository(BaseRepository[UserActivity]):
         )
 
         result = await self.session.execute(query)
-        return [
-            {"hour": row.hour, "count": row.count, "users": row.users}
-            for row in result.all()
-        ]
+        return [{"hour": row.hour, "count": row.count, "users": row.users} for row in result.all()]
 
     async def cleanup_old_activities(
         self,

@@ -67,11 +67,7 @@ async def _show_dashboard(message: Message, state: FSMContext) -> None:
     cold_plex_bal = Decimal("0")
 
     # Safe comparison - hot_address already validated above
-    has_cold = (
-        cold_address
-        and hot_address
-        and cold_address.lower() != hot_address.lower()
-    )
+    has_cold = cold_address and hot_address and cold_address.lower() != hot_address.lower()
 
     if has_cold:
         cold_bnb_bal = await bs.get_native_balance(cold_address) or Decimal("0")
@@ -111,11 +107,7 @@ async def _show_dashboard(message: Message, state: FSMContext) -> None:
 
     text += "\n👇 Выберите действие:"
 
-    await message.answer(
-        text,
-        parse_mode="Markdown",
-        reply_markup=wallet_dashboard_keyboard()
-    )
+    await message.answer(text, parse_mode="Markdown", reply_markup=wallet_dashboard_keyboard())
 
 
 @router.message(F.text == "🔄 Обновить баланс", WalletManagementStates.menu)
@@ -138,29 +130,19 @@ async def show_receive_info(message: Message):
     hot_address = bs.wallet_address
     cold_address = bs.system_wallet_address
 
-    text = (
-        "📥 **Получение средств**\n\n"
-        "🔥 **Hot Wallet (Для пополнения газа):**\n"
-        f"`{hot_address}`\n\n"
-    )
+    text = f"📥 **Получение средств**\n\n🔥 **Hot Wallet (Для пополнения газа):**\n`{hot_address}`\n\n"
 
     if cold_address and cold_address.lower() != hot_address.lower():
-        text += (
-            "❄️ **Input Wallet (Для депозитов):**\n"
-            f"`{cold_address}`\n"
-        )
+        text += f"❄️ **Input Wallet (Для депозитов):**\n`{cold_address}`\n"
 
-    await message.answer(
-        text,
-        parse_mode="Markdown",
-        reply_markup=wallet_back_keyboard()
-    )
+    await message.answer(text, parse_mode="Markdown", reply_markup=wallet_back_keyboard())
 
 
 @router.message(F.text == "⚙️ Настройки", WalletManagementStates.menu)
 async def go_to_settings(message: Message, state: FSMContext, **data: Any):
     """Go to wallet settings (Backward compatibility but now integrated)."""
     from bot.handlers.admin.wallet_key_setup import handle_wallet_menu
+
     await handle_wallet_menu(message, state, **data)
 
 
@@ -168,6 +150,7 @@ async def go_to_settings(message: Message, state: FSMContext, **data: Any):
 async def dashboard_input_wallet_setup(message: Message, state: FSMContext, **data: Any):
     """Start input wallet setup from dashboard."""
     from bot.handlers.admin.wallet_key_setup import start_input_wallet_setup
+
     # We need to clear current state first to allow wallet setup state
     await state.set_state(None)
     await start_input_wallet_setup(message, state, **data)
@@ -177,6 +160,7 @@ async def dashboard_input_wallet_setup(message: Message, state: FSMContext, **da
 async def dashboard_output_wallet_setup(message: Message, state: FSMContext, **data: Any):
     """Start output wallet setup from dashboard."""
     from bot.handlers.admin.wallet_key_setup import start_output_wallet_setup
+
     # We need to clear current state first to allow wallet setup state
     await state.set_state(None)
     await start_output_wallet_setup(message, state, **data)
@@ -184,15 +168,15 @@ async def dashboard_output_wallet_setup(message: Message, state: FSMContext, **d
 
 # --- SEND FLOW ---
 
+
 @router.message(F.text == "📤 Отправить", WalletManagementStates.menu)
 async def start_send_flow(message: Message, state: FSMContext):
     """Start sending process."""
     await state.set_state(WalletManagementStates.selecting_currency_to_send)
     await message.answer(
-        "📤 **Отправка средств (Hot Wallet)**\n\n"
-        "Выберите валюту для отправки:",
+        "📤 **Отправка средств (Hot Wallet)**\n\nВыберите валюту для отправки:",
         parse_mode="Markdown",
-        reply_markup=wallet_currency_selection_keyboard()
+        reply_markup=wallet_currency_selection_keyboard(),
     )
 
 
@@ -211,10 +195,9 @@ async def select_currency(message: Message, state: FSMContext):
     await state.set_state(WalletManagementStates.input_address_to_send)
 
     await message.answer(
-        f"📤 **Отправка {currency}**\n\n"
-        "Введите адрес получателя (BSC/BEP-20):",
+        f"📤 **Отправка {currency}**\n\nВведите адрес получателя (BSC/BEP-20):",
         parse_mode="Markdown",
-        reply_markup=wallet_back_keyboard()
+        reply_markup=wallet_back_keyboard(),
     )
 
 
@@ -229,10 +212,7 @@ async def input_address(message: Message, state: FSMContext):
     bs = get_blockchain_service()
 
     if not await bs.validate_wallet_address(address):
-        await message.answer(
-            "❌ Неверный формат адреса. Попробуйте еще раз:",
-            reply_markup=wallet_back_keyboard()
-        )
+        await message.answer("❌ Неверный формат адреса. Попробуйте еще раз:", reply_markup=wallet_back_keyboard())
         return
 
     await state.update_data(send_address=address)
@@ -241,11 +221,9 @@ async def input_address(message: Message, state: FSMContext):
 
     await state.set_state(WalletManagementStates.input_amount_to_send)
     await message.answer(
-        f"📤 **Отправка {currency}**\n"
-        f"Получатель: `{address}`\n\n"
-        "Введите сумму или выберите %:",
+        f"📤 **Отправка {currency}**\nПолучатель: `{address}`\n\nВведите сумму или выберите %:",
         parse_mode="Markdown",
-        reply_markup=wallet_amount_keyboard()
+        reply_markup=wallet_amount_keyboard(),
     )
 
 
@@ -348,21 +326,16 @@ async def execute_transaction(message: Message, state: FSMContext):
                 f"[Посмотреть в Explorer](https://bscscan.com/tx/{result['tx_hash']})",
                 parse_mode="Markdown",
                 disable_web_page_preview=True,
-                reply_markup=wallet_back_keyboard()
+                reply_markup=wallet_back_keyboard(),
             )
         else:
             await message.answer(
-                f"❌ **Ошибка отправки**\n\n"
-                f"Причина: {result['error']}",
-                reply_markup=wallet_back_keyboard()
+                f"❌ **Ошибка отправки**\n\nПричина: {result['error']}", reply_markup=wallet_back_keyboard()
             )
 
     except Exception as e:
         logger.error(f"Wallet send error: {e}")
-        await message.answer(
-            f"❌ **Критическая ошибка**\n{str(e)}",
-            reply_markup=wallet_back_keyboard()
-        )
+        await message.answer(f"❌ **Критическая ошибка**\n{str(e)}", reply_markup=wallet_back_keyboard())
 
 
 @router.message(F.text == "❌ Отменить", WalletManagementStates.confirm_transaction)
