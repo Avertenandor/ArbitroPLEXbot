@@ -54,9 +54,7 @@ class FinpassRecoveryService:
         self.repository = FinancialPasswordRecoveryRepository(session)
         self.user_repository = UserRepository(session)
 
-    async def get_pending_by_user(
-        self, user_id: int
-    ) -> FinancialPasswordRecovery | None:
+    async def get_pending_by_user(self, user_id: int) -> FinancialPasswordRecovery | None:
         """Return the pending request for a user, if any."""
         requests = await self.repository.get_by_user(
             user_id=user_id,
@@ -69,11 +67,7 @@ class FinpassRecoveryService:
         stmt = (
             select(FinancialPasswordRecovery.id)
             .where(FinancialPasswordRecovery.user_id == user_id)
-            .where(
-                FinancialPasswordRecovery.status.in_(
-                    [status.value for status in ACTIVE_USER_STATUSES]
-                )
-            )
+            .where(FinancialPasswordRecovery.status.in_([status.value for status in ACTIVE_USER_STATUSES]))
             .limit(1)
         )
         result = await self.session.execute(stmt)
@@ -97,24 +91,17 @@ class FinpassRecoveryService:
         """
         normalized_reason = reason.strip()
         if len(normalized_reason) < 10:
-            raise ValueError(
-                "Recovery reason must contain at least 10 characters"
-            )
+            raise ValueError("Recovery reason must contain at least 10 characters")
 
         user = await self.user_repository.get_by_id(user_id)
         if not user:
             raise ValueError("User not found")
 
         if await self.get_pending_by_user(user_id):
-            raise ValueError(
-                "A pending recovery request already exists for this user"
-            )
+            raise ValueError("A pending recovery request already exists for this user")
 
         if await self.has_active_recovery(user_id):
-            raise ValueError(
-                "You already have an active recovery request awaiting "
-                "completion"
-            )
+            raise ValueError("You already have an active recovery request awaiting completion")
 
         request = await self.repository.create(
             user_id=user_id,
@@ -147,19 +134,14 @@ class FinpassRecoveryService:
 
         return request
 
-    async def get_all_pending(
-        self, limit: int | None = None
-    ) -> list[FinancialPasswordRecovery]:
+    async def get_all_pending(self, limit: int | None = None) -> list[FinancialPasswordRecovery]:
         """Fetch pending requests, optionally limited for admin UI."""
         if limit is None:
             return await self.repository.get_pending_requests()
 
         stmt = (
             select(FinancialPasswordRecovery)
-            .where(
-                FinancialPasswordRecovery.status
-                == FinancialRecoveryStatus.PENDING.value
-            )
+            .where(FinancialPasswordRecovery.status == FinancialRecoveryStatus.PENDING.value)
             .order_by(FinancialPasswordRecovery.created_at.asc())
             .limit(limit)
         )
@@ -276,15 +258,11 @@ class FinpassRecoveryService:
         )
         return updated or request
 
-    async def get_request_by_id(
-        self, request_id: int
-    ) -> FinancialPasswordRecovery | None:
+    async def get_request_by_id(self, request_id: int) -> FinancialPasswordRecovery | None:
         """Get a request by ID."""
         return await self.repository.get_by_id(request_id)
 
-    async def _get_request(
-        self, request_id: int
-    ) -> FinancialPasswordRecovery:
+    async def _get_request(self, request_id: int) -> FinancialPasswordRecovery:
         request = await self.repository.get_by_id(request_id)
         if not request:
             raise ValueError(f"Recovery request {request_id} not found")
@@ -299,9 +277,4 @@ class FinpassRecoveryService:
     ) -> None:
         allowed_values = {status.value for status in allowed}
         if request.status not in allowed_values:
-            raise ValueError(
-
-                    f"Cannot {action} request {request.id} "
-                    f"in status {request.status}"
-
-            )
+            raise ValueError(f"Cannot {action} request {request.id} in status {request.status}")

@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 
 from loguru import logger
 from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.blacklist import BlacklistActionType
 from app.models.user import User

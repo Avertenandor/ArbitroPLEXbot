@@ -13,9 +13,11 @@ import sys
 import asyncpg
 from loguru import logger
 
+
 # Add project root to path
 sys.path.insert(0, str(sys.path[0] + '/..'))
 from app.utils.datetime_utils import utc_now
+
 
 # Configure logger for script
 logger.remove()

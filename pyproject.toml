@@ -1,31 +1,61 @@
 [tool.ruff]
-line-length = 100
-target-version = "py312"
-exclude = ["alembic/versions"]
+# Ruff is the ONLY linter for this project
+# Replaces: flake8, isort, pycodestyle, pyupgrade
+line-length = 120
+target-version = "py311"
+exclude = [
+    "alembic/versions",
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+]
+fix = true
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "C901"]
-ignore = ["E402"]
+select = [
+    "E",      # pycodestyle errors
+    "F",      # pyflakes
+    "W",      # pycodestyle warnings
+    "I",      # isort
+    "C901",   # mccabe complexity
+    "UP",     # pyupgrade
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "E712",   # comparison to True/False (needed for SQLAlchemy)
+    "E402",   # module level import not at top (intentional in some files)
+]
 
 [tool.ruff.lint.mccabe]
-max-complexity = 15
+max-complexity = 25
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "bot", "jobs", "scripts", "calculator"]
+force-single-line = false
+lines-after-imports = 2
 
 [tool.ruff.lint.per-file-ignores]
-# Module level imports not at top - intentional for lazy loading/sys.path modification
-"app/services/blockchain_service.py" = ["E402"]
+# Scripts with sys.path modifications
+"scripts/*.py" = ["E402", "F401"]
+# Test files
+"tests/*" = ["E501", "E402", "F401"]
+# AI services with dynamic imports
+"app/services/ai_*.py" = ["F401"]
+# Blockchain service with lazy imports
+"app/services/blockchain/*.py" = ["E402", "F401"]
+# Bot handlers with conditional imports
+"bot/handlers/**/*.py" = ["E402"]
 "bot/main.py" = ["E402"]
-"bot/handlers/admin/support.py" = ["E402"]
-"bot/handlers/start.py" = ["E402"]
-"jobs/scheduler.py" = ["E402"]
-"jobs/worker.py" = ["E402"]
-"tests/*" = ["E501", "E402"]
-"tests/conftest.py" = ["E402"]
-"scripts/*.py" = ["E402"]
+"jobs/*.py" = ["E402"]
 
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
-line-ending = "lf"
+line-ending = "auto"
+skip-magic-trailing-comma = false
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

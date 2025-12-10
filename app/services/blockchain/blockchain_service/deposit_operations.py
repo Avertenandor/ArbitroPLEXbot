@@ -4,12 +4,12 @@ Deposit Operations Module.
 Contains all deposit-related functionality for the BlockchainService.
 """
 
-from decimal import Decimal, ROUND_DOWN
+from decimal import ROUND_DOWN, Decimal
 from typing import Any
 
 from loguru import logger
 
-from app.config.constants import BLOCKCHAIN_TIMEOUT, BLOCKCHAIN_LONG_TIMEOUT
+from app.config.constants import BLOCKCHAIN_LONG_TIMEOUT, BLOCKCHAIN_TIMEOUT
 
 from ..constants import USDT_ABI, USDT_DECIMALS
 from ..rpc_wrapper import with_timeout

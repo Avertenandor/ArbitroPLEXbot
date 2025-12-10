@@ -54,6 +54,7 @@ from app.services.blockchain import (
     init_blockchain_service,
 )
 
+
 __all__ = [
     "BlockchainService",
     "get_blockchain_service",

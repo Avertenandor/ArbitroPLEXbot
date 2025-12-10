@@ -28,27 +28,24 @@ All handlers are automatically registered on the router.
 """
 
 # Import router first
+# Import all handlers to register them on the router
+from . import input_wallet, menu, output_wallet, utils
+from .input_wallet import confirm_input_wallet, process_input_wallet, start_input_wallet_setup
+
+# Re-export main functions for backward compatibility
+from .menu import handle_back_to_admin_panel, handle_wallet_menu, handle_wallet_status
+from .output_wallet import (
+    confirm_output_wallet,
+    process_derivation_index,
+    process_output_key,
+    start_output_wallet_setup,
+)
 from .router import router
 
 # Import states
 from .states import WalletSetupStates
-
-# Import all handlers to register them on the router
-from . import menu
-from . import input_wallet
-from . import output_wallet
-from . import utils
-
-# Re-export main functions for backward compatibility
-from .menu import handle_wallet_menu, handle_wallet_status, handle_back_to_admin_panel
-from .input_wallet import start_input_wallet_setup, process_input_wallet, confirm_input_wallet
-from .output_wallet import (
-    start_output_wallet_setup,
-    process_output_key,
-    process_derivation_index,
-    confirm_output_wallet,
-)
 from .utils import secure_zero_memory, update_env_variable
+
 
 # Public API
 __all__ = [
@@ -65,5 +62,5 @@ __all__ = [
     "process_derivation_index",
     "confirm_output_wallet",
     "secure_zero_memory",
-    "update_env_variable",
+    "update_env_variable", "menu", "input_wallet", "output_wallet", "utils",
 ]

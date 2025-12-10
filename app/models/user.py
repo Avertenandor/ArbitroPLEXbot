@@ -23,6 +23,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 
+
 if TYPE_CHECKING:
     from app.models.bonus_credit import BonusCredit
     from app.models.deposit import Deposit

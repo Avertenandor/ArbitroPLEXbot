@@ -15,7 +15,6 @@ from app.models.enums import TransactionStatus
 from app.models.plex_payment import PlexPaymentRequirement
 from app.repositories.deposit_repository import DepositRepository
 from app.repositories.global_settings_repository import GlobalSettingsRepository
-from bot.constants.rules import PLEX_PER_DOLLAR_DAILY
 
 
 class DepositConfirmer:

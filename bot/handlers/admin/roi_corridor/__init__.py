@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from aiogram import Router
 
+
 # Create the main router for this module
 router = Router(name="admin_roi_corridor")
 
@@ -51,6 +52,7 @@ from bot.handlers.admin.roi_corridor.menu import register_menu_handlers
 from bot.handlers.admin.roi_corridor.period_setup import (
     register_period_setup_handlers,
 )
+
 
 # Register all handlers to the router
 register_menu_handlers(router)
@@ -108,6 +110,7 @@ from bot.handlers.admin.roi_corridor.utils import (
     notify_other_admins,
     notify_other_admins_period,
 )
+
 
 # Define __all__ to control what gets exported with "from ... import *"
 __all__ = [

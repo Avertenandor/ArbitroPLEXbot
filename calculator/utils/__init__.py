@@ -14,6 +14,7 @@ from calculator.utils.formatters import (
     format_percentage,
 )
 
+
 __all__ = [
     "format_currency",
     "format_percentage",

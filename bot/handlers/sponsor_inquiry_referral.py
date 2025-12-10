@@ -26,6 +26,7 @@ from app.services.sponsor_inquiry_service import (
 from bot.keyboards.reply import referral_keyboard
 from bot.states.sponsor_inquiry import SponsorInquiryStates
 
+
 router = Router(name="sponsor_inquiry_referral")
 
 

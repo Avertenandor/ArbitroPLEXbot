@@ -8,6 +8,7 @@ import sys
 import warnings
 from pathlib import Path
 
+
 # Suppress eth_utils network warnings about invalid ChainId
 # These warnings are from eth_utils library initialization and don't affect functionality
 # Must be set BEFORE importing any modules that use eth_utils
@@ -26,6 +27,7 @@ warnings.filterwarnings(
 
 from loguru import logger
 
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -33,6 +35,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from app.config.database import async_session_maker
 from app.config.settings import settings
 from app.services.blockchain_service import init_blockchain_service
+
 
 # Initialize BlockchainService for worker tasks
 try:
@@ -58,6 +61,7 @@ from jobs.tasks import (  # noqa: F401
     notification_retry,
     payment_retry,
 )
+
 
 logger.info("Dramatiq worker initialized with all tasks")
 

@@ -36,6 +36,7 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -52,6 +53,7 @@ from app.config.settings import settings  # noqa: E402
 from app.models.referral import Referral  # noqa: E402
 from app.models.user import User  # noqa: E402
 from app.services.referral.config import REFERRAL_DEPTH  # noqa: E402
+
 
 # Configure logging
 logger.remove()

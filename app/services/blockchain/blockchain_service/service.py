@@ -14,7 +14,6 @@ from ..deposit_processor import DepositProcessor
 from ..event_monitor import EventMonitor
 from ..payment_sender import PaymentSender
 from ..provider_manager import ProviderManager
-
 from .balance_operations import BalanceOperations
 from .deposit_operations import DepositOperations
 from .failover import Failover

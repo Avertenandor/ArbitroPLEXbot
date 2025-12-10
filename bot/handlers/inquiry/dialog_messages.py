@@ -23,6 +23,7 @@ from bot.keyboards.user import (
 )
 from bot.states.inquiry import InquiryStates
 
+
 router = Router(name="user_inquiry_dialog_messages")
 
 

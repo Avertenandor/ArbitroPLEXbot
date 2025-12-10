@@ -30,6 +30,7 @@ from bot.utils.menu_buttons import is_menu_button
 from .auto_payout import _safe_process_auto_payout
 from .eligibility import check_withdrawal_eligibility
 
+
 # Router will be created in __init__.py and imported there
 router = Router()
 

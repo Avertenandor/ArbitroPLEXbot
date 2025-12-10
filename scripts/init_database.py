@@ -5,6 +5,7 @@ import asyncio
 import os
 import sys
 
+
 # Add project root to path
 sys.path.insert(0, "/app")
 
@@ -12,6 +13,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.models import Base
+
 
 # Configure logger for script
 logger.remove()

@@ -8,6 +8,7 @@ Runs once per day to calculate and distribute rewards.
 import dramatiq
 from loguru import logger
 
+
 try:
     import redis.asyncio as redis
 except ImportError:

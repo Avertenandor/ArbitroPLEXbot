@@ -35,6 +35,7 @@ from app.services.admin_service.constants import (
     SESSION_DURATION_HOURS,
 )
 
+
 __all__ = [
     "AdminService",
     # Constants (for backward compatibility)

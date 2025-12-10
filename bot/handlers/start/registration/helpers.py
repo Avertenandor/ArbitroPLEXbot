@@ -5,7 +5,6 @@ Contains various helper functions used across registration handlers.
 """
 
 from loguru import logger
-from sqlalchemy.exc import DatabaseError, InterfaceError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User

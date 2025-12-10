@@ -18,6 +18,7 @@ from app.repositories.deposit_repository import DepositRepository
 from app.repositories.deposit_reward_repository import DepositRewardRepository
 from app.services.reward.reward_calculator import RewardCalculator
 
+
 if TYPE_CHECKING:
     from app.services.reward.reward_balance_handler import RewardBalanceHandler
 
@@ -59,11 +60,15 @@ class IndividualRewardProcessor:
         # Get deposits due for accrual with pessimistic lock
         # This prevents race conditions with concurrent reward calculations
         now = datetime.now(UTC)
-        stmt = select(Deposit).where(
-            Deposit.status == "confirmed",
-            Deposit.is_roi_completed == False,  # noqa: E712
-            Deposit.next_accrual_at <= now,
-        ).with_for_update()  # Lock deposits to prevent concurrent modifications
+        stmt = (
+            select(Deposit)
+            .where(
+                Deposit.status == "confirmed",
+                Deposit.is_roi_completed == False,  # noqa: E712
+                Deposit.next_accrual_at <= now,
+            )
+            .with_for_update()
+        )  # Lock deposits to prevent concurrent modifications
         result = await self.session.execute(stmt)
         deposits = list(result.scalars().all())
 
@@ -75,27 +80,19 @@ class IndividualRewardProcessor:
         for deposit in deposits:
             try:
                 # Get corridor config
-                config = await corridor_service.get_corridor_config(
-                    deposit.level
-                )
+                config = await corridor_service.get_corridor_config(deposit.level)
 
                 # Determine rate
                 if config["mode"] == "custom":
-                    rate = corridor_service.generate_rate_from_corridor(
-                        config["roi_min"], config["roi_max"]
-                    )
+                    rate = corridor_service.generate_rate_from_corridor(config["roi_min"], config["roi_max"])
                 else:  # equal
                     rate = config["roi_fixed"]
 
                 # Calculate reward using RewardCalculator
-                reward_amount = self.calculator.calculate_reward_amount(
-                    deposit.amount, rate, days=1
-                )
+                reward_amount = self.calculator.calculate_reward_amount(deposit.amount, rate, days=1)
 
                 # Check ROI cap using RewardCalculator
-                reward_amount = self.calculator.cap_reward_to_remaining_roi(
-                    reward_amount, deposit
-                )
+                reward_amount = self.calculator.cap_reward_to_remaining_roi(reward_amount, deposit)
 
                 if reward_amount <= 0:
                     logger.debug(
@@ -118,9 +115,7 @@ class IndividualRewardProcessor:
                 )
 
                 # Update deposit
-                new_roi_paid = (
-                    deposit.roi_paid_amount or Decimal("0")
-                ) + reward_amount
+                new_roi_paid = (deposit.roi_paid_amount or Decimal("0")) + reward_amount
                 period_hours = await corridor_service.get_accrual_period_hours()
                 next_accrual = now + timedelta(hours=period_hours)
 
@@ -131,9 +126,7 @@ class IndividualRewardProcessor:
                 )
 
                 # R19: Process referral rewards from ROI
-                await referral_service.process_roi_referral_rewards(
-                    deposit.user_id, reward_amount
-                )
+                await referral_service.process_roi_referral_rewards(deposit.user_id, reward_amount)
 
                 # Check if ROI completed using RewardCalculator
                 if self.calculator.is_roi_cap_reached(deposit, total_earned=new_roi_paid):
@@ -186,9 +179,7 @@ class IndividualRewardProcessor:
             extra={"processed": len(deposits)},
         )
 
-    async def _send_roi_completed_notification(
-        self, deposit: Deposit
-    ) -> None:
+    async def _send_roi_completed_notification(self, deposit: Deposit) -> None:
         """
         Send notification when ROI reaches 500%.
 

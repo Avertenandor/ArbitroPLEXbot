@@ -22,6 +22,7 @@ from bot.keyboards.reply import referral_keyboard, referral_list_keyboard
 from bot.utils.constants import REFERRAL_RATES
 from bot.utils.formatters import format_usdt
 
+
 router = Router(name="referral_list")
 
 

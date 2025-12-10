@@ -15,13 +15,6 @@ All keyboards are re-exported here for backward compatibility.
 """
 
 # Main menu keyboards
-from .main_menu import (
-    cabinet_submenu_keyboard,
-    finances_submenu_keyboard,
-    help_submenu_keyboard,
-    main_menu_keyboard,
-)
-
 # Deposit menu keyboards
 from .deposit_menu import (
     deposit_levels_keyboard,
@@ -36,6 +29,22 @@ from .financial_menu import (
     withdrawal_menu_keyboard,
 )
 
+# Helper keyboards and functions
+from .helpers import (
+    add_navigation_buttons,
+    build_level_button_text,
+    support_keyboard,
+)
+from .main_menu import (
+    cabinet_submenu_keyboard,
+    finances_submenu_keyboard,
+    help_submenu_keyboard,
+    main_menu_keyboard,
+)
+
+# Referral menu keyboards
+from .referral import referral_menu_keyboard
+
 # Settings menu keyboards
 from .settings_menu import (
     contact_input_keyboard,
@@ -47,15 +56,6 @@ from .settings_menu import (
     wallet_menu_keyboard,
 )
 
-# Helper keyboards and functions
-from .helpers import (
-    add_navigation_buttons,
-    build_level_button_text,
-    support_keyboard,
-)
-
-# Referral menu keyboards
-from .referral import referral_menu_keyboard
 
 # Public exports for backward compatibility
 __all__ = [

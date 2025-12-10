@@ -21,6 +21,7 @@ from bot.keyboards.reply import referral_keyboard
 from bot.utils.formatters import format_usdt
 from bot.utils.user_loader import UserLoader
 
+
 router = Router()
 
 

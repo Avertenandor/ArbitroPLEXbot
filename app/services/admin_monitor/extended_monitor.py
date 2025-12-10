@@ -29,6 +29,7 @@ from .notifications import (
     notify_withdrawal_request,
 )
 
+
 if TYPE_CHECKING:
     from aiogram import Bot
     from sqlalchemy.ext.asyncio import AsyncSession

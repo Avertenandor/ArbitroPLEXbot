@@ -14,14 +14,13 @@ from app.models.base import Base
 
 # Security Models
 from app.models.blacklist import Blacklist
+from app.models.blockchain_sync_state import BlockchainSyncState
 
 # Blockchain Cache
 from app.models.blockchain_tx_cache import BlockchainTxCache
-from app.models.blockchain_sync_state import BlockchainSyncState
 
 # Bonus Credits
 from app.models.bonus_credit import BonusCredit
-
 from app.models.deposit import Deposit
 from app.models.deposit_corridor_history import DepositCorridorHistory
 from app.models.deposit_level_config import DepositLevelConfig
@@ -78,6 +77,7 @@ from app.models.user_message_log import UserMessageLog
 from app.models.user_notification_settings import UserNotificationSettings
 from app.models.user_wallet_history import UserWalletHistory
 from app.models.wallet_change_request import WalletChangeRequest
+
 
 __all__ = [
     # Base

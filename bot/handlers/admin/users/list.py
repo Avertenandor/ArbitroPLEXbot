@@ -16,6 +16,7 @@ from app.services.user_service import UserService
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
 from bot.keyboards.reply import admin_user_list_keyboard, admin_users_keyboard
 
+
 router = Router(name="admin_users_list")
 
 

@@ -157,10 +157,10 @@ async def _check_user_plex_balance(
     user.last_plex_balance = plex_balance
 
     balance_int = int(plex_balance)
-    
+
     # Calculate required PLEX: 10 PLEX per $1 of deposit daily
     required_plex = int(user.required_daily_plex)
-    
+
     # User is sufficient if they have at least required daily PLEX
     is_sufficient = balance_int >= required_plex and required_plex > 0
     was_suspended = user.work_status == WorkStatus.SUSPENDED_NO_PLEX

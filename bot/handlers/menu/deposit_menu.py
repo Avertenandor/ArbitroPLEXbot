@@ -17,6 +17,7 @@ from app.models.user import User
 from bot.keyboards.reply import deposit_keyboard
 from bot.utils.user_loader import UserLoader
 
+
 router = Router()
 
 

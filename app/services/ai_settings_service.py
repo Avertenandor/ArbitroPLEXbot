@@ -18,8 +18,8 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.admin_repository import AdminRepository
-from app.repositories.global_settings_repository import GlobalSettingsRepository
 from app.repositories.deposit_level_config_repository import DepositLevelConfigRepository
+from app.repositories.global_settings_repository import GlobalSettingsRepository
 
 
 # Whitelist of admin telegram IDs who can modify settings

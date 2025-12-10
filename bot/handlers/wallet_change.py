@@ -16,6 +16,7 @@ from app.services.user_service import UserService
 from bot.keyboards.reply import cancel_keyboard, main_menu_reply_keyboard, settings_keyboard
 from bot.states.wallet_change import WalletChangeStates
 
+
 router = Router(name="wallet_change")
 
 

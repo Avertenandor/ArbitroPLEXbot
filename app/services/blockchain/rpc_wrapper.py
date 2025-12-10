@@ -13,6 +13,7 @@ from loguru import logger
 
 from app.config.constants import BLOCKCHAIN_TIMEOUT
 
+
 T = TypeVar("T")
 
 

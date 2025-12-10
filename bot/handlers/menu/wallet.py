@@ -17,6 +17,7 @@ from app.models.user_wallet_history import UserWalletHistory
 from bot.keyboards.reply import wallet_menu_keyboard
 from bot.utils.user_loader import UserLoader
 
+
 router = Router()
 
 

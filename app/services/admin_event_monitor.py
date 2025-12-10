@@ -36,6 +36,7 @@ from app.services.admin_monitor import (
     get_admin_monitor,
 )
 
+
 __all__ = [
     # Main class and factory
     "AdminEventMonitor",

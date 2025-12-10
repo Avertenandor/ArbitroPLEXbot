@@ -75,6 +75,7 @@ from app.repositories.wallet_change_request_repository import (
     WalletChangeRequestRepository,
 )
 
+
 __all__ = [
     # Base
     "BaseRepository",

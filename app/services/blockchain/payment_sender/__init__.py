@@ -21,8 +21,7 @@ from eth_account import Account
 from loguru import logger
 from web3 import AsyncWeb3
 
-from ..constants import USDT_ABI, MAX_RETRIES
-
+from ..constants import MAX_RETRIES, USDT_ABI
 from .balance_checker import BalanceChecker
 from .gas_estimator import GasEstimator
 from .nonce_manager import NonceManager

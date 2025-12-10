@@ -9,6 +9,7 @@ from .admin_checks import (
     is_last_super_admin,
 )
 
+
 __all__ = [
     "check_admin_access",
     "get_admin_or_deny",

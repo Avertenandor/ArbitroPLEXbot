@@ -8,6 +8,7 @@ Runs daily at 01:00 UTC.
 import dramatiq
 from loguru import logger
 
+
 try:
     import redis.asyncio as redis
 except ImportError:

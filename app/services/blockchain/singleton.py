@@ -8,6 +8,7 @@ from typing import Any
 
 from app.config.settings import Settings
 
+
 # Forward declaration to avoid circular import
 _blockchain_service: Any = None
 

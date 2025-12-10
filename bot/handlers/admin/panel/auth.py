@@ -20,8 +20,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.admin import Admin
 from app.services.admin_service import AdminService
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
-from bot.keyboards.reply import admin_keyboard, get_admin_keyboard_from_data
+from bot.keyboards.reply import admin_keyboard
 from bot.states.admin_states import AdminStates
+
 
 router = Router(name="admin_panel_auth")
 

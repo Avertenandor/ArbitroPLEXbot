@@ -48,6 +48,7 @@ from bot.handlers.admin.panel import (
     withdrawals,
 )
 
+
 # Create main router and include all submodule routers
 router = Router(name="admin_panel")
 
@@ -75,6 +76,7 @@ from bot.handlers.admin.panel.navigation import (  # noqa: E402
     handle_admin_withdrawals,
 )
 from bot.handlers.admin.panel.statistics import handle_admin_stats  # noqa: E402
+
 
 # Export all public interfaces
 __all__ = [

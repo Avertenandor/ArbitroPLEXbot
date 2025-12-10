@@ -13,6 +13,7 @@ from aiogram import Router
 
 from . import amount_input, level_selection, tx_hash
 
+
 # Create main deposit router
 router = Router()
 

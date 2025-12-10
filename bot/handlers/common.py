@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from bot.keyboards.reply import main_menu_reply_keyboard
 
+
 router = Router(name="common")
 
 

@@ -7,10 +7,11 @@ Runs frequently (e.g. every minute) to catch deposits without explicit user acti
 
 from decimal import Decimal
 
-from jobs.async_runner import run_async
-
 import dramatiq
 from loguru import logger
+
+from jobs.async_runner import run_async
+
 
 try:
     import redis.asyncio as redis
@@ -98,25 +99,26 @@ async def _monitor_incoming_async() -> None:
                 # Get transfer events using sync Web3 in executor
                 import asyncio
                 from concurrent.futures import ThreadPoolExecutor
+
                 from web3 import Web3
-                
+
                 w3 = blockchain.get_active_web3()
-                
+
                 # Create USDT contract for event parsing
                 from app.services.blockchain.constants import USDT_ABI
                 usdt_contract = w3.eth.contract(
                     address=Web3.to_checksum_address(blockchain.usdt_contract_address),
                     abi=USDT_ABI
                 )
-                
+
                 # Scan in chunks to avoid RPC limits
                 chunk_size = 2000
                 all_logs = []
                 current_start = from_block
-                
+
                 while current_start <= to_block:
                     current_end = min(current_start + chunk_size, to_block)
-                    
+
                     try:
                         # Get Transfer events TO system wallet
                         with ThreadPoolExecutor() as executor:
@@ -133,7 +135,7 @@ async def _monitor_incoming_async() -> None:
                         all_logs.extend(logs)
                     except Exception as chunk_error:
                         logger.warning(f"Chunk {current_start}-{current_end} failed: {chunk_error}")
-                    
+
                     current_start = current_end + 1
 
                 logger.info(f"Found {len(all_logs)} transfer events")
@@ -148,7 +150,7 @@ async def _monitor_incoming_async() -> None:
                         from_address = args.get("from") or args.get("src")
                         to_address = args.get("to") or args.get("dst")
                         value = args.get("value") or args.get("wad", 0)
-                        
+
                         # Convert to checksum addresses
                         from_address = w3.to_checksum_address(from_address)
                         to_address = w3.to_checksum_address(to_address)

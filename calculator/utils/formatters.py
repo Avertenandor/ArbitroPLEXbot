@@ -8,6 +8,7 @@ Formatting utilities for numbers and currency.
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+
 if TYPE_CHECKING:
     from calculator.core.models import CalculationResult
 

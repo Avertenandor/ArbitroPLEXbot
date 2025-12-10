@@ -8,6 +8,7 @@ from decimal import Decimal
 
 from app.config.settings import settings
 
+
 # Access levels configuration
 LEVELS = {
     1: {"plex": 5000, "rabbits": 1, "deposits": 1},

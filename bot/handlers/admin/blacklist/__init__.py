@@ -19,6 +19,8 @@ from aiogram import Router
 from bot.handlers.admin.blacklist.add import router as add_router
 from bot.handlers.admin.blacklist.menu import (
     router as menu_router,
+)
+from bot.handlers.admin.blacklist.menu import (
     show_blacklist,  # Re-export for backward compatibility
 )
 from bot.handlers.admin.blacklist.notifications import (
@@ -26,6 +28,7 @@ from bot.handlers.admin.blacklist.notifications import (
 )
 from bot.handlers.admin.blacklist.remove import router as remove_router
 from bot.handlers.admin.blacklist.view import router as view_router
+
 
 # Create main router and include all sub-routers
 router = Router()

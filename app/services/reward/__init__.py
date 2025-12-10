@@ -21,6 +21,7 @@ from app.services.reward.session_manager import RewardSessionManager
 from app.services.reward.session_reward_processor import SessionRewardProcessor
 from app.services.reward.user_rewards import UserRewardManager
 
+
 __all__ = [
     "RewardCalculator",
     "RewardSessionManager",

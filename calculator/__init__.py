@@ -41,6 +41,7 @@ from calculator.utils import (
     format_percentage,
 )
 
+
 __version__ = "1.0.0"
 __all__ = [
     # Core

@@ -22,6 +22,38 @@ For backward compatibility, all keyboards are also re-exported from bot.keyboard
 """
 
 # Main menu
+# Authorization keyboards
+from bot.keyboards.user.auth import (
+    auth_continue_keyboard,
+    auth_payment_keyboard,
+    auth_rescan_keyboard,
+    auth_retry_keyboard,
+    auth_wallet_input_keyboard,
+)
+
+# Financial keyboards
+from bot.keyboards.user.financial import (
+    finpass_input_keyboard,
+    finpass_recovery_confirm_keyboard,
+    finpass_recovery_keyboard,
+    show_password_keyboard,
+)
+
+# History keyboards
+from bot.keyboards.user.history import (
+    referral_list_keyboard,
+    transaction_history_keyboard,
+    transaction_history_type_keyboard,
+    withdrawal_history_keyboard,
+)
+
+# Inquiry keyboards
+from bot.keyboards.user.inquiry import (
+    inquiry_dialog_keyboard,
+    inquiry_history_keyboard,
+    inquiry_input_keyboard,
+    inquiry_waiting_keyboard,
+)
 from bot.keyboards.user.main_menu import main_menu_reply_keyboard
 
 # Basic menus
@@ -47,41 +79,9 @@ from bot.keyboards.user.menus import (
     withdrawal_menu_keyboard,
 )
 
-# Financial keyboards
-from bot.keyboards.user.financial import (
-    finpass_input_keyboard,
-    finpass_recovery_confirm_keyboard,
-    finpass_recovery_keyboard,
-    show_password_keyboard,
-)
-
-# History keyboards
-from bot.keyboards.user.history import (
-    referral_list_keyboard,
-    transaction_history_keyboard,
-    transaction_history_type_keyboard,
-    withdrawal_history_keyboard,
-)
-
-# Authorization keyboards
-from bot.keyboards.user.auth import (
-    auth_continue_keyboard,
-    auth_payment_keyboard,
-    auth_rescan_keyboard,
-    auth_retry_keyboard,
-    auth_wallet_input_keyboard,
-)
-
-# Inquiry keyboards
-from bot.keyboards.user.inquiry import (
-    inquiry_dialog_keyboard,
-    inquiry_history_keyboard,
-    inquiry_input_keyboard,
-    inquiry_waiting_keyboard,
-)
-
 # Utility keyboards
 from bot.keyboards.user.utility import cancel_keyboard, confirmation_keyboard
+
 
 __all__ = [
     # Main menu

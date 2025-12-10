@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+
 if TYPE_CHECKING:
     from aiogram import Bot
 

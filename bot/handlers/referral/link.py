@@ -17,6 +17,7 @@ from app.models.user import User
 from app.services.user_service import UserService
 from bot.keyboards.reply import referral_keyboard
 
+
 router = Router(name="referral_link")
 
 

@@ -21,6 +21,7 @@ from bot.states.deposit import DepositStates, get_deposit_state_data
 from bot.utils.formatters import format_deposit_status
 from bot.utils.menu_buttons import is_menu_button
 
+
 router = Router()
 
 
@@ -190,9 +191,7 @@ async def process_tx_hash(
     if user and session_factory:
         async with session_factory() as fresh_session:
             blacklist_repo = BlacklistRepository(fresh_session)
-            blacklist_entry = await blacklist_repo.find_by_telegram_id(
-                user.telegram_id
-            )
+            blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
     elif user and data.get("session"):
         blacklist_repo = BlacklistRepository(data.get("session"))
         blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
@@ -200,9 +199,7 @@ async def process_tx_hash(
     await message.answer(
         confirmation_text,
         parse_mode="Markdown",
-        reply_markup=main_menu_reply_keyboard(
-            user=user, blacklist_entry=blacklist_entry, is_admin=is_admin
-        ),
+        reply_markup=main_menu_reply_keyboard(user=user, blacklist_entry=blacklist_entry, is_admin=is_admin),
     )
 
     # Get deposit status with confirmations
@@ -211,16 +208,12 @@ async def process_tx_hash(
         async with session_factory() as fresh_session:
             async with fresh_session.begin():
                 deposit_service_for_status = DepositService(fresh_session)
-                status_info = await deposit_service_for_status.get_deposit_status_with_confirmations(
-                    deposit.id
-                )
+                status_info = await deposit_service_for_status.get_deposit_status_with_confirmations(deposit.id)
     else:
         session = data.get("session")
         if session:
             deposit_service_for_status = DepositService(session)
-            status_info = await deposit_service_for_status.get_deposit_status_with_confirmations(
-                deposit.id
-            )
+            status_info = await deposit_service_for_status.get_deposit_status_with_confirmations(deposit.id)
 
     # Show deposit status with progress bar
     if status_info and status_info.get("success"):

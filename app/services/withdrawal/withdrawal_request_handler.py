@@ -24,6 +24,7 @@ from app.services.withdrawal.withdrawal_balance_manager import (
 )
 from app.services.withdrawal.withdrawal_validator import WithdrawalValidator
 
+
 # R9-2: Maximum retries for race condition conflicts
 MAX_RETRIES = 3
 RETRY_DELAY_BASE = 1.0  # Base delay in seconds

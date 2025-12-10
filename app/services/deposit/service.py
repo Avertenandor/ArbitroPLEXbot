@@ -12,12 +12,12 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.deposit import Deposit
+from app.repositories.deposit_repository import DepositRepository
+from app.repositories.user_repository import UserRepository
 from app.services.deposit.lifecycle.confirmer import DepositConfirmer
 from app.services.deposit.lifecycle.creator import DepositCreator
 from app.services.deposit.lifecycle.status_manager import DepositStatusManager
 from app.services.deposit.roi.calculator import ROICalculator
-from app.repositories.deposit_repository import DepositRepository
-from app.repositories.user_repository import UserRepository
 
 
 class DepositService:

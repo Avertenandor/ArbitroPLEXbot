@@ -12,10 +12,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.enums import TransactionStatus
 from app.repositories.deposit_repository import DepositRepository
 from app.services.deposit.constants import (
-    LEVEL_TYPES,
     LEVEL_TYPE_TEST,
+    LEVEL_TYPES,
     get_level_config,
-    get_next_level_type,
     get_previous_level_type,
     level_type_to_db_level,
 )

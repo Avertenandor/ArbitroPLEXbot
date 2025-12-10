@@ -47,6 +47,7 @@ from bot.handlers.admin.deposit_management import (
     search,
 )
 
+
 # Create main router and include all submodule routers
 router = Router(name="admin_deposit_management")
 
@@ -60,14 +61,15 @@ router.include_router(reports.router)
 router.include_router(navigation.router)
 
 # Re-export commonly used functions for backward compatibility
+from bot.handlers.admin.deposit_management.levels import (  # noqa: E402
+    show_level_actions_for_level,
+    show_levels_management,
+)
 from bot.handlers.admin.deposit_management.menu import (  # noqa: E402
     show_deposit_management_menu,
     show_deposit_statistics,
 )
-from bot.handlers.admin.deposit_management.levels import (  # noqa: E402
-    show_levels_management,
-    show_level_actions_for_level,
-)
+
 
 # Export all public interfaces
 __all__ = [

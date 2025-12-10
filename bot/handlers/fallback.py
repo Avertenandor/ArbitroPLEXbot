@@ -12,6 +12,7 @@ from aiogram.types import Message
 from bot.keyboards.reply import main_menu_reply_keyboard
 from bot.utils.menu_buttons import CONFIRMATION_BUTTONS
 
+
 router = Router()
 
 

@@ -11,6 +11,7 @@ Migration:
 
 from app.repositories.global_settings_repository import GlobalSettingsRepository
 
+
 # Alias for backward compatibility
 SystemSettingRepository = GlobalSettingsRepository
 

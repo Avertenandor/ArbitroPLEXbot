@@ -3,6 +3,7 @@ import sys
 from enum import StrEnum
 from pathlib import Path
 
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -16,6 +17,7 @@ from app.config.settings import settings
 from app.models.deposit import Deposit
 from app.models.deposit_reward import DepositReward
 from app.utils.datetime_utils import utc_now
+
 
 # Configure logger for script
 logger.remove()

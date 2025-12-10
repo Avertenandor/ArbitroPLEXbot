@@ -4,6 +4,7 @@ import os
 import sys
 from pathlib import Path
 
+
 # Установить минимальные переменные окружения для тестов
 # Используем корректный формат токена Telegram бота для валидации
 os.environ.setdefault("TELEGRAM_BOT_TOKEN", "123456789:ABCdefGHIjklMNOpqrsTUVwxyz123456789")

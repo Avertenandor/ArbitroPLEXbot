@@ -23,6 +23,7 @@ from bot.keyboards.inline import InlineKeyboardBuilder
 from bot.keyboards.reply import main_menu_reply_keyboard
 from bot.utils.user_loader import UserLoader
 
+
 router = Router()
 
 

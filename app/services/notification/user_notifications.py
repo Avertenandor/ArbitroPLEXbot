@@ -24,9 +24,7 @@ class UserNotificationMixin:
         """Initialize user notification mixin."""
         self.session = session
 
-    async def notify_withdrawal_processed(
-        self, telegram_id: int, amount: float, tx_hash: str
-    ) -> bool:
+    async def notify_withdrawal_processed(self, telegram_id: int, amount: float, tx_hash: str) -> bool:
         """
         Notify user about withdrawal being processed.
 
@@ -68,10 +66,7 @@ class UserNotificationMixin:
         try:
             await asyncio.wait_for(
                 bot.send_message(
-                    chat_id=telegram_id,
-                    text=message,
-                    parse_mode="Markdown",
-                    disable_web_page_preview=True
+                    chat_id=telegram_id, text=message, parse_mode="Markdown", disable_web_page_preview=True
                 ),
                 timeout=TELEGRAM_TIMEOUT,
             )
@@ -89,9 +84,7 @@ class UserNotificationMixin:
             if should_close and bot:
                 await bot.session.close()
 
-    async def notify_withdrawal_rejected(
-        self, telegram_id: int, amount: float
-    ) -> bool:
+    async def notify_withdrawal_rejected(self, telegram_id: int, amount: float) -> bool:
         """
         Notify user about withdrawal being rejected.
 

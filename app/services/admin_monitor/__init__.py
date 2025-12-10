@@ -39,6 +39,7 @@ from .extended_monitor import AdminEventMonitor, get_admin_monitor
 # Export formatter for advanced usage
 from .formatter import format_admin_message
 
+
 __all__ = [
     # Main class and factory
     "AdminEventMonitor",

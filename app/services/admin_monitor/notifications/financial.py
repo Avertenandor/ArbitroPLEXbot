@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from ..constants import EventCategory, EventPriority
 
+
 if TYPE_CHECKING:
     from ..monitor import AdminEventMonitor
 

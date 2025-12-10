@@ -39,6 +39,7 @@ from app.models import (  # noqa: F401
     WalletChangeRequest,
 )
 
+
 # this is the Alembic Config object
 config = context.config
 

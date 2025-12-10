@@ -19,6 +19,7 @@ from app.services.inquiry_service import InquiryService
 from bot.keyboards.user import inquiry_dialog_keyboard
 from bot.states.inquiry import InquiryStates
 
+
 router = Router(name="user_inquiry_dialog_media")
 
 

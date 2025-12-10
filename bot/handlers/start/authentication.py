@@ -34,6 +34,7 @@ from bot.keyboards.reply import (
 from bot.middlewares.session_middleware import SESSION_KEY_PREFIX, SESSION_TTL
 from bot.states.auth import AuthStates
 
+
 router = Router()
 
 # Constants
@@ -44,6 +45,7 @@ from bot.constants.rules import (
     can_spend_plex,
     get_available_plex_balance,
 )
+
 
 ECOSYSTEM_INFO = (
     "🚀 **Добро пожаловать в ArbitroPLEXbot!**\n\n"
@@ -217,8 +219,8 @@ async def _check_payment_logic(
                 )
 
                 # Import registration states and messages
-                from bot.states.registration import RegistrationStates
                 from bot.handlers.start.registration import messages
+                from bot.states.registration import RegistrationStates
 
                 # Save wallet address for registration
                 await state.update_data(

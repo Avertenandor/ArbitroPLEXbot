@@ -5,17 +5,13 @@ import asyncio
 from decimal import Decimal
 
 from aiogram import Bot
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.constants import TELEGRAM_TIMEOUT
-from app.config.settings import settings
 from app.models.deposit import Deposit
-from app.models.user import User
-from bot.constants.rules import PLEX_PER_DOLLAR_DAILY, SYSTEM_WALLET
+from bot.constants.rules import SYSTEM_WALLET
 
 
 class TransactionNotifier:

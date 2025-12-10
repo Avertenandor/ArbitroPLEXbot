@@ -22,11 +22,12 @@ from app.repositories.deposit_corridor_history_repository import (
 )
 from app.repositories.global_settings_repository import GlobalSettingsRepository
 
+
 # Only these admins can modify ROI
 TRUSTED_ADMIN_IDS = [
     1040687384,  # @VladarevInvestBrok (Командир/super_admin)
     1691026253,  # @AI_XAN (Саша - Tech Deputy)
-    241568583,   # @natder (Наташа)
+    241568583,  # @natder (Наташа)
     6540613027,  # @ded_vtapkax (Влад)
 ]
 
@@ -94,19 +95,21 @@ class AIRoiService:
                 "equal": f"Фиксированный {roi_fixed}%",
             }.get(roi_mode, roi_mode)
 
-            configs.append({
-                "level": lvl,
-                "mode": roi_mode,
-                "mode_description": mode_desc,
-                "roi_min": float(roi_min),
-                "roi_max": float(roi_max),
-                "roi_fixed": float(roi_fixed),
-            })
+            configs.append(
+                {
+                    "level": lvl,
+                    "mode": roi_mode,
+                    "mode_description": mode_desc,
+                    "roi_min": float(roi_min),
+                    "roi_max": float(roi_max),
+                    "roi_fixed": float(roi_fixed),
+                }
+            )
 
         return {
             "success": True,
             "configs": configs,
-            "message": "📊 ROI конфигурация" + (f" уровня {level}" if level else " всех уровней")
+            "message": "📊 ROI конфигурация" + (f" уровня {level}" if level else " всех уровней"),
         }
 
     async def set_roi_corridor(
@@ -137,8 +140,7 @@ class AIRoiService:
 
         if not self._is_trusted_admin():
             logger.warning(
-                f"AI ROI SECURITY: Untrusted admin {self.admin_telegram_id} "
-                f"attempted to modify ROI corridor"
+                f"AI ROI SECURITY: Untrusted admin {self.admin_telegram_id} attempted to modify ROI corridor"
             )
             return {"success": False, "error": "❌ Нет прав на изменение ROI коридора"}
 
@@ -215,7 +217,7 @@ class AIRoiService:
             },
             "reason": reason,
             "admin": f"@{self.admin_username}",
-            "message": f"✅ ROI коридор уровня {level} изменён"
+            "message": f"✅ ROI коридор уровня {level} изменён",
         }
 
     async def get_corridor_history(
@@ -237,9 +239,7 @@ class AIRoiService:
         # Get history entries
         from app.models.deposit_corridor_history import DepositCorridorHistory
 
-        stmt = select(DepositCorridorHistory).order_by(
-            DepositCorridorHistory.created_at.desc()
-        ).limit(limit)
+        stmt = select(DepositCorridorHistory).order_by(DepositCorridorHistory.created_at.desc()).limit(limit)
 
         if level:
             stmt = stmt.where(DepositCorridorHistory.deposit_level == level)
@@ -248,26 +248,24 @@ class AIRoiService:
         entries = list(result.scalars().all())
 
         if not entries:
-            return {
-                "success": True,
-                "history": [],
-                "message": "ℹ️ История изменений пуста"
-            }
+            return {"success": True, "history": [], "message": "ℹ️ История изменений пуста"}
 
         history_list = []
         for entry in entries:
-            history_list.append({
-                "id": entry.id,
-                "level": entry.deposit_level,
-                "roi_min": float(entry.roi_min),
-                "roi_max": float(entry.roi_max),
-                "reason": entry.reason,
-                "created": entry.created_at.strftime("%d.%m.%Y %H:%M") if entry.created_at else None,
-            })
+            history_list.append(
+                {
+                    "id": entry.id,
+                    "level": entry.deposit_level,
+                    "roi_min": float(entry.roi_min),
+                    "roi_max": float(entry.roi_max),
+                    "reason": entry.reason,
+                    "created": entry.created_at.strftime("%d.%m.%Y %H:%M") if entry.created_at else None,
+                }
+            )
 
         return {
             "success": True,
             "count": len(history_list),
             "history": history_list,
-            "message": "📜 История изменений ROI" + (f" уровня {level}" if level else "")
+            "message": "📜 История изменений ROI" + (f" уровня {level}" if level else ""),
         }

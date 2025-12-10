@@ -6,8 +6,6 @@ Contains all message and command handlers for master key operations.
 
 from typing import Any
 
-from aiogram import F
-from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from loguru import logger

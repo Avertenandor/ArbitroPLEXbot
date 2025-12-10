@@ -6,6 +6,7 @@ Contains constants and configuration for the referral system.
 
 from decimal import Decimal
 
+
 # Referral system configuration (from PART2 docs)
 # 3-level referral program: 5% from deposits AND earnings at each level
 REFERRAL_DEPTH = 3

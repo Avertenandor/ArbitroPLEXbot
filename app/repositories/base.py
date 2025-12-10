@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.base import Base
 
+
 # Generic type for model
 ModelType = TypeVar("ModelType", bound=Base)
 

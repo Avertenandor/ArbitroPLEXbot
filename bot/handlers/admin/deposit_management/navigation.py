@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.utils.admin_utils import clear_state_preserve_admin_token
 
+
 router = Router(name="admin_deposit_management_navigation")
 
 

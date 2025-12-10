@@ -6,9 +6,6 @@ All blockchain functionality is organized into specialized managers and utilitie
 """
 
 # Re-export main service and singleton pattern from refactored modules
-from .service_facade import BlockchainService
-from .singleton import get_blockchain_service, init_blockchain_service
-
 # Re-export constants for convenience
 from .constants import USDT_ABI, USDT_DECIMALS
 from .core_constants import (
@@ -17,6 +14,9 @@ from .core_constants import (
     PLEX_DECIMALS,
     PLEX_PER_DOLLAR_DAILY,
 )
+from .service_facade import BlockchainService
+from .singleton import get_blockchain_service, init_blockchain_service
+
 
 __all__ = [
     "BlockchainService",

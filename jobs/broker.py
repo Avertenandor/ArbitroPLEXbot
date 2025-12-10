@@ -11,6 +11,7 @@ from loguru import logger
 
 from app.config.settings import settings
 
+
 # Initialize Redis broker with graceful shutdown middleware
 redis_broker = RedisBroker(
     host=settings.redis_host,

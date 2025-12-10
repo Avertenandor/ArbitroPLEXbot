@@ -21,6 +21,7 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
 
+
 router = Router(name="admin_panel_analytics")
 
 

@@ -4,14 +4,15 @@ Translation strings for all supported languages.
 R13-3: Multi-language support for the bot.
 """
 
-from bot.i18n.deposit_translations import (
-    RU_DEPOSIT_TRANSLATIONS,
-    EN_DEPOSIT_TRANSLATIONS,
-)
 from bot.i18n.auth_translations import (
-    RU_AUTH_TRANSLATIONS,
     EN_AUTH_TRANSLATIONS,
+    RU_AUTH_TRANSLATIONS,
 )
+from bot.i18n.deposit_translations import (
+    EN_DEPOSIT_TRANSLATIONS,
+    RU_DEPOSIT_TRANSLATIONS,
+)
+
 
 # Russian translations (default)
 RU_TRANSLATIONS = {

@@ -8,7 +8,7 @@
 from decimal import Decimal
 from typing import Any
 
-from aiogram import Router, F
+from aiogram import F, Router
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -328,7 +328,7 @@ async def example_compare_periods(session: AsyncSession, user_id: int):
     print(f"За неделю: {format_usdt(week)} USDT")
     print(f"За месяц: {format_usdt(month)} USDT")
 
-    print(f"\nСредний заработок в день:")
+    print("\nСредний заработок в день:")
     print(f"  По неделе: {format_usdt(avg_per_day_week)} USDT/день")
     print(f"  По месяцу: {format_usdt(avg_per_day_month)} USDT/день")
 

@@ -24,6 +24,7 @@ from bot.i18n.loader import get_translator, get_user_language
 from bot.utils.text_utils import safe_answer
 from bot.utils.user_loader import UserLoader
 
+
 router = Router()
 
 

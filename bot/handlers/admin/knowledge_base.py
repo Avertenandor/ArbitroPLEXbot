@@ -15,14 +15,15 @@ from aiogram.types import (
     CallbackQuery,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
+    KeyboardButton,
     Message,
     ReplyKeyboardMarkup,
-    KeyboardButton,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.knowledge_base import get_knowledge_base
 from bot.handlers.admin.utils import get_admin_or_deny, get_admin_or_deny_callback
+
 
 router = Router(name="knowledge_base")
 

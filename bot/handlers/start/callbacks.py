@@ -19,6 +19,7 @@ from app.models.user import User
 from bot.i18n.loader import get_translator, get_user_language
 from bot.keyboards.reply import auth_continue_keyboard, auth_rescan_keyboard
 
+
 router = Router()
 
 

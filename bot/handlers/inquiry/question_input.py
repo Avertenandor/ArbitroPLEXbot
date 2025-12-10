@@ -22,6 +22,7 @@ from bot.states.inquiry import InquiryStates
 
 from .notifications import notify_admins_new_inquiry
 
+
 router = Router(name="user_inquiry_question_input")
 
 

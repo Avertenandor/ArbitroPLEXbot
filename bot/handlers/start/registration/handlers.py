@@ -27,6 +27,7 @@ from bot.middlewares.session_middleware import SESSION_KEY_PREFIX
 from bot.states.registration import RegistrationStates
 from bot.utils.menu_buttons import is_menu_button
 
+from . import messages
 from .blacklist_checks import (
     check_registration_blacklist,
     check_wallet_blacklist,
@@ -40,8 +41,8 @@ from .helpers import (
     reset_bot_blocked_flag,
 )
 from .referral import parse_referral_code
-from .validators import validate_email, validate_password, validate_phone, normalize_phone
-from . import messages
+from .validators import normalize_phone, validate_email, validate_password, validate_phone
+
 
 router = Router()
 
@@ -643,10 +644,10 @@ async def process_password_confirmation(
 
     # Index user's wallet for instant transaction history
     try:
-        from jobs.tasks.blockchain_indexer_task import index_user_on_registration
-
         # Run indexing in background (don't block registration)
         import asyncio
+
+        from jobs.tasks.blockchain_indexer_task import index_user_on_registration
         asyncio.create_task(
             index_user_on_registration(
                 wallet_address=wallet_address,

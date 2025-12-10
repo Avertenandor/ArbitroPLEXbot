@@ -8,6 +8,7 @@ import asyncio
 import sys
 from pathlib import Path
 
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -23,6 +24,7 @@ from app.models.user import User
 from app.services.blockchain_service import get_blockchain_service, init_blockchain_service
 from app.services.deposit import DepositService
 from app.utils.security import mask_address
+
 
 # Configure logger
 logger.remove()

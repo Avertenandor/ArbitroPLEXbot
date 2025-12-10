@@ -23,6 +23,7 @@ from bot.keyboards.user import finances_submenu_keyboard
 from bot.utils.formatters import format_usdt
 from bot.utils.user_loader import UserLoader
 
+
 router = Router()
 
 

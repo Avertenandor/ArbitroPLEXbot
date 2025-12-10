@@ -23,6 +23,7 @@ from bot.keyboards.reply import (
     admin_user_financial_detail_keyboard,
 )
 
+
 router = Router()
 
 

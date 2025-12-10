@@ -21,6 +21,7 @@ from bot.states.profile_update import ProfileUpdateStates
 
 from .utils import get_user_or_error, navigate_to_home
 
+
 router = Router(name="contact_update_menu")
 
 
@@ -79,8 +80,8 @@ async def back_from_choice(
     await state.clear()
 
     # Check for language
-    from bot.i18n.loader import get_user_language
     from app.models.user import User
+    from bot.i18n.loader import get_user_language
 
     user: User | None = data.get("user")
     language = "ru"

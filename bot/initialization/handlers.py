@@ -95,7 +95,6 @@ def register_admin_handlers(dp: Dispatcher) -> None:
         ai_assistant,
         blacklist,
         blockchain_settings,
-        bonus_management_v2 as bonus_management,  # V2 with improved UX
         broadcast,
         deposit_management,
         deposit_settings,
@@ -107,6 +106,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
         panel,
         referral_stats,
         roi_corridor,
+        schedule_management,
         user_messages,
         users,
         wallet_key_setup,
@@ -115,8 +115,10 @@ def register_admin_handlers(dp: Dispatcher) -> None:
         withdrawal_settings,
         withdrawals,
     )
+    from bot.handlers.admin import (
+        bonus_management_v2 as bonus_management,  # V2 with improved UX
+    )
     from bot.handlers.admin import finpass_recovery as admin_finpass
-    from bot.handlers.admin import schedule_management
     from bot.handlers.admin import support as admin_support
 
     # Master key management (only for super admin telegram_id: 1040687384)

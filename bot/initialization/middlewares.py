@@ -10,7 +10,6 @@ from aiogram import Dispatcher
 from loguru import logger
 
 from app.config.database import async_session_maker
-from bot.middlewares.admin_auth_middleware import AdminAuthMiddleware
 from bot.middlewares.auth import AuthMiddleware
 from bot.middlewares.ban_middleware import BanMiddleware
 from bot.middlewares.database import DatabaseMiddleware

@@ -8,6 +8,7 @@ from app.services.financial_report_service import UserDetailedFinancialDTO
 from bot.utils.formatters import format_tx_hash_with_link
 from bot.utils.pagination import PaginationBuilder
 
+
 # Initialize pagination builder for reuse
 pagination_builder = PaginationBuilder()
 

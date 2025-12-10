@@ -19,6 +19,7 @@ import warnings
 from decimal import Decimal
 from typing import Any
 
+
 # Suppress eth_utils network warnings about invalid ChainId
 warnings.filterwarnings(
     "ignore",
@@ -38,7 +39,6 @@ from web3 import Web3
 from web3.exceptions import Web3Exception
 
 from app.config.settings import Settings
-from app.utils.security import mask_address
 
 # Import specialized managers from blockchain subdirectory
 from app.services.blockchain.async_executor import AsyncBlockchainExecutor
@@ -51,6 +51,7 @@ from app.services.blockchain.rpc_rate_limiter import RPCRateLimiter
 from app.services.blockchain.sync_provider_management import SyncProviderManager
 from app.services.blockchain.transaction_operations import TransactionManager
 from app.services.blockchain.wallet_operations import WalletManager
+from app.utils.security import mask_address
 
 
 class BlockchainService:

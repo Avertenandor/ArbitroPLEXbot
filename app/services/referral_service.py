@@ -25,13 +25,14 @@ from app.repositories.referral_repository import ReferralRepository
 from app.repositories.user_repository import UserRepository
 from app.services.base_service import BaseService
 from app.services.referral.chain_manager import ReferralChainManager
-from app.services.referral.config import REFERRAL_DEPTH, REFERRAL_RATES
+from app.services.referral.config import REFERRAL_DEPTH
 from app.services.referral.earnings_manager import ReferralEarningsManager
 from app.services.referral.query_manager import ReferralQueryManager
 from app.services.referral.referral_reward_processor import (
     ReferralRewardProcessor,
 )
 from app.services.referral.statistics import ReferralStatisticsManager
+
 
 if TYPE_CHECKING:
     from aiogram import Bot

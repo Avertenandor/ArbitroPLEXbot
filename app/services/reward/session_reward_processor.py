@@ -23,6 +23,7 @@ from app.repositories.deposit_reward_repository import DepositRewardRepository
 from app.repositories.reward_session_repository import RewardSessionRepository
 from app.services.reward.reward_calculator import RewardCalculator
 
+
 if TYPE_CHECKING:
     from app.services.reward.reward_balance_handler import RewardBalanceHandler
 
@@ -139,9 +140,7 @@ class SessionRewardProcessor:
                 continue
 
             # Check if reward already calculated
-            existing = await self.reward_repo.find_by(
-                deposit_id=deposit.id, reward_session_id=session_id
-            )
+            existing = await self.reward_repo.find_by(deposit_id=deposit.id, reward_session_id=session_id)
 
             if existing:
                 continue
@@ -160,15 +159,10 @@ class SessionRewardProcessor:
                 continue
 
             # R17-1: Get reward rate using RewardCalculator
-            reward_rate = await self.calculator.get_rate_for_level(
-                deposit.level, session_id=session_id
-            )
+            reward_rate = await self.calculator.get_rate_for_level(deposit.level, session_id=session_id)
 
             # If RewardSession rate is 0 or deposit has version, use version's roi_percent
-            has_version_roi = (
-                deposit.deposit_version
-                and deposit.deposit_version.roi_percent
-            )
+            has_version_roi = deposit.deposit_version and deposit.deposit_version.roi_percent
             if reward_rate == Decimal("0") or has_version_roi:
                 # R17-1: Use deposit version's roi_percent as fallback/base rate
                 if deposit.deposit_version:
@@ -188,15 +182,11 @@ class SessionRewardProcessor:
                     continue
 
             # Calculate reward using RewardCalculator
-            reward_amount = self.calculator.calculate_reward_amount(
-                deposit.amount, reward_rate, days=1
-            )
+            reward_amount = self.calculator.calculate_reward_amount(deposit.amount, reward_rate, days=1)
 
             # R12-1: For all levels, cap to remaining ROI space using RewardCalculator
             if deposit.roi_cap_amount:
-                reward_amount = self.calculator.cap_reward_to_remaining_roi(
-                    reward_amount, deposit
-                )
+                reward_amount = self.calculator.cap_reward_to_remaining_roi(reward_amount, deposit)
 
                 if reward_amount <= 0:
                     continue
@@ -233,11 +223,7 @@ class SessionRewardProcessor:
                     # Calculate ROI progress as percentage (0-100)
                     # ROI cap = 500% = deposit.amount * 5
                     roi_cap_amount = deposit.roi_cap_amount or (deposit.amount * 5)
-                    roi_progress = (
-                        (new_roi_paid / roi_cap_amount * 100)
-                        if roi_cap_amount > 0
-                        else Decimal("0")
-                    )
+                    roi_progress = (new_roi_paid / roi_cap_amount * 100) if roi_cap_amount > 0 else Decimal("0")
 
                     # Note: Convert to float only at display layer for Telegram API
                     # Financial calculations above remain in Decimal
@@ -292,9 +278,7 @@ class SessionRewardProcessor:
 
         return True, rewards_calculated, total_reward_amount, None
 
-    async def get_session_statistics(
-        self, session_id: int
-    ) -> dict:
+    async def get_session_statistics(self, session_id: int) -> dict:
         """
         Get session statistics.
 
@@ -308,20 +292,20 @@ class SessionRewardProcessor:
         """
         # Aggregate reward stats using SQL
         stats_stmt = select(
-            func.count(DepositReward.id).label('total_rewards'),
+            func.count(DepositReward.id).label("total_rewards"),
             func.sum(
                 case(
                     (DepositReward.paid == True, 1),  # noqa: E712
-                    else_=0
+                    else_=0,
                 )
-            ).label('paid_rewards'),
-            func.sum(DepositReward.reward_amount).label('total_amount'),
+            ).label("paid_rewards"),
+            func.sum(DepositReward.reward_amount).label("total_amount"),
             func.sum(
                 case(
                     (DepositReward.paid == True, DepositReward.reward_amount),  # noqa: E712
-                    else_=0
+                    else_=0,
                 )
-            ).label('paid_amount')
+            ).label("paid_amount"),
         ).where(DepositReward.reward_session_id == session_id)
 
         result = await self.session.execute(stats_stmt)

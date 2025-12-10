@@ -17,11 +17,11 @@ from app.models.user import User
 from app.models.user_inquiry import InquiryStatus
 from app.services.inquiry_service import InquiryService
 from bot.keyboards.user import (
-    inquiry_dialog_keyboard,
     inquiry_history_keyboard,
     main_menu_reply_keyboard,
 )
 from bot.states.inquiry import InquiryStates
+
 
 router = Router(name="user_inquiry_dialog_basic")
 

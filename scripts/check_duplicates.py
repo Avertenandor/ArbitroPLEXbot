@@ -7,11 +7,13 @@ from pathlib import Path
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from loguru import logger
 
 from app.config.settings import settings
+
 
 # Configure logger for script
 logger.remove()

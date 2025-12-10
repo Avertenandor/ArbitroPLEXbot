@@ -8,7 +8,6 @@ Handles main menu navigation - ONLY REPLY KEYBOARDS!
 from typing import Any
 
 from aiogram import F, Router
-from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from loguru import logger
@@ -22,6 +21,7 @@ from bot.i18n.loader import get_translator, get_user_language
 from bot.keyboards.reply import main_menu_reply_keyboard
 from bot.utils.formatters import format_usdt
 from bot.utils.text_utils import escape_markdown
+
 
 router = Router()
 

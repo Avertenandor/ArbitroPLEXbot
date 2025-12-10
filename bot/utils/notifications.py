@@ -15,6 +15,7 @@ from loguru import logger
 
 from app.config.constants import TELEGRAM_TIMEOUT
 
+
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 

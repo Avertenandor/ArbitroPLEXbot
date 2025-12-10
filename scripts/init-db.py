@@ -7,10 +7,9 @@ from pathlib import Path
 
 from sqlalchemy.ext.asyncio import create_async_engine
 
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from app.models.system_setting import SystemSetting  # noqa: E402, F401
 
 from app.config.settings import settings  # noqa: E402
 from app.models.admin import Admin  # noqa: E402, F401
@@ -30,6 +29,7 @@ from app.models.referral_earning import ReferralEarning  # noqa: E402, F401
 from app.models.reward_session import RewardSession  # noqa: E402, F401
 from app.models.support_message import SupportMessage  # noqa: E402, F401
 from app.models.support_ticket import SupportTicket  # noqa: E402, F401
+from app.models.system_setting import SystemSetting  # noqa: E402, F401
 from app.models.transaction import Transaction  # noqa: E402, F401
 from app.models.user import User  # noqa: E402, F401
 from app.models.user_action import UserAction  # noqa: E402, F401

@@ -24,6 +24,7 @@ from bot.handlers.admin.inquiries import (
     responses,
 )
 
+
 # Create main router and include all sub-routers
 router = Router(name="admin_inquiry")
 

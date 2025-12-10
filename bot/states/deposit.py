@@ -4,7 +4,7 @@ Deposit FSM states.
 States for deposit creation flow.
 """
 
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from decimal import Decimal
 from typing import Any
 

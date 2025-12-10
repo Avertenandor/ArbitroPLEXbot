@@ -26,6 +26,7 @@ from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
 from bot.keyboards.reply import get_admin_keyboard_from_data
 from bot.utils.text_utils import escape_markdown
 
+
 router = Router(name="admin_ai_assistant")
 
 
@@ -300,15 +301,15 @@ async def handle_chat_message(
         return
 
     # ========== SECURITY CHECKS ==========
+    from app.services.admin_security_service import VERIFIED_ADMIN_IDS
     from app.services.aria_security_defense import (
-        get_security_guard,
-        check_forwarded_message,
-        sanitize_user_input,
-        create_secure_context,
         SECURITY_RESPONSE_BLOCKED,
         SECURITY_RESPONSE_FORWARDED,
+        check_forwarded_message,
+        create_secure_context,
+        get_security_guard,
+        sanitize_user_input,
     )
-    from app.services.admin_security_service import VERIFIED_ADMIN_IDS
 
     # Check for forwarded messages
     forward_check = check_forwarded_message(message)

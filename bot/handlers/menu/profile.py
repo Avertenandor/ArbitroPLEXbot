@@ -22,6 +22,7 @@ from bot.utils.formatters import format_usdt
 from bot.utils.text_utils import escape_markdown, safe_answer
 from bot.utils.user_loader import UserLoader
 
+
 router = Router()
 
 

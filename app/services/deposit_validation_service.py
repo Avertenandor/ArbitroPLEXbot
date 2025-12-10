@@ -14,6 +14,7 @@ All imports are re-exported from the new modular structure:
 from app.services.deposit import DEPOSIT_LEVELS, PARTNER_REQUIREMENTS
 from app.services.deposit.validation_service import DepositValidationService
 
+
 __all__ = [
     "DepositValidationService",
     "DEPOSIT_LEVELS",

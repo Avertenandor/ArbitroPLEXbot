@@ -11,6 +11,7 @@ This module contains all blockchain-related constants including:
 from decimal import Decimal
 from typing import TypeVar
 
+
 # USDT contract ABI (ERC-20 standard functions)
 USDT_ABI = [
     {

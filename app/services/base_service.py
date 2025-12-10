@@ -14,6 +14,7 @@ from typing import Any, TypeVar
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+
 # Type variable for generic decorator return types
 T = TypeVar("T")
 

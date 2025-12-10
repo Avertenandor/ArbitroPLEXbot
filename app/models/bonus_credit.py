@@ -10,18 +10,17 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     DECIMAL,
-    BigInteger,
     Boolean,
     DateTime,
     ForeignKey,
     Index,
     Integer,
-    String,
     Text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
+
 
 if TYPE_CHECKING:
     from app.models.admin import Admin

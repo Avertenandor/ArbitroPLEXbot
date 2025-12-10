@@ -16,6 +16,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+
 sys.path.insert(0, '/app')
 
 from aiogram import Bot  # noqa: E402

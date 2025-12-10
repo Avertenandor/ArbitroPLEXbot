@@ -16,6 +16,7 @@ from app.models.user_inquiry import InquiryStatus
 from app.services.inquiry_service import InquiryService
 from bot.keyboards.admin_keyboards import admin_inquiry_menu_keyboard
 
+
 router = Router(name="admin_inquiry_menu")
 
 

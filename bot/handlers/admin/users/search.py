@@ -21,6 +21,7 @@ from bot.utils.formatters import escape_md
 from bot.utils.menu_buttons import is_menu_button
 from bot.utils.user_loader import UserLoader
 
+
 router = Router(name="admin_users_search")
 
 

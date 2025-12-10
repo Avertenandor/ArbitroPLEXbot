@@ -23,6 +23,7 @@ from bot.states.admin_states import AdminStates
 from bot.utils.admin_utils import clear_state_preserve_admin_token
 from bot.utils.formatters import format_usdt
 
+
 router = Router(name="admin_withdrawals_details")
 
 

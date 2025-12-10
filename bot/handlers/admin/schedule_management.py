@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from bot.keyboards.inline import InlineKeyboardBuilder
 
+
 router = Router()
 
 
@@ -314,6 +315,7 @@ async def show_task_status(
 
     try:
         import redis.asyncio as redis
+
         from app.config.settings import settings
 
         redis_client = redis.Redis(

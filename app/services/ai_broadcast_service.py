@@ -6,10 +6,10 @@ from typing import Any
 
 from aiogram import Bot
 from loguru import logger
-from sqlalchemy import select, func, and_, or_
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import User, Appeal
+from app.models import Appeal, User
 from app.repositories.user_repository import UserRepository
 
 

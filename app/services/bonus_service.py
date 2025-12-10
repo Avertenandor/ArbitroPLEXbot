@@ -12,7 +12,6 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.bonus_credit import BonusCredit
-from app.models.user import User
 from app.repositories.bonus_credit_repository import BonusCreditRepository
 from app.repositories.user_repository import UserRepository
 from app.services.base_service import BaseService
@@ -236,8 +235,8 @@ class BonusService(BaseService):
         Returns:
             Dict with processing statistics
         """
-        from app.services.roi_corridor_service import RoiCorridorService
         from app.services.reward.reward_calculator import RewardCalculator
+        from app.services.roi_corridor_service import RoiCorridorService
 
         now = datetime.now(UTC)
         stats = {

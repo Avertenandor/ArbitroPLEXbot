@@ -6,7 +6,6 @@ Handles batch and individual retry processing.
 Processes pending retries with exponential backoff.
 """
 
-from datetime import UTC, datetime
 from loguru import logger
 
 from app.models.payment_retry import PaymentRetry

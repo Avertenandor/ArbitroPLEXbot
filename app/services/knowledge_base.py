@@ -4,7 +4,9 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
 from loguru import logger
+
 
 KB_PATH = Path("/app/data/knowledge_base.json")
 KB_PATH_LOCAL = Path("data/knowledge_base.json")

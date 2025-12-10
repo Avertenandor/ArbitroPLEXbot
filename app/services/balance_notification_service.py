@@ -22,6 +22,7 @@ from app.models.referral import Referral
 from app.models.user import User
 from app.services.base_service import BaseService
 
+
 if TYPE_CHECKING:
     from aiogram import Bot
 

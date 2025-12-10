@@ -21,6 +21,7 @@ from bot.utils.user_loader import (
     format_user_label,
 )
 
+
 __all__ = [
     # Decorators
     "require_admin",

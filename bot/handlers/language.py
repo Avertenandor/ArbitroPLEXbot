@@ -16,6 +16,7 @@ from app.models.user import User
 from bot.i18n import SUPPORTED_LANGUAGES, get_translator, get_user_language, set_user_language
 from bot.keyboards.reply import settings_keyboard
 
+
 router = Router(name="language")
 
 

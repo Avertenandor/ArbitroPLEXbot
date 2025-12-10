@@ -14,6 +14,7 @@ from bot.constants.rules import (
     get_user_level,
 )
 
+
 __all__ = [
     "LEVELS",
     "LEVELS_TABLE",

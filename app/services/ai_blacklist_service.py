@@ -13,13 +13,14 @@ SECURITY: Add/remove require TRUSTED_ADMIN access.
 from typing import Any
 
 from loguru import logger
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.blacklist import Blacklist, BlacklistActionType
 from app.repositories.admin_repository import AdminRepository
 from app.repositories.blacklist_repository import BlacklistRepository
 from app.repositories.user_repository import UserRepository
+
 
 # Only these admins can modify blacklist
 TRUSTED_ADMIN_IDS = [

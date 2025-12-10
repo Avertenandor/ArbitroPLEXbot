@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.admin import Admin
 from app.repositories.admin_repository import AdminRepository
 
+
 # Get super admin Telegram ID from environment variable
 DEFAULT_SUPER_ADMIN_TELEGRAM_ID = int(os.getenv("SUPER_ADMIN_TELEGRAM_ID", "0"))
 

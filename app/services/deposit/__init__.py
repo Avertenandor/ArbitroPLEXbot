@@ -17,6 +17,7 @@ from .plex import PlexPaymentMonitor, PlexPaymentNotifier
 from .service import DepositService
 from .validation_service import DepositValidationService
 
+
 __all__ = [
     "DepositService",
     "DepositValidationService",

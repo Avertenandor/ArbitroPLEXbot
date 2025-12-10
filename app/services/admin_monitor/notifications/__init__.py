@@ -37,6 +37,7 @@ from .user import (
     notify_new_registration,
 )
 
+
 __all__ = [
     # Financial
     "notify_new_deposit",

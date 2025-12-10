@@ -7,6 +7,7 @@ This file kept for compatibility with imports.
 
 from aiogram import Router
 
+
 router = Router(name="profile")
 
 # All profile handlers moved to bot/handlers/menu.py

@@ -16,6 +16,7 @@ from aiogram import Router
 
 from . import email, menu, phone
 
+
 # Create main router that includes all submodule routers
 router = Router(name="contact_update")
 
@@ -26,6 +27,7 @@ router.include_router(email.router)
 
 # Re-export utility functions for backward compatibility
 from .utils import get_user_or_error, navigate_to_home
+
 
 __all__ = [
     "router",

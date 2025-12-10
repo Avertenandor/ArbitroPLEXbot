@@ -27,6 +27,7 @@ from bot.keyboards.admin import (
 from bot.utils.formatters import format_usdt
 from bot.utils.text_utils import escape_markdown
 
+
 router = Router(name="admin_users_bonus")
 
 if TYPE_CHECKING:
@@ -39,9 +40,9 @@ class BonusStates(StatesGroup):
     waiting_amount = State()
     waiting_reason = State()
     # Cancel bonus flow states
-    cancel_select_bonus = State()      # Step 1: Select bonus ID
-    cancel_select_reason = State()     # Step 2: Select/enter reason
-    cancel_confirm = State()           # Step 3: Confirm cancellation
+    cancel_select_bonus = State()  # Step 1: Select bonus ID
+    cancel_select_reason = State()  # Step 2: Select/enter reason
+    cancel_confirm = State()  # Step 3: Confirm cancellation
 
 
 # ============ CANCEL REASON TEMPLATES ============
@@ -266,10 +267,7 @@ async def process_bonus_reason(
         reply_markup=admin_bonus_keyboard(),
     )
 
-    logger.info(
-        f"Admin {admin.telegram_id} granted bonus {amount} USDT "
-        f"to user {user_id}: {reason}"
-    )
+    logger.info(f"Admin {admin.telegram_id} granted bonus {amount} USDT to user {user_id}: {reason}")
 
 
 @router.message(F.text == "📋 Список бонусов")
@@ -305,10 +303,7 @@ async def list_user_bonuses(
 
     for bonus in bonuses:
         status_emoji = "✅" if bonus.is_active else ("🏁" if bonus.is_roi_completed else "❌")
-        status_text = (
-            "Активен" if bonus.is_active
-            else ("ROI завершён" if bonus.is_roi_completed else "Отменён")
-        )
+        status_text = "Активен" if bonus.is_active else ("ROI завершён" if bonus.is_roi_completed else "Отменён")
 
         progress = bonus.roi_progress_percent
         created = bonus.created_at.strftime("%d.%m.%Y %H:%M")
@@ -331,6 +326,7 @@ async def list_user_bonuses(
 
 
 # ============ CANCEL BONUS FLOW ============
+
 
 def cancel_reason_keyboard() -> "ReplyKeyboardMarkup":
     """Keyboard for selecting cancel reason."""
@@ -390,8 +386,7 @@ async def start_cancel_bonus(
 
     if not active_bonuses:
         await message.answer(
-            f"ℹ️ **Нет активных бонусов**\n\n"
-            f"У пользователя @{safe_username} нет активных бонусов для отмены.",
+            f"ℹ️ **Нет активных бонусов**\n\nУ пользователя @{safe_username} нет активных бонусов для отмены.",
             parse_mode="Markdown",
             reply_markup=admin_bonus_keyboard(),
         )
@@ -438,7 +433,7 @@ async def start_cancel_bonus(
                 "progress": b.roi_progress_percent,
             }
             for b in active_bonuses
-        }
+        },
     )
 
     await message.answer(
@@ -479,8 +474,7 @@ async def process_cancel_select_bonus(
         bonus_id = int(message.text.strip())
     except ValueError:
         await message.answer(
-            "❌ **Неверный формат**\n\n"
-            "Введите только число — ID бонуса из списка выше.",
+            "❌ **Неверный формат**\n\nВведите только число — ID бонуса из списка выше.",
             parse_mode="Markdown",
         )
         return
@@ -549,8 +543,7 @@ async def process_cancel_select_reason(
             else:
                 # "Другое" selected - ask for custom reason
                 await message.answer(
-                    "✏️ **Введите причину отмены:**\n\n"
-                    "_Опишите причину отмены своими словами._",
+                    "✏️ **Введите причину отмены:**\n\n_Опишите причину отмены своими словами._",
                     parse_mode="Markdown",
                     reply_markup=admin_cancel_keyboard(),
                 )

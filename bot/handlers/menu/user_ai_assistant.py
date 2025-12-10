@@ -17,8 +17,8 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.ai_assistant_service import AI_NAME, UserRole, get_ai_service
-from bot.keyboards.reply import main_menu_reply_keyboard
 from bot.utils.text_utils import escape_markdown, safe_answer, sanitize_markdown
+
 
 router = Router(name="user_ai_assistant")
 
@@ -129,11 +129,11 @@ async def handle_user_chat(
 
     # ========== SECURITY CHECKS ==========
     from app.services.aria_security_defense import (
-        get_security_guard,
-        check_forwarded_message,
-        sanitize_user_input,
         SECURITY_RESPONSE_BLOCKED,
         SECURITY_RESPONSE_FORWARDED,
+        check_forwarded_message,
+        get_security_guard,
+        sanitize_user_input,
     )
 
     # Block forwarded messages

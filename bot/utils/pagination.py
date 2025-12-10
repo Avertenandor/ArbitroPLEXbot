@@ -12,6 +12,7 @@ from typing import Any, TypeVar
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+
 T = TypeVar('T')
 
 

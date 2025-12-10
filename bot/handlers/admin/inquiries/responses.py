@@ -22,6 +22,7 @@ from bot.keyboards.admin_keyboards import (
 )
 from bot.states.inquiry import AdminInquiryStates
 
+
 router = Router(name="admin_inquiry_responses")
 
 

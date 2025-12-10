@@ -20,6 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
 
+
 if TYPE_CHECKING:
     from app.models.admin import Admin
     from app.models.deposit import Deposit

@@ -39,6 +39,7 @@ from aiogram import Router
 # Import all sub-module routers
 from . import leaderboard, link, list, promo, stats, structure
 
+
 # Create main router for referral functionality
 router = Router(name="referral")
 

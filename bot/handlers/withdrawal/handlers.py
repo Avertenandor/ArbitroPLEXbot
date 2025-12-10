@@ -16,10 +16,11 @@ from app.models.user import User
 from app.services.user_service import UserService
 from app.services.withdrawal_service import WithdrawalService
 from bot.i18n.loader import get_text, get_translator, get_user_language
-from bot.keyboards.reply import finpass_input_keyboard, withdrawal_keyboard
+from bot.keyboards.reply import withdrawal_keyboard
 from bot.states.withdrawal import WithdrawalStates
 
 from .eligibility import check_withdrawal_eligibility
+
 
 # Router will be created in __init__.py and imported there
 router = Router()

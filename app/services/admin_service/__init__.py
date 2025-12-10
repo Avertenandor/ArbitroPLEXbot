@@ -22,6 +22,7 @@ The AdminService class delegates to specialized managers:
 
 from .service import AdminService
 
+
 __all__ = [
     "AdminService",
 ]

@@ -11,6 +11,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, TelegramObject
 from loguru import logger
 
+
 try:
     import redis.asyncio as redis
 except ImportError:

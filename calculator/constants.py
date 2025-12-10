@@ -8,6 +8,7 @@ from decimal import Decimal
 
 from calculator.core.models import DepositLevel
 
+
 # Default deposit levels for ArbitroPLEX
 DEFAULT_LEVELS: list[DepositLevel] = [
     DepositLevel(

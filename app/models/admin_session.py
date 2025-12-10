@@ -21,6 +21,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 from app.utils.datetime_utils import utc_now
 
+
 if TYPE_CHECKING:
     from app.models.admin import Admin
 

@@ -67,8 +67,7 @@ class ErrorHandlerMiddleware(BaseMiddleware):
                 if attempt < self.MAX_RETRIES - 1:
                     delay = self.RETRY_DELAYS[attempt]
                     logger.warning(
-                        f"Network error (attempt {attempt + 1}/{self.MAX_RETRIES}), "
-                        f"retrying in {delay}s: {e}"
+                        f"Network error (attempt {attempt + 1}/{self.MAX_RETRIES}), retrying in {delay}s: {e}"
                     )
                     await asyncio.sleep(delay)
                     continue
@@ -94,10 +93,7 @@ class ErrorHandlerMiddleware(BaseMiddleware):
                         try:
                             await bot.send_message(
                                 chat_id=user.id,
-                                text=(
-                                    "⚠️ Произошла ошибка форматирования.\n"
-                                    "Попробуйте ещё раз."
-                                ),
+                                text=("⚠️ Произошла ошибка форматирования.\nПопробуйте ещё раз."),
                             )
                         except Exception:
                             pass
@@ -133,20 +129,13 @@ class ErrorHandlerMiddleware(BaseMiddleware):
                         error_trace = traceback.format_exc()[-800:]
                         # Escape special characters for HTML
                         error_trace_escaped = (
-                            error_trace
-                            .replace("&", "&amp;")
-                            .replace("<", "&lt;")
-                            .replace(">", "&gt;")
+                            error_trace.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
                         )
 
                         # Get user info for context
                         user_info = "Unknown"
                         if user:
-                            user_info = (
-                                f"@{user.username}"
-                                if user.username
-                                else f"ID: {user.id}"
-                            )
+                            user_info = f"@{user.username}" if user.username else f"ID: {user.id}"
 
                         error_msg = str(e)[:200].replace("<", "&lt;").replace(">", "&gt;")
                         text = (

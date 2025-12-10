@@ -8,6 +8,7 @@ for formatting data in a consistent way across the bot.
 from decimal import Decimal
 from typing import Any
 
+
 # ============================================================================
 # MESSAGE TEMPLATES
 # ============================================================================

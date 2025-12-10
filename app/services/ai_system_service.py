@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.admin_repository import AdminRepository
 from app.repositories.global_settings_repository import GlobalSettingsRepository
 
+
 # Only these users can control emergency stops
 SUPER_ADMIN_IDS = [
     1040687384,  # @VladarevInvestBrok (Командир/super_admin)

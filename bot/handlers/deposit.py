@@ -20,10 +20,10 @@ Flow:
 All handlers are imported from the deposit module.
 """
 
-from aiogram import Router
 
 # Import the main router from deposit module
 from bot.handlers.deposit import router as deposit_router
+
 
 # Re-export the router for compatibility
 router = deposit_router

@@ -22,6 +22,7 @@ from bot.i18n.loader import get_translator, get_user_language
 from bot.keyboards.reply import auth_continue_keyboard, auth_rescan_keyboard
 from bot.states.auth import AuthStates
 
+
 router = Router()
 
 

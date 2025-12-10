@@ -8,7 +8,6 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
-from web3 import Web3
 
 if TYPE_CHECKING:
     from app.services.blockchain.rpc_rate_limiter import RPCRateLimiter
@@ -47,9 +46,5 @@ class BlockOperations:
         async with self.rpc_limiter:
             return await loop.run_in_executor(
                 self._executor,
-                lambda: asyncio.run(
-                    self.provider_manager._execute_with_failover(
-                        lambda w3: w3.eth.block_number
-                    )
-                )
+                lambda: asyncio.run(self.provider_manager._execute_with_failover(lambda w3: w3.eth.block_number)),
             )

@@ -18,6 +18,7 @@ from sqlalchemy.pool import NullPool
 
 from app.config.settings import settings
 
+
 T = TypeVar("T")
 
 # Thread-local storage for event loops

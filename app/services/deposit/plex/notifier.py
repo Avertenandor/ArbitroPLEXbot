@@ -205,7 +205,7 @@ class PlexPaymentNotifier:
                 f"PLEX notification sent to user {user_telegram_id}"
             )
             return True
-        except asyncio.TimeoutError:
+        except TimeoutError:
             logger.warning(
                 f"Timeout sending PLEX notification to user {user_telegram_id}"
             )

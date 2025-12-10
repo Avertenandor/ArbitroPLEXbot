@@ -21,6 +21,7 @@ from bot.keyboards.user import earnings_dashboard_keyboard
 from bot.utils.formatters import format_usdt
 from bot.utils.user_loader import UserLoader
 
+
 router = Router()
 
 

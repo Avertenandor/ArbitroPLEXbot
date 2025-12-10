@@ -3,8 +3,9 @@
 import asyncio
 
 from aiogram import Bot
-from app.database import async_session_maker
 from loguru import logger
+
+from app.database import async_session_maker
 
 
 async def broadcast_message(

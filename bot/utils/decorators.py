@@ -20,6 +20,7 @@ from sqlalchemy.exc import (
 from app.models.admin import Admin
 from app.models.user import User
 
+
 # Type variable for handler return type
 T = TypeVar("T")
 

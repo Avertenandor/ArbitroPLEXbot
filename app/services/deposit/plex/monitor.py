@@ -11,7 +11,6 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config.settings import settings
 from app.models.deposit import Deposit
 from app.models.plex_payment import PlexPaymentRequirement, PlexPaymentStatus
 from app.services.blockchain.blockchain_service import BlockchainService

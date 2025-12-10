@@ -13,6 +13,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 from app.models.enums import SupportTicketStatus
 
+
 if TYPE_CHECKING:
     from app.models.admin import Admin
     from app.models.support_message import SupportMessage

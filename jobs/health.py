@@ -10,6 +10,7 @@ from aiohttp import web
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from loguru import logger
 
+
 # Global scheduler reference for health checks
 _scheduler: AsyncIOScheduler | None = None
 

@@ -26,6 +26,7 @@ from bot.i18n.loader import get_translator, get_user_language
 from bot.keyboards.reply import main_menu_reply_keyboard
 from bot.utils.user_loader import UserLoader
 
+
 router = Router()
 
 

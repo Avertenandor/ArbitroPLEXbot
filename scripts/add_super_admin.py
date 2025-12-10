@@ -5,6 +5,7 @@ import sys
 
 from sqlalchemy import text
 
+
 # Add parent directory to path
 sys.path.insert(0, "/app")
 
@@ -18,13 +19,13 @@ async def update_super_admin():
         result = await session.execute(text("SELECT * FROM admins"))
         admins = result.fetchall()
         print(f"Current admins: {admins}")
-        
+
         # Delete the fake admin with wrong ID
         await session.execute(
             text("DELETE FROM admins WHERE telegram_id = 1234567890")
         )
         await session.commit()
-        
+
         # Verify
         result = await session.execute(text("SELECT * FROM admins"))
         admins = result.fetchall()

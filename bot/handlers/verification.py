@@ -18,6 +18,7 @@ from app.models.user import User
 from app.services.user_service import UserService
 from bot.keyboards.reply import main_menu_reply_keyboard
 
+
 router = Router(name="verification")
 
 

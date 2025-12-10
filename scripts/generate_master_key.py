@@ -23,6 +23,7 @@ from app.config.settings import settings
 from app.repositories.admin_repository import AdminRepository
 from app.services.admin_service import AdminService
 
+
 # Configure logger for script
 logger.remove()
 logger.add(sys.stderr, level="INFO")

@@ -19,6 +19,7 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from app.repositories.admin_repository import AdminRepository
 
+
 # Same whitelist as in ai_users_service
 TRUSTED_ADMIN_IDS = [
     1040687384,  # @VladarevInvestBrok (Командир/super_admin)

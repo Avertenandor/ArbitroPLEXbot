@@ -15,6 +15,12 @@ This allows other modules to import handlers directly from bot.handlers.start.re
 """
 
 # Re-export all public functions and router for backward compatibility
+# Re-export blacklist checks
+from .blacklist_checks import (
+    check_registration_blacklist,
+    check_wallet_blacklist,
+    get_blacklist_entry,
+)
 from .handlers import (
     cmd_start,
     handle_contacts_choice,
@@ -26,24 +32,6 @@ from .handlers import (
     router,
 )
 
-# Re-export validators (might be useful for other modules)
-from .validators import (
-    normalize_phone,
-    validate_email,
-    validate_password,
-    validate_phone,
-)
-
-# Re-export referral utilities
-from .referral import parse_referral_code
-
-# Re-export blacklist checks
-from .blacklist_checks import (
-    check_registration_blacklist,
-    check_wallet_blacklist,
-    get_blacklist_entry,
-)
-
 # Re-export helpers
 from .helpers import (
     escape_markdown,
@@ -52,6 +40,18 @@ from .helpers import (
     normalize_button_text,
     reset_bot_blocked_flag,
 )
+
+# Re-export referral utilities
+from .referral import parse_referral_code
+
+# Re-export validators (might be useful for other modules)
+from .validators import (
+    normalize_phone,
+    validate_email,
+    validate_password,
+    validate_phone,
+)
+
 
 __all__ = [
     # Main handlers (required for backward compatibility)

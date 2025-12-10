@@ -59,6 +59,7 @@ from bot.messages.user_messages import (
     format_withdrawal_status,
 )
 
+
 __all__ = [
     # Admin messages - constants
     "ADMIN_PANEL_WELCOME",

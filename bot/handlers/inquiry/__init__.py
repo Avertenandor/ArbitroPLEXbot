@@ -26,6 +26,7 @@ from . import (
     question_input,
 )
 
+
 # Create main router and include all submodule routers
 router = Router(name="user_inquiry")
 router.include_router(entry.router)

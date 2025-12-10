@@ -6,8 +6,6 @@ Runs every 30 seconds.
 """
 
 import dramatiq
-
-from jobs.async_runner import run_async
 from aiogram import Bot
 from loguru import logger
 
@@ -15,6 +13,7 @@ from app.config.database import async_session_maker
 from app.config.settings import settings
 from app.services.blockchain_service import get_blockchain_service
 from app.services.notification_service import NotificationService
+from jobs.async_runner import run_async
 
 
 @dramatiq.actor(max_retries=3, time_limit=60_000)  # 1 min timeout

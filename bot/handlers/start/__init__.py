@@ -16,6 +16,7 @@ from aiogram import Router
 # Import all routers from submodules
 from . import authentication, callbacks, registration, reply_handlers
 
+
 # Create a main router that includes all submodule routers
 router = Router()
 
@@ -33,16 +34,6 @@ router.include_router(reply_handlers.router)
 # This allows other modules to import handlers directly from bot.handlers.start
 
 # Registration handlers
-from .registration import (
-    cmd_start,
-    handle_contacts_choice,
-    process_email,
-    process_financial_password,
-    process_password_confirmation,
-    process_phone,
-    process_wallet,
-)
-
 # Authentication handlers
 from .authentication import (
     ECOSYSTEM_INFO,
@@ -57,6 +48,15 @@ from .callbacks import (
     handle_show_password_again,
     handle_start_after_auth,
 )
+from .registration import (
+    cmd_start,
+    handle_contacts_choice,
+    process_email,
+    process_financial_password,
+    process_password_confirmation,
+    process_phone,
+    process_wallet,
+)
 
 # Reply keyboard handlers
 from .reply_handlers import (
@@ -67,6 +67,7 @@ from .reply_handlers import (
     handle_show_password_reply,
     handle_start_work_reply,
 )
+
 
 # Export all public symbols
 __all__ = [

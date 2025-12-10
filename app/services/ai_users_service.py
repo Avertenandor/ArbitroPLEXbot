@@ -25,6 +25,7 @@ from app.models.user import User
 from app.repositories.admin_repository import AdminRepository
 from app.repositories.user_repository import UserRepository
 
+
 # Whitelist of admin telegram IDs who can perform dangerous operations
 # (change balance, modify deposits, etc.)
 # New admins won't have these permissions

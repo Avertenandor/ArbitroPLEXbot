@@ -6,11 +6,12 @@ Loads users, deposit levels, and system settings in batches.
 """
 
 import dramatiq
-
-from jobs.async_runner import run_async
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
+
+from jobs.async_runner import run_async
+
 
 try:
     from redis.asyncio import Redis as AsyncRedis

@@ -18,6 +18,7 @@ from app.repositories.global_settings_repository import (
 from bot.keyboards.admin.emergency_keyboards import emergency_stops_keyboard
 from bot.keyboards.reply import get_admin_keyboard_from_data
 
+
 router = Router()
 
 

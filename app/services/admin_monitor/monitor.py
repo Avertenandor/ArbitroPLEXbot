@@ -15,6 +15,7 @@ from app.config.constants import TELEGRAM_TIMEOUT
 from .constants import EventCategory, EventPriority
 from .formatter import format_admin_message
 
+
 if TYPE_CHECKING:
     from aiogram import Bot
     from sqlalchemy.ext.asyncio import AsyncSession

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.referral_service import ReferralService
 
+
 router = Router(name="admin_users_referrals")
 
 

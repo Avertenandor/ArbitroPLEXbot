@@ -13,6 +13,7 @@ from loguru import logger
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+
 try:
     import redis.asyncio as redis
 except ImportError:

@@ -5,6 +5,7 @@ Common constants used across bot handlers
 
 from decimal import Decimal
 
+
 # Referral commission rates by level
 # 3-level referral program: 5% from deposits AND earnings at each level
 REFERRAL_RATES = {

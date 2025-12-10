@@ -22,6 +22,7 @@ from app.services.referral.referral_reward_processor import (
 )
 from app.services.referral.statistics import ReferralStatisticsManager
 
+
 __all__ = [
     # Configuration
     "REFERRAL_DEPTH",

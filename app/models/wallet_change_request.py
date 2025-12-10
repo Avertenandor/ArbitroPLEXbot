@@ -13,6 +13,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 from app.models.enums import WalletChangeStatus, WalletChangeType
 
+
 if TYPE_CHECKING:
     from app.models.admin import Admin
 

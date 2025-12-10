@@ -4,10 +4,12 @@
 import asyncio
 import sys
 
+
 sys.path.insert(0, '/app')
 
 from loguru import logger
 from web3 import Web3
+
 
 # Configure logger
 logger.remove()

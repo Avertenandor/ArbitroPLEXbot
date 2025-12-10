@@ -24,6 +24,7 @@ from bot.keyboards.reply import (
 )
 from bot.utils.formatters import escape_md, format_transaction_hash, format_usdt
 
+
 router = Router(name="transaction")
 
 # Constants for pagination

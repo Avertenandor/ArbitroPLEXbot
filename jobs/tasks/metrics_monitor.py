@@ -8,8 +8,6 @@ Runs every 5 minutes.
 from typing import Any
 
 import dramatiq
-
-from jobs.async_runner import run_async
 from aiogram import Bot
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -18,6 +16,7 @@ from sqlalchemy.pool import NullPool
 from app.config.settings import settings
 from app.services.metrics_monitor_service import MetricsMonitorService
 from app.services.notification_service import NotificationService
+from jobs.async_runner import run_async
 
 
 @dramatiq.actor(max_retries=3, time_limit=120_000)  # 2 min timeout
@@ -96,7 +95,7 @@ async def _send_anomaly_alerts(
     bot = None
     try:
         bot = Bot(token=settings.telegram_bot_token)
-        
+
         # Create local session for notification service
         local_engine = create_async_engine(
             settings.database_url,
@@ -108,7 +107,7 @@ async def _send_anomaly_alerts(
             class_=AsyncSession,
             expire_on_commit=False,
         )
-        
+
         try:
             async with local_session_maker() as session:
                 notification_service = NotificationService(session)

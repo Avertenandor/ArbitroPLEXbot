@@ -6,12 +6,13 @@ Runs every 5 minutes to check for stuck transactions.
 """
 
 import dramatiq
-
-from jobs.async_runner import run_async
 from aiogram import Bot
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
+
+from jobs.async_runner import run_async
+
 
 try:
     import redis.asyncio as redis

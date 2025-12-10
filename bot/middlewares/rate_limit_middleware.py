@@ -13,6 +13,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import TelegramObject, User
 from loguru import logger
 
+
 try:
     import redis.asyncio as redis
 except ImportError:

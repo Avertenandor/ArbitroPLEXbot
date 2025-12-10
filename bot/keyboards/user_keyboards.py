@@ -28,46 +28,47 @@ Or:
 
 # Re-export all keyboards from new modular structure for backward compatibility
 from bot.keyboards.user import (
-    # Main menu
-    main_menu_reply_keyboard,
-    # Basic menus
-    balance_menu_keyboard,
-    contact_input_keyboard,
-    contact_update_menu_keyboard,
-    contacts_choice_keyboard,
-    deposit_menu_keyboard,
-    notification_settings_reply_keyboard,
-    profile_menu_keyboard,
-    referral_menu_keyboard,
-    settings_menu_keyboard,
-    support_keyboard,
-    wallet_menu_keyboard,
-    withdrawal_menu_keyboard,
-    # Financial keyboards
-    finpass_input_keyboard,
-    finpass_recovery_confirm_keyboard,
-    finpass_recovery_keyboard,
-    show_password_keyboard,
-    # History keyboards
-    referral_list_keyboard,
-    transaction_history_keyboard,
-    transaction_history_type_keyboard,
-    withdrawal_history_keyboard,
     # Authorization keyboards
     auth_continue_keyboard,
     auth_payment_keyboard,
     auth_rescan_keyboard,
     auth_retry_keyboard,
     auth_wallet_input_keyboard,
+    # Basic menus
+    balance_menu_keyboard,
+    # Utility keyboards
+    cancel_keyboard,
+    confirmation_keyboard,
+    contact_input_keyboard,
+    contact_update_menu_keyboard,
+    contacts_choice_keyboard,
+    deposit_menu_keyboard,
+    # Financial keyboards
+    finpass_input_keyboard,
+    finpass_recovery_confirm_keyboard,
+    finpass_recovery_keyboard,
     # Inquiry keyboards
     inquiry_dialog_keyboard,
     inquiry_history_keyboard,
     inquiry_input_keyboard,
     inquiry_waiting_keyboard,
-    # Utility keyboards
-    cancel_keyboard,
-    confirmation_keyboard,
+    # Main menu
+    main_menu_reply_keyboard,
+    notification_settings_reply_keyboard,
+    profile_menu_keyboard,
+    # History keyboards
+    referral_list_keyboard,
+    referral_menu_keyboard,
+    settings_menu_keyboard,
+    show_password_keyboard,
+    support_keyboard,
+    transaction_history_keyboard,
+    transaction_history_type_keyboard,
+    wallet_menu_keyboard,
+    withdrawal_history_keyboard,
+    withdrawal_menu_keyboard,
 )
+
 
 __all__ = [
     # Main menu

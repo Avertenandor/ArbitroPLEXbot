@@ -19,11 +19,12 @@ Usage:
 
 from typing import Any
 
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin import Admin
 from app.services.admin_service import AdminService
+
 
 # Role display mapping for consistent UI text
 ROLE_DISPLAY = {

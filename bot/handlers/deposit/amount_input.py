@@ -19,6 +19,7 @@ from bot.utils.menu_buttons import is_menu_button
 
 from .utils import format_amount, validate_amount_input
 
+
 router = Router()
 
 

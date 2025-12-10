@@ -27,6 +27,7 @@ from .notifier import PlexPaymentNotifier
 from .processor import PlexPaymentProcessor
 from .scanner import PlexTransferScanner
 
+
 __all__ = [
     "PlexPaymentMonitor",
     "PlexPaymentNotifier",

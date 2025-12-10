@@ -10,4 +10,5 @@ from the refactored modular structure.
 # Re-export from modular structure for backward compatibility
 from app.services.blacklist_service import BlacklistService
 
+
 __all__ = ['BlacklistService']

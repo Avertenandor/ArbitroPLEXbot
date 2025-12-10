@@ -116,25 +116,25 @@ async def index_user_on_registration(
         async with async_session_maker() as session:
             # Use the new realtime sync service to link transactions
             from app.services.blockchain_realtime_sync_service import BlockchainRealtimeSyncService
-            
+
             sync_service = BlockchainRealtimeSyncService(session)
             linked = await sync_service.link_user_to_transactions(user_id, wallet_address)
-            
+
             # Also get their deposit total from cache
             deposits = await sync_service.get_user_deposits_from_cache(wallet_address, "USDT")
-            
+
             result = {
                 "success": True,
                 "linked_transactions": linked,
                 "cached_deposits": deposits.get("tx_count", 0),
                 "total_usdt": float(deposits.get("total_amount", 0)),
             }
-            
+
             logger.info(
                 f"[Indexer] User {user_id}: linked {linked} transactions, "
                 f"found {deposits.get('tx_count', 0)} deposits ({deposits.get('total_amount', 0)} USDT)"
             )
-            
+
             return result
 
     except Exception as e:

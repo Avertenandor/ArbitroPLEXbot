@@ -20,14 +20,12 @@ from app.repositories.admin_repository import AdminRepository
 from app.repositories.deposit_level_config_repository import (
     DepositLevelConfigRepository,
 )
-from app.repositories.deposit_level_version_repository import (
-    DepositLevelVersionRepository,
-)
 from app.repositories.global_settings_repository import (
     GlobalSettingsRepository,
 )
 from app.services.admin_log_service import AdminLogService
 from bot.keyboards.reply import admin_deposit_settings_keyboard
+
 
 router = Router()
 

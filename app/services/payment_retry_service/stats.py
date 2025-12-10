@@ -5,7 +5,6 @@ Module: stats.py
 Provides statistics and user-specific retry operations.
 """
 
-from decimal import Decimal
 
 from app.models.payment_retry import PaymentRetry
 

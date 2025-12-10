@@ -32,47 +32,46 @@ All classes are re-exported here for backward compatibility.
 # USER-FACING BUTTONS
 # ============================================================================
 
-from bot.keyboards.buttons.main_menu import MainMenuButtons
-from bot.keyboards.buttons.deposits import DepositButtons
-from bot.keyboards.buttons.withdrawals import (
-    WithdrawalButtons,
-    WithdrawalSettingsButtons,
-)
-from bot.keyboards.buttons.referrals import ReferralButtons
-from bot.keyboards.buttons.settings import (
-    SettingsButtons,
-    ContactButtons,
-    NotificationButtons,
-)
-from bot.keyboards.buttons.transactions import TransactionButtons
-from bot.keyboards.buttons.auth import AuthButtons, AppealButtons
+from bot.keyboards.buttons.actions import ActionButtons
 
 # ============================================================================
 # ADMIN BUTTONS
 # ============================================================================
-
 from bot.keyboards.buttons.admin import (
     AdminButtons,
+    AdminManagementButtons,
     AdminUserButtons,
     AdminWalletButtons,
-    AdminManagementButtons,
 )
 from bot.keyboards.buttons.admin_deposits import AdminDepositButtons
-from bot.keyboards.buttons.broadcast import BroadcastButtons
+from bot.keyboards.buttons.auth import AppealButtons, AuthButtons
 from bot.keyboards.buttons.blacklist import BlacklistButtons
-from bot.keyboards.buttons.master_key import MasterKeyButtons
-from bot.keyboards.buttons.user_messages import UserMessagesButtons
-from bot.keyboards.buttons.roi import ROICorridorButtons
+from bot.keyboards.buttons.broadcast import BroadcastButtons
+from bot.keyboards.buttons.deposits import DepositButtons
 from bot.keyboards.buttons.financial import FinancialReportButtons
+from bot.keyboards.buttons.inline import InlineButtons
+from bot.keyboards.buttons.main_menu import MainMenuButtons
+from bot.keyboards.buttons.master_key import MasterKeyButtons
 
 # ============================================================================
 # COMMON BUTTONS
 # ============================================================================
-
 from bot.keyboards.buttons.navigation import NavigationButtons, PaginationButtons
-from bot.keyboards.buttons.actions import ActionButtons
+from bot.keyboards.buttons.referrals import ReferralButtons
+from bot.keyboards.buttons.roi import ROICorridorButtons
+from bot.keyboards.buttons.settings import (
+    ContactButtons,
+    NotificationButtons,
+    SettingsButtons,
+)
 from bot.keyboards.buttons.support import SupportButtons
-from bot.keyboards.buttons.inline import InlineButtons
+from bot.keyboards.buttons.transactions import TransactionButtons
+from bot.keyboards.buttons.user_messages import UserMessagesButtons
+from bot.keyboards.buttons.withdrawals import (
+    WithdrawalButtons,
+    WithdrawalSettingsButtons,
+)
+
 
 # ============================================================================
 # PUBLIC API

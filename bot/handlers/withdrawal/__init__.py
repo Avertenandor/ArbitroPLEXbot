@@ -15,6 +15,9 @@ All public interfaces are re-exported here to maintain backward compatibility.
 
 from aiogram import Router
 
+# Import routers from each module
+from . import handlers, history, processors
+
 # Import all public functions for backward compatibility
 from .auto_payout import (
     _safe_process_auto_payout,
@@ -29,8 +32,6 @@ from .history import (
     show_history,
 )
 
-# Import routers from each module
-from . import handlers, history, processors
 
 # Create main router and include all sub-routers
 router = Router()

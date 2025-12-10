@@ -20,6 +20,7 @@ from app.models.user import User
 from bot.keyboards.user import cabinet_submenu_keyboard
 from bot.utils.user_loader import UserLoader
 
+
 router = Router()
 
 

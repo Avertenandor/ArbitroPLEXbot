@@ -13,19 +13,18 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
+from aiogram import Bot
+from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from aiogram import Bot
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
-
 from app.config.settings import settings
 from app.models.deposit import Deposit
 from app.models.user import User
-from app.services.deposit.transaction_notifier import TransactionNotifier
 from app.services.deposit import DepositService
+from app.services.deposit.transaction_notifier import TransactionNotifier
 from app.services.notification_service import NotificationService
 from app.utils.distributed_lock import get_distributed_lock
 from app.utils.security import mask_address, mask_tx_hash
@@ -35,6 +34,7 @@ from bot.constants.rules import (
     SYSTEM_WALLET,
 )
 from bot.utils.formatters import escape_md
+
 
 if TYPE_CHECKING:
     pass

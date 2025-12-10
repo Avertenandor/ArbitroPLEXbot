@@ -18,6 +18,7 @@ from bot.states.admin_states import AdminStates
 from bot.utils.admin_utils import clear_state_preserve_admin_token
 from bot.utils.pagination import paginate_list
 
+
 WITHDRAWALS_PER_PAGE = 8
 
 router = Router(name="admin_withdrawals_pending")

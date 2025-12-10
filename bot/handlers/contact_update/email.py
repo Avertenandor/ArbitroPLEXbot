@@ -12,10 +12,11 @@ from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.validators.common import validate_email
-from bot.keyboards.reply import contact_input_keyboard, settings_keyboard
+from bot.keyboards.reply import settings_keyboard
 from bot.states.profile_update import ProfileUpdateStates
 
 from .utils import get_user_or_error, navigate_to_home
+
 
 router = Router(name="contact_update_email")
 

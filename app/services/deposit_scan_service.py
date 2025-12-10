@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.user_repository import UserRepository
 from app.services.blockchain_service import get_blockchain_service
 
+
 # Minimum deposit to be considered an active depositor
 MINIMUM_DEPOSIT_USDT = Decimal("30")
 
@@ -153,9 +154,9 @@ class DepositScanService:
 
         # Cache the transactions we found
         try:
-            from app.services.blockchain_tx_cache_service import BlockchainTxCacheService
-            from app.repositories.blockchain_tx_cache_repository import BlockchainTxCacheRepository
             from app.config.settings import settings
+            from app.repositories.blockchain_tx_cache_repository import BlockchainTxCacheRepository
+            from app.services.blockchain_tx_cache_service import BlockchainTxCacheService
 
             cache_repo = BlockchainTxCacheRepository(self._session)
 

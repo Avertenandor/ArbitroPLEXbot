@@ -8,6 +8,7 @@ dependencies on database, ORM, or app-specific code.
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+
 if TYPE_CHECKING:
     from calculator.core.models import CalculationResult, DepositCalculation, DepositLevel
 

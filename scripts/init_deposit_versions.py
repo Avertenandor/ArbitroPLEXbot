@@ -18,6 +18,7 @@ from app.repositories.deposit_level_version_repository import (
     DepositLevelVersionRepository,
 )
 
+
 # Default deposit conditions (can be adjusted)
 DEFAULT_CONDITIONS = {
     1: {

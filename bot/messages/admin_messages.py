@@ -5,6 +5,7 @@ Contains message templates and formatting functions for admin operations
 
 from typing import Any
 
+
 # Admin Panel Messages
 ADMIN_PANEL_WELCOME = """
 👑 **Панель администратора**

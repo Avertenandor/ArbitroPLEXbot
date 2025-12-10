@@ -22,6 +22,7 @@ from app.services.withdrawal.withdrawal_lifecycle_handler import (
 from app.services.withdrawal_service import WithdrawalService
 from bot.keyboards.user.menus.financial_menu import withdrawal_menu_keyboard
 
+
 # Router will be created in __init__.py and imported there
 router = Router()
 
@@ -58,16 +59,12 @@ async def _show_withdrawal_history(
             await message.answer("❌ Системная ошибка.")
             return
         withdrawal_service = WithdrawalService(session)
-        result = await withdrawal_service.get_user_withdrawals(
-            user.id, page=page, limit=10
-        )
+        result = await withdrawal_service.get_user_withdrawals(user.id, page=page, limit=10)
     else:
         async with session_factory() as session:
             async with session.begin():
                 withdrawal_service = WithdrawalService(session)
-                result = await withdrawal_service.get_user_withdrawals(
-                    user.id, page=page, limit=10
-                )
+                result = await withdrawal_service.get_user_withdrawals(user.id, page=page, limit=10)
 
     withdrawals = result["withdrawals"]
     result["total"]
@@ -76,10 +73,7 @@ async def _show_withdrawal_history(
     await state.update_data(withdrawal_page=page)
 
     if not withdrawals:
-        await message.answer(
-            "📜 История выводов пуста",
-            reply_markup=withdrawal_menu_keyboard()
-        )
+        await message.answer("📜 История выводов пуста", reply_markup=withdrawal_menu_keyboard())
         return
 
     text = f"📜 *История выводов* (Страница {page}/{total_pages})\n\n"
@@ -88,13 +82,9 @@ async def _show_withdrawal_history(
     inline_buttons = []
 
     for tx in withdrawals:
-        status_icon = {
-            "pending": "⏳",
-            "processing": "⚙️",
-            "confirmed": "✅",
-            "failed": "❌",
-            "frozen": "❄️"
-        }.get(tx.status, "❓")
+        status_icon = {"pending": "⏳", "processing": "⚙️", "confirmed": "✅", "failed": "❌", "frozen": "❄️"}.get(
+            tx.status, "❓"
+        )
 
         date = tx.created_at.strftime("%d.%m.%Y %H:%M")
         net_amount = tx.amount - tx.fee
@@ -105,12 +95,9 @@ async def _show_withdrawal_history(
 
         # Add cancel button for PENDING withdrawals
         if tx.status == "pending":
-            inline_buttons.append([
-                InlineKeyboardButton(
-                    text=f"❌ Отменить вывод ID:{tx.id}",
-                    callback_data=f"cancel_withdrawal_{tx.id}"
-                )
-            ])
+            inline_buttons.append(
+                [InlineKeyboardButton(text=f"❌ Отменить вывод ID:{tx.id}", callback_data=f"cancel_withdrawal_{tx.id}")]
+            )
 
         text += "───────────────────\n"
 
@@ -118,11 +105,7 @@ async def _show_withdrawal_history(
     inline_markup = InlineKeyboardMarkup(inline_keyboard=inline_buttons) if inline_buttons else None
 
     # Pagination keyboard would go here (omitted for brevity, assume simple list)
-    await message.answer(
-        text,
-        parse_mode="Markdown",
-        reply_markup=inline_markup or withdrawal_menu_keyboard()
-    )
+    await message.answer(text, parse_mode="Markdown", reply_markup=inline_markup or withdrawal_menu_keyboard())
 
 
 @router.callback_query(F.data.startswith("cancel_withdrawal_"))
@@ -150,24 +133,16 @@ async def handle_cancel_withdrawal_request(
         f"После отмены средства будут возвращены на ваш баланс."
     )
 
-    confirmation_keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="✅ Да, отменить",
-                callback_data=f"confirm_cancel_{tx_id}"
-            ),
-            InlineKeyboardButton(
-                text="❌ Нет, вернуться",
-                callback_data=f"reject_cancel_{tx_id}"
-            )
+    confirmation_keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Да, отменить", callback_data=f"confirm_cancel_{tx_id}"),
+                InlineKeyboardButton(text="❌ Нет, вернуться", callback_data=f"reject_cancel_{tx_id}"),
+            ]
         ]
-    ])
-
-    await callback.message.edit_text(
-        confirmation_text,
-        parse_mode="Markdown",
-        reply_markup=confirmation_keyboard
     )
+
+    await callback.message.edit_text(confirmation_text, parse_mode="Markdown", reply_markup=confirmation_keyboard)
     await callback.answer()
 
 
@@ -201,43 +176,27 @@ async def handle_confirm_cancel_withdrawal(
     try:
         if session:
             lifecycle_handler = WithdrawalLifecycleHandler(session)
-            success, error_msg = await lifecycle_handler.cancel_withdrawal(
-                tx_id, user.id
-            )
+            success, error_msg = await lifecycle_handler.cancel_withdrawal(tx_id, user.id)
         else:
             async with session_factory() as sess:
                 async with sess.begin():
                     lifecycle_handler = WithdrawalLifecycleHandler(sess)
-                    success, error_msg = await lifecycle_handler.cancel_withdrawal(
-                        tx_id, user.id
-                    )
+                    success, error_msg = await lifecycle_handler.cancel_withdrawal(tx_id, user.id)
 
         if success:
             success_text = (
-                f"✅ *Вывод успешно отменен*\n\n"
-                f"Вывод ID: `{tx_id}` был отменен.\n"
-                f"Средства возвращены на ваш баланс."
+                f"✅ *Вывод успешно отменен*\n\nВывод ID: `{tx_id}` был отменен.\nСредства возвращены на ваш баланс."
             )
-            await callback.message.edit_text(
-                success_text,
-                parse_mode="Markdown"
-            )
+            await callback.message.edit_text(success_text, parse_mode="Markdown")
             await callback.answer("✅ Вывод отменен")
         else:
-            error_text = (
-                f"❌ *Ошибка отмены вывода*\n\n"
-                f"{error_msg or 'Не удалось отменить вывод'}"
-            )
-            await callback.message.edit_text(
-                error_text,
-                parse_mode="Markdown"
-            )
+            error_text = f"❌ *Ошибка отмены вывода*\n\n{error_msg or 'Не удалось отменить вывод'}"
+            await callback.message.edit_text(error_text, parse_mode="Markdown")
             await callback.answer(f"❌ {error_msg or 'Ошибка отмены'}")
 
     except Exception:
         await callback.message.edit_text(
-            "❌ *Системная ошибка*\n\nНе удалось отменить вывод. Попробуйте позже.",
-            parse_mode="Markdown"
+            "❌ *Системная ошибка*\n\nНе удалось отменить вывод. Попробуйте позже.", parse_mode="Markdown"
         )
         await callback.answer("❌ Системная ошибка")
 
@@ -249,8 +208,7 @@ async def handle_reject_cancel_withdrawal(
 ) -> None:
     """Handle rejection of withdrawal cancellation - return to history."""
     await callback.message.edit_text(
-        "ℹ️ Отмена вывода отменена.\n\n"
-        "Используйте кнопку '📜 История выводов' чтобы вернуться к истории.",
-        parse_mode="Markdown"
+        "ℹ️ Отмена вывода отменена.\n\nИспользуйте кнопку '📜 История выводов' чтобы вернуться к истории.",
+        parse_mode="Markdown",
     )
     await callback.answer("Действие отменено")

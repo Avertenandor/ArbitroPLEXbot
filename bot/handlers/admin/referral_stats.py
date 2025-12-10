@@ -15,6 +15,7 @@ from app.services.referral_service import ReferralService
 from bot.keyboards.admin_keyboards import admin_keyboard
 from bot.utils.formatters import format_usdt
 
+
 router = Router(name="admin_referral_stats")
 
 

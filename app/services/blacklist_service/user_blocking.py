@@ -9,7 +9,6 @@ Uses distributed locks to prevent race conditions.
 from typing import Any
 
 from loguru import logger
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.blacklist import BlacklistActionType
 

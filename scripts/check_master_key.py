@@ -6,6 +6,7 @@ import sys
 
 from sqlalchemy import text
 
+
 sys.path.insert(0, "/app")
 
 from app.config.database import async_session_maker
@@ -18,7 +19,7 @@ async def check_master_key():
             text("SELECT id, telegram_id, username, role, master_key FROM admins")
         )
         admins = result.fetchall()
-        
+
         for admin in admins:
             print(f"Admin ID: {admin[0]}")
             print(f"Telegram ID: {admin[1]}")
@@ -26,7 +27,7 @@ async def check_master_key():
             print(f"Role: {admin[3]}")
             print(f"Master Key: {admin[4] or 'NOT SET'}")
             print("-" * 40)
-            
+
             # If super_admin has no master key, generate one
             if admin[3] == 'super_admin' and not admin[4]:
                 new_key = secrets.token_hex(16).upper()

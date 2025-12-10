@@ -13,6 +13,7 @@ from bot.middlewares.markdown_error_handler import MarkdownErrorHandlerMiddlewar
 from bot.middlewares.rate_limit_middleware import RateLimitMiddleware
 from bot.middlewares.request_id import RequestIDMiddleware
 
+
 __all__ = [
     "ActivityLoggingMiddleware",
     "AuthMiddleware",

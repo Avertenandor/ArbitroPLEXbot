@@ -19,6 +19,7 @@ from app.repositories.blacklist_repository import BlacklistRepository
 from app.services.deposit_scan_service import DepositScanService
 from bot.keyboards.reply import main_menu_reply_keyboard
 
+
 router = Router()
 
 

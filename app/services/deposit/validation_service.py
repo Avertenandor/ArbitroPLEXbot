@@ -14,7 +14,6 @@ from app.models.enums import TransactionStatus
 from app.repositories.deposit_repository import DepositRepository
 from app.repositories.referral_repository import ReferralRepository
 from app.services.deposit.constants import (
-    DEPOSIT_LEVELS,
     PARTNER_REQUIREMENTS,
     db_level_to_level_type,
     get_level_config,
@@ -232,12 +231,12 @@ class DepositValidationService:
         """
         from app.services.deposit.constants import (
             DEPOSIT_LEVEL_CONFIGS,
-            LEVEL_TYPE_TEST,
             LEVEL_TYPE_LEVEL_1,
             LEVEL_TYPE_LEVEL_2,
             LEVEL_TYPE_LEVEL_3,
             LEVEL_TYPE_LEVEL_4,
             LEVEL_TYPE_LEVEL_5,
+            LEVEL_TYPE_TEST,
         )
 
         # Get user's confirmed deposits

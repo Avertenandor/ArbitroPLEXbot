@@ -15,6 +15,7 @@ from app.config.settings import settings
 from app.services.blockchain.blockchain_service import BlockchainService
 from app.services.blockchain.constants import USDT_ABI
 
+
 # ERC-20 standard ABI для Transfer событий (PLEX использует тот же стандарт)
 PLEX_ABI = USDT_ABI
 

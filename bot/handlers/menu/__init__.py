@@ -37,9 +37,6 @@ This __init__.py maintains full backward compatibility by:
 
 from aiogram import Router
 
-# Import core function for backward compatibility
-from bot.handlers.menu.core import show_main_menu
-
 # Import all routers from submodules
 from bot.handlers.menu import (
     balance,
@@ -64,6 +61,10 @@ from bot.handlers.menu import (
     wallet_balance,
     withdrawal_menu,
 )
+
+# Import core function for backward compatibility
+from bot.handlers.menu.core import show_main_menu
+
 
 # Create combined router
 router = Router()

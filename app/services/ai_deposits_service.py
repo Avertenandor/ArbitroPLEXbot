@@ -26,6 +26,7 @@ from app.repositories.deposit_repository import DepositRepository
 from app.repositories.global_settings_repository import GlobalSettingsRepository
 from app.repositories.user_repository import UserRepository
 
+
 # Only these admins can modify deposits
 TRUSTED_ADMIN_IDS = [
     1040687384,  # @VladarevInvestBrok (Командир/super_admin)

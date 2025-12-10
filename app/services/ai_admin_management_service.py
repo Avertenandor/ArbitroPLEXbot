@@ -14,11 +14,12 @@ from datetime import UTC, datetime
 from typing import Any
 
 from loguru import logger
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.admin import Admin
 from app.repositories.admin_repository import AdminRepository
+
 
 # Only these users can manage admins
 SUPER_ADMIN_IDS = [

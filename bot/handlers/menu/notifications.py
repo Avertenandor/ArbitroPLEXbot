@@ -16,6 +16,7 @@ from app.models.user import User
 from app.services.user_notification_service import UserNotificationService
 from bot.keyboards.reply import notification_settings_reply_keyboard
 
+
 router = Router()
 
 

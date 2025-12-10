@@ -12,6 +12,7 @@ import sys
 import warnings
 from pathlib import Path
 
+
 # Suppress eth_utils network warnings about invalid ChainId
 # These warnings are from eth_utils library initialization and don't affect functionality
 # Must be set BEFORE importing any modules that use eth_utils
@@ -34,6 +35,7 @@ from aiogram.enums import ParseMode  # noqa: E402
 from aiogram.types import ErrorEvent  # noqa: E402
 from loguru import logger  # noqa: E402
 
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -48,6 +50,7 @@ from bot.initialization.middlewares import register_middlewares  # noqa: E402
 from bot.initialization.services import initialize_all_services  # noqa: E402
 from bot.initialization.shutdown import shutdown_handler  # noqa: E402
 from bot.initialization.storage import setup_fsm_storage  # noqa: E402
+
 
 # Global bot instance for external access (e.g. from services)
 bot_instance: Bot | None = None
@@ -85,8 +88,7 @@ async def main() -> None:  # noqa: C901
     async def error_handler(event: ErrorEvent) -> bool:
         """Global error handler for unhandled exceptions."""
         logger.exception(
-            f"Unhandled error in bot: {event.exception.__class__.__name__}: "
-            f"{event.exception}",
+            f"Unhandled error in bot: {event.exception.__class__.__name__}: {event.exception}",
             extra={"update": str(event.update) if event.update else None},
         )
 
@@ -94,8 +96,7 @@ async def main() -> None:  # noqa: C901
         try:
             if event.update and event.update.message:
                 await event.update.message.answer(
-                    "⚠️ Произошла ошибка. Пожалуйста, попробуйте позже "
-                    "или обратитесь в поддержку."
+                    "⚠️ Произошла ошибка. Пожалуйста, попробуйте позже или обратитесь в поддержку."
                 )
         except Exception as send_error:
             logger.error(f"Failed to send error message: {send_error}")
@@ -112,6 +113,7 @@ async def main() -> None:  # noqa: C901
 
         # Set bot username in settings if not already set
         import os
+
         if not settings.telegram_bot_username:
             os.environ["TELEGRAM_BOT_USERNAME"] = bot_info.username
             # Update settings object (runtime override)
@@ -129,9 +131,7 @@ async def main() -> None:  # noqa: C901
         logger.info("Default super admin initialized successfully")
     except Exception as e:
         logger.error(f"Failed to initialize default super admin: {e}")
-        logger.warning(
-            "Bot will continue, but admin may need to be created manually"
-        )
+        logger.warning("Bot will continue, but admin may need to be created manually")
 
     # Start polling
     logger.info("Bot started successfully")
@@ -146,9 +146,7 @@ async def main() -> None:  # noqa: C901
                 port=settings.health_check_port or 8080,
             )
         )
-        logger.info(
-            f"Health check server started on port {settings.health_check_port or 8080}"
-        )
+        logger.info(f"Health check server started on port {settings.health_check_port or 8080}")
     except Exception as e:
         logger.warning(f"Failed to start health check server: {e}")
 
@@ -156,9 +154,7 @@ async def main() -> None:  # noqa: C901
 
     try:
         logger.info("Starting polling...")
-        await dp.start_polling(
-            bot, allowed_updates=dp.resolve_used_update_types()
-        )
+        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
     except Exception as e:
         logger.exception(f"Polling error: {e}")
         raise

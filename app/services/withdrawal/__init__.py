@@ -34,6 +34,7 @@ from app.services.withdrawal.withdrawal_validator import (
     WithdrawalValidator,
 )
 
+
 __all__ = [
     "WithdrawalBalanceManager",
     "WithdrawalValidator",

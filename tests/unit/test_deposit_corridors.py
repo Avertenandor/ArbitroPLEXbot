@@ -7,11 +7,13 @@
 - Последовательность уровней (test -> level_1 -> ... -> level_5)
 - Расчет PLEX за депозит
 """
-import pytest
 from decimal import Decimal
+
+import pytest
+
 from bot.constants.rules import (
-    DEPOSIT_LEVELS,
     DEPOSIT_LEVEL_ORDER,
+    DEPOSIT_LEVELS,
     PLEX_PER_DOLLAR_DAILY,
 )
 

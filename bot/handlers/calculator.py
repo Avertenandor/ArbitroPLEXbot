@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from bot.keyboards.reply import main_menu_reply_keyboard
 from bot.utils.menu_buttons import is_menu_button
 
+
 router = Router(name="calculator")
 
 

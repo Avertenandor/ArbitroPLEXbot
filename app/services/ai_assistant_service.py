@@ -14,6 +14,7 @@ from typing import Any
 
 from loguru import logger
 
+
 try:
     import anthropic
     ANTHROPIC_AVAILABLE = True
@@ -2839,7 +2840,7 @@ class AIAssistantService:
             }
         ]
 
-    async def _execute_tools(
+    async def _execute_tools(  # noqa: C901
         self,
         content: list,
         session: Any,
@@ -2847,22 +2848,22 @@ class AIAssistantService:
         admin_data: dict[str, Any] | None = None,
     ) -> list[dict]:
         """Execute requested tools and return results."""
-        from app.services.ai_broadcast_service import AIBroadcastService
-        from app.services.ai_bonus_service import AIBonusService
-        from app.services.ai_appeals_service import AIAppealsService
-        from app.services.ai_inquiries_service import AIInquiriesService
-        from app.services.ai_users_service import AIUsersService
-        from app.services.ai_statistics_service import AIStatisticsService
-        from app.services.ai_withdrawals_service import AIWithdrawalsService
-        from app.services.ai_system_service import AISystemService
         from app.services.ai_admin_management_service import AIAdminManagementService
-        from app.services.ai_deposits_service import AIDepositsService
-        from app.services.ai_roi_service import AIRoiService
+        from app.services.ai_appeals_service import AIAppealsService
         from app.services.ai_blacklist_service import AIBlacklistService
+        from app.services.ai_bonus_service import AIBonusService
+        from app.services.ai_broadcast_service import AIBroadcastService
+        from app.services.ai_deposits_service import AIDepositsService
         from app.services.ai_finpass_service import AIFinpassService
-        from app.services.ai_referral_service import AIReferralService
+        from app.services.ai_inquiries_service import AIInquiriesService
         from app.services.ai_logs_service import AILogsService
+        from app.services.ai_referral_service import AIReferralService
+        from app.services.ai_roi_service import AIRoiService
         from app.services.ai_settings_service import AISettingsService
+        from app.services.ai_statistics_service import AIStatisticsService
+        from app.services.ai_system_service import AISystemService
+        from app.services.ai_users_service import AIUsersService
+        from app.services.ai_withdrawals_service import AIWithdrawalsService
 
         broadcast_service = AIBroadcastService(
             session, bot,
@@ -3366,7 +3367,9 @@ class AIAssistantService:
                         "check_username_spoofing", "get_verified_admins", "verify_admin_identity"
                     ):
                         from app.services.admin_security_service import (
-                            AdminSecurityService, username_similarity, VERIFIED_ADMIN_IDS
+                            VERIFIED_ADMIN_IDS,
+                            AdminSecurityService,
+                            username_similarity,
                         )
                         security_service = AdminSecurityService(session)
 

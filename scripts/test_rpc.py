@@ -2,10 +2,14 @@
 """Test RPC connection."""
 import sys
 from pathlib import Path
+
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from web3 import Web3
+
 from app.config.settings import settings
+
 
 print(f"RPC URL: {settings.rpc_url}")
 

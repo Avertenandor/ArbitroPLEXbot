@@ -21,6 +21,7 @@ from app.repositories.referral_earning_repository import (
 from app.repositories.referral_repository import ReferralRepository
 from app.repositories.user_repository import UserRepository
 
+
 # Referral system configuration
 REFERRAL_DEPTH = 3
 REFERRAL_RATES = {

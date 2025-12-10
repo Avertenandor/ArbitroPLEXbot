@@ -7,6 +7,7 @@ Defines deposit level types, amounts, and helper functions.
 from decimal import Decimal
 from typing import NamedTuple
 
+
 # Deposit level type constants
 LEVEL_TYPE_TEST = "test"
 LEVEL_TYPE_LEVEL_1 = "level_1"

@@ -19,6 +19,7 @@ from app.models.sponsor_inquiry import (
 )
 from app.models.user import User
 
+
 if TYPE_CHECKING:
     from aiogram import Bot
 

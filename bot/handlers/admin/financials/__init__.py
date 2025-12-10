@@ -18,21 +18,24 @@ All handlers are combined into a single router for easy registration.
 
 from aiogram import Router
 
-# Import states for external use
-from bot.handlers.admin.financials.states import AdminFinancialStates
-
 # Import all sub-module routers
 from bot.handlers.admin.financials.deposits import router as deposits_router
 from bot.handlers.admin.financials.list import (
     router as list_router,
+)
+from bot.handlers.admin.financials.list import (
     show_financial_list,  # Re-export for backward compatibility
 )
 from bot.handlers.admin.financials.navigation import router as navigation_router
+
+# Import states for external use
+from bot.handlers.admin.financials.states import AdminFinancialStates
 from bot.handlers.admin.financials.user_detail import router as user_detail_router
 from bot.handlers.admin.financials.wallet_history import (
     router as wallet_history_router,
 )
 from bot.handlers.admin.financials.withdrawals import router as withdrawals_router
+
 
 # Create main router and include all sub-routers
 router = Router()

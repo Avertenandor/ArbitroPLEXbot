@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from loguru import logger
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.financial_password_recovery import FinancialPasswordRecovery
@@ -23,6 +23,7 @@ from app.services.finpass_recovery_service import (
     FinancialRecoveryStatus,
     FinpassRecoveryService,
 )
+
 
 # Only these admins can approve/reject
 TRUSTED_ADMIN_IDS = [

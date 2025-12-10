@@ -20,6 +20,7 @@ from .service import BlockchainService
 # Import singleton functions
 from .singleton import get_blockchain_service, init_blockchain_service
 
+
 # Re-export for backward compatibility
 __all__ = [
     "BlockchainService",

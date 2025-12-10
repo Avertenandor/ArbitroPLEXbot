@@ -13,11 +13,12 @@ from loguru import logger
 
 from app.models.user import User
 from app.repositories.deposit_level_config_repository import DepositLevelConfigRepository
-from bot.keyboards.reply import cancel_keyboard, deposit_keyboard
+from bot.keyboards.reply import cancel_keyboard
 from bot.states.deposit import DepositStates, update_deposit_state_data
 from bot.utils.menu_buttons import is_menu_button
 
 from .utils import extract_level_type_from_button, format_amount
+
 
 router = Router()
 

@@ -18,6 +18,7 @@ from app.repositories.user_repository import UserRepository
 from bot.i18n.loader import get_user_language
 from bot.keyboards.reply import settings_keyboard
 
+
 router = Router()
 
 

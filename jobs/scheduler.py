@@ -8,6 +8,7 @@ import sys
 import warnings
 from pathlib import Path
 
+
 # Suppress eth_utils network warnings about invalid ChainId
 # These warnings are from eth_utils library initialization and don't affect functionality
 # Must be set BEFORE importing any modules that use eth_utils
@@ -29,6 +30,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 from loguru import logger
 
+
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -36,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from app.config.database import async_session_maker
 from app.config.settings import settings
 from app.services.blockchain_service import init_blockchain_service
+
 
 try:
     init_blockchain_service(
@@ -55,6 +58,7 @@ from app.tasks.reward_accrual_task import run_individual_reward_accrual
 from jobs.tasks.admin_session_cleanup import (
     cleanup_expired_admin_sessions,
 )
+from jobs.tasks.balance_notification import send_balance_notifications
 from jobs.tasks.blockchain_cache_sync import sync_blockchain_cache
 from jobs.tasks.blockchain_indexer_task import run_blockchain_indexer
 from jobs.tasks.blockchain_tx_cache_scan import (
@@ -75,7 +79,6 @@ from jobs.tasks.notification_fallback_processor import (
 )
 from jobs.tasks.notification_retry import process_notification_retries
 from jobs.tasks.payment_retry import process_payment_retries
-from jobs.tasks.balance_notification import send_balance_notifications
 from jobs.tasks.plex_balance_monitor import monitor_plex_balances
 from jobs.tasks.plex_payment_monitor import monitor_plex_payments
 from jobs.tasks.stuck_transaction_monitor import monitor_stuck_transactions

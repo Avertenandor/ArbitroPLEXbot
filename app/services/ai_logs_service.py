@@ -10,13 +10,13 @@ Provides admin action logs viewing for AI assistant:
 from typing import Any
 
 from loguru import logger
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.admin_action import AdminAction
 from app.models.admin import Admin
-from app.repositories.admin_repository import AdminRepository
+from app.models.admin_action import AdminAction
 from app.repositories.admin_action_repository import AdminActionRepository
+from app.repositories.admin_repository import AdminRepository
 
 
 class AILogsService:

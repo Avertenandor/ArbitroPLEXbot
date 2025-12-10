@@ -22,6 +22,7 @@ from app.repositories.failed_notification_repository import (
     FailedNotificationRepository,
 )
 
+
 # Retry configuration: 1min, 5min, 15min, 1h, 2h
 RETRY_DELAYS_MINUTES = [1, 5, 15, 60, 120]
 MAX_RETRIES = 5

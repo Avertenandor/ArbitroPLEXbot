@@ -18,6 +18,7 @@ from app.repositories.blacklist_repository import BlacklistRepository
 from bot.keyboards.reply import main_menu_reply_keyboard
 from bot.states.registration import RegistrationStates
 
+
 router = Router()
 
 

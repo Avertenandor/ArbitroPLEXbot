@@ -20,6 +20,7 @@ from app.services.finpass_recovery_service import FinpassRecoveryService
 from bot.keyboards.reply import main_menu_reply_keyboard
 from bot.states.finpass_recovery import FinpassRecoveryStates
 
+
 router = Router()
 
 
@@ -149,7 +150,7 @@ async def process_recovery_type_choice(
     **data: Any,
 ) -> None:
     """Process recovery type selection."""
-    from bot.keyboards.reply import finpass_recovery_keyboard, cancel_keyboard
+    from bot.keyboards.reply import cancel_keyboard, finpass_recovery_keyboard
     from bot.utils.menu_buttons import is_menu_button
 
     is_admin = data.get("is_admin", False)
@@ -213,7 +214,7 @@ async def process_new_wallet_for_recovery(
     **data: Any,
 ) -> None:
     """Process new wallet address for recovery with wallet change."""
-    from bot.keyboards.reply import finpass_recovery_keyboard, cancel_keyboard
+    from bot.keyboards.reply import cancel_keyboard, finpass_recovery_keyboard
     from bot.utils.menu_buttons import is_menu_button
 
     is_admin = data.get("is_admin", False)

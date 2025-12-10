@@ -20,10 +20,11 @@ from bot.constants.rules import RULES_BRIEF_VERSION, RULES_FULL_TEXT
 from bot.keyboards.reply import main_menu_reply_keyboard
 from bot.keyboards.user.menus.main_menu import help_submenu_keyboard
 
+
 router = Router()
 
 
-@router.message(StateFilter('*'), F.text.in_({"🐰 Купить кролика", "🐰 DEXRabbit"}))
+@router.message(StateFilter("*"), F.text.in_({"🐰 Купить кролика", "🐰 DEXRabbit"}))
 async def show_rabbit_partner(
     message: Message,
     session: AsyncSession,
@@ -46,12 +47,11 @@ async def show_rabbit_partner(
         "⚠️ **Обязательное условие для работы!**"
     )
 
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text="🐰 Перейти к покупке кролика",
-            url="https://t.me/dexrabbit_bot?start=ref_9"
-        )],
-    ])
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🐰 Перейти к покупке кролика", url="https://t.me/dexrabbit_bot?start=ref_9")],
+        ]
+    )
 
     await message.answer(text, reply_markup=kb, parse_mode="Markdown")
 
@@ -60,22 +60,18 @@ async def show_rabbit_partner(
     try:
         blacklist_repo = BlacklistRepository(session)
         if message.from_user:
-            blacklist_entry = await blacklist_repo.find_by_telegram_id(
-                message.from_user.id
-            )
+            blacklist_entry = await blacklist_repo.find_by_telegram_id(message.from_user.id)
     except Exception as e:
         logger.warning(f"Failed to get blacklist entry: {e}")
 
     # Send back button
     await message.answer(
         "⬅️ Для возврата в меню нажмите кнопку ниже:",
-        reply_markup=main_menu_reply_keyboard(
-            user=user, blacklist_entry=blacklist_entry, is_admin=is_admin
-        ),
+        reply_markup=main_menu_reply_keyboard(user=user, blacklist_entry=blacklist_entry, is_admin=is_admin),
     )
 
 
-@router.message(StateFilter('*'), F.text == "📋 Правила")
+@router.message(StateFilter("*"), F.text == "📋 Правила")
 async def show_rules(
     message: Message,
     session: AsyncSession,
@@ -86,16 +82,13 @@ async def show_rules(
     await state.clear()
 
     # Show brief version with "Read more" button
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📖 Подробнее", callback_data="rules:full")],
-    ])
-
-    await message.answer(
-        RULES_BRIEF_VERSION,
-        reply_markup=kb,
-        parse_mode="Markdown",
-        disable_web_page_preview=True
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📖 Подробнее", callback_data="rules:full")],
+        ]
     )
+
+    await message.answer(RULES_BRIEF_VERSION, reply_markup=kb, parse_mode="Markdown", disable_web_page_preview=True)
 
     # Send back button with reply keyboard
     await message.answer(
@@ -113,15 +106,14 @@ async def show_full_rules(
     await callback.answer()
 
     # Show full version with "Back to brief" button
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⬅️ Вернуться к краткой версии", callback_data="rules:brief")],
-    ])
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⬅️ Вернуться к краткой версии", callback_data="rules:brief")],
+        ]
+    )
 
     await callback.message.edit_text(
-        RULES_FULL_TEXT,
-        reply_markup=kb,
-        parse_mode="Markdown",
-        disable_web_page_preview=True
+        RULES_FULL_TEXT, reply_markup=kb, parse_mode="Markdown", disable_web_page_preview=True
     )
 
 
@@ -133,19 +125,18 @@ async def show_brief_rules_callback(
     """Return to brief rules version."""
     await callback.answer()
 
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📖 Подробнее", callback_data="rules:full")],
-    ])
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="📖 Подробнее", callback_data="rules:full")],
+        ]
+    )
 
     await callback.message.edit_text(
-        RULES_BRIEF_VERSION,
-        reply_markup=kb,
-        parse_mode="Markdown",
-        disable_web_page_preview=True
+        RULES_BRIEF_VERSION, reply_markup=kb, parse_mode="Markdown", disable_web_page_preview=True
     )
 
 
-@router.message(StateFilter('*'), F.text.in_({"🌐 Инструменты нашей экосистемы", "🌐 Экосистема"}))
+@router.message(StateFilter("*"), F.text.in_({"🌐 Инструменты нашей экосистемы", "🌐 Экосистема"}))
 async def show_ecosystem_tools(
     message: Message,
     session: AsyncSession,
@@ -158,38 +149,18 @@ async def show_ecosystem_tools(
 
     await state.clear()
 
-    text = (
-        "🌐 **Экосистема PLEX**\n\n"
-        "Проекты и сервисы на базе **PLEX**:\n\n"
-        "Выберите интересующий проект:"
-    )
+    text = "🌐 **Экосистема PLEX**\n\nПроекты и сервисы на базе **PLEX**:\n\nВыберите интересующий проект:"
 
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text="🤖 ArbitroPLEXbot — Торговый бот",
-            url="https://arbitrage-bot.com/"
-        )],
-        [InlineKeyboardButton(
-            text="🐰 DEXRabbit — Ферма кроликов",
-            url="https://xn--80apagbbfxgmuj4j.site/"
-        )],
-        [InlineKeyboardButton(
-            text="👑 RoyalKeta — Premium сервис",
-            url="https://royalketa.com/"
-        )],
-        [InlineKeyboardButton(
-            text="🎬 FreeTube — Видео платформа",
-            url="https://freetube.online/"
-        )],
-        [InlineKeyboardButton(
-            text="🛒 BestTrade Store — Магазин ботов",
-            url="https://best-trade.store/bots/"
-        )],
-        [InlineKeyboardButton(
-            text="📊 DataPLEX — Аналитика",
-            url="https://data-plex.net/"
-        )],
-    ])
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🤖 ArbitroPLEXbot — Торговый бот", url="https://arbitrage-bot.com/")],
+            [InlineKeyboardButton(text="🐰 DEXRabbit — Ферма кроликов", url="https://xn--80apagbbfxgmuj4j.site/")],
+            [InlineKeyboardButton(text="👑 RoyalKeta — Premium сервис", url="https://royalketa.com/")],
+            [InlineKeyboardButton(text="🎬 FreeTube — Видео платформа", url="https://freetube.online/")],
+            [InlineKeyboardButton(text="🛒 BestTrade Store — Магазин ботов", url="https://best-trade.store/bots/")],
+            [InlineKeyboardButton(text="📊 DataPLEX — Аналитика", url="https://data-plex.net/")],
+        ]
+    )
 
     await message.answer(text, reply_markup=kb, parse_mode="Markdown")
 
@@ -198,16 +169,12 @@ async def show_ecosystem_tools(
     try:
         blacklist_repo = BlacklistRepository(session)
         if message.from_user:
-            blacklist_entry = await blacklist_repo.find_by_telegram_id(
-                message.from_user.id
-            )
+            blacklist_entry = await blacklist_repo.find_by_telegram_id(message.from_user.id)
     except Exception as e:
         logger.warning(f"Failed to get blacklist entry: {e}")
 
     # Send back button with reply keyboard
     await message.answer(
         "⬅️ Для возврата в главное меню:",
-        reply_markup=main_menu_reply_keyboard(
-            user=user, blacklist_entry=blacklist_entry, is_admin=is_admin
-        ),
+        reply_markup=main_menu_reply_keyboard(user=user, blacklist_entry=blacklist_entry, is_admin=is_admin),
     )

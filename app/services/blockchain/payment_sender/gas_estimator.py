@@ -5,7 +5,7 @@ Provides gas cost estimation functionality for USDT transfers.
 """
 
 import asyncio
-from decimal import Decimal, ROUND_DOWN
+from decimal import ROUND_DOWN, Decimal
 from typing import Any
 
 from loguru import logger

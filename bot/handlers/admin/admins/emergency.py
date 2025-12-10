@@ -7,7 +7,7 @@ This includes blacklisting, deletion, and user banning.
 
 from typing import Any
 
-from aiogram import F, Bot
+from aiogram import Bot, F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from loguru import logger
@@ -27,7 +27,7 @@ from bot.handlers.admin.utils.admin_checks import (
     get_admin_or_deny,
     is_last_super_admin,
 )
-from bot.keyboards.reply import cancel_keyboard, admin_management_keyboard
+from bot.keyboards.reply import admin_management_keyboard, cancel_keyboard
 from bot.states.admin import AdminManagementStates
 from bot.utils.admin_utils import clear_state_preserve_admin_token
 

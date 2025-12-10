@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.admin_service import AdminService
 from bot.states.admin_states import AdminStates
 
+
 # States that should bypass master key requirement
 # (user interaction states where interruption is bad UX)
 BYPASS_AUTH_STATES = [

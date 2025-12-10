@@ -10,6 +10,7 @@ from aiogram.fsm.storage.base import BaseStorage
 from aiogram.fsm.storage.redis import RedisStorage
 from loguru import logger
 
+
 try:
     from redis.asyncio import Redis as AsyncRedis
 except ImportError:

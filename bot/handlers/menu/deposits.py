@@ -20,6 +20,7 @@ from bot.keyboards.inline import deposit_status_keyboard
 from bot.keyboards.reply import main_menu_reply_keyboard
 from bot.utils.formatters import format_deposit_status, format_usdt
 
+
 router = Router()
 
 
