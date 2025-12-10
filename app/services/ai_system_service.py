@@ -38,7 +38,7 @@ TRUSTED_ADMIN_IDS = [
 class AISystemService:
     """
     AI-powered system administration service.
-    
+
     SECURITY NOTES:
     - Emergency controls: ONLY super_admin
     - Read-only monitoring: Trusted admins
@@ -83,7 +83,7 @@ class AISystemService:
     async def get_emergency_status(self) -> dict[str, Any]:
         """
         Get current emergency stop status.
-        
+
         Returns:
             Current status of all emergency flags
         """
@@ -115,9 +115,9 @@ class AISystemService:
     async def toggle_emergency_deposits(self, enable_stop: bool) -> dict[str, Any]:
         """
         Toggle emergency stop for deposits.
-        
+
         SECURITY: SUPER_ADMIN only!
-        
+
         Args:
             enable_stop: True to stop deposits, False to resume
         """
@@ -155,7 +155,7 @@ class AISystemService:
     async def toggle_emergency_withdrawals(self, enable_stop: bool) -> dict[str, Any]:
         """
         Toggle emergency stop for withdrawals.
-        
+
         SECURITY: SUPER_ADMIN only!
         """
         admin, error = await self._verify_admin()
@@ -192,7 +192,7 @@ class AISystemService:
     async def toggle_emergency_roi(self, enable_stop: bool) -> dict[str, Any]:
         """
         Toggle emergency stop for ROI accruals.
-        
+
         SECURITY: SUPER_ADMIN only!
         """
         admin, error = await self._verify_admin()
@@ -229,7 +229,7 @@ class AISystemService:
     async def emergency_full_stop(self) -> dict[str, Any]:
         """
         FULL EMERGENCY STOP - stops all financial operations.
-        
+
         SECURITY: SUPER_ADMIN only!
         """
         admin, error = await self._verify_admin()
@@ -267,7 +267,7 @@ class AISystemService:
     async def emergency_full_resume(self) -> dict[str, Any]:
         """
         Resume all financial operations.
-        
+
         SECURITY: SUPER_ADMIN only!
         """
         admin, error = await self._verify_admin()
@@ -309,7 +309,7 @@ class AISystemService:
     async def get_blockchain_status(self) -> dict[str, Any]:
         """
         Get current blockchain/RPC status.
-        
+
         Returns:
             RPC providers status
         """
@@ -359,10 +359,10 @@ class AISystemService:
     async def switch_rpc_provider(self, provider: str) -> dict[str, Any]:
         """
         Switch active RPC provider.
-        
+
         Args:
             provider: Provider name (quicknode, nodereal, nodereal2)
-            
+
         SECURITY: nodereal2 only for super_admin!
         """
         admin, error = await self._verify_admin()
@@ -418,7 +418,7 @@ class AISystemService:
     async def toggle_rpc_auto_switch(self, enable: bool) -> dict[str, Any]:
         """
         Toggle auto-switching of RPC providers.
-        
+
         Args:
             enable: True to enable auto-switch
         """
@@ -460,7 +460,7 @@ class AISystemService:
     async def get_global_settings(self) -> dict[str, Any]:
         """
         Get current global platform settings.
-        
+
         Returns:
             All global settings
         """
@@ -495,7 +495,7 @@ class AISystemService:
     async def get_platform_health(self) -> dict[str, Any]:
         """
         Get comprehensive platform health status.
-        
+
         Returns:
             Health metrics for all components
         """

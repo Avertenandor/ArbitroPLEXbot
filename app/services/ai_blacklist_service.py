@@ -66,7 +66,7 @@ class AIBlacklistService:
     async def get_blacklist(self, limit: int = 50) -> dict[str, Any]:
         """
         Get active blacklist entries.
-        
+
         Args:
             limit: Max results
         """
@@ -140,7 +140,7 @@ class AIBlacklistService:
     async def check_blacklist(self, identifier: str) -> dict[str, Any]:
         """
         Check if user/wallet is blacklisted.
-        
+
         Args:
             identifier: @username, telegram_id, or wallet address
         """
@@ -201,9 +201,9 @@ class AIBlacklistService:
     ) -> dict[str, Any]:
         """
         Add user/wallet to blacklist.
-        
+
         SECURITY: TRUSTED ADMIN only!
-        
+
         Args:
             identifier: @username, telegram_id, or wallet
             reason: Reason for blacklisting
@@ -290,9 +290,9 @@ class AIBlacklistService:
     ) -> dict[str, Any]:
         """
         Remove user/wallet from blacklist.
-        
+
         SECURITY: TRUSTED ADMIN only!
-        
+
         Args:
             identifier: @username, telegram_id, or wallet
             reason: Reason for removal

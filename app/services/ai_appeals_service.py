@@ -26,7 +26,7 @@ from app.repositories.admin_repository import AdminRepository
 class AIAppealsService:
     """
     AI-powered appeals management service.
-    
+
     SECURITY NOTES:
     - admin_data MUST come from authenticated admin session
     - All operations are logged with admin info
@@ -48,7 +48,7 @@ class AIAppealsService:
     async def _verify_admin(self) -> tuple[Any | None, str | None]:
         """
         Verify admin credentials from session data.
-        
+
         Returns:
             Tuple of (admin_model, error_message)
         """
@@ -79,11 +79,11 @@ class AIAppealsService:
     ) -> dict[str, Any]:
         """
         Get list of appeals with optional status filter.
-        
+
         Args:
             status: Filter by status (pending, under_review, approved, rejected)
             limit: Maximum number of appeals to return
-            
+
         Returns:
             Result dict with appeals list
         """
@@ -103,7 +103,7 @@ class AIAppealsService:
             valid_statuses = ["pending", "under_review", "approved", "rejected"]
             if status.lower() not in valid_statuses:
                 return {
-                    "success": False, 
+                    "success": False,
                     "error": f"❌ Неверный статус. Допустимые: {', '.join(valid_statuses)}"
                 }
             stmt = stmt.where(Appeal.status == status.lower())
@@ -140,7 +140,7 @@ class AIAppealsService:
 
             status_emoji = {
                 "pending": "🟡",
-                "under_review": "🔵", 
+                "under_review": "🔵",
                 "approved": "✅",
                 "rejected": "❌"
             }.get(a.status, "⚪")
@@ -179,10 +179,10 @@ class AIAppealsService:
     ) -> dict[str, Any]:
         """
         Get detailed information about a specific appeal.
-        
+
         Args:
             appeal_id: Appeal ID
-            
+
         Returns:
             Result dict with appeal details
         """
@@ -249,10 +249,10 @@ class AIAppealsService:
     ) -> dict[str, Any]:
         """
         Take appeal for review (set status to under_review).
-        
+
         Args:
             appeal_id: Appeal ID
-            
+
         Returns:
             Result dict
         """
@@ -271,7 +271,7 @@ class AIAppealsService:
 
         if appeal.status != AppealStatus.PENDING:
             return {
-                "success": False, 
+                "success": False,
                 "error": f"❌ Обращение уже имеет статус '{appeal.status}'. Взять можно только 'pending'."
             }
 
@@ -302,14 +302,14 @@ class AIAppealsService:
     ) -> dict[str, Any]:
         """
         Resolve appeal (approve or reject).
-        
+
         SECURITY: Only admins can resolve appeals.
-        
+
         Args:
             appeal_id: Appeal ID
             decision: "approve" or "reject"
             notes: Optional review notes
-            
+
         Returns:
             Result dict
         """
@@ -397,12 +397,12 @@ class AIAppealsService:
     ) -> dict[str, Any]:
         """
         Send reply message to user who submitted the appeal.
-        
+
         Args:
             appeal_id: Appeal ID
             message: Message text to send
             bot: Bot instance for sending
-            
+
         Returns:
             Result dict
         """

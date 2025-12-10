@@ -180,7 +180,7 @@ class SecurityAnalyzer:
     def analyze_message(self, text: str) -> dict[str, Any]:
         """
         Analyze message for security threats.
-        
+
         Returns:
             dict with threat analysis results
         """
@@ -314,13 +314,13 @@ class ARIASecurityGuard:
     ) -> dict[str, Any]:
         """
         Check message for security threats.
-        
+
         Args:
             text: Message text
             telegram_id: Sender's telegram ID
             username: Sender's username
             is_admin: Whether sender is admin
-            
+
         Returns:
             dict with security check result
         """
@@ -452,7 +452,7 @@ def create_secure_context(
 def check_forwarded_message(message: Any) -> dict[str, Any]:
     """
     Check if message is forwarded from aiogram Message object.
-    
+
     Forwarded messages should NEVER be used for admin commands!
     """
     result = {
@@ -569,7 +569,7 @@ class ToolRateLimiter:
     def check_limit(self, admin_id: int, tool_name: str) -> tuple[bool, str]:
         """
         Check if admin can execute tool.
-        
+
         Returns:
             (allowed, message) - allowed=True if within limits
         """

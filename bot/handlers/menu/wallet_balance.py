@@ -188,9 +188,9 @@ async def show_wallet_balance(
                 if days_left == float('inf'):
                     days_display = "∞"
                 elif days_left >= 365:
-                    days_display = f"{days_left/365:.1f} лет"
+                    days_display = f"{days_left / 365:.1f} лет"
                 elif days_left >= 30:
-                    days_display = f"{days_left/30:.1f} месяцев"
+                    days_display = f"{days_left / 30:.1f} месяцев"
                 else:
                     days_display = f"{days_left:.1f} дней"
 

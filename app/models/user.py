@@ -311,7 +311,7 @@ class User(Base):
         Calculate required daily PLEX based on total investment (deposits + bonuses).
 
         Formula: (deposit_amount + bonus_balance) * 10 PLEX per dollar per day.
-        
+
         Every dollar invested (whether real deposit or admin bonus) requires
         10 PLEX coins per day to maintain active status in the ecosystem.
 

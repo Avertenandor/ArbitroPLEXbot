@@ -29,7 +29,7 @@ SUPER_ADMIN_IDS = [
 class AIAdminManagementService:
     """
     AI-powered admin management service.
-    
+
     SECURITY: Super admin only for all management operations.
     """
 
@@ -63,7 +63,7 @@ class AIAdminManagementService:
     async def get_admins_list(self) -> dict[str, Any]:
         """
         Get list of all administrators.
-        
+
         Returns:
             List of admins with their roles and status
         """
@@ -106,7 +106,7 @@ class AIAdminManagementService:
     async def get_admin_details(self, admin_identifier: str | int) -> dict[str, Any]:
         """
         Get detailed info about a specific admin.
-        
+
         Args:
             admin_identifier: @username or telegram_id
         """
@@ -164,9 +164,9 @@ class AIAdminManagementService:
     ) -> dict[str, Any]:
         """
         Block an administrator.
-        
+
         SECURITY: SUPER_ADMIN only!
-        
+
         Args:
             admin_identifier: @username or telegram_id
             reason: Block reason
@@ -225,7 +225,7 @@ class AIAdminManagementService:
     async def unblock_admin(self, admin_identifier: str | int) -> dict[str, Any]:
         """
         Unblock an administrator.
-        
+
         SECURITY: SUPER_ADMIN only!
         """
         admin, error = await self._verify_admin()
@@ -277,9 +277,9 @@ class AIAdminManagementService:
     ) -> dict[str, Any]:
         """
         Change admin role.
-        
+
         SECURITY: SUPER_ADMIN only!
-        
+
         Args:
             admin_identifier: @username or telegram_id
             new_role: New role (admin, support)
@@ -340,7 +340,7 @@ class AIAdminManagementService:
     async def get_admin_stats(self) -> dict[str, Any]:
         """
         Get statistics about administrators.
-        
+
         Returns:
             Admin statistics
         """

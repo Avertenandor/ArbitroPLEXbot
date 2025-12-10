@@ -38,7 +38,7 @@ TRUSTED_ADMIN_IDS = [
 class AIDepositsService:
     """
     AI-powered deposits management service.
-    
+
     Provides full deposit management for ARIA.
     """
 
@@ -98,7 +98,7 @@ class AIDepositsService:
     async def get_deposit_levels_config(self) -> dict[str, Any]:
         """
         Get current deposit levels configuration.
-        
+
         Returns:
             Levels config with enabled status and limits
         """
@@ -148,7 +148,7 @@ class AIDepositsService:
     async def get_user_deposits(self, user_identifier: str) -> dict[str, Any]:
         """
         Get all deposits for a specific user.
-        
+
         Args:
             user_identifier: @username or telegram_id
         """
@@ -217,7 +217,7 @@ class AIDepositsService:
     async def get_pending_deposits(self, limit: int = 20) -> dict[str, Any]:
         """
         Get pending deposits awaiting confirmation.
-        
+
         Args:
             limit: Max results
         """
@@ -265,7 +265,7 @@ class AIDepositsService:
     async def get_deposit_details(self, deposit_id: int) -> dict[str, Any]:
         """
         Get detailed info about a specific deposit.
-        
+
         Args:
             deposit_id: Deposit ID
         """
@@ -382,9 +382,9 @@ class AIDepositsService:
     async def change_max_deposit_level(self, new_max: int) -> dict[str, Any]:
         """
         Change maximum open deposit level.
-        
+
         SECURITY: TRUSTED ADMIN only!
-        
+
         Args:
             new_max: New maximum level (1-5)
         """
@@ -431,9 +431,9 @@ class AIDepositsService:
     ) -> dict[str, Any]:
         """
         Create a manual deposit for user (admin adjustment).
-        
+
         SECURITY: TRUSTED ADMIN only!
-        
+
         Args:
             user_identifier: @username or telegram_id
             level: Deposit level (1-5)
@@ -517,9 +517,9 @@ class AIDepositsService:
     ) -> dict[str, Any]:
         """
         Modify deposit ROI values.
-        
+
         SECURITY: TRUSTED ADMIN only!
-        
+
         Args:
             deposit_id: Deposit ID
             new_roi_paid: New ROI paid amount (optional)
@@ -592,9 +592,9 @@ class AIDepositsService:
     ) -> dict[str, Any]:
         """
         Cancel/reject a deposit.
-        
+
         SECURITY: TRUSTED ADMIN only!
-        
+
         Args:
             deposit_id: Deposit ID
             reason: Cancellation reason

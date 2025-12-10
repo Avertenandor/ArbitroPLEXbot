@@ -43,7 +43,7 @@ except ImportError:
 class MonitoringService:
     """
     Service for collecting platform metrics and statistics.
-    
+
     Provides data for ARIA AI assistant to give real-time insights.
     """
 
@@ -132,7 +132,7 @@ class MonitoringService:
     async def get_user_stats(self) -> dict[str, Any]:
         """
         Get user statistics.
-        
+
         Returns:
             Dict with user statistics
         """
@@ -203,10 +203,10 @@ class MonitoringService:
     async def get_financial_stats(self, hours: int = 24) -> dict[str, Any]:
         """
         Get financial statistics.
-        
+
         Args:
             hours: Lookback period
-            
+
         Returns:
             Dict with financial stats
         """
@@ -286,11 +286,11 @@ class MonitoringService:
     ) -> list[dict[str, Any]]:
         """
         Get recent admin actions log.
-        
+
         Args:
             limit: Max number of actions
             hours: Lookback period
-            
+
         Returns:
             List of recent actions
         """
@@ -334,7 +334,7 @@ class MonitoringService:
     async def get_system_health(self) -> dict[str, Any]:
         """
         Get system health indicators.
-        
+
         Returns:
             Dict with health metrics
         """
@@ -854,10 +854,10 @@ class MonitoringService:
     def format_dashboard_for_ai(self, data: dict[str, Any]) -> str:
         """
         Format dashboard data as text for AI context.
-        
+
         Args:
             data: Dashboard data dict
-            
+
         Returns:
             Formatted text for AI prompt
         """
@@ -1152,4 +1152,3 @@ class MonitoringService:
         except Exception as e:
             logger.error(f"Error getting AI conversations: {e}")
             return "⚠️ Ошибка получения разговоров с AI"
-

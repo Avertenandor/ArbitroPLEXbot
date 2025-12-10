@@ -54,7 +54,7 @@ router = Router(name="admin_bonus_management_v2")
 def get_bonus_status(bonus: "BonusCredit") -> str:
     """
     Get status string from BonusCredit model.
-    
+
     Model has: is_active, is_roi_completed, cancelled_at
     Returns: "active", "completed", or "cancelled"
     """
@@ -118,7 +118,7 @@ QUICK_AMOUNTS = [10, 25, 50, 100, 250, 500, 1000]
 def bonus_main_menu_keyboard(role: str) -> ReplyKeyboardMarkup:
     """
     Главное меню бонусов с учётом роли.
-    
+
     Модератор: только просмотр
     Админ: просмотр + начисление
     Старший админ: + отмена своих

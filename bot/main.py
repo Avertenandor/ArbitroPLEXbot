@@ -28,11 +28,11 @@ warnings.filterwarnings(
     category=UserWarning,
 )
 
-from aiogram import Bot, Dispatcher
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
-from aiogram.types import ErrorEvent
-from loguru import logger
+from aiogram import Bot, Dispatcher  # noqa: E402
+from aiogram.client.default import DefaultBotProperties  # noqa: E402
+from aiogram.enums import ParseMode  # noqa: E402
+from aiogram.types import ErrorEvent  # noqa: E402
+from loguru import logger  # noqa: E402
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))

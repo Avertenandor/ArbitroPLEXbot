@@ -66,7 +66,7 @@ class AIRoiService:
     async def get_roi_config(self, level: int | None = None) -> dict[str, Any]:
         """
         Get ROI corridor configuration.
-        
+
         Args:
             level: Specific level (1-5) or None for all levels
         """
@@ -120,9 +120,9 @@ class AIRoiService:
     ) -> dict[str, Any]:
         """
         Set ROI corridor for a level.
-        
+
         SECURITY: TRUSTED ADMIN only!
-        
+
         Args:
             level: Deposit level (1-5)
             mode: "custom" (min-max range) or "equal" (fixed rate)
@@ -225,7 +225,7 @@ class AIRoiService:
     ) -> dict[str, Any]:
         """
         Get ROI corridor change history.
-        
+
         Args:
             level: Specific level or None for all
             limit: Max results

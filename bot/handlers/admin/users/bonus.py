@@ -366,7 +366,7 @@ async def start_cancel_bonus(
 ) -> None:
     """
     Step 1: Show list of active bonuses to cancel.
-    
+
     Displays all active bonuses with detailed info for easy selection.
     """
     admin = await get_admin_or_deny(message, session, **data)

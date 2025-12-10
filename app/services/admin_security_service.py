@@ -153,7 +153,7 @@ class AdminSecurityService:
         """
         Verify admin identity by telegram_id.
         Check for spoofing attempts if username provided.
-        
+
         Returns:
             dict with verification result and any warnings
         """
@@ -238,12 +238,12 @@ class AdminSecurityService:
                 if similarity >= 0.9:
                     result["warning"] = (
                         f"🚨 КРИТИЧНО: Username @{username} почти идентичен "
-                        f"админу @{admin_username} (сходство: {similarity*100:.0f}%)"
+                        f"админу @{admin_username} (сходство: {similarity * 100:.0f}%)"
                     )
                 else:
                     result["warning"] = (
                         f"⚠️ ПОДОЗРЕНИЕ: Username @{username} похож на "
-                        f"админа @{admin_username} (сходство: {similarity*100:.0f}%)"
+                        f"админа @{admin_username} (сходство: {similarity * 100:.0f}%)"
                     )
                 break
 
@@ -333,7 +333,7 @@ def test_similarity():
         print(f"{description}:")
         print(f"  Original: {original} -> {norm_orig}")
         print(f"  Spoofed:  {spoofed} -> {norm_spoof}")
-        print(f"  Similarity: {sim*100:.1f}%")
+        print(f"  Similarity: {sim * 100:.1f}%")
         print()
 
 

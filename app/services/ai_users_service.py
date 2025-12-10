@@ -4,7 +4,7 @@ AI Users Service.
 Provides comprehensive user management tools for AI assistant.
 Includes: search, profile, balance changes, blocking, deposits.
 
-SECURITY: 
+SECURITY:
 - Only accessible from authenticated admin session
 - Dangerous operations require whitelist check
 """
@@ -26,7 +26,7 @@ from app.repositories.admin_repository import AdminRepository
 from app.repositories.user_repository import UserRepository
 
 # Whitelist of admin telegram IDs who can perform dangerous operations
-# (change balance, modify deposits, etc.) 
+# (change balance, modify deposits, etc.)
 # New admins won't have these permissions
 TRUSTED_ADMIN_IDS = [
     1040687384,  # @VladarevInvestBrok (Командир/super_admin)
@@ -39,7 +39,7 @@ TRUSTED_ADMIN_IDS = [
 class AIUsersService:
     """
     AI-powered user management service.
-    
+
     Provides full user management capabilities for ARIA.
     """
 
@@ -108,10 +108,10 @@ class AIUsersService:
     async def get_user_profile(self, user_identifier: str) -> dict[str, Any]:
         """
         Get detailed user profile.
-        
+
         Args:
             user_identifier: @username, telegram_id, or wallet address
-            
+
         Returns:
             Detailed user profile
         """
@@ -206,11 +206,11 @@ class AIUsersService:
     ) -> dict[str, Any]:
         """
         Search users by username, telegram_id, or wallet.
-        
+
         Args:
             query: Search query
             limit: Max results
-            
+
         Returns:
             List of matching users
         """
@@ -283,9 +283,9 @@ class AIUsersService:
     ) -> dict[str, Any]:
         """
         Change user balance (add or subtract).
-        
+
         SECURITY: Only trusted admins can use this!
-        
+
         Args:
             user_identifier: @username or telegram_id
             amount: Amount to add/subtract
@@ -369,7 +369,7 @@ class AIUsersService:
     ) -> dict[str, Any]:
         """
         Block a user.
-        
+
         Args:
             user_identifier: @username or telegram_id
             reason: Block reason
@@ -412,7 +412,7 @@ class AIUsersService:
     ) -> dict[str, Any]:
         """
         Unblock a user.
-        
+
         Args:
             user_identifier: @username or telegram_id
         """
@@ -449,7 +449,7 @@ class AIUsersService:
     ) -> dict[str, Any]:
         """
         Get user's deposits and bonuses.
-        
+
         Args:
             user_identifier: @username or telegram_id
         """
@@ -517,7 +517,7 @@ class AIUsersService:
     async def get_users_stats(self) -> dict[str, Any]:
         """
         Get overall users statistics.
-        
+
         Returns:
             Users statistics
         """
@@ -584,4 +584,3 @@ class AIUsersService:
             },
             "message": "📊 Статистика пользователей"
         }
-

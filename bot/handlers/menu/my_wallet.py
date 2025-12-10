@@ -65,11 +65,11 @@ def format_wallet_message(
 ) -> str:
     """
     Format wallet info message.
-    
+
     Args:
         user: User object
         balance_data: WalletBalance from service
-        
+
     Returns:
         Formatted message text
     """
@@ -109,12 +109,12 @@ def format_transactions_message(
 ) -> str:
     """
     Format transaction list message.
-    
+
     Args:
         token: Token symbol (PLEX, USDT, BNB)
         transactions: List of TokenTransaction
         wallet_address: User's wallet address
-        
+
     Returns:
         Formatted message text
     """
@@ -177,7 +177,7 @@ async def show_my_wallet(
 ) -> None:
     """
     Show user's wallet information with balances.
-    
+
     Displays:
     - Wallet address
     - PLEX, USDT, BNB balances

@@ -54,7 +54,7 @@ class AILogsService:
     ) -> dict[str, Any]:
         """
         Get recent admin action logs.
-        
+
         Args:
             limit: Max results
             action_type: Filter by action type (optional)
@@ -115,7 +115,7 @@ class AILogsService:
     ) -> dict[str, Any]:
         """
         Get activity for a specific admin.
-        
+
         Args:
             admin_identifier: @username or admin_id
             limit: Max results
@@ -185,7 +185,7 @@ class AILogsService:
     ) -> dict[str, Any]:
         """
         Search admin logs with filters.
-        
+
         Args:
             user_id: Filter by target user ID
             action_type: Filter by action type

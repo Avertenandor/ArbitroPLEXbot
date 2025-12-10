@@ -117,7 +117,7 @@ class AIReferralService:
     ) -> dict[str, Any]:
         """
         Get referrals for a specific user.
-        
+
         Args:
             user_identifier: @username or telegram_id
             limit: Max results
@@ -162,7 +162,7 @@ class AIReferralService:
     async def get_top_referrers(self, limit: int = 20) -> dict[str, Any]:
         """
         Get top referrers by referral count.
-        
+
         Args:
             limit: Max results
         """
@@ -205,7 +205,7 @@ class AIReferralService:
     async def get_top_earners(self, limit: int = 20) -> dict[str, Any]:
         """
         Get top referrers by earnings.
-        
+
         Args:
             limit: Max results
         """

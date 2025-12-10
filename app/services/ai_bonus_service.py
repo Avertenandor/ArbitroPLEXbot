@@ -24,7 +24,7 @@ from app.services.bonus_service import BonusService
 class AIBonusService:
     """
     AI-powered bonus management service.
-    
+
     SECURITY NOTES:
     - admin_data MUST come from authenticated admin session
     - All operations are logged with admin info
@@ -46,7 +46,7 @@ class AIBonusService:
     async def _verify_admin(self) -> tuple[Any | None, str | None]:
         """
         Verify admin credentials from session data.
-        
+
         Returns:
             Tuple of (admin_model, error_message)
         """
@@ -73,10 +73,10 @@ class AIBonusService:
     async def _find_user(self, user_identifier: str) -> tuple[Any | None, str | None]:
         """
         Find user by identifier (@username or telegram_id).
-        
+
         Args:
             user_identifier: @username or telegram_id
-            
+
         Returns:
             Tuple of (user_model, error_message)
         """
@@ -108,14 +108,14 @@ class AIBonusService:
     ) -> dict[str, Any]:
         """
         Grant bonus to a user.
-        
+
         SECURITY: Verifies admin credentials before execution.
-        
+
         Args:
             user_identifier: @username or telegram_id
             amount: Bonus amount in USDT (1-10000)
             reason: Reason for granting bonus
-            
+
         Returns:
             Result dict with status and details
         """
@@ -177,11 +177,11 @@ class AIBonusService:
     ) -> dict[str, Any]:
         """
         Get user's bonus list.
-        
+
         Args:
             user_identifier: @username or telegram_id
             active_only: Only return active bonuses
-            
+
         Returns:
             Result dict with bonuses list
         """
@@ -239,13 +239,13 @@ class AIBonusService:
     ) -> dict[str, Any]:
         """
         Cancel an active bonus.
-        
+
         SECURITY: Verifies admin credentials before execution.
-        
+
         Args:
             bonus_id: Bonus ID to cancel
             reason: Reason for cancellation
-            
+
         Returns:
             Result dict with status
         """

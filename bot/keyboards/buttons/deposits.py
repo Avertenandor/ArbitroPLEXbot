@@ -4,6 +4,7 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
+
 @dataclass
 class DepositLevelButton:
     """Кнопка уровня депозита."""
@@ -12,6 +13,7 @@ class DepositLevelButton:
     name: str
     min_amount: int
     max_amount: int
+
 
 class DepositButtons:
     """Кнопки для депозитов."""

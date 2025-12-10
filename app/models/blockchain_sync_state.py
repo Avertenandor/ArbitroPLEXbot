@@ -15,7 +15,7 @@ from app.models.base import Base
 class BlockchainSyncState(Base):
     """
     Tracks blockchain synchronization state.
-    
+
     Used to:
     - Know which blocks have been synced
     - Resume sync after restart

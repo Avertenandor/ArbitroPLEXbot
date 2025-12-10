@@ -25,7 +25,7 @@ from app.repositories.admin_repository import AdminRepository
 class AIInquiriesService:
     """
     AI-powered user inquiries management service.
-    
+
     SECURITY NOTES:
     - admin_data MUST come from authenticated admin session
     - All operations are logged with admin info
@@ -77,11 +77,11 @@ class AIInquiriesService:
     ) -> dict[str, Any]:
         """
         Get list of user inquiries with optional status filter.
-        
+
         Args:
             status: Filter by status (new, in_progress, closed)
             limit: Maximum number of inquiries to return
-            
+
         Returns:
             Result dict with inquiries list
         """
@@ -189,10 +189,10 @@ class AIInquiriesService:
     ) -> dict[str, Any]:
         """
         Get detailed information about a specific inquiry with messages.
-        
+
         Args:
             inquiry_id: Inquiry ID
-            
+
         Returns:
             Result dict with inquiry details and messages
         """
@@ -286,10 +286,10 @@ class AIInquiriesService:
     ) -> dict[str, Any]:
         """
         Take inquiry for processing (assign to current admin).
-        
+
         Args:
             inquiry_id: Inquiry ID
-            
+
         Returns:
             Result dict
         """
@@ -363,12 +363,12 @@ class AIInquiriesService:
     ) -> dict[str, Any]:
         """
         Send reply to user's inquiry.
-        
+
         Args:
             inquiry_id: Inquiry ID
             message: Message text to send
             bot: Bot instance for sending
-            
+
         Returns:
             Result dict
         """
@@ -477,11 +477,11 @@ class AIInquiriesService:
     ) -> dict[str, Any]:
         """
         Close an inquiry.
-        
+
         Args:
             inquiry_id: Inquiry ID
             reason: Optional closing reason
-            
+
         Returns:
             Result dict
         """

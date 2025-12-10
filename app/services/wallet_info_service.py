@@ -99,7 +99,7 @@ class TokenTransaction:
 class WalletInfoService:
     """
     Service for retrieving comprehensive wallet information.
-    
+
     Uses:
     - BlockchainService for balance queries (RPC)
     - eth_getLogs for token transfer history (standard RPC method)
@@ -122,11 +122,11 @@ class WalletInfoService:
     async def _rpc_call(self, method: str, params: list) -> Any:
         """
         Make JSON-RPC call.
-        
+
         Args:
             method: RPC method name
             params: RPC parameters
-            
+
         Returns:
             Result or None on error
         """
@@ -161,10 +161,10 @@ class WalletInfoService:
     async def get_wallet_balances(self, wallet_address: str) -> WalletBalance | None:
         """
         Get all token balances for wallet.
-        
+
         Args:
             wallet_address: BSC wallet address
-            
+
         Returns:
             WalletBalance or None on error
         """
@@ -216,7 +216,7 @@ class WalletInfoService:
     ) -> list[TokenTransaction]:
         """
         Get BEP-20 token transaction history using eth_getLogs.
-        
+
         Args:
             wallet_address: Wallet address
             contract_address: Token contract address
@@ -224,7 +224,7 @@ class WalletInfoService:
             token_name: Token name for display
             decimals: Token decimals
             limit: Max transactions to return
-            
+
         Returns:
             List of TokenTransaction
         """
@@ -324,7 +324,7 @@ class WalletInfoService:
     ) -> list[TokenTransaction]:
         """
         Get BNB transactions.
-        
+
         Note: Native BNB transfers cannot be retrieved via eth_getLogs.
         Returns empty list - use BSCScan API for full BNB history.
         """
@@ -369,11 +369,11 @@ class WalletInfoService:
     ) -> dict[str, list[TokenTransaction]]:
         """
         Get all transaction types for wallet.
-        
+
         Args:
             wallet_address: Wallet address
             limit_per_token: Max transactions per token type
-            
+
         Returns:
             Dict with keys: "BNB", "USDT", "PLEX"
         """

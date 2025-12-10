@@ -40,13 +40,13 @@ class ActivityType:
 
     # Registration flow
     WALLET_ENTERED = "wallet_entered"   # User entered wallet address
-    WALLET_VERIFIED = "wallet_verified" # Wallet verified on blockchain
+    WALLET_VERIFIED = "wallet_verified"  # Wallet verified on blockchain
     PLEX_PAID = "plex_paid"             # Paid 10 PLEX for entry
     FINPASS_SET = "finpass_set"         # Set financial password
 
     # Financial actions
     DEPOSIT_STARTED = "deposit_started"     # Started deposit flow
-    DEPOSIT_CONFIRMED = "deposit_confirmed" # Deposit confirmed
+    DEPOSIT_CONFIRMED = "deposit_confirmed"  # Deposit confirmed
     WITHDRAWAL_REQUESTED = "withdrawal_requested"
     WITHDRAWAL_COMPLETED = "withdrawal_completed"
     PLEX_DAILY_PAID = "plex_daily_paid"     # Daily PLEX payment
@@ -54,7 +54,7 @@ class ActivityType:
     # User interactions
     MESSAGE_SENT = "message_sent"       # Any message to bot
     BUTTON_CLICKED = "button_clicked"   # Button/callback interaction
-    SUPPORT_REQUEST = "support_request" # Opened support ticket
+    SUPPORT_REQUEST = "support_request"  # Opened support ticket
     INQUIRY_SENT = "inquiry_sent"       # Sent inquiry to admins
 
     # Profile actions

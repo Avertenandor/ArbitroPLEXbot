@@ -88,7 +88,7 @@ class FinpassRecoveryService:
         new_wallet_address: str | None = None,
     ) -> FinancialPasswordRecovery:
         """Create a new financial password recovery request.
-        
+
         Args:
             user_id: User ID
             reason: Reason for recovery

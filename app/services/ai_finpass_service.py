@@ -70,7 +70,7 @@ class AIFinpassService:
     async def get_pending_requests(self, limit: int = 20) -> dict[str, Any]:
         """
         Get pending finpass recovery requests.
-        
+
         Args:
             limit: Max results
         """
@@ -133,7 +133,7 @@ class AIFinpassService:
     async def get_request_details(self, request_id: int) -> dict[str, Any]:
         """
         Get detailed info about a recovery request.
-        
+
         Args:
             request_id: Request ID
         """
@@ -184,9 +184,9 @@ class AIFinpassService:
     ) -> dict[str, Any]:
         """
         Approve a finpass recovery request.
-        
+
         SECURITY: TRUSTED ADMIN only!
-        
+
         Args:
             request_id: Request ID
             notes: Optional admin notes
@@ -251,9 +251,9 @@ class AIFinpassService:
     ) -> dict[str, Any]:
         """
         Reject a finpass recovery request.
-        
+
         SECURITY: TRUSTED ADMIN only!
-        
+
         Args:
             request_id: Request ID
             reason: Rejection reason

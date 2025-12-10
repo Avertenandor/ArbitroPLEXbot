@@ -1107,7 +1107,7 @@ TECH_DEPUTIES = ["AIXAN", "AI_XAN"]
 class AIAssistantService:
     """
     AI Assistant service using Anthropic Claude API.
-    
+
     Provides role-based intelligent assistance with different
     access levels for users, admins and super admins.
     """
@@ -1115,7 +1115,7 @@ class AIAssistantService:
     def __init__(self, api_key: str | None = None) -> None:
         """
         Initialize AI assistant.
-        
+
         Args:
             api_key: Anthropic API key
         """
@@ -1317,11 +1317,11 @@ class AIAssistantService:
     async def get_quick_help(self, topic: str, role: UserRole) -> str:
         """
         Get quick help on a specific topic.
-        
+
         Args:
             topic: Help topic
             role: User role
-            
+
         Returns:
             Help text
         """
@@ -3384,7 +3384,7 @@ class AIAssistantService:
                                     level = "🚨 КРИТИЧНО" if sim >= 0.9 else "⚠️ ПОДОЗРЕНИЕ"
                                     warnings.append(
                                         f"{level}: @{username} похож на админа "
-                                        f"@{admin_info['username']} ({sim*100:.0f}%)"
+                                        f"@{admin_info['username']} ({sim * 100:.0f}%)"
                                     )
 
                             if warnings:

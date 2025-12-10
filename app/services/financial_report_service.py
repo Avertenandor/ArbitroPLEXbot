@@ -137,7 +137,7 @@ class FinancialReportService:
     async def get_platform_financial_stats(self) -> PlatformFinancialStatsDTO:
         """
         Get platform-wide financial statistics.
-        
+
         Returns comprehensive financial overview including:
         - User counts (total, verified, with deposits)
         - Deposit statistics (count, amounts, active)

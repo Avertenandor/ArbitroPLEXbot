@@ -41,7 +41,7 @@ ERC20_ABI = [
 class BlockchainRealtimeSyncService:
     """
     Real-time blockchain synchronization service.
-    
+
     Features:
     - Incremental sync from last synced block
     - Automatic user linking
@@ -112,13 +112,13 @@ class BlockchainRealtimeSyncService:
     ) -> dict:
         """
         Get user's deposits from local cache.
-        
+
         This is the FAST path - no blockchain queries needed!
-        
+
         Args:
             user_wallet: User's wallet address
             token_type: Token type (USDT, PLEX)
-            
+
         Returns:
             Dict with total_amount, tx_count, transactions
         """
@@ -230,12 +230,12 @@ class BlockchainRealtimeSyncService:
     ) -> int:
         """
         Sync new blocks for a token type.
-        
+
         Args:
             token_type: USDT or PLEX
             token_address: Token contract address
             max_blocks: Maximum blocks to sync in one run
-            
+
         Returns:
             Number of new transactions cached
         """
@@ -343,7 +343,7 @@ class BlockchainRealtimeSyncService:
     async def sync_all_tokens(self) -> dict:
         """
         Sync all tokens (USDT and PLEX).
-        
+
         Returns:
             Dict with counts per token
         """
@@ -368,13 +368,13 @@ class BlockchainRealtimeSyncService:
     async def link_user_to_transactions(self, user_id: int, wallet_address: str) -> int:
         """
         Link existing cached transactions to a user.
-        
+
         Called when user registers their wallet.
-        
+
         Args:
             user_id: User ID
             wallet_address: User's wallet address
-            
+
         Returns:
             Number of transactions linked
         """

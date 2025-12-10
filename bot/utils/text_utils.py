@@ -27,10 +27,10 @@ def escape_markdown(text: str) -> str:
 def strip_markdown(text: str) -> str:
     """
     Remove Markdown formatting from text.
-    
+
     Args:
         text: Text with Markdown formatting
-        
+
     Returns:
         Plain text without Markdown
     """
@@ -110,13 +110,13 @@ async def safe_answer(
 ) -> Message | None:
     """
     Safely send a message with fallback if Markdown parsing fails.
-    
+
     Args:
         message: Message to reply to
         text: Text to send
         parse_mode: Parse mode (Markdown, HTML, or None)
         **kwargs: Additional arguments for message.answer()
-        
+
     Returns:
         Sent message or None if failed
     """
@@ -133,4 +133,3 @@ async def safe_answer(
                 logger.error(f"Failed to send plain text: {e2}")
                 return None
         raise
-

@@ -24,7 +24,7 @@ def strip_markdown(text: str) -> str:
 class MarkdownErrorHandlerMiddleware(BaseMiddleware):
     """
     Middleware that catches Markdown parse errors and retries without formatting.
-    
+
     This is a safety net for when sanitize_markdown misses edge cases.
     """
 

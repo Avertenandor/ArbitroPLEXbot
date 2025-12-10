@@ -9,10 +9,10 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 def deposit_status_keyboard(deposit_id: int) -> InlineKeyboardMarkup:
     """
     Keyboard for deposit status view.
-    
+
     Args:
         deposit_id: Deposit ID
-        
+
     Returns:
         InlineKeyboardMarkup with refresh option
     """
@@ -34,7 +34,7 @@ def admin_blockchain_keyboard(
 ) -> InlineKeyboardMarkup:
     """
     Keyboard for blockchain settings management.
-    
+
     NOTE: This is kept for backward compatibility.
     The new implementation uses reply keyboards in blockchain_keyboards.py
     """

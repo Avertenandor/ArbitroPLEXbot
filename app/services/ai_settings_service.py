@@ -34,7 +34,7 @@ TRUSTED_ADMIN_IDS = [
 class AISettingsService:
     """
     AI-powered settings management service.
-    
+
     Provides withdrawal and deposit settings management for ARIA.
     """
 

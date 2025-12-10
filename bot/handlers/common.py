@@ -31,7 +31,7 @@ async def cancel_handler(
 
     This handler catches the "❌ Отмена" button from any state
     and clears the state, returning to the main menu.
-    
+
     NOTE: Admin-specific states (BonusStates, etc.) have their own
     cancel handlers that should take priority.
 
