@@ -1,0 +1,530 @@
+# 🔍 ПРОВЕРКА: Wallet Balance Checking для ARIA
+
+## Цель проверки
+Убедиться, что новый функционал **сканирования кошелька пользователя** работает корректно и ARIA может:
+1. Проверять балансы BNB/USDT/PLEX через NodeReal RPC
+2. Показывать текущий курс PLEX
+3. В конце диалога рекомендовать докупить PLEX если нужно
+
+---
+
+## 📋 Контекст изменений
+
+### Новые файлы:
+- `app/services/ai_wallet_service.py` — новый сервис (310 строк)
+
+### Изменённые файлы:
+- `app/services/ai_assistant_service.py` — добавлены tools и методы
+- `bot/handlers/menu/user_ai_assistant.py` — интеграция с wallet tools
+
+---
+
+## 🎯 ЗАДАНИЯ ДЛЯ 20 АГЕНТОВ
+
+### 🔹 АГЕНТ 1: Структура AIWalletService
+
+**Файл:** `app/services/ai_wallet_service.py`
+
+**Проверить:**
+```python
+# Класс должен содержать:
+class AIWalletService:
+    def __init__(self, session, admin_data=None)
+    async def check_user_wallet(self, user_identifier) -> dict
+    async def get_plex_rate(self) -> dict
+    async def get_wallet_summary_for_dialog_end(self, user_telegram_id) -> dict
+    def _format_balance_message(...) -> str
+```
+
+**Вопросы:**
+1. Все ли методы реализованы?
+2. Правильно ли инициализируются репозитории?
+3. Есть ли обработка ошибок?
+
+---
+
+### 🔹 АГЕНТ 2: Интеграция с WalletInfoService
+
+**Файл:** `app/services/ai_wallet_service.py` строки 55-110
+
+**Проверить:**
+```python
+# Должен использовать существующий сервис:
+from app.services.wallet_info_service import WalletInfoService
+
+# И вызывать:
+balance = await self.wallet_service.get_wallet_balances(wallet_address)
+```
+
+**Вопросы:**
+1. Правильно ли создаётся WalletInfoService?
+2. Корректно ли обрабатывается None результат?
+3. Используется ли asyncio для параллельных запросов?
+
+---
+
+### 🔹 АГЕНТ 3: Поиск пользователя по идентификатору
+
+**Файл:** `app/services/ai_wallet_service.py` строки 60-100
+
+**Проверить логику поиска:**
+```python
+# Должен поддерживать:
+# 1. Wallet address (0x...)
+# 2. @username
+# 3. telegram_id (числовой)
+# 4. username без @
+```
+
+**Вопросы:**
+1. Все ли варианты поиска реализованы?
+2. Правильно ли используется UserRepository?
+3. Что происходит если пользователь не найден?
+
+---
+
+### 🔹 АГЕНТ 4: Формат ответа check_user_wallet
+
+**Файл:** `app/services/ai_wallet_service.py` строки 150-195
+
+**Проверить структуру ответа:**
+```python
+return {
+    "success": True,
+    "wallet": {"address": ..., "address_short": ...},
+    "balances": {
+        "bnb": {"raw": float, "formatted": str},
+        "usdt": {"raw": float, "formatted": str},
+        "plex": {"raw": float, "formatted": str},
+    },
+    "plex_rate": {"per_dollar": int, "description": str, "example": str},
+    "recommendations": [...],
+    "warnings": [...],
+    "user": {...} | None,
+    "checked_at": str,
+    "message": str,
+}
+```
+
+**Вопросы:**
+1. Все ли поля присутствуют?
+2. Правильные ли типы данных?
+3. Форматирование human-readable?
+
+---
+
+### 🔹 АГЕНТ 5: Логика рекомендаций
+
+**Файл:** `app/services/ai_wallet_service.py` строки 125-145
+
+**Проверить константы и логику:**
+```python
+RECOMMENDED_PLEX_MIN = 1000
+RECOMMENDED_BNB_MIN = Decimal("0.005")
+
+# Логика:
+if plex_balance < RECOMMENDED_PLEX_MIN:
+    recommendations.append("💎 Рекомендуется докупить...")
+
+if bnb_balance < RECOMMENDED_BNB_MIN:
+    warnings.append("⚠️ Мало BNB для комиссий!")
+```
+
+**Вопросы:**
+1. Адекватны ли пороговые значения?
+2. Правильно ли формируются сообщения?
+3. Есть ли локализация на русский?
+
+---
+
+### 🔹 АГЕНТ 6: Получение курса PLEX
+
+**Файл:** `app/services/ai_wallet_service.py` строки 200-250
+
+**Проверить:**
+```python
+async def get_plex_rate(self) -> dict:
+    # Должен получать из DepositLevelConfigRepository
+    # Или использовать дефолт PLEX_PER_DOLLAR_DAILY = 10
+```
+
+**Вопросы:**
+1. Откуда берётся реальный курс?
+2. Есть ли fallback на дефолтное значение?
+3. Правильно ли рассчитываются примеры (daily/weekly/monthly)?
+
+---
+
+### 🔹 АГЕНТ 7: Сводка для завершения диалога
+
+**Файл:** `app/services/ai_wallet_service.py` строки 255-300
+
+**Проверить:**
+```python
+async def get_wallet_summary_for_dialog_end(self, user_telegram_id):
+    # Должен:
+    # 1. Вызвать check_user_wallet
+    # 2. Определить plex_status (✅/👍/⚠️/❌)
+    # 3. Определить should_buy_more
+    # 4. Сформировать end_dialog_message
+```
+
+**Вопросы:**
+1. Правильные ли пороги для статусов PLEX?
+2. Формируется ли вопрос о докупке?
+3. Включаются ли warnings?
+
+---
+
+### 🔹 АГЕНТ 8: Admin Tools Definition
+
+**Файл:** `app/services/ai_assistant_service.py`
+
+**Найти и проверить определения tools:**
+```python
+# Поиск: "WALLET BALANCE TOOLS"
+{
+    "name": "check_user_wallet",
+    "description": "Проверить балансы кошелька пользователя...",
+    "input_schema": {"properties": {"user_identifier": ...}}
+},
+{
+    "name": "get_plex_rate",
+    ...
+},
+{
+    "name": "get_wallet_summary_for_dialog",
+    ...
+}
+```
+
+**Вопросы:**
+1. Все ли 3 admin tools определены?
+2. Правильные ли input_schema?
+3. Понятные ли descriptions?
+
+---
+
+### 🔹 АГЕНТ 9: Admin Tools Execution
+
+**Файл:** `app/services/ai_assistant_service.py`
+
+**Найти и проверить обработку tools:**
+```python
+# Поиск: "WALLET BALANCE TOOLS" в _execute_tools
+elif tool_name in ("check_user_wallet", "get_plex_rate", "get_wallet_summary_for_dialog"):
+    from app.services.ai_wallet_service import AIWalletService
+    wallet_service = AIWalletService(session, admin_data)
+    
+    if tool_name == "check_user_wallet":
+        result = await wallet_service.check_user_wallet(...)
+    elif tool_name == "get_plex_rate":
+        result = await wallet_service.get_plex_rate()
+    elif tool_name == "get_wallet_summary_for_dialog":
+        result = await wallet_service.get_wallet_summary_for_dialog_end(...)
+```
+
+**Вопросы:**
+1. Правильно ли импортируется AIWalletService?
+2. Передаются ли все нужные параметры?
+3. Есть ли try/except?
+
+---
+
+### 🔹 АГЕНТ 10: User Tools Definition
+
+**Файл:** `app/services/ai_assistant_service.py`
+
+**Найти метод:**
+```python
+def _get_user_wallet_tools(self) -> list[dict]:
+    return [
+        {"name": "check_my_wallet", ...},
+        {"name": "get_current_plex_rate", ...},
+    ]
+```
+
+**Вопросы:**
+1. Определены ли оба user tools?
+2. Отличаются ли названия от admin tools (check_my_wallet vs check_user_wallet)?
+3. Нет ли параметров (пользователь проверяет только свой кошелёк)?
+
+---
+
+### 🔹 АГЕНТ 11: User Chat Method
+
+**Файл:** `app/services/ai_assistant_service.py`
+
+**Найти метод:**
+```python
+async def chat_user_with_wallet(
+    self,
+    message: str,
+    user_telegram_id: int,
+    user_data: dict | None = None,
+    conversation_history: list[dict] | None = None,
+    session: Any = None,
+) -> str:
+```
+
+**Вопросы:**
+1. Метод существует?
+2. Принимает ли user_telegram_id?
+3. Принимает ли session для wallet lookups?
+4. Вызывает ли _get_user_wallet_tools()?
+
+---
+
+### 🔹 АГЕНТ 12: User Tools Execution
+
+**Файл:** `app/services/ai_assistant_service.py`
+
+**Найти метод:**
+```python
+async def _execute_user_wallet_tools(
+    self,
+    content: list,
+    user_telegram_id: int,
+    session: Any,
+) -> list[dict]:
+```
+
+**Вопросы:**
+1. Правильно ли обрабатывается check_my_wallet?
+2. Передаётся ли user_telegram_id как user_identifier?
+3. Формируется ли tool_results в правильном формате?
+
+---
+
+### 🔹 АГЕНТ 13: SYSTEM_PROMPT_USER Updates
+
+**Файл:** `app/services/ai_assistant_service.py`
+
+**Найти в SYSTEM_PROMPT_USER:**
+```python
+=== ПРОВЕРКА КОШЕЛЬКА И PLEX ===
+В КОНЦЕ КАЖДОГО ДИАЛОГА ты ДОЛЖНА:
+1. Использовать tool `get_wallet_summary_for_dialog` с telegram_id пользователя
+2. Показать пользователю его балансы: BNB, USDT, PLEX
+3. Показать текущий курс PLEX (сколько PLEX за $1 депозита в сутки)
+4. Если PLEX < 1000 — мягко спросить...
+5. Если BNB < 0.005 — предупредить о недостатке газа
+```
+
+**Вопросы:**
+1. Инструкции добавлены в SYSTEM_PROMPT_USER?
+2. Есть ли пример завершения диалога?
+3. Упоминается ли конкретный tool для вызова?
+
+---
+
+### 🔹 АГЕНТ 14: Handler Integration
+
+**Файл:** `bot/handlers/menu/user_ai_assistant.py`
+
+**Найти изменения в handle_user_chat:**
+```python
+# Было:
+response = await ai_service.chat(...)
+
+# Стало:
+response = await ai_service.chat_user_with_wallet(
+    message=sanitized_message,
+    user_telegram_id=message.from_user.id,
+    user_data=user_data,
+    conversation_history=history,
+    session=session,
+)
+```
+
+**Вопросы:**
+1. Изменён ли вызов на chat_user_with_wallet?
+2. Передаётся ли session?
+3. Передаётся ли user_telegram_id?
+
+---
+
+### 🔹 АГЕНТ 15: NodeReal RPC Integration
+
+**Файлы:**
+- `app/services/wallet_info_service.py`
+- `app/services/blockchain/balance_operations.py`
+
+**Проверить цепочку вызовов:**
+```
+AIWalletService.check_user_wallet()
+  → WalletInfoService.get_wallet_balances()
+    → BlockchainService.get_native_balance() (BNB)
+    → BlockchainService.get_usdt_balance()
+    → BlockchainService.get_plex_balance()
+      → NodeReal RPC
+```
+
+**Вопросы:**
+1. Существует ли WalletInfoService.get_wallet_balances?
+2. Работает ли параллельный запрос балансов?
+3. Правильный ли PLEX contract address?
+
+---
+
+### 🔹 АГЕНТ 16: Error Handling
+
+**Файл:** `app/services/ai_wallet_service.py`
+
+**Проверить все try/except блоки:**
+```python
+# Должны быть обработаны:
+# - Пользователь не найден
+# - Кошелёк не указан
+# - Ошибка получения балансов
+# - Ошибка получения курса
+```
+
+**Вопросы:**
+1. Все ли ошибки возвращают {"success": False, "error": "..."}?
+2. Логируются ли ошибки через logger?
+3. Понятные ли сообщения для пользователя?
+
+---
+
+### 🔹 АГЕНТ 17: Type Hints и Decimal
+
+**Файл:** `app/services/ai_wallet_service.py`
+
+**Проверить:**
+```python
+from decimal import Decimal
+from typing import Any
+
+# Все методы должны иметь type hints
+async def check_user_wallet(self, user_identifier: str | int) -> dict[str, Any]:
+```
+
+**Вопросы:**
+1. Все ли методы имеют type hints?
+2. Используется ли Decimal для денежных значений?
+3. Правильное ли преобразование Decimal → float для JSON?
+
+---
+
+### 🔹 АГЕНТ 18: Constants и Config
+
+**Файлы:**
+- `app/services/ai_wallet_service.py`
+- `bot/utils/constants.py`
+
+**Проверить:**
+```python
+# ai_wallet_service.py
+PLEX_PER_DOLLAR_DAILY = 10
+PLEX_CONTRACT = "0xdf179b6cadbc61ffd86a3d2e55f6d6e083ade6c1"
+RECOMMENDED_PLEX_MIN = 1000
+RECOMMENDED_BNB_MIN = Decimal("0.005")
+
+# bot/utils/constants.py
+PLEX_PER_DOLLAR_DAILY = 10
+```
+
+**Вопросы:**
+1. Совпадают ли константы?
+2. Правильный ли PLEX contract address?
+3. Нет ли дублирования (можно импортировать)?
+
+---
+
+### 🔹 АГЕНТ 19: Security Considerations
+
+**Файлы:**
+- `app/services/ai_wallet_service.py`
+- `bot/handlers/menu/user_ai_assistant.py`
+
+**Проверить:**
+```python
+# 1. Пользователь может проверить ТОЛЬКО СВОЙ кошелёк
+# В user tools: check_my_wallet НЕ принимает параметров
+# user_telegram_id берётся из message.from_user.id
+
+# 2. Админы могут проверить ЛЮБОЙ кошелёк
+# В admin tools: check_user_wallet принимает user_identifier
+```
+
+**Вопросы:**
+1. Нельзя ли пользователю проверить чужой кошелёк?
+2. Проходит ли сообщение через security checks?
+3. Логируются ли запросы к кошелькам?
+
+---
+
+### 🔹 АГЕНТ 20: End-to-End Flow
+
+**Симулировать полный flow:**
+
+```
+1. Пользователь открывает "🤖 Помощник"
+2. Выбирает "💬 Задать вопрос"
+3. Пишет любой вопрос
+4. ARIA отвечает
+5. Пользователь пишет "спасибо" или "пока"
+6. ARIA должна:
+   a) Вызвать check_my_wallet
+   b) Получить балансы через NodeReal
+   c) Показать BNB/USDT/PLEX
+   d) Показать курс PLEX
+   e) Если PLEX < 1000 — предложить докупить
+```
+
+**Вопросы:**
+1. Как ARIA понимает что диалог заканчивается?
+2. Вызывает ли ARIA tools автоматически?
+3. Работает ли рекомендация докупки?
+
+---
+
+## 📊 Формат отчёта каждого агента
+
+```markdown
+## Агент N: [Название]
+
+### ✅ Проверено и работает:
+- Пункт 1
+- Пункт 2
+
+### ⚠️ Потенциальные проблемы:
+- Проблема 1: описание
+
+### ❌ Баги/Ошибки:
+- Баг 1: описание, как исправить
+
+### 💡 Рекомендации:
+- Рекомендация 1
+```
+
+---
+
+## 🎯 Критерии успеха
+
+1. **AIWalletService** полностью реализован и работает
+2. **3 admin tools** определены и обрабатываются
+3. **2 user tools** определены и обрабатываются  
+4. **SYSTEM_PROMPT_USER** содержит инструкции
+5. **user_ai_assistant.py** использует новый метод
+6. **NodeReal RPC** корректно возвращает балансы
+7. **Рекомендации** формируются при низком PLEX
+8. **Безопасность** — пользователь видит только свой кошелёк
+
+---
+
+## ⚡ Быстрый старт
+
+```bash
+# Ключевые файлы для проверки:
+app/services/ai_wallet_service.py              # НОВЫЙ - главный сервис
+app/services/ai_assistant_service.py           # Tools + prompts + methods
+bot/handlers/menu/user_ai_assistant.py         # Handler integration
+
+# Зависимости:
+app/services/wallet_info_service.py            # Получение балансов
+app/services/blockchain/balance_operations.py  # RPC вызовы
+app/repositories/user_repository.py            # Поиск пользователей
+app/repositories/deposit_level_config_repository.py  # Курс PLEX
+```
