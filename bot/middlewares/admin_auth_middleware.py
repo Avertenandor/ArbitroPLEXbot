@@ -130,11 +130,12 @@ class AdminAuthMiddleware(BaseMiddleware):
             data["admin"] = admin
             return await handler(event, data)
 
-        # Super admin bypass: allow super admin to work without master key
-        # for convenience during development/testing
-        if admin.is_super_admin:
-            logger.debug(
-                f"AdminAuthMiddleware: Super admin {admin.telegram_id} bypass"
+        # Super admin bypass: ONLY in development mode
+        # In production, even super admin must authenticate
+        import os
+        if admin.is_super_admin and os.getenv("ENVIRONMENT", "production") == "development":
+            logger.warning(
+                f"AdminAuthMiddleware: DEV MODE - Super admin {admin.telegram_id} bypass"
             )
             data["admin"] = admin
             return await handler(event, data)

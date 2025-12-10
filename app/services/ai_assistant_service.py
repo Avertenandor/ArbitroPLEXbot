@@ -2864,7 +2864,11 @@ class AIAssistantService:
         from app.services.ai_logs_service import AILogsService
         from app.services.ai_settings_service import AISettingsService
 
-        broadcast_service = AIBroadcastService(session, bot)
+        broadcast_service = AIBroadcastService(
+            session, bot,
+            admin_telegram_id=admin_data.get("ID") if admin_data else None,
+            admin_username=admin_data.get("username") if admin_data else None,
+        )
         bonus_service = AIBonusService(session, admin_data)
         appeals_service = AIAppealsService(session, admin_data)
         inquiries_service = AIInquiriesService(session, admin_data)
@@ -2880,6 +2884,12 @@ class AIAssistantService:
         referral_service = AIReferralService(session, admin_data)
         logs_service = AILogsService(session, admin_data)
         settings_service = AISettingsService(session, admin_data)
+        
+        # Get rate limiter for tool execution
+        from app.services.aria_security_defense import get_rate_limiter
+        rate_limiter = get_rate_limiter()
+        admin_id = admin_data.get("ID") if admin_data else 0
+        
         results = []
 
         for block in content:
@@ -2887,6 +2897,16 @@ class AIAssistantService:
                 tool_name = block.name
                 tool_input = block.input
                 tool_id = block.id
+                
+                # Check rate limit before execution
+                allowed, limit_msg = rate_limiter.check_limit(admin_id, tool_name)
+                if not allowed:
+                    results.append({
+                        "type": "tool_result",
+                        "tool_use_id": tool_id,
+                        "content": limit_msg,
+                    })
+                    continue
 
                 try:
                     if tool_name == "send_message_to_user":
@@ -3425,14 +3445,21 @@ class AIAssistantService:
                         "content": str(result),
                     })
 
-                    logger.info(f"ARIA executed tool '{tool_name}': {result}")
+                    # Record tool usage for rate limiting
+                    rate_limiter.record_usage(admin_id, tool_name)
+                    
+                    # Log with admin ID for audit
+                    logger.info(
+                        f"ARIA tool executed: admin={admin_id} tool='{tool_name}' "
+                        f"result={result}"
+                    )
 
                 except Exception as e:
                     logger.error(f"Tool execution error: {e}")
                     results.append({
                         "type": "tool_result",
                         "tool_use_id": tool_id,
-                        "content": f"Error: {str(e)}",
+                        "content": "Ошибка выполнения операции",
                         "is_error": True,
                     })
 

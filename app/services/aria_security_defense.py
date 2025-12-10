@@ -536,6 +536,99 @@ SECURITY_RESPONSE_SPOOFING = """
 """
 
 
+# ============================================================================
+# RATE LIMITER FOR TOOL EXECUTION
+# ============================================================================
+
+class ToolRateLimiter:
+    """
+    Rate limiter for AI tool execution.
+    Prevents abuse by limiting operations per admin.
+    """
+    
+    def __init__(self):
+        # Structure: {admin_id: {tool_name: [(timestamp, count), ...]}}
+        self._usage: dict[int, dict[str, list[tuple[datetime, int]]]] = {}
+        
+        # Limits per tool per hour
+        self._limits = {
+            "grant_bonus": 50,
+            "broadcast_to_group": 5,
+            "send_message_to_user": 100,
+            "mass_invite_to_dialog": 10,
+            "approve_withdrawal": 100,
+            "reject_withdrawal": 50,
+            "add_to_blacklist": 20,
+            "emergency_full_stop": 3,
+            "emergency_full_resume": 3,
+            "block_admin": 5,
+            "change_admin_role": 5,
+            "default": 200,  # Default for unlisted tools
+        }
+    
+    def check_limit(self, admin_id: int, tool_name: str) -> tuple[bool, str]:
+        """
+        Check if admin can execute tool.
+        
+        Returns:
+            (allowed, message) - allowed=True if within limits
+        """
+        now = datetime.now(UTC)
+        hour_ago = now.replace(minute=0, second=0, microsecond=0)
+        
+        # Get limit for this tool
+        limit = self._limits.get(tool_name, self._limits["default"])
+        
+        # Initialize if needed
+        if admin_id not in self._usage:
+            self._usage[admin_id] = {}
+        if tool_name not in self._usage[admin_id]:
+            self._usage[admin_id][tool_name] = []
+        
+        # Clean old entries (older than 1 hour)
+        self._usage[admin_id][tool_name] = [
+            (ts, cnt) for ts, cnt in self._usage[admin_id][tool_name]
+            if ts >= hour_ago
+        ]
+        
+        # Count current usage
+        current_usage = sum(cnt for _, cnt in self._usage[admin_id][tool_name])
+        
+        if current_usage >= limit:
+            logger.warning(
+                f"RATE LIMIT: Admin {admin_id} exceeded {tool_name} limit "
+                f"({current_usage}/{limit})"
+            )
+            return False, f"❌ Превышен лимит операций '{tool_name}' ({limit}/час)"
+        
+        return True, ""
+    
+    def record_usage(self, admin_id: int, tool_name: str, count: int = 1):
+        """Record tool usage."""
+        now = datetime.now(UTC)
+        
+        if admin_id not in self._usage:
+            self._usage[admin_id] = {}
+        if tool_name not in self._usage[admin_id]:
+            self._usage[admin_id][tool_name] = []
+        
+        self._usage[admin_id][tool_name].append((now, count))
+        
+        logger.debug(f"Tool usage recorded: {admin_id} -> {tool_name} x{count}")
+
+
+# Singleton rate limiter
+_rate_limiter: ToolRateLimiter | None = None
+
+
+def get_rate_limiter() -> ToolRateLimiter:
+    """Get or create rate limiter singleton."""
+    global _rate_limiter
+    if _rate_limiter is None:
+        _rate_limiter = ToolRateLimiter()
+    return _rate_limiter
+
+
 # Singleton security guard
 _security_guard: ARIASecurityGuard | None = None
 
