@@ -369,6 +369,44 @@ async def handle_chat_message(
     if not user_message.strip():
         return
 
+    # ========== CHECK FOR ACTIVE INTERVIEW ==========
+    from app.services.ai_interview_service import get_interview_service
+
+    interview_service = get_interview_service(message.bot)
+    if interview_service and interview_service.has_active_interview(admin.telegram_id):
+        # This admin is being interviewed - process the answer
+        result = await interview_service.process_answer(
+            target_admin_id=admin.telegram_id,
+            answer_text=user_message,
+        )
+        
+        if result.get("completed"):
+            # Interview completed - save to knowledge base
+            ai_service = get_ai_service()
+            answers = result.get("answers", [])
+            topic = result.get("topic", "")
+            
+            if answers:
+                # Convert to QA pairs for knowledge base
+                qa_pairs = []
+                for qa in answers:
+                    qa_pairs.append({
+                        "question": qa["question"],
+                        "answer": qa["answer"],
+                        "category": topic,
+                    })
+                
+                # Save to knowledge base
+                saved = await ai_service.save_learned_knowledge(
+                    qa_pairs, 
+                    result.get("target", "interview")
+                )
+                
+                logger.info(f"Interview completed: saved {saved} entries from @{result.get('target')}")
+        
+        # Don't process as regular message - interview handler took care of it
+        return
+
     # ========== SECURITY CHECKS ==========
     from app.services.admin_security_service import VERIFIED_ADMIN_IDS
     from app.services.aria_security_defense import (

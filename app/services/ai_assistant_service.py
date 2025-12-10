@@ -806,6 +806,47 @@ SYSTEM_PROMPT_SUPER_ADMIN = (
 "Кто сейчас с обращениями?" → показываю список
 "Пригласи всех с депозитами в диалог" → делаю массовое приглашение
 
+=== 📋 ИНТЕРВЬЮ С АДМИНАМИ ===
+
+Ты можешь проводить НАСТОЯЩИЕ ИНТЕРВЬЮ с админами!
+Когда Командир просит расспросить админа — используй эти инструменты.
+
+📤 ДОСТУПНЫЕ ИНСТРУМЕНТЫ:
+
+1. start_interview — начать интервью с админом
+   Параметры: @username админа, тема, список вопросов (1-10 штук)
+   Пример: "Проведи интервью с @natder о ДС, спроси что это и как работает"
+
+2. get_interview_status — узнать статус интервью
+   Пример: "Как там интервью с Натальей?"
+
+3. cancel_interview — отменить интервью
+   Пример: "Отмени интервью с @natder"
+
+КАК ПРОВОДИТЬ ИНТЕРВЬЮ:
+1. Командир говорит "расспроси @админ о теме"
+2. Я формирую 3-5 вопросов по теме
+3. Запускаю start_interview с вопросами
+4. Админ получает вопросы по одному
+5. Отвечает на каждый — я жду ответы
+6. После всех ответов — автоматически сохраняю в базу знаний
+7. Докладываю Командиру результаты
+
+ВАЖНО:
+- Вопросы задаю ПО ОДНОМУ (не все сразу!)
+- Жду ответа на каждый вопрос перед следующим
+- После завершения — автоматически сохраняю в базу знаний
+- Докладываю Командиру о завершении с результатами
+
+ПРИМЕР:
+Командир: "Проведи интервью с Натальей про ДС"
+Я: Запускаю интервью с вопросами:
+   1. Что такое ДС?
+   2. Как работает ДС технически?
+   3. Какие есть виды ДС?
+   4. Как пользователь получает ДС?
+   5. Какие ограничения у ДС?
+
 === 🎁 ИНСТРУМЕНТЫ УПРАВЛЕНИЯ БОНУСАМИ ===
 
 У тебя есть возможность управлять бонусами пользователей!
@@ -1466,7 +1507,7 @@ class AIAssistantService:
 - Сообщения об ошибках
 - Личные данные
 
-ВАЖНО: 
+ВАЖНО:
 - Если Командир что-то объясняет или указывает - это ЗНАНИЕ для сохранения!
 - Если ARIA обещает что-то делать по-новому - сохрани это как правило!
 - Ответы должны быть КРАТКИМИ.
@@ -1923,6 +1964,58 @@ class AIAssistantService:
                         },
                     },
                     "required": ["group"],
+                },
+            },
+            # ========== INTERVIEW TOOL ==========
+            {
+                "name": "start_interview",
+                "description": "Начать интервью с админом. Отправляет вопросы по одному и ждёт ответов. После получения всех ответов автоматически сохраняет в базу знаний.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "admin_identifier": {
+                            "type": "string",
+                            "description": "@username или telegram_id админа для интервью",
+                        },
+                        "topic": {
+                            "type": "string",
+                            "description": "Тема интервью (например: 'DEX Rabbit', 'Депозиты', 'ДС')",
+                        },
+                        "questions": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Список вопросов для интервью (1-10 вопросов)",
+                        },
+                    },
+                    "required": ["admin_identifier", "topic", "questions"],
+                },
+            },
+            {
+                "name": "get_interview_status",
+                "description": "Получить статус активного интервью с админом.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "admin_identifier": {
+                            "type": "string",
+                            "description": "@username или telegram_id админа",
+                        },
+                    },
+                    "required": ["admin_identifier"],
+                },
+            },
+            {
+                "name": "cancel_interview",
+                "description": "Отменить активное интервью с админом.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "admin_identifier": {
+                            "type": "string",
+                            "description": "@username или telegram_id админа",
+                        },
+                    },
+                    "required": ["admin_identifier"],
                 },
             },
             # ========== BONUS MANAGEMENT TOOLS ==========
@@ -2932,6 +3025,40 @@ class AIAssistantService:
             },
         ]
 
+    async def _resolve_admin_id(
+        self,
+        identifier: str | int,
+        session: Any,
+    ) -> dict[str, Any] | None:
+        """Resolve admin identifier to telegram_id and username."""
+        from app.repositories.admin_repository import AdminRepository
+        
+        admin_repo = AdminRepository(session)
+        
+        if isinstance(identifier, int):
+            admin = await admin_repo.get_by(telegram_id=identifier)
+        else:
+            identifier = str(identifier).strip()
+            
+            # @username
+            if identifier.startswith("@"):
+                username = identifier[1:]
+                admin = await admin_repo.get_by(username=username)
+            # Telegram ID as string
+            elif identifier.isdigit():
+                admin = await admin_repo.get_by(telegram_id=int(identifier))
+            else:
+                # Try username without @
+                admin = await admin_repo.get_by(username=identifier)
+        
+        if admin:
+            return {
+                "telegram_id": admin.telegram_id,
+                "username": admin.username,
+                "display_name": admin.display_name,
+            }
+        return None
+
     async def _execute_tools(  # noqa: C901
         self,
         content: list,
@@ -3033,6 +3160,63 @@ class AIAssistantService:
                             custom_message=tool_input.get("custom_message"),
                             limit=tool_input.get("limit", 50),
                         )
+                    # ========== INTERVIEW TOOLS ==========
+                    elif tool_name == "start_interview":
+                        from app.services.ai_interview_service import get_interview_service, init_interview_service
+                        
+                        interview_service = get_interview_service(bot)
+                        if not interview_service:
+                            interview_service = init_interview_service(bot)
+                        
+                        # Find admin by identifier
+                        admin_id = await self._resolve_admin_id(
+                            tool_input["admin_identifier"], 
+                            session
+                        )
+                        if not admin_id:
+                            result = {
+                                "success": False,
+                                "error": f"Админ '{tool_input['admin_identifier']}' не найден",
+                            }
+                        else:
+                            result = await interview_service.start_interview(
+                                interviewer_id=user_data.get("ID", 0),
+                                target_admin_id=admin_id["telegram_id"],
+                                target_admin_username=admin_id["username"] or str(admin_id["telegram_id"]),
+                                topic=tool_input["topic"],
+                                questions=tool_input["questions"],
+                            )
+                    elif tool_name == "get_interview_status":
+                        from app.services.ai_interview_service import get_interview_service
+                        
+                        interview_service = get_interview_service(bot)
+                        if not interview_service:
+                            result = {"success": False, "error": "Сервис интервью не инициализирован"}
+                        else:
+                            admin_id = await self._resolve_admin_id(
+                                tool_input["admin_identifier"], 
+                                session
+                            )
+                            if not admin_id:
+                                result = {"success": False, "error": "Админ не найден"}
+                            else:
+                                status = interview_service.get_interview_status(admin_id["telegram_id"])
+                                result = status if status else {"success": False, "error": "Нет активного интервью"}
+                    elif tool_name == "cancel_interview":
+                        from app.services.ai_interview_service import get_interview_service
+                        
+                        interview_service = get_interview_service(bot)
+                        if not interview_service:
+                            result = {"success": False, "error": "Сервис интервью не инициализирован"}
+                        else:
+                            admin_id = await self._resolve_admin_id(
+                                tool_input["admin_identifier"], 
+                                session
+                            )
+                            if not admin_id:
+                                result = {"success": False, "error": "Админ не найден"}
+                            else:
+                                result = await interview_service.cancel_interview(admin_id["telegram_id"])
                     # ========== BONUS TOOLS ==========
                     elif tool_name == "grant_bonus":
                         result = await bonus_service.grant_bonus(
