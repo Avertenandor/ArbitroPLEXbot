@@ -155,12 +155,17 @@ class AIDepositsService:
         Args:
             user_identifier: @username or telegram_id
         """
+        from loguru import logger
+        logger.info(f"AI_DEPOSITS: get_user_deposits called by admin_telegram_id={self.admin_telegram_id}, admin_data={self.admin_data}")
+        
         admin, error = await self._verify_admin()
         if error:
+            logger.warning(f"AI_DEPOSITS: verify_admin failed: {error}")
             return {"success": False, "error": error}
 
         # Only trusted admins can view user deposits
         if not self._is_trusted_admin():
+            logger.warning(f"AI_DEPOSITS: admin {self.admin_telegram_id} not in TRUSTED_ADMIN_IDS={TRUSTED_ADMIN_IDS}")
             return {"success": False, "error": "❌ Недостаточно прав для просмотра депозитов"}
 
         user, error = await self._find_user(user_identifier)
