@@ -115,9 +115,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
         withdrawal_settings,
         withdrawals,
     )
-    from bot.handlers.admin import (
-        bonus_management_v2 as bonus_management,  # V2 with improved UX
-    )
+    from bot.handlers.admin import bonus_v2 as bonus_management  # V2 refactored
     from bot.handlers.admin import finpass_recovery as admin_finpass
     from bot.handlers.admin import support as admin_support
 
