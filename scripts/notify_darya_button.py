@@ -4,6 +4,7 @@
 import asyncio
 import sys
 
+
 sys.path.insert(0, "/app")
 
 from aiogram import Bot
@@ -33,14 +34,14 @@ MESSAGE = """🆕 Новая функция!
 
 async def main():
     bot = Bot(token=settings.telegram_bot_token)
-    
+
     for admin_id in ADMIN_IDS:
         try:
             await bot.send_message(admin_id, MESSAGE)
             print(f"✅ Sent to {admin_id}")
         except Exception as e:
             print(f"❌ Failed {admin_id}: {e}")
-    
+
     await bot.session.close()
     print("Done!")
 

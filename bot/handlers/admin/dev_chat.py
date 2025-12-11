@@ -22,7 +22,7 @@ router = Router(name="dev_chat")
 
 class DevChatStates(StatesGroup):
     """States for developer chat."""
-    
+
     writing_message = State()  # Admin is writing a message to Darya
 
 
@@ -45,7 +45,7 @@ async def handle_write_to_darya(
         return
 
     await state.set_state(DevChatStates.writing_message)
-    
+
     await message.answer(
         "💬 **Написать Дарье (разработчику)**\n\n"
         "Привет! Я Дарья — ИИ-разработчик бота (Copilot/Claude).\n\n"
@@ -68,10 +68,10 @@ async def handle_cancel_dev_chat(
 ):
     """Cancel dev chat."""
     await state.clear()
-    
+
     # Return to admin panel
     from bot.keyboards.reply import get_admin_keyboard_from_data
-    
+
     await message.answer(
         "✅ Отменено. Возвращаю в админ-панель.",
         reply_markup=get_admin_keyboard_from_data(kwargs),
@@ -106,9 +106,9 @@ async def handle_dev_chat_message(
 
             if result.get("success"):
                 await state.clear()
-                
+
                 from bot.keyboards.reply import get_admin_keyboard_from_data
-                
+
                 await message.answer(
                     "✅ **Сообщение отправлено Дарье!**\n\n"
                     f"Ваше сообщение:\n_{response_text[:200]}{'...' if len(response_text) > 200 else ''}_\n\n"
@@ -124,9 +124,9 @@ async def handle_dev_chat_message(
             # Fallback without Redis - just log
             logger.info(f"DevChat (no Redis) from @{admin_username}: {response_text}")
             await state.clear()
-            
+
             from bot.keyboards.reply import get_admin_keyboard_from_data
-            
+
             await message.answer(
                 "✅ Сообщение записано в лог. Дарья увидит его при мониторинге.",
                 reply_markup=get_admin_keyboard_from_data(kwargs),

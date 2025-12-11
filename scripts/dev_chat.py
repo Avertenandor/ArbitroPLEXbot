@@ -33,7 +33,9 @@ async def get_redis_client():
     """Get Redis client."""
     # Build Redis URL from settings
     if settings.redis_password:
-        redis_url = f"redis://:{settings.redis_password}@{settings.redis_host}:{settings.redis_port}/{settings.redis_db}"
+        redis_url = (
+            f"redis://:{settings.redis_password}@{settings.redis_host}:{settings.redis_port}/{settings.redis_db}"
+        )
     else:
         redis_url = f"redis://{settings.redis_host}:{settings.redis_port}/{settings.redis_db}"
     return redis.from_url(redis_url)
