@@ -33,6 +33,32 @@ def wallet_dashboard_keyboard() -> ReplyKeyboardMarkup:
     return builder.as_markup(resize_keyboard=True)
 
 
+def wallet_dashboard_no_hot_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Wallet dashboard keyboard without Send button (hot wallet not configured).
+    """
+    builder = ReplyKeyboardBuilder()
+
+    # Row 1: Only Receive (no Send without hot wallet)
+    builder.row(
+        KeyboardButton(text="📥 Получить"),
+    )
+
+    # Row 2: Setup Keys/Addresses - highlight output wallet setup
+    builder.row(
+        KeyboardButton(text="📥 Настроить кошелек для входа"),
+        KeyboardButton(text="📤 Настроить кошелек для выдачи"),
+    )
+
+    # Row 3: Refresh / Admin Panel
+    builder.row(
+        KeyboardButton(text="🔄 Обновить баланс"),
+        KeyboardButton(text="👑 Админ-панель"),
+    )
+
+    return builder.as_markup(resize_keyboard=True)
+
+
 def wallet_currency_selection_keyboard() -> ReplyKeyboardMarkup:
     """
     Currency selection for sending.
