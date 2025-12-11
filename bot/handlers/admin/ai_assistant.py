@@ -124,6 +124,7 @@ def chat_keyboard() -> Any:
     """Keyboard for chat mode."""
     builder = ReplyKeyboardBuilder()
     builder.row(KeyboardButton(text="🧠 Запомнить это"))
+    builder.row(KeyboardButton(text="💬 Написать Дарье"))
     builder.row(KeyboardButton(text="🔚 Завершить диалог"))
     return builder.as_markup(resize_keyboard=True)
 
@@ -351,6 +352,45 @@ async def manual_save_knowledge(
             "• Рассказать о важном правиле",
             reply_markup=chat_keyboard(),
         )
+
+
+@router.message(AIAssistantStates.chatting, F.text == "💬 Написать Дарье")
+async def switch_to_darya_chat(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    redis_client=None,
+    **data: Any,
+) -> None:
+    """Switch from ARIA chat to Darya (developer) chat without leaving the dialog."""
+    from bot.handlers.admin.dev_chat import DevChatStates, get_dev_chat_keyboard
+
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
+        return
+
+    # Save current ARIA state so we can return
+    state_data = await state.get_data()
+    state_data["return_to_aria"] = True
+    await state.update_data(return_to_aria=True)
+
+    # Switch to Darya chat state
+    await state.set_state(DevChatStates.writing_message)
+
+    await message.answer(
+        "💬 **Переключаюсь на Дарью (разработчика)**\n\n"
+        "Привет! Я Дарья — ИИ-разработчик бота (Copilot/Claude).\n\n"
+        "Напиши мне:\n"
+        "• Что неудобно в боте?\n"
+        "• Какие функции добавить?\n"
+        "• Какие баги исправить?\n"
+        "• Любые идеи и предложения!\n\n"
+        "✍️ **Просто напиши сообщение ниже:**\n\n"
+        "_После отправки вернёшься к ARIA._",
+        parse_mode="Markdown",
+        reply_markup=get_dev_chat_keyboard(),
+    )
+    logger.info(f"Admin @{admin.username} switched from ARIA to Darya chat")
 
 
 @router.message(AIAssistantStates.chatting)

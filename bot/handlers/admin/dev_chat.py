@@ -95,6 +95,10 @@ async def handle_dev_chat_message(
     admin_id = message.from_user.id
     response_text = message.text
 
+    # Check if we should return to ARIA after sending
+    state_data = await state.get_data()
+    return_to_aria = state_data.get("return_to_aria", False)
+
     try:
         if redis_client:
             service = DevChatService(session, message.bot, redis_client)
@@ -105,18 +109,32 @@ async def handle_dev_chat_message(
             )
 
             if result.get("success"):
-                await state.clear()
+                if return_to_aria:
+                    # Return to ARIA chat
+                    from bot.handlers.admin.ai_assistant import AIAssistantStates, chat_keyboard
 
-                from bot.keyboards.reply import get_admin_keyboard_from_data
+                    await state.set_state(AIAssistantStates.chatting)
+                    await message.answer(
+                        "✅ **Сообщение отправлено Дарье!**\n\n"
+                        f"_{response_text[:150]}{'...' if len(response_text) > 150 else ''}_\n\n"
+                        "Дарья прочитает при следующем мониторинге.\n\n"
+                        "**Возвращаю к ARIA.** Продолжай обучение! 💬",
+                        parse_mode="Markdown",
+                        reply_markup=chat_keyboard(),
+                    )
+                else:
+                    await state.clear()
 
-                await message.answer(
-                    "✅ **Сообщение отправлено Дарье!**\n\n"
-                    f"Ваше сообщение:\n_{response_text[:200]}{'...' if len(response_text) > 200 else ''}_\n\n"
-                    "Я прочитаю его при следующем мониторинге и отвечу или внесу изменения. "
-                    "Если нужен быстрый ответ — напишите через 🤖 AI Помощник.",
-                    parse_mode="Markdown",
-                    reply_markup=get_admin_keyboard_from_data(kwargs),
-                )
+                    from bot.keyboards.reply import get_admin_keyboard_from_data
+
+                    await message.answer(
+                        "✅ **Сообщение отправлено Дарье!**\n\n"
+                        f"Ваше сообщение:\n_{response_text[:200]}{'...' if len(response_text) > 200 else ''}_\n\n"
+                        "Я прочитаю его при следующем мониторинге и отвечу или внесу изменения. "
+                        "Если нужен быстрый ответ — напишите через 🤖 AI Помощник.",
+                        parse_mode="Markdown",
+                        reply_markup=get_admin_keyboard_from_data(kwargs),
+                    )
                 logger.info(f"DevChat: @{admin_username} sent message to Darya: {response_text[:50]}...")
             else:
                 await message.answer("❌ Ошибка отправки. Попробуйте ещё раз.")

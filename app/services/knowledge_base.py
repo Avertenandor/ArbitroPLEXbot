@@ -1024,7 +1024,8 @@ class KnowledgeBase:
         """Get entries added/learned from a specific user."""
         username_lower = username.lower().replace("@", "")
         return [
-            e for e in self.entries
+            e
+            for e in self.entries
             if username_lower in str(e.get("source_user", "")).lower()
             or username_lower in str(e.get("added_by", "")).lower()
             or username_lower in str(e.get("clarification", "")).lower()

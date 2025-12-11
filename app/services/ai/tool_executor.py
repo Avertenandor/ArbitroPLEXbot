@@ -582,6 +582,7 @@ class ToolExecutor:
             return await interview_service.cancel_interview(admin_id["telegram_id"])
         elif name == "get_knowledge_by_user":
             from app.services.knowledge_base import get_knowledge_base
+
             kb = get_knowledge_base()
             username = inp.get("username", "").replace("@", "")
             entries = kb.get_entries_by_user(username)
@@ -595,14 +596,16 @@ class ToolExecutor:
             # Format entries for display
             formatted = []
             for e in entries:
-                formatted.append({
-                    "id": e.get("id"),
-                    "question": e.get("question"),
-                    "answer": e.get("answer"),
-                    "category": e.get("category"),
-                    "added_at": e.get("added_at"),
-                    "verified": e.get("verified_by_boss", False),
-                })
+                formatted.append(
+                    {
+                        "id": e.get("id"),
+                        "question": e.get("question"),
+                        "answer": e.get("answer"),
+                        "category": e.get("category"),
+                        "added_at": e.get("added_at"),
+                        "verified": e.get("verified_by_boss", False),
+                    }
+                )
             return {
                 "success": True,
                 "count": len(entries),
