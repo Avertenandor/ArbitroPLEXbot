@@ -3177,7 +3177,7 @@ class AIAssistantService:
                             }
                         else:
                             result = await interview_service.start_interview(
-                                interviewer_id=user_data.get("ID", 0),
+                                interviewer_id=admin_data.get("ID", 0) if admin_data else 0,
                                 target_admin_id=admin_id["telegram_id"],
                                 target_admin_username=admin_id["username"] or str(admin_id["telegram_id"]),
                                 topic=tool_input["topic"],
