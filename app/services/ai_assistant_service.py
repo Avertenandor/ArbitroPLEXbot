@@ -337,9 +337,11 @@ class AIAssistantService:
                 messages=messages,
             )
 
-            # Extract text response
+            # Extract text response (safely check for text attribute)
             if response.content and len(response.content) > 0:
-                return response.content[0].text
+                first_block = response.content[0]
+                if hasattr(first_block, "text") and first_block.text:
+                    return first_block.text
 
             return "🤖 Не удалось получить ответ. Попробуйте переформулировать вопрос."
 
@@ -447,22 +449,29 @@ class AIAssistantService:
                 },
             ]
 
+            # Use prompt caching for system prompt (saves 90% on repeated calls)
+            system_prompt = "Ты помощник для извлечения знаний. Отвечай ТОЛЬКО валидным JSON массивом. Ответы должны быть КРАТКИМИ."
+            system_with_cache = [{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}]
+
             response = self.client.messages.create(
                 model=self.model_haiku,  # Use Haiku for extraction (12x cheaper)
                 max_tokens=4096,
-                system="Ты помощник для извлечения знаний. Отвечай ТОЛЬКО валидным JSON массивом. Ответы должны быть КРАТКИМИ.",
+                system=system_with_cache,
                 messages=messages,
             )
 
-            if response.content:
+            if response.content and len(response.content) > 0:
                 import json
                 import re
 
-                text = response.content[0].text.strip()
+                first_block = response.content[0]
+                if not hasattr(first_block, "text") or not first_block.text:
+                    return None
+                text = first_block.text.strip()
 
                 # Try to extract JSON array from response
                 # Sometimes Claude adds extra text before/after JSON
-                json_match = re.search(r"\[[\s\S]*\]", text)
+                json_match = re.search(r"\[[\s\S]*?\]", text)  # Non-greedy to capture only first JSON array
                 if json_match:
                     json_text = json_match.group(0)
                     try:
@@ -567,19 +576,35 @@ class AIAssistantService:
             )
 
             # Handle tool use
-            if response.stop_reason == "tool_use" and session:
+            if response.stop_reason == "tool_use":
+                if not session:
+                    logger.error(f"Tool use requested but session is None for user {user_telegram_id}")
+                    return "🤖 Ошибка: сессия базы данных недоступна. Попробуйте позже."
+
                 tool_results = await self._execute_user_wallet_tools(response.content, user_telegram_id, session)
 
-                messages.append({"role": "assistant", "content": response.content})
+                # Serialize response.content to JSON-compatible format
+                assistant_content = []
+                for block in response.content:
+                    if hasattr(block, "type"):
+                        if block.type == "text":
+                            assistant_content.append({"type": "text", "text": block.text})
+                        elif block.type == "tool_use":
+                            assistant_content.append({
+                                "type": "tool_use",
+                                "id": block.id,
+                                "name": block.name,
+                                "input": block.input,
+                            })
+                messages.append({"role": "assistant", "content": assistant_content})
                 messages.append({"role": "user", "content": tool_results})
 
-                # Get final response
+                # Get final response (no tools - final answer should be text only)
                 response = self.client.messages.create(
                     model=self.model_haiku,  # Keep Haiku for users
                     max_tokens=1024,
                     system=system_with_cache,
                     messages=messages,
-                    tools=tools,
                 )
 
             # Extract text
