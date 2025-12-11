@@ -2,6 +2,10 @@
 Wallet management handler.
 
 Allows admins to manage system and payout wallets.
+
+SECURITY: All wallet management operations require super_admin role.
+This is critical for security - regular admins should NOT be able to
+approve/reject wallet change requests.
 """
 
 import re
@@ -12,6 +16,7 @@ from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.wallet_admin_service import WalletAdminService
+from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
 from bot.keyboards.reply import admin_keyboard, get_admin_keyboard_from_data
 
 
@@ -24,10 +29,10 @@ async def show_wallet_management(
     session: AsyncSession,
     **data: Any,
 ) -> None:
-    """Show wallet management menu."""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    """Show wallet management menu. Requires super_admin role."""
+    # SECURITY: Require super_admin for wallet management
+    admin = await get_admin_or_deny(message, session, require_super=True, **data)
+    if not admin:
         return
 
     from app.config.settings import settings
@@ -63,10 +68,10 @@ async def show_wallet_requests(
     session: AsyncSession,
     **data: Any,
 ) -> None:
-    """Show pending wallet change requests."""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    """Show pending wallet change requests. Requires super_admin role."""
+    # SECURITY: Require super_admin for viewing wallet requests
+    admin = await get_admin_or_deny(message, session, require_super=True, **data)
+    if not admin:
         return
 
     wallet_service = WalletAdminService(session)
@@ -113,10 +118,10 @@ async def approve_wallet_change(
     session: AsyncSession,
     **data: Any,
 ) -> None:
-    """Approve wallet change request."""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    """Approve wallet change request. Requires super_admin role."""
+    # SECURITY: Require super_admin for approving wallet changes
+    admin = await get_admin_or_deny(message, session, require_super=True, **data)
+    if not admin:
         return
 
     # Extract request ID from message text
@@ -131,19 +136,6 @@ async def approve_wallet_change(
         return
 
     request_id = int(match.group(1))
-
-    # Get admin
-    from app.repositories.admin_repository import AdminRepository
-
-    admin_repo = AdminRepository(session)
-    admin = await admin_repo.get_by(telegram_id=message.from_user.id)
-
-    if not admin:
-        await message.answer(
-            "❌ Администратор не найден",
-            reply_markup=get_admin_keyboard_from_data(data),
-        )
-        return
 
     wallet_service = WalletAdminService(session)
 
@@ -178,10 +170,10 @@ async def reject_wallet_change(
     session: AsyncSession,
     **data: Any,
 ) -> None:
-    """Reject wallet change request."""
-    is_admin = data.get("is_admin", False)
-    if not is_admin:
-        await message.answer("❌ Эта функция доступна только администраторам")
+    """Reject wallet change request. Requires super_admin role."""
+    # SECURITY: Require super_admin for rejecting wallet changes
+    admin = await get_admin_or_deny(message, session, require_super=True, **data)
+    if not admin:
         return
 
     # Extract request ID from message text
@@ -196,19 +188,6 @@ async def reject_wallet_change(
         return
 
     request_id = int(match.group(1))
-
-    # Get admin
-    from app.repositories.admin_repository import AdminRepository
-
-    admin_repo = AdminRepository(session)
-    admin = await admin_repo.get_by(telegram_id=message.from_user.id)
-
-    if not admin:
-        await message.answer(
-            "❌ Администратор не найден",
-            reply_markup=get_admin_keyboard_from_data(data),
-        )
-        return
 
     wallet_service = WalletAdminService(session)
 

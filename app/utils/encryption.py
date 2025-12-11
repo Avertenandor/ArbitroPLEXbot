@@ -27,8 +27,9 @@ class EncryptionService:
             try:
                 self.fernet = Fernet(encryption_key.encode())
                 self.enabled = True
-            except Exception as e:
-                logger.error(f"Invalid encryption key: {e}")
+            except Exception:
+                # SECURITY: Do not log exception details - may contain key info
+                logger.error("Invalid encryption key format (key validation failed)")
                 self.fernet = None
                 self.enabled = False
                 if self.environment == "production":
@@ -75,8 +76,9 @@ class EncryptionService:
             encrypted = self.fernet.encrypt(plaintext.encode())
             return base64.b64encode(encrypted).decode()
 
-        except Exception as e:
-            logger.error(f"Encryption error: {e}")
+        except Exception:
+            # SECURITY: Do not log exception details - may contain sensitive data
+            logger.error("Encryption operation failed")
             return None
 
     def decrypt(self, ciphertext: str) -> str | None:
@@ -108,10 +110,11 @@ class EncryptionService:
             decrypted = self.fernet.decrypt(encrypted)
             return decrypted.decode()
 
-        except Exception as e:
-            logger.error(f"Decryption error: {e}")
+        except Exception:
+            # SECURITY: Do not log exception details - may contain sensitive data
+            logger.error("Decryption operation failed")
             from app.utils.exceptions import SecurityError
-            raise SecurityError(f"Decryption failed: {e}")
+            raise SecurityError("Decryption failed: invalid ciphertext or key mismatch")
 
     @staticmethod
     def generate_key() -> str:
