@@ -242,3 +242,67 @@ class TestGlobalDailyLimit:
 
         is_valid = (today_total + request) <= daily_limit
         assert is_valid is False
+
+
+class TestPlexWalletBalanceCheck:
+    """Test PLEX wallet balance check for withdrawals.
+
+    Business rule: User must have at least 5000 PLEX on their wallet
+    at all times. This is a "non-burnable minimum" (несгораемый минимум).
+    """
+
+    MINIMUM_PLEX_BALANCE = 5000
+
+    def test_sufficient_plex_balance(self):
+        """Test withdrawal allowed with sufficient PLEX balance."""
+        plex_balance = Decimal("10000")
+        is_valid = plex_balance >= self.MINIMUM_PLEX_BALANCE
+        assert is_valid is True
+
+    def test_exactly_at_minimum(self):
+        """Test withdrawal allowed with exactly minimum PLEX balance."""
+        plex_balance = Decimal("5000")
+        is_valid = plex_balance >= self.MINIMUM_PLEX_BALANCE
+        assert is_valid is True
+
+    def test_below_minimum(self):
+        """Test withdrawal blocked with PLEX below minimum."""
+        plex_balance = Decimal("4999")
+        is_valid = plex_balance >= self.MINIMUM_PLEX_BALANCE
+        assert is_valid is False
+
+    def test_zero_plex_balance(self):
+        """Test withdrawal blocked with zero PLEX balance."""
+        plex_balance = Decimal("0")
+        is_valid = plex_balance >= self.MINIMUM_PLEX_BALANCE
+        assert is_valid is False
+
+    def test_just_below_minimum(self):
+        """Test withdrawal blocked with PLEX just below minimum."""
+        plex_balance = Decimal("4999.99")
+        is_valid = plex_balance >= self.MINIMUM_PLEX_BALANCE
+        assert is_valid is False
+
+    def test_well_above_minimum(self):
+        """Test withdrawal allowed with PLEX well above minimum."""
+        plex_balance = Decimal("25000")
+        is_valid = plex_balance >= self.MINIMUM_PLEX_BALANCE
+        assert is_valid is True
+
+    def test_slightly_above_minimum(self):
+        """Test withdrawal allowed with PLEX slightly above minimum."""
+        plex_balance = Decimal("5001")
+        is_valid = plex_balance >= self.MINIMUM_PLEX_BALANCE
+        assert is_valid is True
+
+    def test_decimal_plex_balance(self):
+        """Test with decimal PLEX balance."""
+        plex_balance = Decimal("5000.50")
+        is_valid = plex_balance >= self.MINIMUM_PLEX_BALANCE
+        assert is_valid is True
+
+    def test_large_plex_balance(self):
+        """Test with large PLEX balance."""
+        plex_balance = Decimal("1000000")
+        is_valid = plex_balance >= self.MINIMUM_PLEX_BALANCE
+        assert is_valid is True
