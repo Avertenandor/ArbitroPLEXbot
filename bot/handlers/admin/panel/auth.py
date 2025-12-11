@@ -198,6 +198,19 @@ async def handle_master_key_input(
 
             await show_financial_list(message, session, state, **data)
             return
+        elif redirect_message_text == "📋 Логи действий":
+            # Super admin action logs viewer
+            from bot.handlers.admin.action_logs import handle_action_logs
+
+            await handle_action_logs(message, session, **data)
+            return
+        elif redirect_message_text == "⏰ Расписание задач":
+            # Admin schedule management panel
+            from bot.handlers.admin.schedule_management import show_schedule_management
+
+            # Pass FSM state explicitly as это требуется сигнатурой
+            await show_schedule_management(message, session, state, **data)
+            return
         elif redirect_message_text == "👑 Админ-панель":
             # Just continue to show admin panel below
             pass

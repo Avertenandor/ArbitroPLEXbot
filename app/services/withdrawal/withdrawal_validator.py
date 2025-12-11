@@ -120,10 +120,7 @@ class WithdrawalValidator:
             Tuple of (is_valid, error_message)
         """
         # Check both static config flag and DB flag
-        if (
-            settings.emergency_stop_withdrawals
-            or getattr(self.global_settings, "emergency_stop_withdrawals", False)
-        ):
+        if settings.emergency_stop_withdrawals or getattr(self.global_settings, "emergency_stop_withdrawals", False):
             logger.warning("Withdrawal blocked by emergency stop")
             return False, (
                 "⚠️ Временная приостановка выводов из-за технических работ.\n\n"
@@ -153,18 +150,12 @@ class WithdrawalValidator:
         # Check if user is banned
         if user.is_banned:
             logger.warning(f"Withdrawal blocked: User {user_id} is banned")
-            return False, (
-                "Ваш аккаунт заблокирован. "
-                "Обратитесь в поддержку для выяснения причин."
-            )
+            return False, ("Ваш аккаунт заблокирован. Обратитесь в поддержку для выяснения причин.")
 
         # Check if withdrawals are blocked for this user
         if user.withdrawal_blocked:
             logger.warning(f"Withdrawal blocked: User {user_id} has withdrawal_blocked=True")
-            return False, (
-                "Вывод средств заблокирован. "
-                "Обратитесь в поддержку для выяснения причин."
-            )
+            return False, ("Вывод средств заблокирован. Обратитесь в поддержку для выяснения причин.")
 
         return True, None
 
@@ -185,9 +176,7 @@ class WithdrawalValidator:
 
         return True, None
 
-    async def check_balance(
-        self, user_id: int, amount: Decimal, available_balance: Decimal
-    ) -> tuple[bool, str | None]:
+    async def check_balance(self, user_id: int, amount: Decimal, available_balance: Decimal) -> tuple[bool, str | None]:
         """
         Check if user has sufficient balance.
 
@@ -201,18 +190,13 @@ class WithdrawalValidator:
         """
         if available_balance < amount:
             logger.warning(
-                f"Insufficient balance for user {user_id}: "
-                f"requested={amount}, available={available_balance}"
+                f"Insufficient balance for user {user_id}: requested={amount}, available={available_balance}"
             )
-            return False, (
-                f"Недостаточно средств. Доступно: {available_balance:.2f} USDT"
-            )
+            return False, (f"Недостаточно средств. Доступно: {available_balance:.2f} USDT")
 
         return True, None
 
-    async def check_daily_limit(
-        self, user_id: int, amount: Decimal
-    ) -> tuple[bool, str | None]:
+    async def check_daily_limit(self, user_id: int, amount: Decimal) -> tuple[bool, str | None]:
         """
         Check if withdrawal exceeds daily limit.
 
@@ -276,9 +260,7 @@ class WithdrawalValidator:
         if fraud_check.get("blocked"):
             logger.warning(f"Withdrawal blocked: User {user_id} flagged by fraud detection")
             return False, (
-                "Вывод средств временно заблокирован "
-                "из-за подозрительной активности. "
-                "Обратитесь в поддержку."
+                "Вывод средств временно заблокирован из-за подозрительной активности. Обратитесь в поддержку."
             )
 
         return True, None
@@ -345,9 +327,7 @@ class WithdrawalValidator:
             logger.error(f"PLEX payment check failed for user {user_id}: {exc}")
             return True, None
 
-    async def check_auto_withdrawal_eligibility(
-        self, user_id: int, amount: Decimal
-    ) -> bool:
+    async def check_auto_withdrawal_eligibility(self, user_id: int, amount: Decimal) -> bool:
         """
         Check if withdrawal is eligible for auto-approval.
 
@@ -387,10 +367,7 @@ class WithdrawalValidator:
             return False
 
         # 2. Check Global Daily Limit (Circuit Breaker)
-        if (
-            self.global_settings.is_daily_limit_enabled
-            and self.global_settings.daily_withdrawal_limit
-        ):
+        if self.global_settings.is_daily_limit_enabled and self.global_settings.daily_withdrawal_limit:
             today_total = await self.transaction_repo.get_total_withdrawn_today()
             if (today_total + amount) > self.global_settings.daily_withdrawal_limit:
                 logger.warning(
