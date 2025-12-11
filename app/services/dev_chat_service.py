@@ -277,7 +277,8 @@ class DevChatService:
             Result with count of queued messages
         """
         try:
-            stmt = select(Admin).where(Admin.is_active == True)  # noqa: E712
+            # Get all active (not blocked) admins
+            stmt = select(Admin).where(Admin.is_blocked == False)  # noqa: E712
             result = await self.session.execute(stmt)
             admins = result.scalars().all()
 
