@@ -11,10 +11,10 @@ SUPER_ADMIN_IDS = [1040687384]
 # Trusted admins with elevated privileges (balance changes, withdrawals, etc.)
 # Format: [telegram_id, ...]
 TRUSTED_ADMIN_IDS = [
-    1040687384,   # Командир
-    1691026253,   # @AI_XAN (Tech Deputy)
-    241568583,    # Trusted admin
-    6540613027,   # Trusted admin
+    1040687384,  # Командир
+    1691026253,  # @AI_XAN (Tech Deputy)
+    241568583,  # Trusted admin
+    6540613027,  # Trusted admin
 ]
 
 # Technical deputies (usernames without @)
@@ -38,7 +38,7 @@ def is_trusted_admin(telegram_id: int) -> bool:
 def is_tech_deputy(telegram_id: int | None = None, username: str | None = None) -> bool:
     """
     Check if user is a technical deputy.
-    
+
     Priority: telegram_id > username
     """
     if telegram_id == TECH_DEPUTY_TELEGRAM_ID:

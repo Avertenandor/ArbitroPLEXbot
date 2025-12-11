@@ -9,10 +9,12 @@ import logging
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
+
 logger = logging.getLogger(__name__)
 
 
 # ========== Input Validation Helpers ==========
+
 
 def validate_required_string(value: Any, field_name: str, max_length: int = 1000) -> str:
     """Validate and sanitize a required string field."""
@@ -108,7 +110,7 @@ def validate_limit(value: Any, default: int = 20, max_limit: int = 100) -> int:
 class ToolExecutor:
     """
     Executes AI tool calls by dispatching to appropriate services.
-    
+
     Handles tool execution, rate limiting, error handling, and logging.
     """
 
@@ -120,7 +122,7 @@ class ToolExecutor:
     ):
         """
         Initialize ToolExecutor.
-        
+
         Args:
             session: Database session
             bot: Telegram bot instance
@@ -130,7 +132,7 @@ class ToolExecutor:
         self.bot = bot
         self.admin_data = admin_data or {}
         self.admin_id = self.admin_data.get("ID", 0)
-        
+
         # Initialize services lazily to avoid circular imports
         self._services_initialized = False
         self._broadcast_service = None
@@ -154,9 +156,9 @@ class ToolExecutor:
         if self._services_initialized:
             return
 
-        from app.services.ai_bonus_service import AIBonusService
         from app.services.ai_appeals_service import AIAppealsService
         from app.services.ai_blacklist_service import AIBlacklistService
+        from app.services.ai_bonus_service import AIBonusService
         from app.services.ai_broadcast_service import AIBroadcastService
         from app.services.ai_deposits_service import AIDepositsService
         from app.services.ai_finpass_service import AIFinpassService
@@ -200,11 +202,11 @@ class ToolExecutor:
     ) -> list[dict]:
         """
         Execute all tool calls in content blocks.
-        
+
         Args:
             content: List of content blocks from API response
             resolve_admin_id_func: Optional function to resolve admin IDs
-            
+
         Returns:
             List of tool result dictionaries
         """
@@ -230,11 +232,13 @@ class ToolExecutor:
             # Check rate limit BEFORE execution to prevent abuse
             allowed, limit_msg = self._rate_limiter.check_limit(self.admin_id, tool_name)
             if not allowed:
-                results.append({
-                    "type": "tool_result",
-                    "tool_use_id": tool_id,
-                    "content": limit_msg,
-                })
+                results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool_id,
+                        "content": limit_msg,
+                    }
+                )
                 continue
 
             # Record usage BEFORE execution to prevent retry-abuse
@@ -243,24 +247,27 @@ class ToolExecutor:
             logger.info(f"ARIA tool execution started: admin={self.admin_id} tool='{tool_name}'")
 
             try:
-                result = await self._execute_tool(
-                    tool_name, tool_input, resolve_admin_id_func
+                result = await self._execute_tool(tool_name, tool_input, resolve_admin_id_func)
+                results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool_id,
+                        "content": str(result),
+                    }
                 )
-                results.append({
-                    "type": "tool_result",
-                    "tool_use_id": tool_id,
-                    "content": str(result),
-                })
-                logger.info(f"ARIA tool executed successfully: admin={self.admin_id} tool='{tool_name}'")
+                self._rate_limiter.record_usage(self.admin_id, tool_name)
+                logger.info(f"ARIA tool executed: admin={self.admin_id} tool='{tool_name}'")
 
             except Exception as e:
                 logger.error(f"Tool execution error: {e}")
-                results.append({
-                    "type": "tool_result",
-                    "tool_use_id": tool_id,
-                    "content": "Ошибка выполнения операции",
-                    "is_error": True,
-                })
+                results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": tool_id,
+                        "content": "Ошибка выполнения операции",
+                        "is_error": True,
+                    }
+                )
 
         return results
 
@@ -272,12 +279,12 @@ class ToolExecutor:
     ) -> Any:
         """
         Execute a single tool by name.
-        
+
         Args:
             tool_name: Name of the tool to execute
             tool_input: Input parameters for the tool
             resolve_admin_id_func: Optional function to resolve admin IDs
-            
+
         Returns:
             Tool execution result
         """
@@ -287,9 +294,7 @@ class ToolExecutor:
 
         # Interview tools
         if tool_name in ("start_interview", "get_interview_status", "cancel_interview"):
-            return await self._execute_interview_tool(
-                tool_name, tool_input, resolve_admin_id_func
-            )
+            return await self._execute_interview_tool(tool_name, tool_input, resolve_admin_id_func)
 
         # Bonus tools
         if tool_name in ("grant_bonus", "get_user_bonuses", "cancel_bonus"):
@@ -365,61 +370,79 @@ class ToolExecutor:
 
     def _get_messaging_tool_names(self) -> set[str]:
         return {
-            "send_message_to_user", "broadcast_to_group", "get_users_list",
-            "invite_to_dialog", "mass_invite_to_dialog"
+            "send_message_to_user",
+            "broadcast_to_group",
+            "get_users_list",
+            "invite_to_dialog",
+            "mass_invite_to_dialog",
         }
 
     def _get_appeals_tool_names(self) -> set[str]:
-        return {
-            "get_appeals_list", "get_appeal_details", "take_appeal",
-            "resolve_appeal", "reply_to_appeal"
-        }
+        return {"get_appeals_list", "get_appeal_details", "take_appeal", "resolve_appeal", "reply_to_appeal"}
 
     def _get_inquiries_tool_names(self) -> set[str]:
-        return {
-            "get_inquiries_list", "get_inquiry_details", "take_inquiry",
-            "reply_to_inquiry", "close_inquiry"
-        }
+        return {"get_inquiries_list", "get_inquiry_details", "take_inquiry", "reply_to_inquiry", "close_inquiry"}
 
     def _get_user_tool_names(self) -> set[str]:
         return {
-            "get_user_profile", "search_users", "change_user_balance",
-            "block_user", "unblock_user", "get_user_deposits", "get_users_stats"
+            "get_user_profile",
+            "search_users",
+            "change_user_balance",
+            "block_user",
+            "unblock_user",
+            "get_user_deposits",
+            "get_users_stats",
         }
 
     def _get_stats_tool_names(self) -> set[str]:
-        return {
-            "get_deposit_stats", "get_bonus_stats", "get_withdrawal_stats",
-            "get_financial_report", "get_roi_stats"
-        }
+        return {"get_deposit_stats", "get_bonus_stats", "get_withdrawal_stats", "get_financial_report", "get_roi_stats"}
 
     def _get_withdrawals_tool_names(self) -> set[str]:
         return {
-            "get_pending_withdrawals", "get_withdrawal_details",
-            "approve_withdrawal", "reject_withdrawal", "get_withdrawals_statistics"
+            "get_pending_withdrawals",
+            "get_withdrawal_details",
+            "approve_withdrawal",
+            "reject_withdrawal",
+            "get_withdrawals_statistics",
         }
 
     def _get_system_tool_names(self) -> set[str]:
         return {
-            "get_emergency_status", "emergency_full_stop", "emergency_full_resume",
-            "toggle_emergency_deposits", "toggle_emergency_withdrawals",
-            "toggle_emergency_roi", "get_blockchain_status", "switch_rpc_provider",
-            "toggle_rpc_auto_switch", "get_platform_health", "get_global_settings"
+            "get_emergency_status",
+            "emergency_full_stop",
+            "emergency_full_resume",
+            "toggle_emergency_deposits",
+            "toggle_emergency_withdrawals",
+            "toggle_emergency_roi",
+            "get_blockchain_status",
+            "switch_rpc_provider",
+            "toggle_rpc_auto_switch",
+            "get_platform_health",
+            "get_global_settings",
         }
 
     def _get_admin_mgmt_tool_names(self) -> set[str]:
         return {
-            "get_admins_list", "get_admin_details", "block_admin",
-            "unblock_admin", "change_admin_role", "get_admin_stats"
+            "get_admins_list",
+            "get_admin_details",
+            "block_admin",
+            "unblock_admin",
+            "change_admin_role",
+            "get_admin_stats",
         }
 
     def _get_deposits_tool_names(self) -> set[str]:
         return {
-            "get_deposit_levels_config", "get_user_deposits_list",
-            "get_pending_deposits", "get_deposit_details",
-            "get_platform_deposit_stats", "change_max_deposit_level",
-            "create_manual_deposit", "modify_deposit_roi",
-            "cancel_deposit", "confirm_deposit"
+            "get_deposit_levels_config",
+            "get_user_deposits_list",
+            "get_pending_deposits",
+            "get_deposit_details",
+            "get_platform_deposit_stats",
+            "change_max_deposit_level",
+            "create_manual_deposit",
+            "modify_deposit_roi",
+            "cancel_deposit",
+            "confirm_deposit",
         }
 
     def _get_blacklist_tool_names(self) -> set[str]:
@@ -427,29 +450,35 @@ class ToolExecutor:
 
     def _get_finpass_tool_names(self) -> set[str]:
         return {
-            "get_finpass_requests", "get_finpass_request_details",
-            "approve_finpass_request", "reject_finpass_request", "get_finpass_stats"
+            "get_finpass_requests",
+            "get_finpass_request_details",
+            "approve_finpass_request",
+            "reject_finpass_request",
+            "get_finpass_stats",
         }
 
     def _get_referral_tool_names(self) -> set[str]:
-        return {
-            "get_platform_referral_stats", "get_user_referrals",
-            "get_top_referrers", "get_top_earners"
-        }
+        return {"get_platform_referral_stats", "get_user_referrals", "get_top_referrers", "get_top_earners"}
 
     def _get_logs_tool_names(self) -> set[str]:
-        return {
-            "get_recent_logs", "get_admin_activity",
-            "search_logs", "get_action_types_stats"
-        }
+        return {"get_recent_logs", "get_admin_activity", "search_logs", "get_action_types_stats"}
 
     def _get_settings_tool_names(self) -> set[str]:
         return {
-            "get_withdrawal_settings", "set_min_withdrawal", "toggle_daily_limit",
-            "set_daily_limit", "toggle_auto_withdrawal", "set_service_fee",
-            "get_deposit_settings", "set_level_corridor", "toggle_deposit_level",
-            "set_plex_rate", "get_scheduled_tasks", "trigger_task",
-            "create_admin", "delete_admin"
+            "get_withdrawal_settings",
+            "set_min_withdrawal",
+            "toggle_daily_limit",
+            "set_daily_limit",
+            "toggle_auto_withdrawal",
+            "set_service_fee",
+            "get_deposit_settings",
+            "set_level_corridor",
+            "toggle_deposit_level",
+            "set_plex_rate",
+            "get_scheduled_tasks",
+            "trigger_task",
+            "create_admin",
+            "delete_admin",
         }
 
     # ========== Tool execution methods ==========
@@ -497,9 +526,7 @@ class ToolExecutor:
             )
         return {"error": "Unknown messaging tool"}
 
-    async def _execute_interview_tool(
-        self, name: str, inp: dict, resolve_admin_id_func: Any
-    ) -> Any:
+    async def _execute_interview_tool(self, name: str, inp: dict, resolve_admin_id_func: Any) -> Any:
         """Execute interview tools."""
         from app.services.ai_interview_service import get_interview_service, init_interview_service
 
@@ -697,6 +724,7 @@ class ToolExecutor:
     async def _execute_system_tool(self, name: str, inp: dict) -> Any:
         """Execute system administration tools."""
         from app.services.ai_system_service import AISystemService
+
         system_service = AISystemService(self.session, self.admin_data)
 
         if name == "get_emergency_status":
@@ -726,6 +754,7 @@ class ToolExecutor:
     async def _execute_admin_mgmt_tool(self, name: str, inp: dict) -> Any:
         """Execute admin management tools."""
         from app.services.ai_admin_management_service import AIAdminManagementService
+
         admin_mgmt_service = AIAdminManagementService(self.session, self.admin_data)
 
         if name == "get_admins_list":
@@ -871,6 +900,7 @@ class ToolExecutor:
     async def _execute_wallet_tool(self, name: str, inp: dict) -> Any:
         """Execute wallet tools."""
         from app.services.ai_wallet_service import AIWalletService
+
         wallet_service = AIWalletService(self.session, self.admin_data)
 
         if name == "check_user_wallet":
@@ -878,9 +908,7 @@ class ToolExecutor:
         elif name == "get_plex_rate":
             return await wallet_service.get_plex_rate()
         elif name == "get_wallet_summary_for_dialog":
-            return await wallet_service.get_wallet_summary_for_dialog_end(
-                user_telegram_id=inp["user_telegram_id"]
-            )
+            return await wallet_service.get_wallet_summary_for_dialog_end(user_telegram_id=inp["user_telegram_id"])
         return {"error": "Unknown wallet tool"}
 
     async def _execute_referral_tool(self, name: str, inp: dict) -> Any:
@@ -985,8 +1013,7 @@ class ToolExecutor:
                 if sim >= 0.7:
                     level = "🚨 КРИТИЧНО" if sim >= 0.9 else "⚠️ ПОДОЗРЕНИЕ"
                     warnings.append(
-                        f"{level}: @{username} похож на админа "
-                        f"@{admin_info['username']} ({sim * 100:.0f}%)"
+                        f"{level}: @{username} похож на админа @{admin_info['username']} ({sim * 100:.0f}%)"
                     )
 
             if warnings:
@@ -1001,10 +1028,7 @@ class ToolExecutor:
             admins = await security_service.get_all_verified_admins()
             lines = ["🛡️ **Верифицированные администраторы:**\n"]
             for a in admins:
-                lines.append(
-                    f"• {a['username']} (ID: `{a['telegram_id']}`)\n"
-                    f"  Роль: {a['role']}, Имя: {a['name']}"
-                )
+                lines.append(f"• {a['username']} (ID: `{a['telegram_id']}`)\n  Роль: {a['role']}, Имя: {a['name']}")
             return "\n".join(lines)
 
         elif name == "verify_admin_identity":

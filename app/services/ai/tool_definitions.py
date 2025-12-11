@@ -1216,15 +1216,15 @@ def get_user_wallet_tools() -> list[dict[str, Any]]:
 def get_all_admin_tools(role: UserRole = UserRole.ADMIN) -> list[dict[str, Any]]:
     """
     Get all admin tools based on role.
-    
+
     Args:
         role: User role
-        
+
     Returns:
         List of all available tools for the role
     """
     tools = []
-    
+
     # Basic admin tools
     tools.extend(get_messaging_tools(role))
     tools.extend(get_bonus_tools())
@@ -1242,11 +1242,11 @@ def get_all_admin_tools(role: UserRole = UserRole.ADMIN) -> list[dict[str, Any]]
     tools.extend(get_logs_tools())
     tools.extend(get_settings_tools())
     tools.extend(get_security_tools())
-    
+
     # Super admin only tools
     if role == UserRole.SUPER_ADMIN:
         tools.extend(get_interview_tools())
         tools.extend(get_system_admin_tools())
         tools.extend(get_admin_management_tools())
-    
+
     return tools
