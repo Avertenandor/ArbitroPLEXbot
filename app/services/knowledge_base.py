@@ -1020,6 +1020,17 @@ class KnowledgeBase:
         """Get entries that were learned from dialogs."""
         return [e for e in self.entries if e.get("learned_from_dialog")]
 
+    def get_entries_by_user(self, username: str) -> list[dict]:
+        """Get entries added/learned from a specific user."""
+        username_lower = username.lower().replace("@", "")
+        return [
+            e
+            for e in self.entries
+            if username_lower in str(e.get("source_user", "")).lower()
+            or username_lower in str(e.get("added_by", "")).lower()
+            or username_lower in str(e.get("clarification", "")).lower()
+        ]
+
     def get_pending_verification(self) -> list[dict]:
         """Get entries pending boss verification."""
         return [e for e in self.entries if e.get("learned_from_dialog") and not e.get("verified_by_boss")]

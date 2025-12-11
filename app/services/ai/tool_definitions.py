@@ -103,6 +103,47 @@ def get_messaging_tools(role: UserRole = UserRole.SUPER_ADMIN) -> list[dict[str,
                 "required": ["group"],
             },
         },
+        {
+            "name": "send_feedback_request",
+            "description": "Отправить запрос обратной связи админу. Спросить о предложениях, проблемах или идеях по улучшению.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "admin_identifier": {
+                        "type": "string",
+                        "description": "@username или telegram_id админа",
+                    },
+                    "topic": {
+                        "type": "string",
+                        "description": "Тема опроса (например: 'улучшения бота', 'проблемы', 'новые функции')",
+                    },
+                    "question": {
+                        "type": "string",
+                        "description": "Конкретный вопрос для админа",
+                    },
+                },
+                "required": ["admin_identifier", "topic", "question"],
+            },
+        },
+        {
+            "name": "broadcast_to_admins",
+            "description": "Отправить сообщение всем активным админам. Для объявлений, опросов или сбора обратной связи.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "message_text": {
+                        "type": "string",
+                        "description": "Текст сообщения (Markdown)",
+                    },
+                    "request_feedback": {
+                        "type": "boolean",
+                        "description": "Добавить кнопку 'Ответить ARIA'",
+                        "default": True,
+                    },
+                },
+                "required": ["message_text"],
+            },
+        },
     ]
 
 
@@ -146,6 +187,17 @@ def get_interview_tools() -> list[dict[str, Any]]:
                     "admin_identifier": {"type": "string", "description": "@username или telegram_id"},
                 },
                 "required": ["admin_identifier"],
+            },
+        },
+        {
+            "name": "get_knowledge_by_user",
+            "description": "Получить записи базы знаний от конкретного пользователя/админа. Показывает интервью и записи.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "username": {"type": "string", "description": "@username пользователя (без @)"},
+                },
+                "required": ["username"],
             },
         },
     ]
@@ -1216,15 +1268,15 @@ def get_user_wallet_tools() -> list[dict[str, Any]]:
 def get_all_admin_tools(role: UserRole = UserRole.ADMIN) -> list[dict[str, Any]]:
     """
     Get all admin tools based on role.
-    
+
     Args:
         role: User role
-        
+
     Returns:
         List of all available tools for the role
     """
     tools = []
-    
+
     # Basic admin tools
     tools.extend(get_messaging_tools(role))
     tools.extend(get_bonus_tools())
@@ -1242,11 +1294,11 @@ def get_all_admin_tools(role: UserRole = UserRole.ADMIN) -> list[dict[str, Any]]
     tools.extend(get_logs_tools())
     tools.extend(get_settings_tools())
     tools.extend(get_security_tools())
-    
+
     # Super admin only tools
     if role == UserRole.SUPER_ADMIN:
         tools.extend(get_interview_tools())
         tools.extend(get_system_admin_tools())
         tools.extend(get_admin_management_tools())
-    
+
     return tools

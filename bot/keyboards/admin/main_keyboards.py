@@ -73,6 +73,9 @@ def admin_keyboard(
     # AI Assistant - available for all admins
     builder.row(KeyboardButton(text="🤖 AI Помощник"))
 
+    # Direct Developer Chat - talk to Darya (Copilot/Claude)
+    builder.row(KeyboardButton(text="💬 Написать Дарье"))
+
     # Knowledge Base - available for all admins
     builder.row(KeyboardButton(text="📚 База знаний"))
 

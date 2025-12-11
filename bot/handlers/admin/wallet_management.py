@@ -88,8 +88,8 @@ async def _show_dashboard(message: Message, state: FSMContext) -> None:
         return f"{int(val):,}".replace(",", " ")
 
     text = (
-        "🔐 *Админ-кошелек* — Dashboard\n\n"
-        "🔥 *HOT WALLET* — Выплатной\n"
+        "🔐 *Кошелёк администратора*\n\n"
+        "🔥 *HOT WALLET* (Выплатной)\n"
         f"Адрес: `{hot_address}`\n"
         f"🔶 BNB: *{fmt_bnb(hot_bnb_bal)}*\n"
         f"💵 USDT: *{fmt_usdt(hot_usdt_bal)}*\n"
@@ -98,7 +98,7 @@ async def _show_dashboard(message: Message, state: FSMContext) -> None:
 
     if has_cold:
         text += (
-            "\n❄️ *INPUT WALLET* — Приемный\n"
+            "\n❄️ *INPUT WALLET* (Приемный)\n"
             f"Адрес: `{cold_address}`\n"
             f"🔶 BNB: *{fmt_bnb(cold_bnb_bal)}*\n"
             f"💵 USDT: *{fmt_usdt(cold_usdt_bal)}*\n"
@@ -131,10 +131,10 @@ async def show_receive_info(message: Message):
     hot_address = bs.wallet_address
     cold_address = bs.system_wallet_address
 
-    text = f"📥 **Получение средств**\n\n🔥 **Hot Wallet (Для пополнения газа):**\n`{hot_address}`\n\n"
+    text = f"📥 *Получение средств*\n\n🔥 *Hot Wallet (Для пополнения газа):*\n`{hot_address}`\n\n"
 
     if cold_address and cold_address.lower() != hot_address.lower():
-        text += f"❄️ **Input Wallet (Для депозитов):**\n`{cold_address}`\n"
+        text += f"❄️ *Input Wallet (Для депозитов):*\n`{cold_address}`\n"
 
     await message.answer(text, parse_mode="Markdown", reply_markup=wallet_back_keyboard())
 
@@ -175,7 +175,7 @@ async def start_send_flow(message: Message, state: FSMContext):
     """Start sending process."""
     await state.set_state(WalletManagementStates.selecting_currency_to_send)
     await message.answer(
-        "📤 **Отправка средств (Hot Wallet)**\n\nВыберите валюту для отправки:",
+        "📤 *Отправка средств (Hot Wallet)*\n\nВыберите валюту для отправки:",
         parse_mode="Markdown",
         reply_markup=wallet_currency_selection_keyboard(),
     )
@@ -196,7 +196,7 @@ async def select_currency(message: Message, state: FSMContext):
     await state.set_state(WalletManagementStates.input_address_to_send)
 
     await message.answer(
-        f"📤 **Отправка {currency}**\n\nВведите адрес получателя (BSC/BEP-20):",
+        f"📤 *Отправка {currency}*\n\nВведите адрес получателя (BSC/BEP-20):",
         parse_mode="Markdown",
         reply_markup=wallet_back_keyboard(),
     )
@@ -225,7 +225,7 @@ async def input_address(message: Message, state: FSMContext):
 
     await state.set_state(WalletManagementStates.input_amount_to_send)
     await message.answer(
-        f"📤 **Отправка {currency}**\nПолучатель: `{address}`\n\nВведите сумму или выберите %:",
+        f"📤 *Отправка {currency}*\nПолучатель: `{address}`\n\nВведите сумму или выберите %:",
         parse_mode="Markdown",
         reply_markup=wallet_amount_keyboard(),
     )
@@ -292,8 +292,8 @@ async def _show_confirmation(message: Message, state: FSMContext):
     await state.set_state(WalletManagementStates.confirm_transaction)
 
     text = (
-        "📝 **Подтверждение транзакции**\n\n"
-        f"💸 Сумма: **{amount} {currency}**\n"
+        "📝 *Подтверждение транзакции*\n\n"
+        f"💸 Сумма: *{amount} {currency}*\n"
         f"📬 Получатель: `{address}`\n"
         "📡 Сеть: BSC (Binance Smart Chain)\n\n"
         "Проверьте данные и подтвердите отправку."
@@ -328,7 +328,7 @@ async def execute_transaction(message: Message, state: FSMContext):
 
         if result["success"]:
             await message.answer(
-                f"✅ **Транзакция отправлена!**\n\n"
+                f"✅ *Транзакция отправлена!*\n\n"
                 f"🔗 Hash: `{result['tx_hash']}`\n\n"
                 f"[Посмотреть в Explorer](https://bscscan.com/tx/{result['tx_hash']})",
                 parse_mode="Markdown",

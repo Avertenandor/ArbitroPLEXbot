@@ -78,10 +78,12 @@ def register_user_handlers(dp: Dispatcher) -> None:
 
     # AI Assistant for users
     from bot.handlers.menu import user_ai_assistant
+
     dp.include_router(user_ai_assistant.router)
 
     # CloudSonet 4.5 AI Assistant handler (legacy)
     from bot.handlers import cloudsonet_ai
+
     dp.include_router(cloudsonet_ai.router)
 
     logger.info("User handlers registered successfully")
@@ -98,6 +100,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
         broadcast,
         deposit_management,
         deposit_settings,
+        dev_chat,
         emergency,
         financials,
         inquiries,
@@ -133,33 +136,37 @@ def register_admin_handlers(dp: Dispatcher) -> None:
     admin_auth_middleware = AdminAuthMiddleware()
 
     # Apply middleware to admin routers
-    _apply_admin_auth(admin_auth_middleware, [
-        wallet_key_setup,
-        panel,
-        users,
-        withdrawals,
-        withdrawal_settings,
-        blockchain_settings,
-        financials,
-        broadcast,
-        blacklist,
-        deposit_settings,
-        deposit_management,
-        roi_corridor,
-        admin_finpass,
-        wallets,
-        wallet_management,
-        admins,
-        admin_support,
-        user_messages,
-        emergency,
-        inquiries,
-        action_logs,
-        schedule_management,
-        ai_assistant,  # Added: AI Assistant for admins
-        knowledge_base,  # Added: Knowledge Base management
-        bonus_management,  # Added: Bonus management
-    ])
+    _apply_admin_auth(
+        admin_auth_middleware,
+        [
+            wallet_key_setup,
+            panel,
+            users,
+            withdrawals,
+            withdrawal_settings,
+            blockchain_settings,
+            financials,
+            broadcast,
+            blacklist,
+            deposit_settings,
+            deposit_management,
+            roi_corridor,
+            admin_finpass,
+            wallets,
+            wallet_management,
+            admins,
+            admin_support,
+            user_messages,
+            emergency,
+            inquiries,
+            action_logs,
+            schedule_management,
+            ai_assistant,  # Added: AI Assistant for admins
+            knowledge_base,  # Added: Knowledge Base management
+            bonus_management,  # Added: Bonus management
+            dev_chat,  # Added: Developer direct chat
+        ],
+    )
 
     dp.include_router(wallet_key_setup.router)
     # AI Assistant must be BEFORE panel.router to handle chatting state
@@ -190,6 +197,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
     dp.include_router(action_logs.router)  # Admin action logs viewer
     dp.include_router(schedule_management.router)  # Schedule management
     dp.include_router(bonus_management.router)  # Bonus management
+    dp.include_router(dev_chat.router)  # Developer chat for direct Copilot communication
     # ai_assistant.router registered earlier (before panel.router) for FSM priority
 
     # Admin referral stats handler

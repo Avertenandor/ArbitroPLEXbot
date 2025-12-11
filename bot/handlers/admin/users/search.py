@@ -8,13 +8,13 @@ from typing import Any
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import KeyboardButton, Message, ReplyKeyboardMarkup
+from aiogram.utils.keyboard import ReplyKeyboardBuilder
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.user_service import UserService
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
-from bot.keyboards.reply import cancel_keyboard
 from bot.states.admin_states import AdminStates
 from bot.utils.admin_utils import clear_state_preserve_admin_token
 from bot.utils.formatters import escape_md
@@ -23,6 +23,14 @@ from bot.utils.user_loader import UserLoader
 
 
 router = Router(name="admin_users_search")
+
+
+def search_user_keyboard() -> ReplyKeyboardMarkup:
+    """Клавиатура для поиска пользователя с кнопкой Назад."""
+    builder = ReplyKeyboardBuilder()
+    builder.row(KeyboardButton(text="◀️ Назад"))
+    builder.row(KeyboardButton(text="❌ Отмена"))
+    return builder.as_markup(resize_keyboard=True)
 
 
 @router.message(Command("search"))
@@ -66,6 +74,7 @@ async def cmd_search_user(
 
     # Import here to avoid circular dependency
     from bot.handlers.admin.users.profile import show_user_profile
+
     await show_user_profile(message, user, state, session)
 
 
@@ -90,8 +99,21 @@ async def handle_find_user(
         "Пример: `@username`, `123456789`, `0x1234...`\n\n"
         "💡 Или используйте команду: `/search @username`",
         parse_mode="Markdown",
-        reply_markup=cancel_keyboard(),
+        reply_markup=search_user_keyboard(),
     )
+
+
+@router.message(AdminStates.finding_user, F.text == "◀️ Назад")
+async def handle_search_back(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Handle back button - return to users menu."""
+    from bot.handlers.admin.users.menu import handle_admin_users_menu
+
+    await handle_admin_users_menu(message, state, session, **data)
 
 
 @router.message(AdminStates.finding_user)
@@ -105,6 +127,7 @@ async def process_find_user_input(
     if message.text == "❌ Отмена":
         # Import here to avoid circular dependency
         from bot.handlers.admin.users.menu import handle_admin_users_menu
+
         await handle_admin_users_menu(message, state, session, **data)
         return
 
@@ -124,13 +147,13 @@ async def process_find_user_input(
 
     if not user:
         await message.reply(
-            "❌ **Пользователь не найден**\n"
-            "Проверьте введенные данные и попробуйте снова.",
+            "❌ **Пользователь не найден**\nПроверьте введенные данные и попробуйте снова.",
             parse_mode="Markdown",
-            reply_markup=cancel_keyboard(),
+            reply_markup=search_user_keyboard(),
         )
         return
 
     # Import here to avoid circular dependency
     from bot.handlers.admin.users.profile import show_user_profile
+
     await show_user_profile(message, user, state, session)

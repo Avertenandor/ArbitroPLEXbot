@@ -8,9 +8,22 @@ Contains all AI assistant related components:
 - tool_executor: Tool execution logic (to be added)
 """
 
+from app.services.ai.helpers import (
+    build_messages,
+    create_tool_result,
+    extract_user_identifiers,
+    format_tool_error,
+    format_tool_success,
+    get_unavailable_message,
+    is_valid_telegram_id,
+    is_valid_username,
+    parse_content_block,
+    parse_user_identifier,
+    wrap_system_prompt,
+)
 from app.services.ai.prompts import (
-    AI_NAME,
     AI_FULL_NAME,
+    AI_NAME,
     ROLE_DESCRIPTIONS,
     SYSTEM_PROMPT_ADMIN,
     SYSTEM_PROMPT_BASE,
@@ -43,19 +56,6 @@ from app.services.ai.tool_definitions import (
     get_user_wallet_tools,
     get_wallet_tools,
     get_withdrawals_tools,
-)
-from app.services.ai.helpers import (
-    build_messages,
-    create_tool_result,
-    extract_user_identifiers,
-    format_tool_error,
-    format_tool_success,
-    get_unavailable_message,
-    is_valid_telegram_id,
-    is_valid_username,
-    parse_content_block,
-    parse_user_identifier,
-    wrap_system_prompt,
 )
 from app.services.ai.tool_executor import ToolExecutor
 

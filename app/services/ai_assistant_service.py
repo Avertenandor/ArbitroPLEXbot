@@ -12,6 +12,8 @@ from typing import Any
 
 from loguru import logger
 
+from app.config.security import TECH_DEPUTIES
+
 # Import from new ai module
 from app.services.ai import (
     AI_NAME,
@@ -28,7 +30,6 @@ from app.services.ai import (
     get_user_wallet_tools,
     wrap_system_prompt,
 )
-from app.config.security import TECH_DEPUTIES
 
 
 try:
@@ -38,7 +39,6 @@ try:
 except ImportError:
     ANTHROPIC_AVAILABLE = False
     anthropic = None
-
 
 
 class AIAssistantService:
