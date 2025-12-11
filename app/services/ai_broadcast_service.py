@@ -461,3 +461,171 @@ class AIBroadcastService:
             }
             for u in users
         ]
+
+    async def send_feedback_request(
+        self,
+        admin_identifier: str | int,
+        topic: str,
+        question: str,
+    ) -> dict[str, Any]:
+        """
+        Send a feedback request to a specific admin.
+
+        Args:
+            admin_identifier: @username or telegram_id of admin
+            topic: Topic of the feedback request
+            question: Specific question to ask
+
+        Returns:
+            Result dict with status
+        """
+        from app.models import Admin
+
+        try:
+            # Find admin
+            admin = await self._find_admin(admin_identifier)
+            if not admin:
+                return {
+                    "success": False,
+                    "error": f"Админ '{admin_identifier}' не найден",
+                }
+
+            # Format feedback request message
+            message = (
+                f"💬 **Запрос обратной связи от ARIA**\n\n"
+                f"📋 **Тема:** {topic}\n\n"
+                f"❓ **Вопрос:**\n{question}\n\n"
+                f"_Пожалуйста, ответьте на это сообщение или нажмите '🤖 AI Помощник' "
+                f"чтобы обсудить с ARIA._"
+            )
+
+            await self.bot.send_message(
+                admin.telegram_id,
+                message,
+                parse_mode="Markdown",
+            )
+
+            logger.info(
+                f"ARIA sent feedback request to admin {admin.telegram_id} (@{admin.username}) "
+                f"on topic: {topic}"
+            )
+
+            return {
+                "success": True,
+                "admin_id": admin.telegram_id,
+                "admin_username": admin.username,
+                "topic": topic,
+                "message": f"Запрос отправлен @{admin.username}",
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to send feedback request: {e}")
+            return {
+                "success": False,
+                "error": f"Ошибка отправки: {str(e)}",
+            }
+
+    async def broadcast_to_admins(
+        self,
+        message_text: str,
+        request_feedback: bool = True,
+    ) -> dict[str, Any]:
+        """
+        Broadcast message to all active admins.
+
+        Args:
+            message_text: Message to send
+            request_feedback: Whether to add feedback prompt
+
+        Returns:
+            Result dict with stats
+        """
+        from app.models import Admin
+        from sqlalchemy import select
+
+        try:
+            # Get all active admins
+            stmt = select(Admin).where(Admin.is_active == True)  # noqa: E712
+            result = await self.session.execute(stmt)
+            admins = result.scalars().all()
+
+            if not admins:
+                return {
+                    "success": False,
+                    "error": "Нет активных админов",
+                }
+
+            # Add feedback prompt if requested
+            if request_feedback:
+                message_text += (
+                    "\n\n💬 _Есть идеи или предложения? "
+                    "Нажмите '🤖 AI Помощник' чтобы обсудить с ARIA._"
+                )
+
+            sent_count = 0
+            failed_count = 0
+            sent_to = []
+
+            for admin in admins:
+                try:
+                    await self.bot.send_message(
+                        admin.telegram_id,
+                        message_text,
+                        parse_mode="Markdown",
+                    )
+                    sent_count += 1
+                    sent_to.append(f"@{admin.username}")
+                    await asyncio.sleep(0.1)  # Rate limiting
+                except Exception as e:
+                    logger.warning(f"Failed to send to admin {admin.telegram_id}: {e}")
+                    failed_count += 1
+
+            logger.info(
+                f"ARIA broadcast to {sent_count} admins: {', '.join(sent_to)}"
+            )
+
+            return {
+                "success": True,
+                "sent": sent_count,
+                "failed": failed_count,
+                "admins": sent_to,
+                "message": f"Отправлено {sent_count} админам",
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to broadcast to admins: {e}")
+            return {
+                "success": False,
+                "error": f"Ошибка рассылки: {str(e)}",
+            }
+
+    async def _find_admin(self, identifier: str | int) -> Any:
+        """Find admin by username or telegram_id."""
+        from app.models import Admin
+        from sqlalchemy import select
+
+        try:
+            if isinstance(identifier, int):
+                telegram_id = identifier
+            elif identifier.startswith("@"):
+                # Find by username
+                username = identifier[1:]  # Remove @
+                stmt = select(Admin).where(Admin.username == username)
+                result = await self.session.execute(stmt)
+                return result.scalar_one_or_none()
+            elif identifier.isdigit():
+                telegram_id = int(identifier)
+            else:
+                # Try as username without @
+                stmt = select(Admin).where(Admin.username == identifier)
+                result = await self.session.execute(stmt)
+                return result.scalar_one_or_none()
+
+            # Find by telegram_id
+            stmt = select(Admin).where(Admin.telegram_id == telegram_id)
+            result = await self.session.execute(stmt)
+            return result.scalar_one_or_none()
+
+        except Exception as e:
+            logger.error(f"Error finding admin: {e}")
+            return None

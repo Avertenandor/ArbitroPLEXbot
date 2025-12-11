@@ -11,6 +11,7 @@ This module contains all constants used in the bonus management system including
 
 from decimal import Decimal
 
+
 # ============ BONUS TEMPLATES ============
 
 BONUS_REASON_TEMPLATES = [
@@ -28,8 +29,8 @@ QUICK_AMOUNTS = [5, 10, 30, 50, 70, 100]
 # ============ BONUS LIMITS AND VALIDATION ============
 
 BONUS_ROI_CAP_MULTIPLIER = 5  # 500% ROI cap
-BONUS_AMOUNT_MIN = Decimal('1')
-BONUS_AMOUNT_MAX = Decimal('100000')
+BONUS_AMOUNT_MIN = Decimal("1")
+BONUS_AMOUNT_MAX = Decimal("100000")
 
 # Aliases for backwards compatibility
 BONUS_MIN_AMOUNT = BONUS_AMOUNT_MIN

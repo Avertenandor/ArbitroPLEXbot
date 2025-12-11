@@ -375,6 +375,8 @@ class ToolExecutor:
             "get_users_list",
             "invite_to_dialog",
             "mass_invite_to_dialog",
+            "send_feedback_request",
+            "broadcast_to_admins",
         }
 
     def _get_appeals_tool_names(self) -> set[str]:
@@ -523,6 +525,22 @@ class ToolExecutor:
                 group=group,
                 custom_message=custom_msg,
                 limit=limit,
+            )
+        elif name == "send_feedback_request":
+            admin_id = validate_user_identifier(inp.get("admin_identifier"))
+            topic = validate_required_string(inp.get("topic"), "topic", max_length=100)
+            question = validate_required_string(inp.get("question"), "question", max_length=1000)
+            return await self._broadcast_service.send_feedback_request(
+                admin_identifier=admin_id,
+                topic=topic,
+                question=question,
+            )
+        elif name == "broadcast_to_admins":
+            message = validate_required_string(inp.get("message_text"), "message_text", max_length=4000)
+            request_feedback = inp.get("request_feedback", True)
+            return await self._broadcast_service.broadcast_to_admins(
+                message_text=message,
+                request_feedback=request_feedback,
             )
         return {"error": "Unknown messaging tool"}
 
