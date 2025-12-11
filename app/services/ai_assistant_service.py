@@ -12,7 +12,14 @@ from typing import Any
 
 from loguru import logger
 
-from app.config.security import TECH_DEPUTIES
+from app.config.security import (
+    TECH_DEPUTIES,
+    can_command_arya,
+    can_teach_arya,
+    is_super_admin,
+    ARYA_COMMAND_GIVERS,
+    ARYA_TEACHERS,
+)
 
 # Import from new ai module
 from app.services.ai import (
@@ -389,13 +396,18 @@ class AIAssistantService:
         self,
         conversation: list[dict],
         source_user: str,
+        source_telegram_id: int | None = None,
     ) -> list[dict] | None:
         """
         Extract knowledge from conversation to add to knowledge base.
 
+        ВАЖНО: Самообучение работает от ВСЕХ ARYA_TEACHERS!
+        Проверка через can_teach_arya() - список в security.py.
+
         Args:
             conversation: List of message dicts with role and content
             source_user: Username of the person in conversation
+            source_telegram_id: Telegram ID for authorization check
 
         Returns:
             List of extracted Q&A pairs or None
@@ -403,9 +415,17 @@ class AIAssistantService:
         if not self.client:
             return None
 
+        # КРИТИЧЕСКИ ВАЖНО: Проверяем может ли собеседник учить Арью
+        if source_telegram_id and not can_teach_arya(source_telegram_id):
+            logger.debug(f"ARYA: user {source_user} (ID:{source_telegram_id}) cannot teach Арья - not in ARYA_TEACHERS")
+            return None
+
         try:
-            extraction_prompt = """
-Проанализируй диалог между КОМАНДИРОМ (Александр Владарев, создатель ArbitroPLEX) и AI-ассистентом ARIA.
+            # Определяем роль учителя для промпта
+            teacher_role = "КОМАНДИРОМ" if source_telegram_id and is_super_admin(source_telegram_id) else "АДМИНИСТРАТОРОМ"
+
+            extraction_prompt = f"""
+Проанализируй диалог между {teacher_role} ({source_user}) платформы ArbitroPLEX и AI-ассистентом ARIA.
 
 ТВОЯ ЗАДАЧА: Извлечь ЛЮБЫЕ ПОЛЕЗНЫЕ ЗНАНИЯ, ФАКТЫ и ИНСТРУКЦИИ из слов Командира.
 
@@ -724,7 +744,12 @@ class AIAssistantService:
     ) -> str:
         """
         Chat with tool/function calling support.
-        Only available for SUPER_ADMIN (Командир) and admins.
+
+        ВАЖНО: Арья выполняет команды от АВТОРИЗОВАННЫХ АДМИНОВ!
+        Проверка через can_command_arya() - список в security.py.
+
+        Арья сама является администратором (extended_admin) и выполняет
+        команды от имени системы, НЕ от имени собеседника.
 
         Args:
             message: User message
@@ -739,17 +764,37 @@ class AIAssistantService:
         Returns:
             AI response
         """
-        # Admins and super admin get tool access
-        allowed_roles = (UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.EXTENDED_ADMIN)
-        if role not in allowed_roles or not session or not bot:
+        # Извлекаем telegram_id собеседника для проверки прав
+        caller_telegram_id = None
+        if user_data:
+            caller_telegram_id = user_data.get("ID") or user_data.get("telegram_id")
+            if isinstance(caller_telegram_id, str):
+                try:
+                    caller_telegram_id = int(caller_telegram_id)
+                except ValueError:
+                    caller_telegram_id = None
+
+        # КРИТИЧЕСКИ ВАЖНО: Проверяем может ли собеседник командовать Арьей
+        # Арья выполняет команды ТОЛЬКО от авторизованных админов!
+        caller_can_command = caller_telegram_id and can_command_arya(caller_telegram_id)
+
+        # Если нет сессии/бота или собеседник не может командовать - обычный чат
+        if not session or not bot or not caller_can_command:
+            # Для обычных пользователей и неавторизованных - только информация
             return await self.chat(message, role, user_data, platform_stats, monitoring_data, conversation_history)
+
+        # Арья выполняет команды как EXTENDED_ADMIN (свои права, не права собеседника)
+        # Если собеседник - Командир, используем SUPER_ADMIN для полного доступа
+        arya_role = UserRole.SUPER_ADMIN if is_super_admin(caller_telegram_id) else UserRole.EXTENDED_ADMIN
 
         if not self.client:
             return f"🤖 К сожалению, {AI_NAME} временно недоступна. Пожалуйста, попробуйте позже."
 
         try:
-            # Define tools for broadcasting (with role-based limits)
-            tools = get_all_admin_tools(role)
+            # ВАЖНО: Инструменты определяются по роли АРЬИ, не собеседника!
+            # Арья - extended_admin (или super_admin для Командира)
+            tools = get_all_admin_tools(arya_role)
+            logger.info(f"ARYA: executing commands from telegram_id={caller_telegram_id}, arya_role={arya_role.value}")
 
             # Extract username and telegram_id
             username = None
@@ -798,7 +843,13 @@ class AIAssistantService:
             # Check if tool use requested
             if response.stop_reason == "tool_use":
                 # Execute tools using ToolExecutor
-                executor = ToolExecutor(session, bot, user_data)
+                # ВАЖНО: передаём caller_telegram_id для логирования и rate limiting
+                executor = ToolExecutor(
+                    session,
+                    bot,
+                    user_data,
+                    caller_telegram_id=caller_telegram_id,
+                )
                 tool_results = await executor.execute(
                     response.content,
                     resolve_admin_id_func=self._resolve_admin_id,
