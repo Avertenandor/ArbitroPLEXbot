@@ -20,6 +20,7 @@ from bot.keyboards.wallet_mgmt import (
     wallet_confirm_keyboard,
     wallet_currency_selection_keyboard,
     wallet_dashboard_keyboard,
+    wallet_dashboard_no_hot_keyboard,
 )
 from bot.states.wallet_management import WalletManagementStates
 from bot.utils.admin_utils import clear_state_preserve_admin_token
@@ -52,24 +53,30 @@ async def _show_dashboard(message: Message, state: FSMContext) -> None:
         await message.answer("❌ Сервис блокчейна недоступен.")
         return
 
-    # Hot Wallet (Output)
+    # Hot Wallet (Output) - may be None if not configured
     hot_address = bs.wallet_address
-    if not hot_address:
-        await message.answer("❌ Hot wallet не настроен (TREASURY_ADDRESS).")
-        return
+    hot_configured = bool(hot_address)
 
-    hot_bnb_bal = await bs.get_native_balance(hot_address)
-    hot_usdt_bal = await bs.get_usdt_balance(hot_address)
-    hot_plex_bal = await bs.get_plex_balance(hot_address)
+    # Hot wallet balances (only if configured)
+    hot_bnb_bal = None
+    hot_usdt_bal = None
+    hot_plex_bal = None
 
-    # System Wallet (Input/Cold) - if configured different from Hot
+    if hot_configured:
+        hot_bnb_bal = await bs.get_native_balance(hot_address)
+        hot_usdt_bal = await bs.get_usdt_balance(hot_address)
+        hot_plex_bal = await bs.get_plex_balance(hot_address)
+
+    # System Wallet (Input/Cold) - for deposits
     cold_address = bs.system_wallet_address
     cold_bnb_bal = Decimal("0")
     cold_usdt_bal = Decimal("0")
     cold_plex_bal = Decimal("0")
 
-    # Safe comparison - hot_address already validated above
-    has_cold = cold_address and hot_address and cold_address.lower() != hot_address.lower()
+    # Check if cold wallet is different from hot (or hot is not configured)
+    has_cold = bool(cold_address)
+    if has_cold and hot_configured:
+        has_cold = cold_address.lower() != hot_address.lower()
 
     if has_cold:
         cold_bnb_bal = await bs.get_native_balance(cold_address) or Decimal("0")
@@ -88,15 +95,27 @@ async def _show_dashboard(message: Message, state: FSMContext) -> None:
             return "Err"
         return f"{int(val):,}".replace(",", " ")
 
-    text = (
-        "🔐 Кошелёк администратора\n\n"
-        "🔥 HOT WALLET (выплатной)\n"
-        f"Адрес: {hot_address}\n"
-        f"🔶 BNB: {fmt_bnb(hot_bnb_bal)}\n"
-        f"💵 USDT: {fmt_usdt(hot_usdt_bal)}\n"
-        f"💎 PLEX: {fmt_plex(hot_plex_bal)}\n"
-    )
+    # Build dashboard text
+    text = "🔐 Кошелёк администратора\n\n"
 
+    # Hot Wallet section
+    if hot_configured:
+        text += (
+            "🔥 HOT WALLET (выплатной)\n"
+            f"Адрес: {hot_address}\n"
+            f"🔶 BNB: {fmt_bnb(hot_bnb_bal)}\n"
+            f"💵 USDT: {fmt_usdt(hot_usdt_bal)}\n"
+            f"💎 PLEX: {fmt_plex(hot_plex_bal)}\n"
+        )
+    else:
+        text += (
+            "🔥 HOT WALLET (выплатной)\n"
+            "❌ Не настроен\n"
+            "Для настройки нажмите:\n"
+            "📤 Настроить кошелек для выдачи\n"
+        )
+
+    # Cold/Input Wallet section
     if has_cold:
         text += (
             "\n❄️ INPUT WALLET (приёмный)\n"
@@ -109,7 +128,9 @@ async def _show_dashboard(message: Message, state: FSMContext) -> None:
 
     text += "\n👇 Выберите действие:"
 
-    await safe_answer(message, text, parse_mode=None, reply_markup=wallet_dashboard_keyboard())
+    # Use keyboard without Send button if hot wallet not configured
+    keyboard = wallet_dashboard_keyboard() if hot_configured else wallet_dashboard_no_hot_keyboard()
+    await safe_answer(message, text, parse_mode=None, reply_markup=keyboard)
 
 
 @router.message(F.text == "🔄 Обновить баланс", WalletManagementStates.menu)
@@ -132,9 +153,23 @@ async def show_receive_info(message: Message):
     hot_address = bs.wallet_address
     cold_address = bs.system_wallet_address
 
-    text = f"📥 Получение средств\n\n🔥 Hot Wallet (для пополнения газа):\n{hot_address}\n\n"
+    text = "📥 Получение средств\n\n"
 
-    if cold_address and cold_address.lower() != hot_address.lower():
+    # Hot Wallet section
+    if hot_address:
+        text += f"🔥 Hot Wallet (для пополнения газа):\n{hot_address}\n\n"
+    else:
+        text += "🔥 Hot Wallet (для пополнения газа):\n❌ Не настроен\n\n"
+
+    # Input Wallet section (show if different from hot or if hot not configured)
+    show_cold = False
+    if cold_address:
+        if not hot_address:
+            show_cold = True
+        elif cold_address.lower() != hot_address.lower():
+            show_cold = True
+
+    if show_cold:
         text += f"❄️ Input Wallet (для депозитов):\n{cold_address}\n"
 
     await safe_answer(message, text, parse_mode=None, reply_markup=wallet_back_keyboard())
@@ -174,6 +209,15 @@ async def dashboard_output_wallet_setup(message: Message, state: FSMContext, **d
 @router.message(F.text == "📤 Отправить", WalletManagementStates.menu)
 async def start_send_flow(message: Message, state: FSMContext):
     """Start sending process."""
+    # Safety check - ensure hot wallet is configured
+    bs = get_blockchain_service()
+    if not bs or not bs.wallet_address:
+        await message.answer(
+            "❌ Hot wallet не настроен.\n"
+            "Нажмите '📤 Настроить кошелек для выдачи' для настройки.",
+        )
+        return
+
     await state.set_state(WalletManagementStates.selecting_currency_to_send)
     await safe_answer(
         message,
