@@ -36,7 +36,7 @@ DEV_CHAT_LOG = "dev_chat:log"  # Full conversation log
 class DevChatService:
     """
     Service for direct Copilot-Admin communication.
-    
+
     This creates a fast feedback loop for development:
     - Copilot can ask questions to specific admins
     - Admins respond through bot
@@ -62,13 +62,13 @@ class DevChatService:
     ) -> dict[str, Any]:
         """
         Queue a message from Copilot to an admin.
-        
+
         Args:
             admin_identifier: @username or telegram_id
             message: Message text
             sender: Sender name (Copilot, Claude, etc.)
             priority: normal, high, urgent
-            
+
         Returns:
             Result dict
         """
@@ -91,12 +91,17 @@ class DevChatService:
 
             # Add to outbox queue
             await self.redis.lpush(DEV_CHAT_OUTBOX, json.dumps(msg_data))
-            
+
             # Also add to log
-            await self.redis.lpush(DEV_CHAT_LOG, json.dumps({
-                **msg_data,
-                "direction": "outgoing",
-            }))
+            await self.redis.lpush(
+                DEV_CHAT_LOG,
+                json.dumps(
+                    {
+                        **msg_data,
+                        "direction": "outgoing",
+                    }
+                ),
+            )
 
             logger.info(f"DevChat: Queued message to @{admin.username} from {sender}")
 
@@ -114,55 +119,55 @@ class DevChatService:
         """
         Process pending messages in outbox and send them.
         Called periodically by bot or manually.
-        
+
         Returns:
             Number of messages sent
         """
         sent_count = 0
-        
+
         while True:
             # Get next message from queue
             msg_json = await self.redis.rpop(DEV_CHAT_OUTBOX)
             if not msg_json:
                 break
-                
+
             try:
                 msg_data = json.loads(msg_json)
-                
+
                 # Format message
                 priority_emoji = {
                     "urgent": "🚨",
                     "high": "⚡",
                     "normal": "💬",
                 }.get(msg_data.get("priority", "normal"), "💬")
-                
+
                 formatted_msg = (
                     f"{priority_emoji} **Сообщение от разработчика ({msg_data.get('sender', 'Dev')})**\n\n"
                     f"{msg_data['message']}\n\n"
                     f"_Ответьте на это сообщение — ваш ответ будет передан разработчику._\n"
                     f"_Или используйте команду: /dev\\_reply <ваш ответ>_"
                 )
-                
+
                 # Send to admin
                 await self.bot.send_message(
                     msg_data["to_admin_id"],
                     formatted_msg,
                     parse_mode="Markdown",
                 )
-                
+
                 # Update status
                 msg_data["status"] = "sent"
                 msg_data["sent_at"] = datetime.utcnow().isoformat()
-                
+
                 sent_count += 1
                 logger.info(f"DevChat: Sent message to {msg_data['to_admin_id']}")
-                
+
             except Exception as e:
                 logger.error(f"DevChat: Failed to send message: {e}")
                 # Re-queue failed message
                 await self.redis.rpush(DEV_CHAT_OUTBOX, msg_json)
                 break
-                
+
         return sent_count
 
     async def record_admin_response(
@@ -173,12 +178,12 @@ class DevChatService:
     ) -> dict[str, Any]:
         """
         Record a response from admin to the inbox.
-        
+
         Args:
             admin_id: Admin's telegram_id
             admin_username: Admin's username
             response_text: Their response
-            
+
         Returns:
             Result dict
         """
@@ -191,20 +196,25 @@ class DevChatService:
                 "received_at": datetime.utcnow().isoformat(),
                 "read": False,
             }
-            
+
             # Add to inbox
             await self.redis.lpush(DEV_CHAT_INBOX, json.dumps(response_data))
-            
+
             # Add to log
-            await self.redis.lpush(DEV_CHAT_LOG, json.dumps({
-                **response_data,
-                "direction": "incoming",
-            }))
-            
+            await self.redis.lpush(
+                DEV_CHAT_LOG,
+                json.dumps(
+                    {
+                        **response_data,
+                        "direction": "incoming",
+                    }
+                ),
+            )
+
             logger.info(f"DevChat: Recorded response from @{admin_username}")
-            
+
             return {"success": True, "response_id": response_data["id"]}
-            
+
         except Exception as e:
             logger.error(f"DevChat: Failed to record response: {e}")
             return {"success": False, "error": str(e)}
@@ -212,24 +222,24 @@ class DevChatService:
     async def get_unread_responses(self, limit: int = 50) -> list[dict]:
         """
         Get unread responses from admins.
-        
+
         Args:
             limit: Max responses to return
-            
+
         Returns:
             List of response dicts
         """
         try:
             responses = []
             inbox_items = await self.redis.lrange(DEV_CHAT_INBOX, 0, limit - 1)
-            
+
             for item in inbox_items:
                 data = json.loads(item)
                 if not data.get("read", False):
                     responses.append(data)
-                    
+
             return responses
-            
+
         except Exception as e:
             logger.error(f"DevChat: Failed to get responses: {e}")
             return []
@@ -237,10 +247,10 @@ class DevChatService:
     async def get_conversation_log(self, limit: int = 100) -> list[dict]:
         """
         Get full conversation log.
-        
+
         Args:
             limit: Max entries to return
-            
+
         Returns:
             List of log entries (newest first)
         """
@@ -258,11 +268,11 @@ class DevChatService:
     ) -> dict[str, Any]:
         """
         Send message to all active admins.
-        
+
         Args:
             message: Message text
             sender: Sender name
-            
+
         Returns:
             Result with count of queued messages
         """
@@ -270,7 +280,7 @@ class DevChatService:
             stmt = select(Admin).where(Admin.is_active == True)  # noqa: E712
             result = await self.session.execute(stmt)
             admins = result.scalars().all()
-            
+
             queued = 0
             for admin in admins:
                 result = await self.send_dev_message(
@@ -280,13 +290,13 @@ class DevChatService:
                 )
                 if result.get("success"):
                     queued += 1
-                    
+
             return {
                 "success": True,
                 "queued": queued,
                 "total_admins": len(admins),
             }
-            
+
         except Exception as e:
             logger.error(f"DevChat broadcast error: {e}")
             return {"success": False, "error": str(e)}
