@@ -34,15 +34,14 @@ async def send_message(telegram_id: int, message: str, sender: str = "Copilot"):
 
     try:
         formatted_msg = (
-            f"💬 **Сообщение от разработчика ({sender})**\n\n"
+            f"💬 Сообщение от разработчика ({sender})\n\n"
             f"{message}\n\n"
-            f"_Ответьте командой /dev\\_reply <ваш ответ> или через 🤖 AI Помощник._"
+            f"Ответьте командой /dev_reply <ваш ответ> или через 🤖 AI Помощник."
         )
 
         await bot.send_message(
             telegram_id,
             formatted_msg,
-            parse_mode="Markdown",
         )
         print(f"✅ Отправлено {ADMIN_IDS.get(telegram_id, telegram_id)}")
 
@@ -58,15 +57,15 @@ async def broadcast_message(message: str, sender: str = "Copilot"):
 
     try:
         formatted_msg = (
-            f"💬 **Сообщение от разработчика ({sender})**\n\n"
+            f"💬 Сообщение от разработчика ({sender})\n\n"
             f"{message}\n\n"
-            f"_Ответьте командой /dev\\_reply <ваш ответ> или через 🤖 AI Помощник._"
+            f"Ответьте командой /dev_reply <ваш ответ> или через 🤖 AI Помощник."
         )
 
         sent = 0
         for tid, username in ADMIN_IDS.items():
             try:
-                await bot.send_message(tid, formatted_msg, parse_mode="Markdown")
+                await bot.send_message(tid, formatted_msg)
                 print(f"✅ Отправлено @{username}")
                 sent += 1
                 await asyncio.sleep(0.2)
