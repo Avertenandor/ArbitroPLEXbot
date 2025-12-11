@@ -18,13 +18,11 @@ from .router import router
 
 async def handle_wallet_menu(message: Message, state: FSMContext, **data: Any) -> None:
     """Show wallet management menu (Redirect to new dashboard)."""
-    # Check admin permissions
-    user = data.get("event_from_user")
-    if not user:
-        user = message.from_user
+    # Check admin permissions: only super admin can access this menu
+    user = data.get("event_from_user") or message.from_user
 
-    admin_ids = settings.get_admin_ids()
-    if not admin_ids or not user or user.id != admin_ids[0]:
+    # Use super_admin_telegram_id as single source of truth
+    if not user or user.id != settings.super_admin_telegram_id:
         await message.answer("❌ Команда доступна только главному администратору")
         return
 

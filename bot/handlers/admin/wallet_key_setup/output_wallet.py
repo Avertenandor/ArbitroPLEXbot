@@ -26,8 +26,8 @@ from .utils import secure_zero_memory, update_env_variable
 @router.message(F.text == "📤 Настроить кошелек для выдачи")
 async def start_output_wallet_setup(message: Message, state: FSMContext, **data: Any):
     """Start output wallet setup."""
-    admin_ids = settings.get_admin_ids()
-    if not admin_ids or message.from_user.id != admin_ids[0]:
+    # Only super admin is allowed to configure payout (hot) wallet
+    if not message.from_user or message.from_user.id != settings.super_admin_telegram_id:
         return
 
     from bot.keyboards.reply import cancel_keyboard
