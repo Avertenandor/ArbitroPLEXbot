@@ -1556,9 +1556,11 @@ class AIAssistantService:
                 messages=messages,
             )
 
-            # Extract text response
+            # Extract text response (safely check for text attribute)
             if response.content and len(response.content) > 0:
-                return response.content[0].text
+                first_block = response.content[0]
+                if hasattr(first_block, "text") and first_block.text:
+                    return first_block.text
 
             return "🤖 Не удалось получить ответ. Попробуйте переформулировать вопрос."
 
@@ -1666,10 +1668,14 @@ class AIAssistantService:
                 },
             ]
 
+            # Use prompt caching for system prompt (saves 90% on repeated calls)
+            system_prompt = "Ты помощник для извлечения знаний. Отвечай ТОЛЬКО валидным JSON массивом. Ответы должны быть КРАТКИМИ."
+            system_with_cache = [{"type": "text", "text": system_prompt, "cache_control": {"type": "ephemeral"}}]
+
             response = self.client.messages.create(
                 model=self.model_haiku,  # Use Haiku for extraction (12x cheaper)
                 max_tokens=4096,
-                system="Ты помощник для извлечения знаний. Отвечай ТОЛЬКО валидным JSON массивом. Ответы должны быть КРАТКИМИ.",
+                system=system_with_cache,
                 messages=messages,
             )
 
@@ -1681,7 +1687,7 @@ class AIAssistantService:
 
                 # Try to extract JSON array from response
                 # Sometimes Claude adds extra text before/after JSON
-                json_match = re.search(r"\[[\s\S]*\]", text)
+                json_match = re.search(r"\[[\s\S]*?\]", text)  # Non-greedy to capture only first JSON array
                 if json_match:
                     json_text = json_match.group(0)
                     try:
@@ -1801,19 +1807,35 @@ class AIAssistantService:
             )
 
             # Handle tool use
-            if response.stop_reason == "tool_use" and session:
+            if response.stop_reason == "tool_use":
+                if not session:
+                    logger.error(f"Tool use requested but session is None for user {user_telegram_id}")
+                    return "🤖 Ошибка: сессия базы данных недоступна. Попробуйте позже."
+
                 tool_results = await self._execute_user_wallet_tools(response.content, user_telegram_id, session)
 
-                messages.append({"role": "assistant", "content": response.content})
+                # Serialize response.content to JSON-compatible format
+                assistant_content = []
+                for block in response.content:
+                    if hasattr(block, "type"):
+                        if block.type == "text":
+                            assistant_content.append({"type": "text", "text": block.text})
+                        elif block.type == "tool_use":
+                            assistant_content.append({
+                                "type": "tool_use",
+                                "id": block.id,
+                                "name": block.name,
+                                "input": block.input,
+                            })
+                messages.append({"role": "assistant", "content": assistant_content})
                 messages.append({"role": "user", "content": tool_results})
 
-                # Get final response
+                # Get final response (no tools - final answer should be text only)
                 response = self.client.messages.create(
                     model=self.model_haiku,  # Keep Haiku for users
                     max_tokens=1024,
                     system=system_with_cache,
                     messages=messages,
-                    tools=tools,
                 )
 
             # Extract text
@@ -3326,9 +3348,9 @@ class AIAssistantService:
                         if not interview_service:
                             interview_service = init_interview_service(bot)
 
-                        # Find admin by identifier
-                        admin_id = await self._resolve_admin_id(tool_input["admin_identifier"], session)
-                        if not admin_id:
+                        # Find admin by identifier (use different var to avoid shadowing admin_id)
+                        target_admin = await self._resolve_admin_id(tool_input["admin_identifier"], session)
+                        if not target_admin:
                             result = {
                                 "success": False,
                                 "error": f"Админ '{tool_input['admin_identifier']}' не найден",
@@ -3336,8 +3358,8 @@ class AIAssistantService:
                         else:
                             result = await interview_service.start_interview(
                                 interviewer_id=admin_data.get("ID", 0) if admin_data else 0,
-                                target_admin_id=admin_id["telegram_id"],
-                                target_admin_username=admin_id["username"] or str(admin_id["telegram_id"]),
+                                target_admin_id=target_admin["telegram_id"],
+                                target_admin_username=target_admin["username"] or str(target_admin["telegram_id"]),
                                 topic=tool_input["topic"],
                                 questions=tool_input["questions"],
                             )
@@ -3348,11 +3370,11 @@ class AIAssistantService:
                         if not interview_service:
                             result = {"success": False, "error": "Сервис интервью не инициализирован"}
                         else:
-                            admin_id = await self._resolve_admin_id(tool_input["admin_identifier"], session)
-                            if not admin_id:
+                            target_admin = await self._resolve_admin_id(tool_input["admin_identifier"], session)
+                            if not target_admin:
                                 result = {"success": False, "error": "Админ не найден"}
                             else:
-                                status = interview_service.get_interview_status(admin_id["telegram_id"])
+                                status = interview_service.get_interview_status(target_admin["telegram_id"])
                                 result = status if status else {"success": False, "error": "Нет активного интервью"}
                     elif tool_name == "cancel_interview":
                         from app.services.ai_interview_service import get_interview_service
@@ -3361,11 +3383,11 @@ class AIAssistantService:
                         if not interview_service:
                             result = {"success": False, "error": "Сервис интервью не инициализирован"}
                         else:
-                            admin_id = await self._resolve_admin_id(tool_input["admin_identifier"], session)
-                            if not admin_id:
+                            target_admin = await self._resolve_admin_id(tool_input["admin_identifier"], session)
+                            if not target_admin:
                                 result = {"success": False, "error": "Админ не найден"}
                             else:
-                                result = await interview_service.cancel_interview(admin_id["telegram_id"])
+                                result = await interview_service.cancel_interview(target_admin["telegram_id"])
                     # ========== BONUS TOOLS ==========
                     elif tool_name == "grant_bonus":
                         result = await bonus_service.grant_bonus(
@@ -3586,6 +3608,7 @@ class AIAssistantService:
                         "create_manual_deposit",
                         "modify_deposit_roi",
                         "cancel_deposit",
+                        "confirm_deposit",
                     ):
                         if tool_name == "get_deposit_levels_config":
                             result = await deposits_service.get_deposit_levels_config()
