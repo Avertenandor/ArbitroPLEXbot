@@ -88,21 +88,21 @@ async def _show_dashboard(message: Message, state: FSMContext) -> None:
         return f"{int(val):,}".replace(",", " ")
 
     text = (
-        "🔐 *Админ-кошелек* — Dashboard\n\n"
-        "🔥 *HOT WALLET* — Выплатной\n"
+        "🔐 **Админ\\-кошелек** — Dashboard\n\n"
+        "🔥 **HOT WALLET** — Выплатной\n"
         f"Адрес: `{hot_address}`\n"
-        f"🔶 BNB: *{fmt_bnb(hot_bnb_bal)}*\n"
-        f"💵 USDT: *{fmt_usdt(hot_usdt_bal)}*\n"
-        f"💎 PLEX: *{fmt_plex(hot_plex_bal)}*\n"
+        f"🔶 BNB: **{fmt_bnb(hot_bnb_bal)}**\n"
+        f"💵 USDT: **{fmt_usdt(hot_usdt_bal)}**\n"
+        f"💎 PLEX: **{fmt_plex(hot_plex_bal)}**\n"
     )
 
     if has_cold:
         text += (
-            "\n❄️ *INPUT WALLET* — Приемный\n"
+            "\n❄️ **INPUT WALLET** — Приемный\n"
             f"Адрес: `{cold_address}`\n"
-            f"🔶 BNB: *{fmt_bnb(cold_bnb_bal)}*\n"
-            f"💵 USDT: *{fmt_usdt(cold_usdt_bal)}*\n"
-            f"💎 PLEX: *{fmt_plex(cold_plex_bal)}*\n"
+            f"🔶 BNB: **{fmt_bnb(cold_bnb_bal)}**\n"
+            f"💵 USDT: **{fmt_usdt(cold_usdt_bal)}**\n"
+            f"💎 PLEX: **{fmt_plex(cold_plex_bal)}**\n"
             "Только просмотр, ключи не хранятся\n"
         )
 

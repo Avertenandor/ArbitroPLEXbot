@@ -74,6 +74,7 @@ async def cmd_search_user(
 
     # Import here to avoid circular dependency
     from bot.handlers.admin.users.profile import show_user_profile
+
     await show_user_profile(message, user, state, session)
 
 
@@ -111,6 +112,7 @@ async def handle_search_back(
 ) -> None:
     """Handle back button - return to users menu."""
     from bot.handlers.admin.users.menu import handle_admin_users_menu
+
     await handle_admin_users_menu(message, state, session, **data)
 
 
@@ -125,6 +127,7 @@ async def process_find_user_input(
     if message.text == "❌ Отмена":
         # Import here to avoid circular dependency
         from bot.handlers.admin.users.menu import handle_admin_users_menu
+
         await handle_admin_users_menu(message, state, session, **data)
         return
 
@@ -144,8 +147,7 @@ async def process_find_user_input(
 
     if not user:
         await message.reply(
-            "❌ **Пользователь не найден**\n"
-            "Проверьте введенные данные и попробуйте снова.",
+            "❌ **Пользователь не найден**\nПроверьте введенные данные и попробуйте снова.",
             parse_mode="Markdown",
             reply_markup=search_user_keyboard(),
         )
@@ -153,4 +155,5 @@ async def process_find_user_input(
 
     # Import here to avoid circular dependency
     from bot.handlers.admin.users.profile import show_user_profile
+
     await show_user_profile(message, user, state, session)
