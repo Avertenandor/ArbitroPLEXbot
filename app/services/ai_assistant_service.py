@@ -1277,7 +1277,13 @@ class AIAssistantService:
         """
         self.api_key = api_key
         self.client = None
-        self.model = "claude-sonnet-4-20250514"  # Latest Claude Sonnet
+        # Models: Sonnet for complex, Haiku for simple (12x cheaper!)
+        self.model_sonnet = "claude-sonnet-4-20250514"  # Complex tasks
+        self.model_haiku = "claude-haiku-4-5-20251001"   # Simple tasks (12x cheaper)
+        self.model = self.model_sonnet  # Default
+        
+        # Cache for system prompts (reusable across sessions)
+        self._cached_system_prompts: dict[str, str] = {}
 
         if api_key and ANTHROPIC_AVAILABLE:
             try:
@@ -1331,20 +1337,25 @@ class AIAssistantService:
                 context_parts.append(f"- {key}: {value}")
             context_parts.append("")
 
-        # Add knowledge base for all users
+        # Add knowledge base - USE COMPACT VERSION to save tokens!
+        # Full KB = ~9000 tokens, Compact KB = ~1500 tokens (saves 83%)
         try:
             from app.services.knowledge_base import get_knowledge_base
 
             kb = get_knowledge_base()
-            kb_context = kb.format_for_ai()
+            # Use compact version instead of full KB
+            kb_context = kb.format_compact()
             if kb_context:
                 context_parts.append(kb_context)
                 context_parts.append("")
         except Exception:
             pass  # KB not available
 
-        # Add real monitoring data for admins
+        # Add real monitoring data for admins (but limit size)
         if monitoring_data and role != UserRole.USER:
+            # Truncate monitoring data to save tokens
+            if len(monitoring_data) > 2000:
+                monitoring_data = monitoring_data[:2000] + "\n... (сокращено для экономии)"
             context_parts.append(monitoring_data)
             context_parts.append("")
 
@@ -1354,6 +1365,72 @@ class AIAssistantService:
                 context_parts.append(f"- {key}: {value}")
 
         return "\n".join(context_parts) if context_parts else ""
+
+    def _select_model(self, message: str, role: UserRole) -> str:
+        """
+        Select optimal model based on message complexity.
+        
+        Haiku is 12x cheaper ($0.25/$1.25 vs $3/$15 per 1M tokens).
+        Use Haiku for simple queries, Sonnet for complex analysis.
+        
+        Args:
+            message: User message
+            role: User role
+            
+        Returns:
+            Model name to use
+        """
+        message_lower = message.lower()
+        
+        # Complex keywords requiring Sonnet (analytical, strategic, tools)
+        complex_keywords = [
+            # Tool usage (always Sonnet for reliability)
+            "покажи", "найди", "поиск", "создай", "измени", "удали", "отмени",
+            "начисли", "заблокируй", "разблокируй", "одобри", "отклони",
+            "статистик", "отчёт", "аналитик", "анализ",
+            # Complex questions
+            "почему", "объясни подробно", "как работает", "стратеги",
+            "сравни", "разница между", "плюсы и минусы",
+            # Financial analysis
+            "депозит", "вывод", "баланс", "roi", "доход", "прибыль",
+            # Admin tools
+            "обращени", "тикет", "пользовател", "админ", "логи",
+            # Security
+            "безопасност", "верифик", "проверь", "подозри",
+        ]
+        
+        # Simple keywords - can use Haiku (greetings, navigation, simple FAQ)
+        simple_keywords = [
+            "привет", "здравствуй", "добрый", "пока", "спасибо", "благодар",
+            "что такое", "как называется", "где найти", "какая кнопка",
+            "помощь", "help", "старт", "start", "меню",
+            "да", "нет", "ок", "понял", "ясно", "хорошо",
+        ]
+        
+        # Check for complex keywords first
+        for keyword in complex_keywords:
+            if keyword in message_lower:
+                logger.debug(f"Token economy: Using Sonnet (complex keyword: {keyword})")
+                return self.model_sonnet
+        
+        # If message is short and simple - use Haiku
+        if len(message) < 50 and any(kw in message_lower for kw in simple_keywords):
+            logger.debug(f"Token economy: Using Haiku (simple message)")
+            return self.model_haiku
+        
+        # Admins get Sonnet by default (they usually need tools)
+        if role in (UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.EXTENDED_ADMIN):
+            logger.debug(f"Token economy: Using Sonnet (admin role)")
+            return self.model_sonnet
+        
+        # For regular users with medium-length messages - Haiku
+        if len(message) < 200 and role == UserRole.USER:
+            logger.debug(f"Token economy: Using Haiku (regular user, short message)")
+            return self.model_haiku
+        
+        # Default to Sonnet for safety
+        logger.debug(f"Token economy: Using Sonnet (default)")
+        return self.model_sonnet
 
     async def chat(
         self,
@@ -1416,11 +1493,25 @@ class AIAssistantService:
             # Get system prompt (with telegram_id for secure tech deputy check)
             system_prompt = self._get_system_prompt(role, username, telegram_id)
 
-            # Call Claude API
+            # Smart model selection: use Haiku for simple queries (12x cheaper!)
+            # Haiku: $0.25/$1.25 per 1M tokens vs Sonnet: $3/$15
+            selected_model = self._select_model(message, role)
+            
+            # Use prompt caching for system prompt (saves 90% on repeated calls)
+            # https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
+            system_with_cache = [
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"}
+                }
+            ]
+
+            # Call Claude API with caching
             response = self.client.messages.create(
-                model=self.model,
+                model=selected_model,
                 max_tokens=1024,
-                system=system_prompt,
+                system=system_with_cache,
                 messages=messages,
             )
 
@@ -1535,7 +1626,7 @@ class AIAssistantService:
             ]
 
             response = self.client.messages.create(
-                model=self.model,
+                model=self.model_haiku,  # Use Haiku for extraction (12x cheaper)
                 max_tokens=4096,
                 system="Ты помощник для извлечения знаний. Отвечай ТОЛЬКО валидным JSON массивом. Ответы должны быть КРАТКИМИ.",
                 messages=messages,
@@ -1655,12 +1746,21 @@ class AIAssistantService:
             messages.append({"role": "user", "content": message})
 
             system_prompt = self._get_system_prompt(UserRole.USER, None, user_telegram_id)
+            
+            # Use prompt caching for system prompt
+            system_with_cache = [
+                {
+                    "type": "text",
+                    "text": system_prompt,
+                    "cache_control": {"type": "ephemeral"}
+                }
+            ]
 
-            # First call
+            # First call - use Haiku for users (cheaper)
             response = self.client.messages.create(
-                model=self.model,
+                model=self.model_haiku,  # Users get Haiku (12x cheaper)
                 max_tokens=1024,
-                system=system_prompt,
+                system=system_with_cache,
                 messages=messages,
                 tools=tools,
             )
@@ -1674,9 +1774,9 @@ class AIAssistantService:
 
                 # Get final response
                 response = self.client.messages.create(
-                    model=self.model,
+                    model=self.model_haiku,  # Keep Haiku for users
                     max_tokens=1024,
-                    system=system_prompt,
+                    system=system_with_cache,
                     messages=messages,
                     tools=tools,
                 )

@@ -786,6 +786,7 @@ class KnowledgeBase:
         return [e for e in self.entries if not e.get("verified_by_boss")]
 
     def format_for_ai(self) -> str:
+        """Full KB format - USE SPARINGLY (high token cost!)"""
         lines = ["=== БАЗА ЗНАНИЙ ===", "Источник: @VladarevInvestBrok", ""]
         for cat in self.get_categories():
             lines.append(f"[{cat}]")
@@ -797,6 +798,55 @@ class KnowledgeBase:
                     if c := e.get("clarification"):
                         lines.append(f"  ! {c}")
             lines.append("")
+        return "\n".join(lines)
+
+    def format_compact(self) -> str:
+        """Compact KB format - RECOMMENDED (saves 70% tokens!)"""
+        lines = ["=== КРАТКАЯ БАЗА ЗНАНИЙ ==="]
+        # Only include verified critical entries
+        critical_categories = ["PLEX токен", "Депозиты", "Сеть BSC", "Арбитраж"]
+        for cat in critical_categories:
+            entries_in_cat = [e for e in self.entries if e.get("category") == cat and e.get("verified_by_boss")]
+            if entries_in_cat:
+                lines.append(f"[{cat}]")
+                for e in entries_in_cat[:3]:  # Max 3 per category
+                    lines.append(f"• {e['question']}: {e['answer'][:150]}...")
+        lines.append("")
+        lines.append("(Полная база доступна через search_knowledge_base)")
+        return "\n".join(lines)
+
+    def search_relevant(self, query: str, limit: int = 5) -> str:
+        """Search KB and return only relevant entries (saves tokens!)"""
+        query_lower = query.lower()
+        scored = []
+        
+        for e in self.entries:
+            score = 0
+            text = f"{e.get('question', '')} {e.get('answer', '')} {e.get('category', '')}".lower()
+            
+            # Score by keyword matches
+            for word in query_lower.split():
+                if len(word) > 2 and word in text:
+                    score += 1
+            
+            if score > 0:
+                scored.append((score, e))
+        
+        # Sort by score, take top N
+        scored.sort(key=lambda x: x[0], reverse=True)
+        top_entries = [e for _, e in scored[:limit]]
+        
+        if not top_entries:
+            return ""
+        
+        lines = [f"=== РЕЛЕВАНТНЫЕ ЗНАНИЯ ({len(top_entries)} записей) ==="]
+        for e in top_entries:
+            lines.append(f"В: {e['question']}")
+            lines.append(f"О: {e['answer']}")
+            if c := e.get("clarification"):
+                lines.append(f"! {c}")
+            lines.append("")
+        
         return "\n".join(lines)
 
     def add_learned_entry(
