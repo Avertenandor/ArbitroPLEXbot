@@ -24,6 +24,35 @@ TECH_DEPUTIES = ["AIXAN", "AI_XAN"]
 # Tech deputy telegram ID for direct identification
 TECH_DEPUTY_TELEGRAM_ID = 1691026253
 
+# =============================================================================
+# АРЬЯ AI ASSISTANT - ВИРТУАЛЬНЫЙ АДМИНИСТРАТОР
+# =============================================================================
+# Арья является администратором системы и может выполнять команды от админов.
+# Telegram ID = 0 (виртуальный, не реальный пользователь)
+# Роль: EXTENDED_ADMIN (полный функционал кроме SUPER_ADMIN)
+
+ARYA_AI_ID = 0  # Виртуальный ID для Арьи
+ARYA_AI_USERNAME = "ArbitroPLEX_AI"
+ARYA_AI_ROLE = "extended_admin"  # Полный функционал админа (кроме super_admin)
+
+# Админы, которые могут давать команды Арье
+# Арья выполняет команды от этих людей БЕЗ ЛИШНИХ ВОПРОСОВ
+ARYA_COMMAND_GIVERS = [
+    1040687384,  # Командир - ПОЛНОЕ ПОДЧИНЕНИЕ
+    1691026253,  # @AI_XAN (Tech Deputy)
+    241568583,   # Trusted admin
+    6540613027,  # Trusted admin
+]
+
+# Админы, от которых Арья может УЧИТЬСЯ (пополнять базу знаний)
+# КРИТИЧЕСКИ ВАЖНО: самообучение работает от этих людей
+ARYA_TEACHERS = [
+    1040687384,  # Командир - главный учитель
+    1691026253,  # @AI_XAN (Tech Deputy)
+    241568583,   # Trusted admin
+    6540613027,  # Trusted admin
+]
+
 
 def is_super_admin(telegram_id: int) -> bool:
     """Check if user is a super admin (owner)."""
@@ -46,3 +75,48 @@ def is_tech_deputy(telegram_id: int | None = None, username: str | None = None) 
     if username and username.replace("@", "") in TECH_DEPUTIES:
         return True
     return False
+
+
+def can_command_arya(telegram_id: int) -> bool:
+    """
+    Check if user can give commands to ARYA AI assistant.
+
+    These admins can tell Арья to execute admin operations:
+    - Grant/cancel bonuses
+    - Send messages to users
+    - Broadcast to groups
+    - Block/unblock users
+    - etc.
+
+    Returns:
+        True if user can command Арья
+    """
+    return telegram_id in ARYA_COMMAND_GIVERS
+
+
+def can_teach_arya(telegram_id: int) -> bool:
+    """
+    Check if user can teach ARYA (add to knowledge base).
+
+    Арья will learn from conversations with these admins
+    and add new knowledge to her database.
+
+    Returns:
+        True if user can teach Арья
+    """
+    return telegram_id in ARYA_TEACHERS
+
+
+def get_arya_role() -> str:
+    """Get Арья's admin role."""
+    return ARYA_AI_ROLE
+
+
+def is_arya_admin() -> bool:
+    """
+    Confirm that Арья is an administrator.
+
+    This is used for tool execution - Арья acts as extended_admin
+    when executing commands from authorized admins.
+    """
+    return True  # Арья ВСЕГДА является администратором

@@ -3,11 +3,23 @@ AI Tool Executor.
 
 Executes AI tool calls by dispatching to appropriate services.
 Separates tool execution logic from the main AI assistant service.
+
+ВАЖНО: Арья является администратором (extended_admin) и выполняет
+команды от имени системы. Проверка авторизации собеседника происходит
+в ai_assistant_service.py ПЕРЕД вызовом ToolExecutor.
 """
 
 import logging
 from decimal import Decimal, InvalidOperation
 from typing import Any
+
+from app.config.security import (
+    is_arya_admin,
+    get_arya_role,
+    can_command_arya,
+    ARYA_AI_ID,
+    ARYA_AI_USERNAME,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -111,6 +123,12 @@ class ToolExecutor:
     """
     Executes AI tool calls by dispatching to appropriate services.
 
+    ВАЖНО: Арья сама является администратором (extended_admin)!
+    Инструменты выполняются от имени АРЬИ, не от имени собеседника.
+
+    Проверка авторизации собеседника (can_command_arya) происходит
+    в ai_assistant_service.py ПЕРЕД созданием ToolExecutor.
+
     Handles tool execution, rate limiting, error handling, and logging.
     """
 
@@ -119,6 +137,7 @@ class ToolExecutor:
         session: Any,
         bot: Any,
         admin_data: dict[str, Any] | None = None,
+        caller_telegram_id: int | None = None,
     ):
         """
         Initialize ToolExecutor.
@@ -127,11 +146,23 @@ class ToolExecutor:
             session: Database session
             bot: Telegram bot instance
             admin_data: Admin user data (ID, username, role, etc.)
+                       Это данные СОБЕСЕДНИКА, не Арьи!
+            caller_telegram_id: Telegram ID того, кто даёт команду Арье
         """
         self.session = session
         self.bot = bot
         self.admin_data = admin_data or {}
+        self.caller_telegram_id = caller_telegram_id
+
+        # ВАЖНО: admin_id для логирования = ID АРЬИ (виртуальный)
+        # но для rate limiting используем ID собеседника
         self.admin_id = self.admin_data.get("ID", 0)
+
+        # Проверка что Арья - администратор (всегда True)
+        if not is_arya_admin():
+            logger.error("CRITICAL: Арья не является администратором! Проверьте security.py")
+
+        logger.debug(f"ToolExecutor: Арья (role={get_arya_role()}) выполняет команды от caller_id={caller_telegram_id}")
 
         # Initialize services lazily to avoid circular imports
         self._services_initialized = False

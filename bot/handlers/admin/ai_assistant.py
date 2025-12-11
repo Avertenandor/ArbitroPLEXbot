@@ -264,15 +264,21 @@ async def end_chat(
 
     logger.info(f"ARIA: Завершение диалога с @{admin.username if admin else 'unknown'}, history_len={len(history)}")
 
-    # Извлечение знаний для ВСЕХ админов (не только super_admin)
+    # Извлечение знаний для ВСЕХ админов из ARYA_TEACHERS (not just super_admin)
+    # ВАЖНО: передаём telegram_id для проверки can_teach_arya()
     if admin and len(history) >= 2:
         ai_service = get_ai_service()
         username = admin.username or str(admin.telegram_id)
 
         await message.answer("🧠 Анализирую диалог для извлечения знаний...")
-        logger.info(f"ARIA: Начинаю извлечение знаний из {len(history)} сообщений")
+        logger.info(f"ARIA: Начинаю извлечение знаний из {len(history)} сообщений от admin_id={admin.telegram_id}")
 
-        qa_pairs = await ai_service.extract_knowledge(history, username)
+        # КРИТИЧЕСКИ ВАЖНО: передаём telegram_id для проверки прав на обучение
+        qa_pairs = await ai_service.extract_knowledge(
+            history,
+            username,
+            source_telegram_id=admin.telegram_id,
+        )
         logger.info(f"ARIA: Извлечено qa_pairs={qa_pairs}")
 
         if qa_pairs:
@@ -325,8 +331,13 @@ async def manual_save_knowledge(
 
     await message.answer("🧠 Анализирую диалог и извлекаю знания...")
 
-    qa_pairs = await ai_service.extract_knowledge(history, username)
-    logger.info(f"ARIA: Ручное извлечение - qa_pairs={qa_pairs}")
+    # КРИТИЧЕСКИ ВАЖНО: передаём telegram_id для проверки прав на обучение
+    qa_pairs = await ai_service.extract_knowledge(
+        history,
+        username,
+        source_telegram_id=admin.telegram_id,
+    )
+    logger.info(f"ARIA: Ручное извлечение от admin_id={admin.telegram_id} - qa_pairs={qa_pairs}")
 
     if qa_pairs:
         saved = await ai_service.save_learned_knowledge(qa_pairs, username)
