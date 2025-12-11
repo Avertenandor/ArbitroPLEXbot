@@ -94,10 +94,9 @@ class AdminAuthMiddleware(BaseMiddleware):
             )
             if isinstance(event, Message):
                 await event.answer(
-                    "🚫 **Доступ запрещен**\n\n"
+                    "🚫 Доступ запрещен\n\n"
                     "Ваш админ-аккаунт заблокирован из соображений безопасности.\n\n"
                     "Обратитесь к супер-администратору для выяснения причин.",
-                    parse_mode="Markdown",
                 )
             elif isinstance(event, CallbackQuery):
                 await event.answer(
@@ -150,8 +149,7 @@ class AdminAuthMiddleware(BaseMiddleware):
             await state.set_state(AdminStates.awaiting_master_key_input)
             if isinstance(event, Message):
                 await event.answer(
-                    "🔐 **Требуется аутентификация**\n\nДля доступа к админ-панели введите мастер-ключ:",
-                    parse_mode="Markdown",
+                    "🔐 Требуется аутентификация\n\nДля доступа к админ-панели введите мастер-ключ:",
                 )
             elif isinstance(event, CallbackQuery):
                 await event.answer("🔐 Требуется аутентификация. Введите мастер-ключ.")
@@ -176,7 +174,6 @@ class AdminAuthMiddleware(BaseMiddleware):
             if isinstance(event, Message):
                 await event.answer(
                     f"❌ {error or 'Сессия недействительна'}\n\nВведите мастер-ключ для повторной аутентификации:",
-                    parse_mode="Markdown",
                 )
             elif isinstance(event, CallbackQuery):
                 await event.answer(f"❌ {error or 'Сессия недействительна'}")

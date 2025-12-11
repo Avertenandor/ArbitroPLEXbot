@@ -87,10 +87,7 @@ class SessionMiddleware(BaseMiddleware):
         if isinstance(actual_event, Message) and actual_event.text:
             logger.debug(f"SessionMiddleware: message text={actual_event.text!r}")
             if actual_event.text.startswith("/start"):
-                logger.info(
-                    f"SessionMiddleware: /start detected, "
-                    f"passing through for user {user_id}"
-                )
+                logger.info(f"SessionMiddleware: /start detected, passing through for user {user_id}")
                 return await handler(event, data)
 
             # Allow authorization buttons (Reply keyboard)
@@ -103,8 +100,7 @@ class SessionMiddleware(BaseMiddleware):
             }
             if actual_event.text in auth_buttons:
                 logger.info(
-                    f"SessionMiddleware: auth button '{actual_event.text}' detected, "
-                    f"passing through for user {user_id}"
+                    f"SessionMiddleware: auth button '{actual_event.text}' detected, passing through for user {user_id}"
                 )
                 return await handler(event, data)
 
@@ -131,8 +127,7 @@ class SessionMiddleware(BaseMiddleware):
 
                 if current_state in auth_state_names:
                     logger.info(
-                        f"SessionMiddleware: auth FSM state '{current_state}', "
-                        f"passing through for user {user_id}"
+                        f"SessionMiddleware: auth FSM state '{current_state}', passing through for user {user_id}"
                     )
                     return await handler(event, data)
 
@@ -146,10 +141,7 @@ class SessionMiddleware(BaseMiddleware):
         if isinstance(actual_event, CallbackQuery) and actual_event.data:
             logger.debug(f"SessionMiddleware: callback data={actual_event.data!r}")
             if actual_event.data in ("check_payment", "start_after_auth"):
-                logger.info(
-                    f"SessionMiddleware: auth callback detected, "
-                    f"passing through for user {user_id}"
-                )
+                logger.info(f"SessionMiddleware: auth callback detected, passing through for user {user_id}")
                 return await handler(event, data)
 
         # Check session
@@ -168,9 +160,7 @@ class SessionMiddleware(BaseMiddleware):
         # Check PLEX balance periodically (for users with deposits)
         db_user = data.get("user")
         if db_user:
-            await self._check_plex_balance_if_needed(
-                actual_event, data, db_user, user_id
-            )
+            await self._check_plex_balance_if_needed(actual_event, data, db_user, user_id)
 
         return await handler(event, data)
 
@@ -190,17 +180,17 @@ class SessionMiddleware(BaseMiddleware):
             await state.clear()
 
         msg_text = (
-            "⏳ **Сессия истекла**\n\n"
+            "⏳ Сессия истекла\n\n"
             "Для продолжения работы необходимо оплатить доступ.\n"
             "Пожалуйста, введите /start для начала."
         )
 
         try:
             if isinstance(actual_event, Message):
-                await actual_event.answer(msg_text, parse_mode="Markdown")
+                await actual_event.answer(msg_text)
             elif isinstance(actual_event, CallbackQuery):
                 if actual_event.message:
-                    await actual_event.message.answer(msg_text, parse_mode="Markdown")
+                    await actual_event.message.answer(msg_text)
                 await actual_event.answer()
         except Exception as e:
             logger.warning(f"Failed to send session expiration message: {e}")
@@ -249,21 +239,13 @@ class SessionMiddleware(BaseMiddleware):
                 # Send warning
                 try:
                     if isinstance(actual_event, Message):
-                        await actual_event.answer(
-                            warning,
-                            parse_mode="Markdown",
-                        )
+                        await actual_event.answer(warning)
                     elif isinstance(actual_event, CallbackQuery) and actual_event.message:
-                        await actual_event.message.answer(
-                            warning,
-                            parse_mode="Markdown",
-                        )
+                        await actual_event.message.answer(warning)
                 except Exception as e:
                     logger.warning(f"Failed to send PLEX warning: {e}")
 
-                logger.warning(
-                    f"Insufficient PLEX balance for user {user_id}"
-                )
+                logger.warning(f"Insufficient PLEX balance for user {user_id}")
 
         except Exception as e:
             logger.error(f"PLEX balance check failed for user {user_id}: {e}")

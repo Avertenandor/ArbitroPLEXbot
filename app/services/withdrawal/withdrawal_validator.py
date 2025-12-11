@@ -100,7 +100,12 @@ class WithdrawalValidator:
         if not is_valid:
             return ValidationResult.error(error_msg, "INSUFFICIENT_BALANCE")
 
-        # 7. Check daily limit (if enabled)
+        # 7. Check PLEX daily payments for active deposits
+        is_valid, error_msg = await self.check_plex_payments(user_id)
+        if not is_valid:
+            return ValidationResult.error(error_msg, "PLEX_PAYMENT_REQUIRED")
+
+        # 8. Check daily limit (if enabled)
         is_valid, error_msg = await self.check_daily_limit(user_id, amount)
         if not is_valid:
             return ValidationResult.error(error_msg, "DAILY_LIMIT")
@@ -277,6 +282,68 @@ class WithdrawalValidator:
             )
 
         return True, None
+
+    async def check_plex_payments(self, user_id: int) -> tuple[bool, str | None]:
+        """Check if user has paid required daily PLEX for all active deposits.
+
+        Business rule:
+        - For every active deposit (bonus or main) user must pay
+          10 PLEX per $ of deposit per day.
+        - Until the required daily PLEX payment is made, USDT withdrawals
+          must be blocked.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        try:
+            from app.services.plex_payment_service import PlexPaymentService
+
+            plex_service = PlexPaymentService(self.session)
+            status = await plex_service.get_user_payment_status(user_id)
+
+            active_deposits = int(status.get("active_deposits", 0) or 0)
+
+            # No active deposits -> no daily PLEX obligation
+            if active_deposits == 0:
+                return True, None
+
+            # If there are any issues with PLEX payments (overdue / warning / blocked)
+            if status.get("has_issues"):
+                required = status.get("total_daily_plex")
+
+                # Format required PLEX amount safely
+                try:
+                    required_str = f"{required.normalize()}" if hasattr(required, "normalize") else str(required)
+                except Exception:  # pragma: no cover - defensive formatting
+                    required_str = str(required)
+
+                logger.warning(
+                    "Withdrawal blocked: user has unpaid daily PLEX requirement",
+                    extra={
+                        "user_id": user_id,
+                        "active_deposits": active_deposits,
+                        "daily_plex_required": required_str,
+                    },
+                )
+
+                return False, (
+                    "🚫 Вывод USDT временно недоступен.\n\n"
+                    "По правилам системы, при активных депозитах необходимо ежедневно "
+                    "оплачивать 10 PLEX за каждый $ депозита.\n\n"
+                    f"Текущий суточный платёж за обслуживание ваших депозитов: {required_str} PLEX.\n\n"
+                    "После поступления PLEX-платежа вывод USDT будет разблокирован."
+                )
+
+            return True, None
+
+        except Exception as exc:  # pragma: no cover - defensive
+            # В случае ошибок проверки PLEX не блокируем вывод жёстко,
+            # чтобы технический сбой не ставил систему на стоп.
+            logger.error(f"PLEX payment check failed for user {user_id}: {exc}")
+            return True, None
 
     async def check_auto_withdrawal_eligibility(
         self, user_id: int, amount: Decimal

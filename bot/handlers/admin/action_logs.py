@@ -108,7 +108,7 @@ def format_action_details(action_type: str, details: dict | None) -> str:
         result.append(f"ID: {details['telegram_id']}")
 
     if "wallet_address" in details:
-        wallet = details['wallet_address']
+        wallet = details["wallet_address"]
         if len(wallet) > 20:
             wallet = wallet[:10] + "..." + wallet[-8:]
         result.append(f"💼 {wallet}")
@@ -148,15 +148,13 @@ async def handle_action_logs(
 
     if not actions:
         await message.answer(
-            "📋 **Логи действий админов**\n\n"
-            "Нет записей о действиях админов.",
-            parse_mode="Markdown",
+            "📋 Логи действий админов\n\nНет записей о действиях админов.",
             reply_markup=get_admin_keyboard_from_data(data),
         )
         return
 
     # Format actions for display
-    text = "📋 **Логи действий админов** (последние 20)\n\n"
+    text = "📋 Логи действий админов (последние 20)\n\n"
 
     for i, action in enumerate(actions, 1):
         # Admin info - escape underscores for Markdown
@@ -166,10 +164,7 @@ async def handle_action_logs(
         # Target user info (if applicable)
         target_info = ""
         if action.target_user_id and action.target_user:
-            target_name = escape_markdown(
-                action.target_user.username
-                or f"ID:{action.target_user.telegram_id}"
-            )
+            target_name = escape_markdown(action.target_user.username or f"ID:{action.target_user.telegram_id}")
             target_info = f"\n🎯 Цель: @{target_name}"
 
         # Format action
@@ -189,7 +184,7 @@ async def handle_action_logs(
     if len(text) > 4000:
         # Send in chunks
         chunks = []
-        current_chunk = "📋 **Логи действий админов** (последние 20)\n\n"
+        current_chunk = "📋 Логи действий админов (последние 20)\n\n"
 
         for i, action in enumerate(actions, 1):
             admin_name = escape_markdown(action.admin.username or f"ID:{action.admin.telegram_id}")
@@ -197,10 +192,7 @@ async def handle_action_logs(
 
             target_info = ""
             if action.target_user_id and action.target_user:
-                target_name = escape_markdown(
-                    action.target_user.username
-                    or f"ID:{action.target_user.telegram_id}"
-                )
+                target_name = escape_markdown(action.target_user.username or f"ID:{action.target_user.telegram_id}")
                 target_info = f"\n🎯 Цель: @{target_name}"
 
             action_text = (
@@ -222,17 +214,15 @@ async def handle_action_logs(
 
         # Send chunks
         for chunk in chunks:
-            await message.answer(chunk, parse_mode="Markdown")
+            await message.answer(chunk)
 
         # Send final summary with keyboard
         await message.answer(
             f"📊 Всего записей: {len(actions)}",
-            parse_mode="Markdown",
             reply_markup=get_admin_keyboard_from_data(data),
         )
     else:
         await message.answer(
             text,
-            parse_mode="Markdown",
             reply_markup=get_admin_keyboard_from_data(data),
         )

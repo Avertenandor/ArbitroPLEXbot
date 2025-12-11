@@ -31,7 +31,6 @@ warnings.filterwarnings(
 
 from aiogram import Bot, Dispatcher  # noqa: E402
 from aiogram.client.default import DefaultBotProperties  # noqa: E402
-from aiogram.enums import ParseMode  # noqa: E402
 from aiogram.types import ErrorEvent  # noqa: E402
 from loguru import logger  # noqa: E402
 
@@ -68,12 +67,13 @@ async def main() -> None:  # noqa: C901
     storage, redis_client = await setup_fsm_storage()
 
     # Initialize bot
+    # ВАЖНО: не используем глобальный Markdown по умолчанию, чтобы
+    # динамические тексты с подчёркиваниями/ссылками не ломали разметку.
+    # Там, где нужен Markdown или HTML, он указывается явно в хендлерах.
     global bot_instance
     bot = Bot(
         token=settings.telegram_bot_token,
-        default=DefaultBotProperties(
-            parse_mode=ParseMode.MARKDOWN,
-        ),
+        default=DefaultBotProperties(),  # без parse_mode по умолчанию
     )
     bot_instance = bot
 

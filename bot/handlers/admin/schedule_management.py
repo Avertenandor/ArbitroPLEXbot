@@ -98,10 +98,7 @@ def schedule_main_keyboard():
     builder = InlineKeyboardBuilder()
 
     for task_id, task in SCHEDULED_TASKS.items():
-        builder.button(
-            text=task["name"],
-            callback_data=f"schedule_task:{task_id}"
-        )
+        builder.button(text=task["name"], callback_data=f"schedule_task:{task_id}")
 
     builder.button(text="🔄 Обновить статус", callback_data="schedule_refresh")
     builder.button(text="◀️ Назад в админку", callback_data="admin_back")
@@ -115,10 +112,7 @@ def task_detail_keyboard(task_id: str, task: dict):
     builder = InlineKeyboardBuilder()
 
     if task.get("can_trigger", False):
-        builder.button(
-            text="▶️ Запустить сейчас",
-            callback_data=f"schedule_run:{task_id}"
-        )
+        builder.button(text="▶️ Запустить сейчас", callback_data=f"schedule_run:{task_id}")
 
     builder.button(text="📊 Статус задачи", callback_data=f"schedule_status:{task_id}")
     builder.button(text="◀️ Назад к списку", callback_data="schedule_list")
@@ -127,7 +121,7 @@ def task_detail_keyboard(task_id: str, task: dict):
     return builder.as_markup()
 
 
-@router.message(StateFilter('*'), F.text == "⏰ Расписание задач")
+@router.message(StateFilter("*"), F.text == "⏰ Расписание задач")
 async def show_schedule_management(
     message: Message,
     session: AsyncSession,
@@ -144,7 +138,7 @@ async def show_schedule_management(
     await state.set_state(ScheduleStates.viewing)
 
     text = (
-        "⏰ *Управление расписанием*\n"
+        "⏰ Управление расписанием\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
         "Здесь вы можете:\n"
         "• Просматривать запланированные задачи\n"
@@ -155,7 +149,6 @@ async def show_schedule_management(
 
     await message.answer(
         text,
-        parse_mode="Markdown",
         reply_markup=schedule_main_keyboard(),
     )
 
@@ -172,15 +165,10 @@ async def show_schedule_list(
     """Show schedule task list."""
     await callback.answer()
 
-    text = (
-        "⏰ *Управление расписанием*\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        "Выберите задачу для управления:"
-    )
+    text = "⏰ Управление расписанием\n━━━━━━━━━━━━━━━━━━━━\n\nВыберите задачу для управления:"
 
     await callback.message.edit_text(
         text,
-        parse_mode="Markdown",
         reply_markup=schedule_main_keyboard(),
     )
 
@@ -205,16 +193,15 @@ async def show_task_detail(
     text = (
         f"{task['name']}\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"📝 *Описание:*\n{task['description']}\n\n"
-        f"⏱️ *Интервал:* {task['default_interval']}\n"
-        f"📦 *Модуль:* `{task['module']}`\n"
-        f"🔧 *Функция:* `{task['function']}`\n\n"
-        "_Выберите действие:_"
+        f"📝 Описание:\n{task['description']}\n\n"
+        f"⏱️ Интервал: {task['default_interval']}\n"
+        f"📦 Модуль: {task['module']}\n"
+        f"🔧 Функция: {task['function']}\n\n"
+        "Выберите действие:"
     )
 
     await callback.message.edit_text(
         text,
-        parse_mode="Markdown",
         reply_markup=task_detail_keyboard(task_id, task),
     )
 
@@ -247,26 +234,31 @@ async def run_task_manually(
         # Dynamically import and run the task
         if task_id == "balance_notifications":
             from jobs.tasks.balance_notification import send_balance_notifications
+
             send_balance_notifications.send()
             result_msg = "✅ Задача отправлена в очередь"
 
         elif task_id == "plex_balance_monitor":
             from jobs.tasks.plex_balance_monitor import monitor_plex_balances
+
             monitor_plex_balances.send()
             result_msg = "✅ Задача отправлена в очередь"
 
         elif task_id == "daily_rewards":
             from jobs.tasks.daily_rewards import process_daily_rewards
+
             process_daily_rewards.send()
             result_msg = "✅ Задача отправлена в очередь"
 
         elif task_id == "deposit_monitoring":
             from jobs.tasks.deposit_monitoring import monitor_deposits
+
             monitor_deposits.send()
             result_msg = "✅ Задача отправлена в очередь"
 
         elif task_id == "blockchain_cache_sync":
             from jobs.tasks.blockchain_cache_sync import sync_blockchain_cache
+
             sync_blockchain_cache.send()
             result_msg = "✅ Задача отправлена в очередь"
 
@@ -376,11 +368,7 @@ async def refresh_schedule_status(
     await callback.answer("🔄 Обновлено")
 
     # Just re-show the list
-    text = (
-        "⏰ *Управление расписанием*\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-        "Выберите задачу для управления:"
-    )
+    text = "⏰ *Управление расписанием*\n━━━━━━━━━━━━━━━━━━━━\n\nВыберите задачу для управления:"
 
     await callback.message.edit_text(
         text,
