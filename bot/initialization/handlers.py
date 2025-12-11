@@ -98,6 +98,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
         broadcast,
         deposit_management,
         deposit_settings,
+        dev_chat,
         emergency,
         financials,
         inquiries,
@@ -159,6 +160,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
         ai_assistant,  # Added: AI Assistant for admins
         knowledge_base,  # Added: Knowledge Base management
         bonus_management,  # Added: Bonus management
+        dev_chat,  # Added: Developer direct chat
     ])
 
     dp.include_router(wallet_key_setup.router)
@@ -190,6 +192,7 @@ def register_admin_handlers(dp: Dispatcher) -> None:
     dp.include_router(action_logs.router)  # Admin action logs viewer
     dp.include_router(schedule_management.router)  # Schedule management
     dp.include_router(bonus_management.router)  # Bonus management
+    dp.include_router(dev_chat.router)  # Developer chat for direct Copilot communication
     # ai_assistant.router registered earlier (before panel.router) for FSM priority
 
     # Admin referral stats handler

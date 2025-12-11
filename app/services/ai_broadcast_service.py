@@ -506,8 +506,7 @@ class AIBroadcastService:
             )
 
             logger.info(
-                f"ARIA sent feedback request to admin {admin.telegram_id} (@{admin.username}) "
-                f"on topic: {topic}"
+                f"ARIA sent feedback request to admin {admin.telegram_id} (@{admin.username}) on topic: {topic}"
             )
 
             return {
@@ -540,8 +539,9 @@ class AIBroadcastService:
         Returns:
             Result dict with stats
         """
-        from app.models import Admin
         from sqlalchemy import select
+
+        from app.models import Admin
 
         try:
             # Get all active admins
@@ -557,10 +557,7 @@ class AIBroadcastService:
 
             # Add feedback prompt if requested
             if request_feedback:
-                message_text += (
-                    "\n\n💬 _Есть идеи или предложения? "
-                    "Нажмите '🤖 AI Помощник' чтобы обсудить с ARIA._"
-                )
+                message_text += "\n\n💬 _Есть идеи или предложения? Нажмите '🤖 AI Помощник' чтобы обсудить с ARIA._"
 
             sent_count = 0
             failed_count = 0
@@ -580,9 +577,7 @@ class AIBroadcastService:
                     logger.warning(f"Failed to send to admin {admin.telegram_id}: {e}")
                     failed_count += 1
 
-            logger.info(
-                f"ARIA broadcast to {sent_count} admins: {', '.join(sent_to)}"
-            )
+            logger.info(f"ARIA broadcast to {sent_count} admins: {', '.join(sent_to)}")
 
             return {
                 "success": True,
@@ -601,8 +596,9 @@ class AIBroadcastService:
 
     async def _find_admin(self, identifier: str | int) -> Any:
         """Find admin by username or telegram_id."""
-        from app.models import Admin
         from sqlalchemy import select
+
+        from app.models import Admin
 
         try:
             if isinstance(identifier, int):
