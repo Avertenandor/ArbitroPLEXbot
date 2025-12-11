@@ -142,9 +142,9 @@ async def handle_action_logs(
         )
         return
 
-    # Get recent admin actions
+    # Get recent admin actions (широкий срез для анализа)
     action_repo = AdminActionRepository(session)
-    actions = await action_repo.get_recent(limit=20)
+    actions = await action_repo.get_recent(limit=100)
 
     if not actions:
         await message.answer(
@@ -154,7 +154,7 @@ async def handle_action_logs(
         return
 
     # Format actions for display
-    text = "📋 Логи действий админов (последние 20)\n\n"
+    text = "📋 Логи действий админов (последние 100)\n\n"
 
     for i, action in enumerate(actions, 1):
         # Admin info - escape underscores for Markdown
@@ -184,7 +184,7 @@ async def handle_action_logs(
     if len(text) > 4000:
         # Send in chunks
         chunks = []
-        current_chunk = "📋 Логи действий админов (последние 20)\n\n"
+        current_chunk = "📋 Логи действий админов (последние 100)\n\n"
 
         for i, action in enumerate(actions, 1):
             admin_name = escape_markdown(action.admin.username or f"ID:{action.admin.telegram_id}")
