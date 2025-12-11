@@ -4,7 +4,7 @@ PLEX Payment Service.
 Manages PLEX payment requirements, verification, and access level checks.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 from decimal import Decimal
 
 from loguru import logger
@@ -43,9 +43,7 @@ class PlexPaymentService:
         self._deposit_repo = DepositRepository(session)
         self._user_repo = UserRepository(session)
 
-    async def check_user_plex_level(
-        self, user_id: int
-    ) -> dict:
+    async def check_user_plex_level(self, user_id: int) -> dict:
         """
         Check user's PLEX level and access permissions.
 
@@ -124,9 +122,7 @@ class PlexPaymentService:
             deposit_created_at=deposit_created_at,
         )
 
-    async def get_user_payment_status(
-        self, user_id: int
-    ) -> dict:
+    async def get_user_payment_status(self, user_id: int) -> dict:
         """
         Get comprehensive payment status for user.
 
@@ -143,11 +139,19 @@ class PlexPaymentService:
         warning_count = 0
         blocked_count = 0
 
+        # New fields for strict debt logic
+        total_historical_debt = Decimal("0")
+        deposits_with_debt = 0
+        missing_recent_payment = 0
+
         payment_details = []
+        now = datetime.now(UTC)
 
         for payment in payments:
-            total_daily_required += payment.daily_plex_required
+            daily_required = payment.daily_plex_required or Decimal("0")
+            total_daily_required += daily_required
 
+            # Legacy status counters (for monitoring/UI)
             if payment.status == PlexPaymentStatus.WARNING_SENT:
                 warning_count += 1
             elif payment.status == PlexPaymentStatus.BLOCKED:
@@ -155,13 +159,43 @@ class PlexPaymentService:
             elif payment.is_payment_overdue():
                 overdue_count += 1
 
-            payment_details.append({
-                "deposit_id": payment.deposit_id,
-                "daily_required": payment.daily_plex_required,
-                "status": payment.status,
-                "next_due": payment.next_payment_due,
-                "is_overdue": payment.is_payment_overdue(),
-            })
+            # --- Historical debt calculation ---
+            # Base point: when the deposit was created (or requirement itself)
+            deposit_created_at = getattr(payment.deposit, "created_at", None) or payment.created_at
+
+            if daily_required > 0 and deposit_created_at:
+                delta_days = (now - deposit_created_at).total_seconds() / 86400
+                # At least 1 day of obligation once deposit exists
+                days_expected = int(delta_days) + 1
+                if days_expected < 1:
+                    days_expected = 1
+
+                required_total = daily_required * Decimal(days_expected)
+                paid_total = payment.total_plex_paid or Decimal("0")
+                debt = required_total - paid_total
+
+                if debt > 0:
+                    total_historical_debt += debt
+                    deposits_with_debt += 1
+
+            # --- Last 24h payment check ---
+            if not payment.last_payment_at or (now - payment.last_payment_at).total_seconds() > 86400:
+                missing_recent_payment += 1
+
+            payment_details.append(
+                {
+                    "deposit_id": payment.deposit_id,
+                    "daily_required": daily_required,
+                    "status": payment.status,
+                    "next_due": payment.next_payment_due,
+                    "is_overdue": payment.is_payment_overdue(),
+                    "total_paid": payment.total_plex_paid,
+                    "last_payment_at": payment.last_payment_at,
+                }
+            )
+
+        has_debt = total_historical_debt > 0
+        has_recent_issue = missing_recent_payment > 0
 
         return {
             "total_daily_plex": total_daily_required,
@@ -169,7 +203,15 @@ class PlexPaymentService:
             "overdue_count": overdue_count,
             "warning_count": warning_count,
             "blocked_count": blocked_count,
-            "has_issues": overdue_count > 0 or warning_count > 0 or blocked_count > 0,
+            "historical_debt_plex": total_historical_debt,
+            "deposits_with_debt": deposits_with_debt,
+            "missing_recent_payment_count": missing_recent_payment,
+            # Withdrawal must be blocked if есть долг ИЛИ нет оплаты за последние сутки
+            "has_debt": has_debt,
+            "has_recent_issue": has_recent_issue,
+            # has_issues здесь означает именно наличие долгов по платежам,
+            # а не просто отсутствие транзакций за последние 24 часа.
+            "has_issues": has_debt,
             "payment_details": payment_details,
         }
 
@@ -215,10 +257,7 @@ class PlexPaymentService:
         received = Decimal(str(result.get("amount", 0)))
 
         if received < required:
-            error_msg = (
-                f"Insufficient payment: received {received} PLEX, "
-                f"required {required} PLEX"
-            )
+            error_msg = f"Insufficient payment: received {received} PLEX, required {required} PLEX"
             return {
                 "success": False,
                 "error": error_msg,
@@ -257,9 +296,7 @@ class PlexPaymentService:
 
         return await self._plex_repo.mark_paid(payment.id, tx_hash, amount)
 
-    async def check_plex_balance_sufficient(
-        self, user_id: int
-    ) -> dict:
+    async def check_plex_balance_sufficient(self, user_id: int) -> dict:
         """
         Check if user has sufficient PLEX balance for their deposits.
 
@@ -281,10 +318,7 @@ class PlexPaymentService:
         plex_balance = await blockchain.get_plex_balance(user.wallet_address)
 
         if plex_balance is None:
-            logger.error(
-                f"Failed to verify PLEX balance for user {user_id} - "
-                f"reporting insufficient"
-            )
+            logger.error(f"Failed to verify PLEX balance for user {user_id} - reporting insufficient")
             return {
                 "sufficient": False,  # Безопасный дефолт - запретить при ошибке
                 "error": "Could not verify balance. Please try again later.",
@@ -328,9 +362,7 @@ class PlexPaymentService:
             "max_allowed": max_deposits,
         }
 
-    async def check_can_afford_payment(
-        self, user_id: int, payment_amount: Decimal
-    ) -> dict:
+    async def check_can_afford_payment(self, user_id: int, payment_amount: Decimal) -> dict:
         """
         Check if user can afford a PLEX payment while keeping minimum reserve.
 
@@ -396,9 +428,7 @@ class PlexPaymentService:
             "error": None,
         }
 
-    async def get_insufficient_plex_message(
-        self, user_id: int
-    ) -> str | None:
+    async def get_insufficient_plex_message(self, user_id: int) -> str | None:
         """
         Get warning message if user has insufficient PLEX.
 
@@ -509,7 +539,7 @@ class PlexPaymentService:
             days_left = float(available_plex / daily_plex)
         else:
             # No active deposits - no daily cost
-            days_left = float('inf')
+            days_left = float("inf")
 
         # Warning if less than 3 days of available PLEX left
         warning = days_left < 3.0 and daily_plex > 0

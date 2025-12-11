@@ -292,8 +292,14 @@ class WithdrawalValidator:
             if active_deposits == 0:
                 return True, None
 
-            # If there are any issues with PLEX payments (overdue / warning / blocked)
-            if status.get("has_issues"):
+            has_debt = bool(status.get("has_debt"))
+            has_recent_issue = bool(status.get("has_recent_issue"))
+
+            # Блокируем вывод только при наличии долга по PLEX
+            # (включая текущие сутки). Факт того, что последний платёж
+            # был более 24 часов назад, сам по себе не блокирует вывод,
+            # если долг полностью погашен и предоплата покрывает сегодня.
+            if has_debt:
                 required = status.get("total_daily_plex")
 
                 # Format required PLEX amount safely
@@ -303,20 +309,28 @@ class WithdrawalValidator:
                     required_str = str(required)
 
                 logger.warning(
-                    "Withdrawal blocked: user has unpaid daily PLEX requirement",
+                    "Withdrawal blocked: user has unpaid PLEX requirement",
                     extra={
                         "user_id": user_id,
                         "active_deposits": active_deposits,
                         "daily_plex_required": required_str,
+                        "has_debt": has_debt,
+                        "has_recent_issue": has_recent_issue,
+                        "historical_debt_plex": str(status.get("historical_debt_plex")),
                     },
                 )
+
+                # Причину формируем вокруг факта долга; информацию о давности
+                # последнего платежа можно использовать только как вспомогательную.
+                reason_text = "— есть задолженность по ежедневным PLEX-платежам (за прошлые дни и/или текущие сутки);"
 
                 return False, (
                     "🚫 Вывод USDT временно недоступен.\n\n"
                     "По правилам системы, при активных депозитах необходимо ежедневно "
                     "оплачивать 10 PLEX за каждый $ депозита.\n\n"
                     f"Текущий суточный платёж за обслуживание ваших депозитов: {required_str} PLEX.\n\n"
-                    "После поступления PLEX-платежа вывод USDT будет разблокирован."
+                    f"Причина блокировки:\n{reason_text}\n\n"
+                    "После полной оплаты задолженности и актуального суточного платежа вывод USDT будет разблокирован."
                 )
 
             return True, None

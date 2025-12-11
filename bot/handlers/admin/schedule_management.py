@@ -18,7 +18,7 @@ from aiogram.types import CallbackQuery, Message
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import User
+from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
 from bot.keyboards.inline import InlineKeyboardBuilder
 
 
@@ -129,10 +129,10 @@ async def show_schedule_management(
     **data: Any,
 ) -> None:
     """Show schedule management panel."""
-    user: User | None = data.get("user")
-
-    if not user or not user.is_admin:
-        await message.answer("❌ Доступ запрещён")
+    # Доступ только для админов (и фактически только супер-админ видит кнопку
+    # в меню, но здесь дополнительно проверяем права через общую утилиту)
+    admin = await get_admin_or_deny(message, session, require_super=True, **data)
+    if not admin:
         return
 
     await state.set_state(ScheduleStates.viewing)
@@ -152,7 +152,7 @@ async def show_schedule_management(
         reply_markup=schedule_main_keyboard(),
     )
 
-    logger.info(f"[ADMIN] Schedule management opened by {user.telegram_id}")
+    logger.info(f"[ADMIN] Schedule management opened by {admin.telegram_id}")
 
 
 @router.callback_query(F.data == "schedule_list")
