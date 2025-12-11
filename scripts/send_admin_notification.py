@@ -12,6 +12,18 @@ sys.path.insert(0, '/app')
 
 from aiogram import Bot
 
+# Import centralized admin IDs to avoid inconsistencies
+try:
+    from app.config.security import TRUSTED_ADMIN_IDS
+except ImportError:
+    # Fallback if import fails (running outside container)
+    TRUSTED_ADMIN_IDS = [
+        1040687384,  # @VladarevInvestBrok (Командир/super_admin)
+        1691026253,  # @AI_XAN (Саша - Tech Deputy)
+        241568583,   # @natder (Наташа)
+        6540613027,  # @ded_vtapkax (Влад)
+    ]
+
 
 async def send_notification(message: str):
     """Send notification to all admins."""
@@ -21,8 +33,8 @@ async def send_notification(message: str):
         return
     bot = Bot(token=token)
 
-    # Admin IDs
-    admins = [5186268007, 1691026253, 6540613027, 241568583]
+    # Use centralized admin IDs
+    admins = TRUSTED_ADMIN_IDS
 
     for admin_id in admins:
         try:

@@ -6,10 +6,103 @@ Separates tool execution logic from the main AI assistant service.
 """
 
 import logging
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+# ========== Input Validation Helpers ==========
+
+def validate_required_string(value: Any, field_name: str, max_length: int = 1000) -> str:
+    """Validate and sanitize a required string field."""
+    if value is None:
+        raise ValueError(f"{field_name} is required")
+    if not isinstance(value, str):
+        value = str(value)
+    value = value.strip()
+    if not value:
+        raise ValueError(f"{field_name} cannot be empty")
+    if len(value) > max_length:
+        value = value[:max_length]
+    return value
+
+
+def validate_optional_string(value: Any, field_name: str, max_length: int = 1000) -> str | None:
+    """Validate and sanitize an optional string field."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        value = str(value)
+    value = value.strip()
+    if not value:
+        return None
+    if len(value) > max_length:
+        value = value[:max_length]
+    return value
+
+
+def validate_positive_int(value: Any, field_name: str, max_value: int = 1000000) -> int:
+    """Validate a positive integer field."""
+    if value is None:
+        raise ValueError(f"{field_name} is required")
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{field_name} must be an integer")
+    if value <= 0:
+        raise ValueError(f"{field_name} must be positive")
+    if value > max_value:
+        value = max_value
+    return value
+
+
+def validate_positive_decimal(value: Any, field_name: str, max_value: Decimal = Decimal("1000000000")) -> Decimal:
+    """Validate a positive decimal field."""
+    if value is None:
+        raise ValueError(f"{field_name} is required")
+    try:
+        value = Decimal(str(value))
+    except (TypeError, ValueError, InvalidOperation):
+        raise ValueError(f"{field_name} must be a number")
+    if value <= 0:
+        raise ValueError(f"{field_name} must be positive")
+    if value > max_value:
+        raise ValueError(f"{field_name} exceeds maximum allowed value")
+    return value
+
+
+def validate_user_identifier(value: Any, field_name: str = "user_identifier") -> str:
+    """Validate a user identifier (telegram_id or @username)."""
+    if value is None:
+        raise ValueError(f"{field_name} is required")
+    value = str(value).strip()
+    if not value:
+        raise ValueError(f"{field_name} cannot be empty")
+    # Accept: numeric ID, @username, or plain username
+    if value.startswith("@"):
+        if len(value) < 2:
+            raise ValueError(f"{field_name}: invalid username format")
+    elif not value.isdigit():
+        # Allow alphanumeric usernames without @
+        if not all(c.isalnum() or c == "_" for c in value):
+            raise ValueError(f"{field_name}: invalid format")
+    return value
+
+
+def validate_limit(value: Any, default: int = 20, max_limit: int = 100) -> int:
+    """Validate a limit parameter."""
+    if value is None:
+        return default
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        return default
+    if value <= 0:
+        return default
+    if value > max_limit:
+        return max_limit
+    return value
 
 
 class ToolExecutor:
@@ -134,7 +227,7 @@ class ToolExecutor:
             if block_type != "tool_use":
                 continue
 
-            # Check rate limit
+            # Check rate limit BEFORE execution to prevent abuse
             allowed, limit_msg = self._rate_limiter.check_limit(self.admin_id, tool_name)
             if not allowed:
                 results.append({
@@ -143,6 +236,11 @@ class ToolExecutor:
                     "content": limit_msg,
                 })
                 continue
+
+            # Record usage BEFORE execution to prevent retry-abuse
+            # (if user retries failed request, it still counts towards limit)
+            self._rate_limiter.record_usage(self.admin_id, tool_name)
+            logger.info(f"ARIA tool execution started: admin={self.admin_id} tool='{tool_name}'")
 
             try:
                 result = await self._execute_tool(
@@ -153,8 +251,7 @@ class ToolExecutor:
                     "tool_use_id": tool_id,
                     "content": str(result),
                 })
-                self._rate_limiter.record_usage(self.admin_id, tool_name)
-                logger.info(f"ARIA tool executed: admin={self.admin_id} tool='{tool_name}'")
+                logger.info(f"ARIA tool executed successfully: admin={self.admin_id} tool='{tool_name}'")
 
             except Exception as e:
                 logger.error(f"Tool execution error: {e}")
@@ -360,31 +457,43 @@ class ToolExecutor:
     async def _execute_messaging_tool(self, name: str, inp: dict) -> Any:
         """Execute messaging/broadcast tools."""
         if name == "send_message_to_user":
+            user_id = validate_user_identifier(inp.get("user_identifier"))
+            message = validate_required_string(inp.get("message_text"), "message_text", max_length=4000)
             return await self._broadcast_service.send_message_to_user(
-                user_identifier=inp["user_identifier"],
-                message_text=inp["message_text"],
+                user_identifier=user_id,
+                message_text=message,
             )
         elif name == "broadcast_to_group":
+            group = validate_required_string(inp.get("group"), "group", max_length=50)
+            message = validate_required_string(inp.get("message_text"), "message_text", max_length=4000)
+            limit = validate_limit(inp.get("limit"), default=100, max_limit=1000)
             return await self._broadcast_service.broadcast_to_group(
-                group=inp["group"],
-                message_text=inp["message_text"],
-                limit=inp.get("limit", 100),
+                group=group,
+                message_text=message,
+                limit=limit,
             )
         elif name == "get_users_list":
+            group = validate_required_string(inp.get("group"), "group", max_length=50)
+            limit = validate_limit(inp.get("limit"), default=20, max_limit=100)
             return await self._broadcast_service.get_users_list(
-                group=inp["group"],
-                limit=inp.get("limit", 20),
+                group=group,
+                limit=limit,
             )
         elif name == "invite_to_dialog":
+            user_id = validate_user_identifier(inp.get("user_identifier"))
+            custom_msg = validate_optional_string(inp.get("custom_message"), "custom_message", max_length=500)
             return await self._broadcast_service.invite_to_dialog(
-                user_identifier=inp["user_identifier"],
-                custom_message=inp.get("custom_message"),
+                user_identifier=user_id,
+                custom_message=custom_msg,
             )
         elif name == "mass_invite_to_dialog":
+            group = validate_required_string(inp.get("group"), "group", max_length=50)
+            custom_msg = validate_optional_string(inp.get("custom_message"), "custom_message", max_length=500)
+            limit = validate_limit(inp.get("limit"), default=50, max_limit=200)
             return await self._broadcast_service.mass_invite_to_dialog(
-                group=inp["group"],
-                custom_message=inp.get("custom_message"),
-                limit=inp.get("limit", 50),
+                group=group,
+                custom_message=custom_msg,
+                limit=limit,
             )
         return {"error": "Unknown messaging tool"}
 
@@ -431,20 +540,26 @@ class ToolExecutor:
     async def _execute_bonus_tool(self, name: str, inp: dict) -> Any:
         """Execute bonus tools."""
         if name == "grant_bonus":
+            user_id = validate_user_identifier(inp.get("user_identifier"))
+            amount = validate_positive_decimal(inp.get("amount"), "amount")
+            reason = validate_required_string(inp.get("reason"), "reason", max_length=500)
             return await self._bonus_service.grant_bonus(
-                user_identifier=inp["user_identifier"],
-                amount=inp["amount"],
-                reason=inp["reason"],
+                user_identifier=user_id,
+                amount=amount,
+                reason=reason,
             )
         elif name == "get_user_bonuses":
+            user_id = validate_user_identifier(inp.get("user_identifier"))
             return await self._bonus_service.get_user_bonuses(
-                user_identifier=inp["user_identifier"],
-                active_only=inp.get("active_only", False),
+                user_identifier=user_id,
+                active_only=bool(inp.get("active_only", False)),
             )
         elif name == "cancel_bonus":
+            bonus_id = validate_positive_int(inp.get("bonus_id"), "bonus_id")
+            reason = validate_required_string(inp.get("reason"), "reason", max_length=500)
             return await self._bonus_service.cancel_bonus(
-                bonus_id=inp["bonus_id"],
-                reason=inp["reason"],
+                bonus_id=bonus_id,
+                reason=reason,
             )
         return {"error": "Unknown bonus tool"}
 
@@ -500,28 +615,41 @@ class ToolExecutor:
     async def _execute_user_tool(self, name: str, inp: dict) -> Any:
         """Execute user management tools."""
         if name == "get_user_profile":
-            return await self._users_service.get_user_profile(user_identifier=inp["user_identifier"])
+            user_id = validate_user_identifier(inp.get("user_identifier"))
+            return await self._users_service.get_user_profile(user_identifier=user_id)
         elif name == "search_users":
+            query = validate_required_string(inp.get("query"), "query", max_length=100)
+            limit = validate_limit(inp.get("limit"), default=20, max_limit=50)
             return await self._users_service.search_users(
-                query=inp["query"],
-                limit=inp.get("limit", 20),
+                query=query,
+                limit=limit,
             )
         elif name == "change_user_balance":
+            user_id = validate_user_identifier(inp.get("user_identifier"))
+            amount = validate_positive_decimal(inp.get("amount"), "amount")
+            reason = validate_required_string(inp.get("reason"), "reason", max_length=500)
+            operation = validate_required_string(inp.get("operation"), "operation", max_length=20)
+            if operation not in ("add", "subtract", "set"):
+                raise ValueError("operation must be 'add', 'subtract', or 'set'")
             return await self._users_service.change_user_balance(
-                user_identifier=inp["user_identifier"],
-                amount=inp["amount"],
-                reason=inp["reason"],
-                operation=inp["operation"],
+                user_identifier=user_id,
+                amount=amount,
+                reason=reason,
+                operation=operation,
             )
         elif name == "block_user":
+            user_id = validate_user_identifier(inp.get("user_identifier"))
+            reason = validate_required_string(inp.get("reason"), "reason", max_length=500)
             return await self._users_service.block_user(
-                user_identifier=inp["user_identifier"],
-                reason=inp["reason"],
+                user_identifier=user_id,
+                reason=reason,
             )
         elif name == "unblock_user":
-            return await self._users_service.unblock_user(user_identifier=inp["user_identifier"])
+            user_id = validate_user_identifier(inp.get("user_identifier"))
+            return await self._users_service.unblock_user(user_identifier=user_id)
         elif name == "get_user_deposits":
-            return await self._users_service.get_user_deposits(user_identifier=inp["user_identifier"])
+            user_id = validate_user_identifier(inp.get("user_identifier"))
+            return await self._users_service.get_user_deposits(user_identifier=user_id)
         elif name == "get_users_stats":
             return await self._users_service.get_users_stats()
         return {"error": "Unknown user tool"}
@@ -543,18 +671,24 @@ class ToolExecutor:
     async def _execute_withdrawals_tool(self, name: str, inp: dict) -> Any:
         """Execute withdrawals tools."""
         if name == "get_pending_withdrawals":
-            return await self._withdrawals_service.get_pending_withdrawals(limit=inp.get("limit", 20))
+            limit = validate_limit(inp.get("limit"), default=20, max_limit=100)
+            return await self._withdrawals_service.get_pending_withdrawals(limit=limit)
         elif name == "get_withdrawal_details":
-            return await self._withdrawals_service.get_withdrawal_details(withdrawal_id=inp["withdrawal_id"])
+            withdrawal_id = validate_positive_int(inp.get("withdrawal_id"), "withdrawal_id")
+            return await self._withdrawals_service.get_withdrawal_details(withdrawal_id=withdrawal_id)
         elif name == "approve_withdrawal":
+            withdrawal_id = validate_positive_int(inp.get("withdrawal_id"), "withdrawal_id")
+            tx_hash = validate_optional_string(inp.get("tx_hash"), "tx_hash", max_length=100)
             return await self._withdrawals_service.approve_withdrawal(
-                withdrawal_id=inp["withdrawal_id"],
-                tx_hash=inp.get("tx_hash"),
+                withdrawal_id=withdrawal_id,
+                tx_hash=tx_hash,
             )
         elif name == "reject_withdrawal":
+            withdrawal_id = validate_positive_int(inp.get("withdrawal_id"), "withdrawal_id")
+            reason = validate_required_string(inp.get("reason"), "reason", max_length=500)
             return await self._withdrawals_service.reject_withdrawal(
-                withdrawal_id=inp["withdrawal_id"],
-                reason=inp["reason"],
+                withdrawal_id=withdrawal_id,
+                reason=reason,
             )
         elif name == "get_withdrawals_statistics":
             return await self._withdrawals_service.get_statistics()
@@ -619,38 +753,59 @@ class ToolExecutor:
         if name == "get_deposit_levels_config":
             return await self._deposits_service.get_deposit_levels_config()
         elif name == "get_user_deposits_list":
-            return await self._deposits_service.get_user_deposits(user_identifier=inp["user_identifier"])
+            user_id = validate_user_identifier(inp.get("user_identifier"))
+            return await self._deposits_service.get_user_deposits(user_identifier=user_id)
         elif name == "get_pending_deposits":
-            return await self._deposits_service.get_pending_deposits(limit=inp.get("limit", 20))
+            limit = validate_limit(inp.get("limit"), default=20, max_limit=100)
+            return await self._deposits_service.get_pending_deposits(limit=limit)
         elif name == "get_deposit_details":
-            return await self._deposits_service.get_deposit_details(deposit_id=inp["deposit_id"])
+            deposit_id = validate_positive_int(inp.get("deposit_id"), "deposit_id")
+            return await self._deposits_service.get_deposit_details(deposit_id=deposit_id)
         elif name == "get_platform_deposit_stats":
             return await self._deposits_service.get_platform_deposit_stats()
         elif name == "change_max_deposit_level":
-            return await self._deposits_service.change_max_deposit_level(new_max=inp["new_max"])
+            new_max = validate_positive_int(inp.get("new_max"), "new_max", max_value=10)
+            return await self._deposits_service.change_max_deposit_level(new_max=new_max)
         elif name == "create_manual_deposit":
+            user_id = validate_user_identifier(inp.get("user_identifier"))
+            level = validate_positive_int(inp.get("level"), "level", max_value=10)
+            amount = validate_positive_decimal(inp.get("amount"), "amount")
+            reason = validate_required_string(inp.get("reason"), "reason", max_length=500)
             return await self._deposits_service.create_manual_deposit(
-                user_identifier=inp["user_identifier"],
-                level=inp["level"],
-                amount=inp["amount"],
-                reason=inp["reason"],
+                user_identifier=user_id,
+                level=level,
+                amount=amount,
+                reason=reason,
             )
         elif name == "modify_deposit_roi":
+            deposit_id = validate_positive_int(inp.get("deposit_id"), "deposit_id")
+            reason = validate_required_string(inp.get("reason"), "reason", max_length=500)
+            # These are optional, but validate if provided
+            new_roi_paid = None
+            new_roi_cap = None
+            if inp.get("new_roi_paid") is not None:
+                new_roi_paid = validate_positive_decimal(inp.get("new_roi_paid"), "new_roi_paid")
+            if inp.get("new_roi_cap") is not None:
+                new_roi_cap = validate_positive_decimal(inp.get("new_roi_cap"), "new_roi_cap")
             return await self._deposits_service.modify_deposit_roi(
-                deposit_id=inp["deposit_id"],
-                new_roi_paid=inp.get("new_roi_paid"),
-                new_roi_cap=inp.get("new_roi_cap"),
-                reason=inp["reason"],
+                deposit_id=deposit_id,
+                new_roi_paid=new_roi_paid,
+                new_roi_cap=new_roi_cap,
+                reason=reason,
             )
         elif name == "cancel_deposit":
+            deposit_id = validate_positive_int(inp.get("deposit_id"), "deposit_id")
+            reason = validate_required_string(inp.get("reason"), "reason", max_length=500)
             return await self._deposits_service.cancel_deposit(
-                deposit_id=inp["deposit_id"],
-                reason=inp["reason"],
+                deposit_id=deposit_id,
+                reason=reason,
             )
         elif name == "confirm_deposit":
+            deposit_id = validate_positive_int(inp.get("deposit_id"), "deposit_id")
+            reason = validate_optional_string(inp.get("reason"), "reason", max_length=500) or ""
             return await self._deposits_service.confirm_deposit(
-                deposit_id=inp["deposit_id"],
-                reason=inp.get("reason", ""),
+                deposit_id=deposit_id,
+                reason=reason,
             )
         return {"error": "Unknown deposits tool"}
 
