@@ -498,24 +498,72 @@ class AIAssistantService:
         qa_pairs: list[dict],
         source_user: str,
     ) -> int:
-        """Save extracted knowledge to knowledge base."""
-        from app.services.knowledge_base import get_knowledge_base
+        """
+        Save extracted knowledge to knowledge base.
 
-        kb = get_knowledge_base()
-        saved = 0
+        Args:
+            qa_pairs: List of Q&A dictionaries with question, answer, category
+            source_user: Username of the source
 
-        for qa in qa_pairs:
-            if qa.get("question") and qa.get("answer"):
-                kb.add_learned_entry(
-                    question=qa["question"],
-                    answer=qa["answer"],
-                    category=qa.get("category", "Из диалогов"),
-                    source_user=source_user,
-                    needs_verification=True,
-                )
-                saved += 1
+        Returns:
+            Number of successfully saved entries
+        """
+        # Validate input
+        if not qa_pairs:
+            logger.debug("save_learned_knowledge: empty qa_pairs, nothing to save")
+            return 0
 
-        return saved
+        if not isinstance(qa_pairs, list):
+            logger.warning(f"save_learned_knowledge: qa_pairs is not a list: {type(qa_pairs)}")
+            return 0
+
+        try:
+            from app.services.knowledge_base import get_knowledge_base
+
+            kb = get_knowledge_base()
+            saved = 0
+
+            for qa in qa_pairs:
+                # Validate each entry
+                if not isinstance(qa, dict):
+                    logger.warning(f"save_learned_knowledge: skipping non-dict entry: {type(qa)}")
+                    continue
+
+                question = qa.get("question", "").strip() if qa.get("question") else ""
+                answer = qa.get("answer", "").strip() if qa.get("answer") else ""
+
+                if not question or not answer:
+                    logger.debug(f"save_learned_knowledge: skipping empty Q&A: q={bool(question)}, a={bool(answer)}")
+                    continue
+
+                # Limit entry size to prevent bloat
+                if len(question) > 500:
+                    question = question[:500] + "..."
+                if len(answer) > 2000:
+                    answer = answer[:2000] + "..."
+
+                try:
+                    kb.add_learned_entry(
+                        question=question,
+                        answer=answer,
+                        category=qa.get("category", "Из диалогов"),
+                        source_user=source_user,
+                        needs_verification=True,
+                    )
+                    saved += 1
+                except Exception as entry_error:
+                    logger.error(f"save_learned_knowledge: failed to save entry: {entry_error}")
+                    continue
+
+            logger.info(f"save_learned_knowledge: saved {saved}/{len(qa_pairs)} entries from {source_user}")
+            return saved
+
+        except ImportError as e:
+            logger.error(f"save_learned_knowledge: knowledge_base import failed: {e}")
+            return 0
+        except Exception as e:
+            logger.error(f"save_learned_knowledge: unexpected error: {e}")
+            return 0
 
     # ========== USER CHAT WITH WALLET TOOLS ==========
 
@@ -731,10 +779,13 @@ class AIAssistantService:
             system_prompt = self._get_system_prompt(role, username, telegram_id)
 
             # First call - may request tool use
+            # Use prompt caching (saves 90% on repeated calls)
+            system_with_cache = wrap_system_prompt(system_prompt)
+
             response = self.client.messages.create(
                 model=self.model,
                 max_tokens=2048,
-                system=system_prompt,
+                system=system_with_cache,
                 messages=messages,
                 tools=tools,
             )
@@ -779,13 +830,12 @@ class AIAssistantService:
                     }
                 )
 
-                # Get final response
+                # Get final response (no tools - final answer should be text only)
                 final_response = self.client.messages.create(
                     model=self.model,
                     max_tokens=2048,
-                    system=system_prompt,
+                    system=system_with_cache,
                     messages=messages,
-                    tools=tools,
                 )
 
                 if final_response.content:

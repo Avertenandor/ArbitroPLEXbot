@@ -114,16 +114,22 @@ def extract_user_identifiers(data: dict[str, Any]) -> tuple[str | None, int | No
 def create_tool_result(tool_use_id: str, result: str | dict[str, Any]) -> dict[str, Any]:
     """
     Create tool result message for API.
-    
+
     Args:
         tool_use_id: ID of the tool call
         result: Result content (string or dict)
-        
+
     Returns:
         Formatted tool result message
     """
+    import json
+
     if isinstance(result, dict):
-        content = str(result)
+        # Use json.dumps for proper serialization instead of str()
+        try:
+            content = json.dumps(result, ensure_ascii=False, default=str)
+        except (TypeError, ValueError):
+            content = str(result)
     else:
         content = result
 
@@ -137,13 +143,14 @@ def create_tool_result(tool_use_id: str, result: str | dict[str, Any]) -> dict[s
 def parse_content_block(block: Any) -> dict[str, Any]:
     """
     Parse content block from API response.
-    
+
     Args:
         block: Content block from response
-        
+
     Returns:
         Parsed block data
     """
+    # Safely get block type with hasattr checks
     if hasattr(block, "type"):
         block_type = block.type
     elif isinstance(block, dict):
@@ -159,7 +166,8 @@ def parse_content_block(block: Any) -> dict[str, Any]:
         elif isinstance(block, dict):
             result["text"] = block.get("text", "")
     elif block_type == "tool_use":
-        if hasattr(block, "id"):
+        # Use hasattr for all attribute accesses
+        if hasattr(block, "id") and hasattr(block, "name") and hasattr(block, "input"):
             result["id"] = block.id
             result["name"] = block.name
             result["input"] = block.input
