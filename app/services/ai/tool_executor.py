@@ -293,7 +293,7 @@ class ToolExecutor:
             return await self._execute_messaging_tool(tool_name, tool_input)
 
         # Interview tools
-        if tool_name in ("start_interview", "get_interview_status", "cancel_interview"):
+        if tool_name in ("start_interview", "get_interview_status", "cancel_interview", "get_knowledge_by_user"):
             return await self._execute_interview_tool(tool_name, tool_input, resolve_admin_id_func)
 
         # Bonus tools
@@ -580,6 +580,35 @@ class ToolExecutor:
             if not admin_id:
                 return {"success": False, "error": "Админ не найден"}
             return await interview_service.cancel_interview(admin_id["telegram_id"])
+        elif name == "get_knowledge_by_user":
+            from app.services.knowledge_base import get_knowledge_base
+            kb = get_knowledge_base()
+            username = inp.get("username", "").replace("@", "")
+            entries = kb.get_entries_by_user(username)
+            if not entries:
+                return {
+                    "success": True,
+                    "count": 0,
+                    "message": f"Записей от @{username} не найдено",
+                    "entries": [],
+                }
+            # Format entries for display
+            formatted = []
+            for e in entries:
+                formatted.append({
+                    "id": e.get("id"),
+                    "question": e.get("question"),
+                    "answer": e.get("answer"),
+                    "category": e.get("category"),
+                    "added_at": e.get("added_at"),
+                    "verified": e.get("verified_by_boss", False),
+                })
+            return {
+                "success": True,
+                "count": len(entries),
+                "message": f"Найдено {len(entries)} записей от @{username}",
+                "entries": formatted,
+            }
         return {"error": "Unknown interview tool"}
 
     async def _execute_bonus_tool(self, name: str, inp: dict) -> Any:

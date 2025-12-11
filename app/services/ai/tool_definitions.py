@@ -189,6 +189,17 @@ def get_interview_tools() -> list[dict[str, Any]]:
                 "required": ["admin_identifier"],
             },
         },
+        {
+            "name": "get_knowledge_by_user",
+            "description": "Получить записи базы знаний от конкретного пользователя/админа. Показывает интервью и записи.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "username": {"type": "string", "description": "@username пользователя (без @)"},
+                },
+                "required": ["username"],
+            },
+        },
     ]
 
 
