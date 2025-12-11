@@ -19,6 +19,7 @@ from app.repositories.global_settings_repository import (
     GlobalSettingsRepository,
 )
 from app.repositories.transaction_repository import TransactionRepository
+from bot.constants.rules import MINIMUM_PLEX_BALANCE
 
 
 @dataclass
@@ -105,7 +106,12 @@ class WithdrawalValidator:
         if not is_valid:
             return ValidationResult.error(error_msg, "PLEX_PAYMENT_REQUIRED")
 
-        # 8. Check daily limit (if enabled)
+        # 8. Check PLEX wallet balance (minimum 5000 PLEX required)
+        is_valid, error_msg = await self.check_plex_wallet_balance(user_id)
+        if not is_valid:
+            return ValidationResult.error(error_msg, "INSUFFICIENT_PLEX_BALANCE")
+
+        # 9. Check daily limit (if enabled)
         is_valid, error_msg = await self.check_daily_limit(user_id, amount)
         if not is_valid:
             return ValidationResult.error(error_msg, "DAILY_LIMIT")
@@ -339,6 +345,79 @@ class WithdrawalValidator:
             # В случае ошибок проверки PLEX не блокируем вывод жёстко,
             # чтобы технический сбой не ставил систему на стоп.
             logger.error(f"PLEX payment check failed for user {user_id}: {exc}")
+            return True, None
+
+    async def check_plex_wallet_balance(self, user_id: int) -> tuple[bool, str | None]:
+        """Check if user has minimum required PLEX balance on their wallet.
+
+        Business rule:
+        - User must have at least 5000 PLEX on their wallet at all times.
+        - This is a "non-burnable minimum" (несгораемый минимум).
+        - If balance is below 5000 PLEX, withdrawals are blocked.
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        try:
+            from app.services.blockchain import get_blockchain_service
+
+            # Get user's wallet address
+            stmt = select(User).where(User.id == user_id)
+            result = await self.session.execute(stmt)
+            user = result.scalar_one_or_none()
+
+            if not user:
+                return False, "Пользователь не найден"
+
+            if not user.wallet_address:
+                logger.warning(f"User {user_id} has no wallet address")
+                return False, "Кошелек не привязан. Обратитесь в поддержку."
+
+            # Get PLEX balance from blockchain
+            blockchain_service = get_blockchain_service()
+            plex_balance = await blockchain_service.get_plex_balance(user.wallet_address)
+
+            if plex_balance is None:
+                # If we can't get balance due to blockchain issues, don't block withdrawal
+                logger.warning(
+                    f"Could not get PLEX balance for user {user_id}, wallet {user.wallet_address}"
+                )
+                return True, None
+
+            # Check minimum balance requirement
+            if plex_balance < MINIMUM_PLEX_BALANCE:
+                logger.warning(
+                    "Withdrawal blocked: insufficient PLEX wallet balance",
+                    extra={
+                        "user_id": user_id,
+                        "wallet_address": user.wallet_address[:10] + "...",
+                        "plex_balance": str(plex_balance),
+                        "minimum_required": str(MINIMUM_PLEX_BALANCE),
+                    },
+                )
+                return False, (
+                    f"🚫 Вывод USDT временно недоступен.\n\n"
+                    f"На вашем кошельке недостаточно монет PLEX.\n\n"
+                    f"📊 Текущий баланс: {plex_balance:,.0f} PLEX\n"
+                    f"📊 Требуемый минимум: {MINIMUM_PLEX_BALANCE:,} PLEX\n\n"
+                    f"🔴 **{MINIMUM_PLEX_BALANCE:,} PLEX** — это несгораемый минимум, "
+                    f"который всегда должен быть на вашем кошельке.\n\n"
+                    f"Пополните баланс PLEX на кошельке до минимума для разблокировки вывода."
+                )
+
+            logger.debug(
+                f"PLEX wallet balance check passed for user {user_id}: "
+                f"balance={plex_balance}, minimum={MINIMUM_PLEX_BALANCE}"
+            )
+            return True, None
+
+        except Exception as exc:  # pragma: no cover - defensive
+            # В случае ошибок проверки не блокируем вывод жёстко,
+            # чтобы технический сбой не ставил систему на стоп.
+            logger.error(f"PLEX wallet balance check failed for user {user_id}: {exc}")
             return True, None
 
     async def check_auto_withdrawal_eligibility(self, user_id: int, amount: Decimal) -> bool:
