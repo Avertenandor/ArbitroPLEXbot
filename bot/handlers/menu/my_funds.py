@@ -235,8 +235,8 @@ async def show_my_funds(
         # Delete loading message and send result
         try:
             await loading_msg.delete()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to delete message: {e}")
 
         # Get keyboard from main menu (to return user to menu)
         from app.repositories.blacklist_repository import BlacklistRepository
@@ -264,8 +264,8 @@ async def show_my_funds(
         # Delete loading message
         try:
             await loading_msg.delete()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to delete message: {e}")
 
         # Show error
         text = (

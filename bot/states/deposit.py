@@ -15,31 +15,18 @@ from aiogram.fsm.state import State, StatesGroup
 class DepositStates(StatesGroup):
     """FSM состояния для процесса создания депозита."""
 
-    # DEPRECATED/RESERVED - not currently used
-    # Выбор уровня
-    selecting_level = State()
-
     # Ввод суммы в коридоре
     entering_amount = State()
-
-    # DEPRECATED/RESERVED - not currently used
-    # Подтверждение параметров
-    confirming_params = State()
-
-    # DEPRECATED/RESERVED - not currently used
-    # Ожидание USDT транзакции
-    waiting_for_usdt = State()
 
     # Ввод хеша USDT транзакции
     waiting_for_tx_hash = State()
 
-    # DEPRECATED/RESERVED - not currently used
-    # Ожидание первого PLEX платежа
-    waiting_for_plex = State()
-
-    # DEPRECATED/RESERVED - not currently used
-    # Ввод хеша PLEX транзакции
-    waiting_for_plex_tx = State()
+    # Removed deprecated states (2025-12-12):
+    # - selecting_level
+    # - confirming_params
+    # - waiting_for_usdt
+    # - waiting_for_plex
+    # - waiting_for_plex_tx
 
 
 @dataclass

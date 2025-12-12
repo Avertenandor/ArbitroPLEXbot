@@ -89,7 +89,7 @@ class BalanceNotificationService(BaseService):
         Returns:
             List of eligible users with deposits loaded
         """
-        from bot.constants.rules import WorkStatus
+        from app.config.business_constants import WorkStatus
 
         stmt = (
             select(User)

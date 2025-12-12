@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.admin_repository import AdminRepository
 from app.repositories.user_repository import UserRepository
 from app.services.bonus_service import BonusService
+from app.utils.formatters import format_user_identifier
 
 
 class AIBonusService:
@@ -162,7 +163,7 @@ class AIBonusService:
         return {
             "success": True,
             "bonus_id": bonus.id,
-            "user": f"@{user.username}" if user.username else f"ID:{user.telegram_id}",
+            "user": format_user_identifier(user),
             "amount": f"{amount} USDT",
             "roi_cap": f"{amount * 5} USDT",
             "reason": reason,
@@ -203,7 +204,7 @@ class AIBonusService:
             status = "активных " if active_only else ""
             return {
                 "success": True,
-                "user": f"@{user.username}" if user.username else f"ID:{user.telegram_id}",
+                "user": format_user_identifier(user),
                 "bonuses": [],
                 "message": f"ℹ️ У пользователя нет {status}бонусов"
             }
@@ -225,7 +226,7 @@ class AIBonusService:
 
         return {
             "success": True,
-            "user": f"@{user.username}" if user.username else f"ID:{user.telegram_id}",
+            "user": format_user_identifier(user),
             "total_count": len(bonuses_list),
             "active_count": sum(1 for b in bonuses if b.is_active),
             "bonuses": bonuses_list,

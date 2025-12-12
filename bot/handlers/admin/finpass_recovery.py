@@ -23,6 +23,7 @@ from bot.keyboards.reply import (
 )
 from bot.states.admin import AdminFinpassRecoveryStates
 from bot.utils.admin_utils import clear_state_preserve_admin_token
+from bot.utils.text_utils import escape_markdown
 
 
 router = Router()
@@ -111,20 +112,6 @@ async def handle_view_request(
 
     request_id = int(match.group(1))
     await show_request_details(message, session, state, request_id)
-
-
-def escape_markdown(text: str) -> str:
-    """Escape special Markdown characters in user input."""
-    if not text:
-        return ""
-    # Escape Markdown special chars: _ * [ ] ( ) ~ ` > # + - = | { } . !
-    special_chars = [
-        '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+',
-        '-', '=', '|', '{', '}', '.', '!'
-    ]
-    for char in special_chars:
-        text = text.replace(char, f'\\{char}')
-    return text
 
 
 async def show_request_details(

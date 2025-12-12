@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.repositories.admin_repository import AdminRepository
 from app.repositories.user_repository import UserRepository
+from app.utils.formatters import format_user_identifier
 
 
 class AIReferralService:
@@ -152,7 +153,7 @@ class AIReferralService:
 
         return {
             "success": True,
-            "user": f"@{user.username}" if user.username else f"ID:{user.telegram_id}",
+            "user": format_user_identifier(user),
             "referral_count": user.referral_count or 0,
             "referral_earnings": float(user.referral_earnings or 0),
             "referrals": referrals_list,
@@ -189,7 +190,7 @@ class AIReferralService:
         for i, user in enumerate(top_users, 1):
             top_list.append({
                 "rank": i,
-                "username": f"@{user.username}" if user.username else f"ID:{user.telegram_id}",
+                "username": format_user_identifier(user),
                 "referral_count": user.referral_count or 0,
                 "referral_earnings": float(user.referral_earnings or 0),
                 "total_deposited": float(user.total_deposited_usdt or 0),
@@ -232,7 +233,7 @@ class AIReferralService:
         for i, user in enumerate(top_users, 1):
             top_list.append({
                 "rank": i,
-                "username": f"@{user.username}" if user.username else f"ID:{user.telegram_id}",
+                "username": format_user_identifier(user),
                 "referral_earnings": float(user.referral_earnings or 0),
                 "referral_count": user.referral_count or 0,
             })

@@ -23,21 +23,11 @@ from bot.keyboards.reply import (
 )
 from bot.states.admin import AdminSupportStates
 from bot.states.admin_states import AdminStates
+from bot.utils.admin_utils import clear_state_preserve_admin_token
+from bot.utils.text_utils import escape_markdown
 
 
 router = Router(name="admin_support")
-
-
-from bot.utils.admin_utils import clear_state_preserve_admin_token
-
-
-def escape_markdown(text: str) -> str:
-    """Escape special Markdown characters in text."""
-    if not text:
-        return text
-    # Escape special Markdown characters: _ * [ ] ( ) ~ ` > # + - = | { } . !
-    escape_chars = r'_*[]()~`>#+-=|{}.!'
-    return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
 
 
 @router.message(StateFilter("*"), F.text == "🆘 Техподдержка")
@@ -448,7 +438,6 @@ async def process_support_reply(
 
             if target_id:
                 try:
-                    from bot.utils.text_utils import escape_markdown
                     safe_reply = escape_markdown(reply_text)
                     await bot.send_message(
                         chat_id=target_id,

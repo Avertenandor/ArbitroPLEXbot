@@ -309,5 +309,5 @@ async def handle_main_menu_callback(
     # Try to delete the callback message
     try:
         await callback.message.delete()
-    except Exception:
-        pass  # Ignore if message can't be deleted
+    except Exception as e:
+        logger.debug(f"Failed to delete message: {e}")

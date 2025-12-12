@@ -4,6 +4,8 @@ Application constants.
 Centralized constants for the application.
 """
 
+from app.config.business_constants import MAX_DEPOSITS_PER_USER
+
 # Support ticket limits
 MAX_OPEN_TICKETS_PER_USER = 5
 

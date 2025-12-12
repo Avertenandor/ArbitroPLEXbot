@@ -37,13 +37,16 @@ from bot.states.auth import AuthStates
 
 router = Router()
 
-# Constants
-from bot.constants.rules import (
-    LEVELS_TABLE,
+# Business logic constants
+from app.config.business_constants import (
     MINIMUM_PLEX_BALANCE,
-    RULES_SHORT_TEXT,
     can_spend_plex,
     get_available_plex_balance,
+)
+# UI constants
+from bot.constants.rules import (
+    LEVELS_TABLE,
+    RULES_SHORT_TEXT,
 )
 
 

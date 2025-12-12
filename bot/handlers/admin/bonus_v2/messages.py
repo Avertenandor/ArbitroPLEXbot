@@ -7,6 +7,7 @@ All message strings centralized in one place for easy maintenance and localizati
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from bot.handlers.admin.bonus_v2.helpers import get_bonus_status_emoji
 from bot.utils.formatters import format_usdt
 from bot.utils.text_utils import escape_markdown
 
@@ -168,8 +169,6 @@ class BonusMessages:
         )
 
         for b in my_bonuses[:10]:
-            from bot.handlers.admin.bonus_management_v2 import get_bonus_status_emoji
-
             status = get_bonus_status_emoji(b)
             user_name = b.user.username if b.user else f"ID:{b.user_id}"
             safe_user = escape_markdown(user_name)

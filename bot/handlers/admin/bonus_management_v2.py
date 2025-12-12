@@ -35,6 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.bonus_service import BonusService
 from app.services.user_service import UserService
+from bot.handlers.admin.bonus_v2.helpers import get_bonus_status, get_bonus_status_emoji
 from bot.handlers.admin.utils.admin_checks import (
     get_admin_or_deny,
     get_admin_or_deny_callback,
@@ -48,31 +49,6 @@ if TYPE_CHECKING:
     from app.models.bonus_credit import BonusCredit
 
 router = Router(name="admin_bonus_management_v2")
-
-
-# ============ HELPERS ============
-
-
-def get_bonus_status(bonus: "BonusCredit") -> str:
-    """
-    Get status string from BonusCredit model.
-
-    Model has: is_active, is_roi_completed, cancelled_at
-    Returns: "active", "completed", or "cancelled"
-    """
-    if bonus.cancelled_at is not None:
-        return "cancelled"
-    if bonus.is_roi_completed:
-        return "completed"
-    if bonus.is_active:
-        return "active"
-    return "inactive"
-
-
-def get_bonus_status_emoji(bonus: "BonusCredit") -> str:
-    """Get status emoji for bonus."""
-    status = get_bonus_status(bonus)
-    return {"active": "🟢", "completed": "✅", "cancelled": "❌", "inactive": "⚪"}.get(status, "⚪")
 
 
 # ============ STATES ============

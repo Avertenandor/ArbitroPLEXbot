@@ -14,13 +14,6 @@ from aiogram.types import Message, TelegramObject
 from loguru import logger
 
 
-def strip_markdown(text: str) -> str:
-    """Remove Markdown formatting from text."""
-    result = text.replace('**', '').replace('*', '').replace('_', '')
-    result = result.replace('`', '').replace('\\', '')
-    return result
-
-
 class MarkdownErrorHandlerMiddleware(BaseMiddleware):
     """
     Middleware that catches Markdown parse errors and retries without formatting.
@@ -51,8 +44,8 @@ class MarkdownErrorHandlerMiddleware(BaseMiddleware):
                             "⚠️ Произошла ошибка форматирования. "
                             "Попробуйте ещё раз или обратитесь в поддержку.",
                         )
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"Operation failed: {e}")
 
                 # Don't re-raise - error is handled
                 return None

@@ -18,6 +18,7 @@ from app.config.settings import settings
 from app.services.blockchain_service import get_blockchain_service
 from app.services.payment_retry_service import PaymentRetryService
 from app.utils.distributed_lock import DistributedLock
+from app.utils.redis_utils import get_redis_client
 from jobs.async_runner import run_async
 
 
@@ -64,13 +65,7 @@ async def _process_payment_retries_async() -> None:
     redis_client = None
     if redis:
         try:
-            redis_client = redis.Redis(
-                host=settings.redis_host,
-                port=settings.redis_port,
-                password=settings.redis_password,
-                db=settings.redis_db,
-                decode_responses=True,
-            )
+            redis_client = await get_redis_client()
         except Exception as e:
             logger.warning(f"Failed to create Redis client for lock: {e}")
 

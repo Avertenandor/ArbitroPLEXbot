@@ -24,69 +24,10 @@ from app.services.ai_assistant_service import (
 from app.services.monitoring_service import MonitoringService
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
 from bot.keyboards.reply import get_admin_keyboard_from_data
-from bot.utils.text_utils import escape_markdown
+from bot.utils.text_utils import escape_markdown, sanitize_markdown
 
 
 router = Router(name="admin_ai_assistant")
-
-
-def sanitize_markdown(text: str) -> str:
-    """
-    Sanitize text to prevent Telegram Markdown parse errors.
-    Fixes unclosed formatting and escapes problematic characters.
-    """
-    if not text:
-        return text
-
-    # Count formatting characters
-    # Fix unclosed bold markers
-    bold_count = text.count("**")
-    if bold_count % 2 != 0:
-        # Remove the last unpaired **
-        last_idx = text.rfind("**")
-        text = text[:last_idx] + text[last_idx + 2 :]
-
-    # Fix unclosed single asterisks (italic)
-    # First, temporarily replace ** with placeholder
-    text = text.replace("**", "\x00BOLD\x00")
-    asterisk_count = text.count("*")
-    if asterisk_count % 2 != 0:
-        # Remove the last unpaired *
-        last_idx = text.rfind("*")
-        text = text[:last_idx] + text[last_idx + 1 :]
-    # Restore bold markers
-    text = text.replace("\x00BOLD\x00", "**")
-
-    # Fix unclosed underscores
-    # Replace __ with placeholder first
-    text = text.replace("__", "\x00UNDER\x00")
-    underscore_count = text.count("_")
-    if underscore_count % 2 != 0:
-        last_idx = text.rfind("_")
-        text = text[:last_idx] + text[last_idx + 1 :]
-    text = text.replace("\x00UNDER\x00", "__")
-
-    # Fix unclosed backticks
-    # Handle code blocks first (```)
-    code_block_count = text.count("```")
-    if code_block_count % 2 != 0:
-        text += "\n```"
-
-    # Handle inline code (single `)
-    text = text.replace("```", "\x00CODE\x00")
-    backtick_count = text.count("`")
-    if backtick_count % 2 != 0:
-        last_idx = text.rfind("`")
-        text = text[:last_idx] + text[last_idx + 1 :]
-    text = text.replace("\x00CODE\x00", "```")
-
-    # Fix unclosed square brackets (links)
-    open_brackets = text.count("[")
-    close_brackets = text.count("]")
-    if open_brackets > close_brackets:
-        text += "]" * (open_brackets - close_brackets)
-
-    return text
 
 
 async def clear_state_keep_session(state: FSMContext) -> None:

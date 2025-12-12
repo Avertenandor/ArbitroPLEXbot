@@ -9,9 +9,9 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config.business_constants import SYSTEM_WALLET
 from app.config.constants import TELEGRAM_TIMEOUT
 from app.models.deposit import Deposit
-from bot.constants.rules import SYSTEM_WALLET
 
 
 class TransactionNotifier:

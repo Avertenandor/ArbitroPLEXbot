@@ -10,12 +10,7 @@ from decimal import Decimal
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.plex_payment import PlexPaymentRequirement, PlexPaymentStatus
-from app.repositories.deposit_repository import DepositRepository
-from app.repositories.plex_payment_repository import PlexPaymentRepository
-from app.repositories.user_repository import UserRepository
-from app.services.blockchain_service import get_blockchain_service
-from bot.constants.rules import (
+from app.config.business_constants import (
     LEVELS,
     MINIMUM_PLEX_BALANCE,
     PLEX_PER_DOLLAR_DAILY,
@@ -24,6 +19,11 @@ from bot.constants.rules import (
     get_max_deposits_for_plex_balance,
     get_user_level,
 )
+from app.models.plex_payment import PlexPaymentRequirement, PlexPaymentStatus
+from app.repositories.deposit_repository import DepositRepository
+from app.repositories.plex_payment_repository import PlexPaymentRepository
+from app.repositories.user_repository import UserRepository
+from app.services.blockchain_service import get_blockchain_service
 
 
 class PlexPaymentService:

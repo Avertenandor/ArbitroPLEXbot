@@ -25,6 +25,7 @@ from app.models.transaction import Transaction
 from app.models.user import User
 from app.repositories.admin_repository import AdminRepository
 from app.repositories.user_repository import UserRepository
+from app.utils.formatters import format_user_identifier
 
 
 class AIUsersService:
@@ -248,14 +249,14 @@ class AIUsersService:
             }
 
         users_list = []
-        for u in users:
+        for user in users:
             users_list.append({
-                "id": u.id,
-                "telegram_id": u.telegram_id,
-                "username": f"@{u.username}" if u.username else f"ID:{u.telegram_id}",
-                "deposit": float(u.total_deposited_usdt),
-                "bonus": float(getattr(u, 'bonus_balance', 0) or 0),
-                "is_banned": u.is_banned,
+                "id": user.id,
+                "telegram_id": user.telegram_id,
+                "username": format_user_identifier(user),
+                "deposit": float(user.total_deposited_usdt),
+                "bonus": float(getattr(user, 'bonus_balance', 0) or 0),
+                "is_banned": user.is_banned,
             })
 
         return {
@@ -344,7 +345,7 @@ class AIUsersService:
 
         return {
             "success": True,
-            "user": f"@{user.username}" if user.username else f"ID:{user.telegram_id}",
+            "user": format_user_identifier(user),
             "operation": {
                 "add": "➕ Пополнение",
                 "subtract": "➖ Списание",
@@ -396,7 +397,7 @@ class AIUsersService:
 
         return {
             "success": True,
-            "user": f"@{user.username}" if user.username else f"ID:{user.telegram_id}",
+            "user": format_user_identifier(user),
             "reason": reason,
             "admin": f"@{admin.username}",
             "message": "🚫 Пользователь заблокирован"
@@ -434,7 +435,7 @@ class AIUsersService:
 
         return {
             "success": True,
-            "user": f"@{user.username}" if user.username else f"ID:{user.telegram_id}",
+            "user": format_user_identifier(user),
             "admin": f"@{admin.username}",
             "message": "✅ Пользователь разблокирован"
         }
@@ -465,13 +466,13 @@ class AIUsersService:
         deposits = list(deposit_result.scalars().all())
 
         deposits_list = []
-        for d in deposits:
+        for deposit in deposits:
             deposits_list.append({
-                "id": d.id,
-                "level": d.level,
-                "amount": float(d.amount),
-                "status": d.status,
-                "created": d.created_at.strftime("%d.%m.%Y") if d.created_at else None,
+                "id": deposit.id,
+                "level": deposit.level,
+                "amount": float(deposit.amount),
+                "status": deposit.status,
+                "created": deposit.created_at.strftime("%d.%m.%Y") if deposit.created_at else None,
             })
 
         # Get bonus credits
@@ -482,23 +483,23 @@ class AIUsersService:
         bonuses = list(bonus_result.scalars().all())
 
         bonuses_list = []
-        for b in bonuses:
+        for bonus in bonuses:
             bonuses_list.append({
-                "id": b.id,
-                "amount": float(b.amount),
-                "roi_paid": float(b.roi_paid_amount or 0),
-                "roi_cap": float(b.roi_cap_amount or 0),
-                "is_active": b.is_active,
-                "reason": b.reason,
-                "created": b.created_at.strftime("%d.%m.%Y") if b.created_at else None,
+                "id": bonus.id,
+                "amount": float(bonus.amount),
+                "roi_paid": float(bonus.roi_paid_amount or 0),
+                "roi_cap": float(bonus.roi_cap_amount or 0),
+                "is_active": bonus.is_active,
+                "reason": bonus.reason,
+                "created": bonus.created_at.strftime("%d.%m.%Y") if bonus.created_at else None,
             })
 
-        total_deposits = sum(d.amount for d in deposits if d.status == TransactionStatus.CONFIRMED.value)
-        total_bonuses = sum(b.amount for b in bonuses if b.is_active)
+        total_deposits = sum(deposit.amount for deposit in deposits if deposit.status == TransactionStatus.CONFIRMED.value)
+        total_bonuses = sum(bonus.amount for bonus in bonuses if bonus.is_active)
 
         return {
             "success": True,
-            "user": f"@{user.username}" if user.username else f"ID:{user.telegram_id}",
+            "user": format_user_identifier(user),
             "summary": {
                 "total_deposits": float(total_deposits),
                 "total_bonuses": float(total_bonuses),

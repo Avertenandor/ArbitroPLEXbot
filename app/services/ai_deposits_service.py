@@ -25,6 +25,7 @@ from app.repositories.admin_repository import AdminRepository
 from app.repositories.deposit_repository import DepositRepository
 from app.repositories.global_settings_repository import GlobalSettingsRepository
 from app.repositories.user_repository import UserRepository
+from app.utils.formatters import format_user_identifier
 
 
 class AIDepositsService:
@@ -174,40 +175,40 @@ class AIDepositsService:
         deposits = list(result.scalars().all())
 
         deposits_list = []
-        for d in deposits:
+        for deposit in deposits:
             status_emoji = {
                 TransactionStatus.PENDING.value: "⏳",
                 TransactionStatus.CONFIRMED.value: "✅",
                 TransactionStatus.FAILED.value: "❌",
-            }.get(d.status, "❓")
+            }.get(deposit.status, "❓")
 
             roi_progress = 0
-            if d.roi_cap_amount and d.roi_cap_amount > 0:
-                roi_progress = float((d.roi_paid_amount or 0) / d.roi_cap_amount * 100)
+            if deposit.roi_cap_amount and deposit.roi_cap_amount > 0:
+                roi_progress = float((deposit.roi_paid_amount or 0) / deposit.roi_cap_amount * 100)
 
             deposits_list.append(
                 {
-                    "id": d.id,
-                    "level": d.level,
-                    "amount": float(d.amount),
-                    "status": f"{status_emoji} {d.status}",
-                    "roi_paid": float(d.roi_paid_amount or 0),
-                    "roi_cap": float(d.roi_cap_amount or 0),
+                    "id": deposit.id,
+                    "level": deposit.level,
+                    "amount": float(deposit.amount),
+                    "status": f"{status_emoji} {deposit.status}",
+                    "roi_paid": float(deposit.roi_paid_amount or 0),
+                    "roi_cap": float(deposit.roi_cap_amount or 0),
                     "roi_progress": f"{roi_progress:.1f}%",
-                    "is_roi_complete": d.is_roi_complete,
-                    "created": d.created_at.strftime("%d.%m.%Y") if d.created_at else None,
-                    "tx_hash": d.tx_hash[:16] + "..." if d.tx_hash else None,
+                    "is_roi_complete": deposit.is_roi_complete,
+                    "created": deposit.created_at.strftime("%d.%m.%Y") if deposit.created_at else None,
+                    "tx_hash": deposit.tx_hash[:16] + "..." if deposit.tx_hash else None,
                 }
             )
 
-        total_deposited = sum(d.amount for d in deposits if d.status == TransactionStatus.CONFIRMED.value)
+        total_deposited = sum(deposit.amount for deposit in deposits if deposit.status == TransactionStatus.CONFIRMED.value)
         active_count = sum(
-            1 for d in deposits if d.status == TransactionStatus.CONFIRMED.value and not d.is_roi_complete
+            1 for deposit in deposits if deposit.status == TransactionStatus.CONFIRMED.value and not deposit.is_roi_complete
         )
 
         return {
             "success": True,
-            "user": f"@{user.username}" if user.username else f"ID:{user.telegram_id}",
+            "user": format_user_identifier(user),
             "summary": {
                 "total_deposited": float(total_deposited),
                 "total_count": len(deposits),
@@ -242,19 +243,19 @@ class AIDepositsService:
             return {"success": True, "count": 0, "deposits": [], "message": "✅ Нет ожидающих депозитов"}
 
         deposits_list = []
-        for d in deposits:
+        for deposit in deposits:
             # Get user
-            user = await self.user_repo.get_by_id(d.user_id)
-            user_info = f"@{user.username}" if user and user.username else f"ID:{d.user_id}"
+            user = await self.user_repo.get_by_id(deposit.user_id)
+            user_info = format_user_identifier(user) if user else f"ID:{deposit.user_id}"
 
             deposits_list.append(
                 {
-                    "id": d.id,
+                    "id": deposit.id,
                     "user": user_info,
-                    "level": d.level,
-                    "amount": float(d.amount),
-                    "tx_hash": d.tx_hash[:20] + "..." if d.tx_hash else "N/A",
-                    "created": d.created_at.strftime("%d.%m.%Y %H:%M") if d.created_at else None,
+                    "level": deposit.level,
+                    "amount": float(deposit.amount),
+                    "tx_hash": deposit.tx_hash[:20] + "..." if deposit.tx_hash else "N/A",
+                    "created": deposit.created_at.strftime("%d.%m.%Y %H:%M") if deposit.created_at else None,
                 }
             )
 
@@ -488,7 +489,7 @@ class AIDepositsService:
         return {
             "success": True,
             "deposit_id": deposit.id,
-            "user": f"@{user.username}" if user.username else f"ID:{user.telegram_id}",
+            "user": format_user_identifier(user),
             "level": level,
             "amount": amount,
             "roi_cap": float(roi_cap),

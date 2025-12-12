@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
+from bot.utils.text_utils import escape_markdown
 
 
 def is_skip_command(text: str | None) -> bool:
@@ -42,24 +43,6 @@ def format_balance(balance: float) -> str:
     if balance_str == '':
         balance_str = '0'
     return balance_str
-
-
-def escape_markdown(text: str) -> str:
-    """
-    Escape special characters for Telegram Markdown.
-
-    Args:
-        text: Text to escape
-
-    Returns:
-        Escaped text
-    """
-    return (
-        text.replace("_", "\\_")
-        .replace("*", "\\*")
-        .replace("`", "\\`")
-        .replace("[", "\\[")
-    )
 
 
 async def reset_bot_blocked_flag(
