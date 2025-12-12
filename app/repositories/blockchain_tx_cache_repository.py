@@ -283,28 +283,51 @@ class BlockchainTxCacheRepository(BaseRepository[BlockchainTxCache]):
         Returns:
             Cached transaction or None if duplicate
         """
-        # Check if already cached
-        existing = await self.get_by_tx_hash(tx_hash)
+        normalized_hash = tx_hash.lower()
+        if not normalized_hash.startswith("0x"):
+            normalized_hash = f"0x{normalized_hash}"
+
+        values = {
+            "tx_hash": normalized_hash,
+            "block_number": block_number,
+            "from_address": from_address.lower(),
+            "to_address": to_address.lower(),
+            "token_type": token_type.upper(),
+            "token_address": token_address.lower() if token_address else None,
+            "amount": amount,
+            "amount_raw": amount_raw,
+            "direction": direction,
+            "block_timestamp": block_timestamp,
+            "user_id": user_id,
+            "status": "confirmed",
+            "is_processed": False,
+        }
+
+        # Make insert idempotent to avoid race-condition duplicate tx_hash errors
+        # when multiple workers index the same blocks.
+        try:
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+            stmt = (
+                pg_insert(BlockchainTxCache)
+                .values(**values)
+                .on_conflict_do_nothing(index_elements=[BlockchainTxCache.tx_hash])
+                .returning(BlockchainTxCache)
+            )
+            result = await self.session.execute(stmt)
+            inserted = result.scalar_one_or_none()
+            if inserted is not None:
+                return inserted
+
+        except Exception:
+            # Fall back to the ORM path (may still race on unique constraint).
+            pass
+
+        existing = await self.get_by_tx_hash(normalized_hash)
         if existing:
             return existing
 
-        # Create new cache entry
-        tx = BlockchainTxCache(
-            tx_hash=tx_hash.lower(),
-            block_number=block_number,
-            from_address=from_address.lower(),
-            to_address=to_address.lower(),
-            token_type=token_type.upper(),
-            token_address=token_address.lower() if token_address else None,
-            amount=amount,
-            amount_raw=amount_raw,
-            direction=direction,
-            block_timestamp=block_timestamp,
-            user_id=user_id,
-            status="confirmed",
-            is_processed=False,
-        )
-
+        tx = BlockchainTxCache(**values)
         self.session.add(tx)
         return tx
 
