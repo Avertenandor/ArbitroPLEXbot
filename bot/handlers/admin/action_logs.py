@@ -15,17 +15,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.admin_action_repository import AdminActionRepository
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
 from bot.keyboards.reply import get_admin_keyboard_from_data
+from bot.utils.text_utils import escape_markdown
 
 
 router = Router(name="admin_action_logs")
-
-
-def escape_markdown(text: str) -> str:
-    """Escape special Markdown characters."""
-    if not text:
-        return text
-    # Escape underscores which break Markdown
-    return text.replace("_", "\\_")
 
 
 def format_action_type(action_type: str) -> str:

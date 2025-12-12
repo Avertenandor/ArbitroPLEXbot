@@ -8,6 +8,9 @@ for formatting data in a consistent way across the bot.
 from decimal import Decimal
 from typing import Any
 
+from bot.utils.formatters import format_usdt
+from bot.utils.text_utils import escape_markdown
+
 
 # ============================================================================
 # MESSAGE TEMPLATES
@@ -218,27 +221,6 @@ def format_withdrawal_status(withdrawal: Any) -> str:
     return result
 
 
-def format_usdt(amount: Decimal | float | int) -> str:
-    """
-    Format USDT amount consistently.
-
-    Args:
-        amount: Amount to format
-
-    Returns:
-        Formatted USDT amount string
-
-    Example:
-        >>> format_usdt(123.456789)
-        '123.46'
-        >>> format_usdt(Decimal("1000.1"))
-        '1000.10'
-    """
-    if isinstance(amount, Decimal | float | int):
-        return f"{float(amount):.2f}"
-    return "0.00"
-
-
 def format_progress_bar(progress: float, length: int = 10) -> str:
     """
     Format a progress bar for display.
@@ -306,30 +288,3 @@ def format_transaction_hash_short(tx_hash: str) -> str:
         return tx_hash
 
     return f"{tx_hash[:10]}...{tx_hash[-6:]}"
-
-
-def escape_markdown(text: str) -> str:
-    """
-    Escape markdown special characters for safe display.
-
-    Args:
-        text: Text to escape
-
-    Returns:
-        Escaped text safe for Markdown
-
-    Example:
-        >>> escape_markdown("test_value")
-        'test\\_value'
-        >>> escape_markdown("*bold*")
-        '\\*bold\\*'
-    """
-    if not text:
-        return text
-
-    # Escape Markdown special characters
-    special_chars = ["_", "*", "`", "["]
-    for char in special_chars:
-        text = text.replace(char, f"\\{char}")
-
-    return text

@@ -49,7 +49,6 @@ from bot.messages.user_messages import (
     REGISTRATION_COMPLETE,
     WALLET_PROMPT,
     WELCOME_MESSAGE,
-    escape_markdown,
     format_balance,
     format_deposit_status,
     format_progress_bar,
@@ -58,6 +57,9 @@ from bot.messages.user_messages import (
     format_wallet_short,
     format_withdrawal_status,
 )
+
+# Import text utilities
+from bot.utils.text_utils import escape_markdown
 
 
 __all__ = [
