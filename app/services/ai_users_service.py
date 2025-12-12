@@ -27,17 +27,6 @@ from app.repositories.admin_repository import AdminRepository
 from app.repositories.user_repository import UserRepository
 
 
-# Whitelist of admin telegram IDs who can perform dangerous operations
-# (change balance, modify deposits, etc.)
-# New admins won't have these permissions
-TRUSTED_ADMIN_IDS = [
-    1040687384,  # @VladarevInvestBrok (Командир/super_admin)
-    1691026253,  # @AI_XAN (Саша - Tech Deputy)
-    241568583,   # @natder (Наташа)
-    6540613027,  # @ded_vtapkax (Влад)
-]
-
-
 class AIUsersService:
     """
     AI-powered user management service.
@@ -72,17 +61,18 @@ class AIUsersService:
 
         return admin, None
 
-    def _is_trusted_admin(self) -> bool:
-        """Check if current admin is in trusted whitelist."""
-        return self.admin_telegram_id in TRUSTED_ADMIN_IDS
-
     async def _find_user(self, identifier: str) -> tuple[User | None, str | None]:
-        """Find user by @username, telegram_id, or wallet address."""
+        """Find user by username, telegram_id, or wallet address."""
         identifier = identifier.strip()
 
-        # By username
+        # By username (@username or plain username)
         if identifier.startswith("@"):
             username = identifier[1:]
+        else:
+            # validate_user_identifier() допускает plain username
+            username = identifier if all(c.isalnum() or c == "_" for c in identifier) else ""
+
+        if username:
             user = await self.user_repo.get_by_username(username)
             if user:
                 return user, None
@@ -105,7 +95,7 @@ class AIUsersService:
                 return user, None
             return None, f"❌ Пользователь с кошельком {identifier[:10]}... не найден"
 
-        return None, "❌ Укажите @username, telegram_id или адрес кошелька"
+        return None, "❌ Укажите @username/username, telegram_id или адрес кошелька"
 
     async def get_user_profile(self, user_identifier: str) -> dict[str, Any]:
         """
@@ -168,7 +158,7 @@ class AIUsersService:
                 "id": user.id,
                 "telegram_id": user.telegram_id,
                 "username": f"@{user.username}" if user.username else None,
-                "first_name": user.first_name,
+                # В модели User нет first_name/last_name — не пытаемся читать несуществующие поля
                 "phone": getattr(user, 'phone', None),
                 "email": getattr(user, 'email', None),
                 "wallet": user.masked_wallet if user.wallet_address else None,
@@ -241,10 +231,9 @@ class AIUsersService:
                 User.wallet_address.ilike(f"%{query}%")
             ).limit(limit)
         else:
-            # General search (name, username)
+            # General search (username only)
             stmt = select(User).where(
-                (User.username.ilike(f"%{query}%")) |
-                (User.first_name.ilike(f"%{query}%"))
+                User.username.ilike(f"%{query}%")
             ).limit(limit)
 
         result = await self.session.execute(stmt)
@@ -284,7 +273,7 @@ class AIUsersService:
         operation: str = "add",
     ) -> dict[str, Any]:
         """
-        Change user balance (add or subtract).
+        Change user balance (add/subtract/set).
 
         All authenticated admins can use this function.
         Operations are logged for audit purposes.
@@ -319,17 +308,20 @@ class AIUsersService:
 
         old_balance = user.balance or Decimal("0")
 
+        tx_type = TransactionType.ADJUSTMENT
         if operation == "add":
             user.balance = old_balance + Decimal(str(amount))
-            tx_type = TransactionType.ADJUSTMENT
-        else:
+        elif operation == "subtract":
             if old_balance < Decimal(str(amount)):
                 return {
                     "success": False,
-                    "error": f"❌ Недостаточно средств. Баланс: {old_balance} USDT"
+                    "error": f"❌ Недостаточно средств. Баланс: {old_balance} USDT",
                 }
             user.balance = old_balance - Decimal(str(amount))
-            tx_type = TransactionType.ADJUSTMENT
+        elif operation == "set":
+            user.balance = Decimal(str(amount))
+        else:
+            return {"success": False, "error": "❌ Неверная операция. Используйте add/subtract/set"}
 
         # Create transaction record
         tx = Transaction(
@@ -353,7 +345,11 @@ class AIUsersService:
         return {
             "success": True,
             "user": f"@{user.username}" if user.username else f"ID:{user.telegram_id}",
-            "operation": "➕ Пополнение" if operation == "add" else "➖ Списание",
+            "operation": {
+                "add": "➕ Пополнение",
+                "subtract": "➖ Списание",
+                "set": "🎯 Установка",
+            }.get(operation, operation),
             "amount": f"{amount} USDT",
             "old_balance": f"{float(old_balance):.2f} USDT",
             "new_balance": f"{float(user.balance):.2f} USDT",
