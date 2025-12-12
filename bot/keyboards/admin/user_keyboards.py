@@ -115,7 +115,7 @@ def admin_user_profile_keyboard(user_is_blocked: bool) -> ReplyKeyboardMarkup:
         KeyboardButton(text="🔄 Сканировать депозит"),
     )
     builder.row(
-        KeyboardButton(text="🚫 Аннулировать депозит"),
+        KeyboardButton(text="➖ Списать депозит"),
     )
     builder.row(
         KeyboardButton(text="⚠️ Терминировать аккаунт"),

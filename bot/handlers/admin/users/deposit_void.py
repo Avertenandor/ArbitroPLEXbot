@@ -97,7 +97,7 @@ async def handle_void_deposit_start_callback(
     await _start_void_deposit_flow(callback.message, state, session, **data)
 
 
-@router.message(F.text == "🚫 Аннулировать депозит")
+@router.message(F.text.in_({"🚫 Аннулировать депозит", "➖ Списать депозит"}))
 async def handle_void_deposit_start(
     message: Message,
     state: FSMContext,

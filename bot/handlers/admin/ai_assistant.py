@@ -76,7 +76,7 @@ def aria_actions_inline_keyboard() -> Any:
     """Inline actions keyboard for ARIA admin chat."""
     kb = InlineKeyboardBuilder()
     kb.button(text="💳 Изменить баланс", callback_data="aria:act:balance")
-    kb.button(text="🚫 Отменить депозит", callback_data="aria:act:cancel_deposit")
+    kb.button(text="➖ Списать депозит", callback_data="aria:act:cancel_deposit")
     kb.button(text="➕ Ручной депозит", callback_data="aria:act:manual_deposit")
     kb.button(text="🎁 Начислить бонус", callback_data="aria:act:bonus")
     kb.adjust(2, 2)
@@ -127,7 +127,7 @@ def aria_confirm_keyboard(confirm_cb: str) -> Any:
 
 def aria_suggest_cancel_deposit_keyboard() -> Any:
     kb = InlineKeyboardBuilder()
-    kb.button(text="🚫 Отменить депозит", callback_data="aria:suggest:cancel_deposit")
+    kb.button(text="➖ Списать депозит", callback_data="aria:suggest:cancel_deposit")
     kb.button(text="❌ Отмена", callback_data="aria:act:cancel")
     kb.adjust(2)
     return kb.as_markup()
@@ -440,7 +440,7 @@ async def aria_confirm_run(
                 and ("недостат" in err_text.lower() or "баланс" in err_text.lower())
             ):
                 await callback.message.answer(
-                    err_text + "\n\nПохоже, нужная сумма находится в «Депозиты». Хотите отменить депозит?",
+                    err_text + "\n\nПохоже, нужная сумма находится в «Депозиты». Хотите списать депозит?",
                     reply_markup=aria_suggest_cancel_deposit_keyboard(),
                 )
             else:

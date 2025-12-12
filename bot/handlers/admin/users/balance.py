@@ -27,7 +27,7 @@ router = Router(name="admin_users_balance")
 
 def _deposit_void_inline_keyboard():
     kb = InlineKeyboardBuilder()
-    kb.button(text="🚫 Аннулировать депозит", callback_data="admin:deposit_void")
+    kb.button(text="➖ Списать депозит", callback_data="admin:deposit_void")
     return kb.as_markup()
 
 
@@ -124,7 +124,7 @@ async def process_balance_change(
     if new_balance < 0:
         await message.reply(
             f"❌ Нельзя списать больше, чем есть на балансе.\nТекущий баланс: {old_balance}\n\n"
-            "Если нужная сумма находится в разделе «Депозиты», используйте аннулирование депозита.",
+            "Если нужная сумма находится в разделе «Депозиты», используйте списание депозита.",
             reply_markup=_deposit_void_inline_keyboard(),
         )
         return
