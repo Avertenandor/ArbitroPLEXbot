@@ -17,6 +17,7 @@ from app.config.settings import settings
 from app.models.blockchain_tx_cache import BlockchainTxCache
 from app.repositories.blockchain_tx_cache_repository import BlockchainTxCacheRepository
 from app.repositories.user_repository import UserRepository
+from app.utils.security import mask_address
 
 
 # Token decimals
@@ -39,13 +40,6 @@ ERC20_ABI = [
         "type": "event",
     }
 ]
-
-
-def mask_address(address: str) -> str:
-    """Mask address for logging."""
-    if not address or len(address) < 10:
-        return address
-    return f"{address[:6]}...{address[-4:]}"
 
 
 class BlockchainTxCacheService:
