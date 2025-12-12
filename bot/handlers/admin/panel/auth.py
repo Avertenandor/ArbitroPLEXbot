@@ -128,88 +128,44 @@ async def handle_master_key_input(
         # Clean up
         await state.update_data(auth_redirect_message=None)
 
-        # Route to specific handlers manually based on saved text
-        # Note: Don't modify message.text - aiogram Message objects are frozen
-        if redirect_message_text == "🆘 Техподдержка":
-            from bot.handlers.admin.support import handle_admin_support_menu
+        # Menu handlers mapping: button_text -> (handler_function, requires_state)
+        # Using lazy imports to avoid circular dependencies
+        menu_handlers = {
+            "🆘 Техподдержка": ("bot.handlers.admin.support", "handle_admin_support_menu", True),
+            "💰 Управление депозитами": ("bot.handlers.admin.deposit_management", "show_deposit_management_menu", False),
+            "⚙️ Настроить уровни депозитов": ("bot.handlers.admin.deposit_settings", "show_deposit_settings", False),
+            "👥 Управление админами": ("bot.handlers.admin.admins", "show_admin_management", False),
+            "🚫 Управление черным списком": ("bot.handlers.admin.blacklist", "show_blacklist", False),
+            "🔐 Управление кошельком": ("bot.handlers.admin.wallet_management", "show_wallet_dashboard", True),
+            "💸 Заявки на вывод": ("bot.handlers.admin.panel.navigation", "handle_admin_withdrawals", False),
+            "📢 Рассылка": ("bot.handlers.admin.broadcast", "handle_start_broadcast", True),
+            "👥 Управление пользователями": ("bot.handlers.admin.panel.navigation", "handle_admin_users_menu", False),
+            "📊 Статистика": ("bot.handlers.admin.panel.statistics", "handle_admin_stats", False),
+            "🔑 Восстановление пароля": ("bot.handlers.admin.finpass_recovery", "show_recovery_requests", True),
+            "📋 Логи действий": ("bot.handlers.admin.action_logs", "handle_action_logs", False),
+            "⏰ Расписание задач": ("bot.handlers.admin.schedule_management", "show_schedule_management", True),
+            "👑 Админ-панель": (None, None, None),  # Just continue to show admin panel below
+        }
 
-            await handle_admin_support_menu(message, state, **data)
-            return
-        elif redirect_message_text == "💰 Управление депозитами":
-            from bot.handlers.admin.deposit_management import (
-                show_deposit_management_menu,
-            )
+        # Special case: check for "Финансовая" in text
+        handler_info = None
+        if "Финансовая" in redirect_message_text:
+            handler_info = ("bot.handlers.admin.financials", "show_financial_list", True)
+        else:
+            handler_info = menu_handlers.get(redirect_message_text)
 
-            await show_deposit_management_menu(message, session, **data)
-            return
-        elif redirect_message_text == "⚙️ Настроить уровни депозитов":
-            from bot.handlers.admin.deposit_settings import (
-                show_deposit_settings,
-            )
+        if handler_info and handler_info[0] is not None:
+            module_path, function_name, requires_state = handler_info
+            # Dynamic import
+            from importlib import import_module
+            module = import_module(module_path)
+            handler = getattr(module, function_name)
 
-            await show_deposit_settings(message, session, **data)
-            return
-        elif redirect_message_text == "👥 Управление админами":
-            from bot.handlers.admin.admins import show_admin_management
-
-            await show_admin_management(message, session, **data)
-            return
-        elif redirect_message_text == "🚫 Управление черным списком":
-            from bot.handlers.admin.blacklist import show_blacklist
-
-            await show_blacklist(message, session, **data)
-            return
-        elif redirect_message_text == "🔐 Управление кошельком":
-            from bot.handlers.admin.wallet_management import (
-                show_wallet_dashboard,
-            )
-
-            await show_wallet_dashboard(message, session, state, **data)
-            return
-        elif redirect_message_text == "💸 Заявки на вывод":
-            from bot.handlers.admin.panel.navigation import handle_admin_withdrawals
-
-            await handle_admin_withdrawals(message, session, **data)
-            return
-        elif redirect_message_text == "📢 Рассылка":
-            from bot.handlers.admin.broadcast import handle_start_broadcast
-
-            await handle_start_broadcast(message, state, **data)
-            return
-        elif redirect_message_text == "👥 Управление пользователями":
-            from bot.handlers.admin.panel.navigation import handle_admin_users_menu
-
-            await handle_admin_users_menu(message, session, **data)
-            return
-        elif redirect_message_text == "📊 Статистика":
-            from bot.handlers.admin.panel.statistics import handle_admin_stats
-
-            await handle_admin_stats(message, session, **data)
-            return
-        elif redirect_message_text == "🔑 Восстановление пароля":
-            from bot.handlers.admin.finpass_recovery import (
-                show_recovery_requests,
-            )
-
-            await show_recovery_requests(message, session, state, **data)
-            return
-        elif redirect_message_text and "Финансовая" in redirect_message_text:
-            from bot.handlers.admin.financials import show_financial_list
-
-            await show_financial_list(message, session, state, **data)
-            return
-        elif redirect_message_text == "📋 Логи действий":
-            # Super admin action logs viewer
-            from bot.handlers.admin.action_logs import handle_action_logs
-
-            await handle_action_logs(message, session, **data)
-            return
-        elif redirect_message_text == "⏰ Расписание задач":
-            # Admin schedule management panel
-            from bot.handlers.admin.schedule_management import show_schedule_management
-
-            # Pass FSM state explicitly as это требуется сигнатурой
-            await show_schedule_management(message, session, state, **data)
+            # Call handler with appropriate parameters
+            if requires_state:
+                await handler(message, session, state, **data)
+            else:
+                await handler(message, session, **data)
             return
         elif redirect_message_text == "👑 Админ-панель":
             # Just continue to show admin panel below
