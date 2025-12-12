@@ -69,6 +69,7 @@ from app.models.transaction import Transaction
 # Core Models
 from app.models.user import User
 from app.models.user_action import UserAction
+from app.models.user_activity import ActivityType, UserActivity
 from app.models.user_fsm_state import UserFsmState
 
 # User Inquiry Models
@@ -140,6 +141,8 @@ __all__ = [
     # System Models
     "GlobalSettings",
     "UserAction",
+    "UserActivity",
+    "ActivityType",
     "UserFsmState",
     "UserNotificationSettings",
     "UserWalletHistory",
