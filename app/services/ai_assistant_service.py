@@ -13,12 +13,12 @@ from typing import Any
 from loguru import logger
 
 from app.config.security import (
+    ARYA_COMMAND_GIVERS,
+    ARYA_TEACHERS,
     TECH_DEPUTIES,
     can_command_arya,
     can_teach_arya,
     is_super_admin,
-    ARYA_COMMAND_GIVERS,
-    ARYA_TEACHERS,
 )
 
 # Import from new ai module
@@ -422,7 +422,9 @@ class AIAssistantService:
 
         try:
             # Определяем роль учителя для промпта
-            teacher_role = "КОМАНДИРОМ" if source_telegram_id and is_super_admin(source_telegram_id) else "АДМИНИСТРАТОРОМ"
+            teacher_role = (
+                "КОМАНДИРОМ" if source_telegram_id and is_super_admin(source_telegram_id) else "АДМИНИСТРАТОРОМ"
+            )
 
             extraction_prompt = f"""
 Проанализируй диалог между {teacher_role} ({source_user}) платформы ArbitroPLEX и AI-ассистентом ARIA.
@@ -451,7 +453,7 @@ class AIAssistantService:
 Формат ответа (ТОЛЬКО JSON массив):
 [
   {
-    "question": "Вопрос (например: Как работает модель кроликов?)",
+                "question": "Вопрос (например: Как работает модель кроликов?)",
     "answer": "Ответ (суть механики, факты)",
     "category": "Экосистема / NFT / Правила / и т.д."
   }
@@ -801,9 +803,7 @@ class AIAssistantService:
                             extra={"caller_telegram_id": caller_telegram_id},
                         )
                 except Exception as e:
-                    logger.error(
-                        f"ARYA: failed to verify admin rights for caller {caller_telegram_id}: {e}"
-                    )
+                    logger.error(f"ARYA: failed to verify admin rights for caller {caller_telegram_id}: {e}")
 
         # Если нет сессии/бота или собеседник не может командовать - обычный чат
         if not session or not bot or not caller_can_command:
