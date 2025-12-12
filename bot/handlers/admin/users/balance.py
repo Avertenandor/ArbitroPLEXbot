@@ -9,6 +9,7 @@ from typing import Any
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 from loguru import logger
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,6 +23,12 @@ from bot.states.admin_states import AdminStates
 
 
 router = Router(name="admin_users_balance")
+
+
+def _deposit_void_inline_keyboard():
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🚫 Аннулировать депозит", callback_data="admin:deposit_void")
+    return kb.as_markup()
 
 
 @router.message(F.text == "💳 Изменить баланс")
@@ -115,7 +122,11 @@ async def process_balance_change(
     new_balance = old_balance + amount
 
     if new_balance < 0:
-        await message.reply(f"❌ Нельзя списать больше, чем есть на балансе.\nТекущий баланс: {old_balance}")
+        await message.reply(
+            f"❌ Нельзя списать больше, чем есть на балансе.\nТекущий баланс: {old_balance}\n\n"
+            "Если нужная сумма находится в разделе «Депозиты», используйте аннулирование депозита.",
+            reply_markup=_deposit_void_inline_keyboard(),
+        )
         return
 
     # R9-2: Atomic balance update to prevent race conditions

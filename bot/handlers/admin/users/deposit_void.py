@@ -19,7 +19,7 @@ from typing import Any
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message
+from aiogram.types import CallbackQuery, Message
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,8 +37,7 @@ from bot.states.admin_states import AdminStates
 router = Router(name="admin_users_deposit_void")
 
 
-@router.message(F.text == "🚫 Аннулировать депозит")
-async def handle_void_deposit_start(
+async def _start_void_deposit_flow(
     message: Message,
     state: FSMContext,
     session: AsyncSession,
@@ -83,6 +82,29 @@ async def handle_void_deposit_start(
 
     await state.set_state(AdminStates.selecting_deposit_to_void)
     await message.answer("\n".join(lines), parse_mode="Markdown", reply_markup=cancel_keyboard())
+
+
+@router.callback_query(F.data == "admin:deposit_void")
+async def handle_void_deposit_start_callback(
+    callback: CallbackQuery,
+    state: FSMContext,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    await callback.answer()
+    if not callback.message:
+        return
+    await _start_void_deposit_flow(callback.message, state, session, **data)
+
+
+@router.message(F.text == "🚫 Аннулировать депозит")
+async def handle_void_deposit_start(
+    message: Message,
+    state: FSMContext,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    await _start_void_deposit_flow(message, state, session, **data)
 
 
 @router.message(AdminStates.selecting_deposit_to_void)

@@ -11,8 +11,7 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, KeyboardButton, Message
-from aiogram.utils.keyboard import InlineKeyboardBuilder
-from aiogram.utils.keyboard import ReplyKeyboardBuilder
+from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -124,6 +123,80 @@ def aria_confirm_keyboard(confirm_cb: str) -> Any:
     kb.button(text="❌ Отмена", callback_data="aria:act:cancel")
     kb.adjust(2)
     return kb.as_markup()
+
+
+def aria_suggest_cancel_deposit_keyboard() -> Any:
+    kb = InlineKeyboardBuilder()
+    kb.button(text="🚫 Отменить депозит", callback_data="aria:suggest:cancel_deposit")
+    kb.button(text="❌ Отмена", callback_data="aria:act:cancel")
+    kb.adjust(2)
+    return kb.as_markup()
+
+
+async def _aria_list_confirmed_deposits_for_user(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    user_identifier: str,
+    payload: dict[str, Any],
+) -> None:
+    from app.models.enums import TransactionStatus
+    from app.repositories.deposit_repository import DepositRepository
+    from app.repositories.user_repository import UserRepository
+
+    user_repo = UserRepository(session)
+    dep_repo = DepositRepository(session)
+
+    if user_identifier.startswith("@"):  # username
+        u = await user_repo.get_by_username(user_identifier[1:])
+    else:
+        u = await user_repo.get_by_telegram_id(int(user_identifier))
+
+    if not u:
+        await message.answer("❌ Пользователь не найден.")
+        return
+
+    deps = await dep_repo.find_by(user_id=u.id, status=TransactionStatus.CONFIRMED.value)
+    if not deps:
+        await message.answer("ℹ️ У пользователя нет подтверждённых депозитов.")
+        await state.set_state(AIAssistantStates.chatting)
+        return
+
+    deposit_rows = [(d.id, float(d.amount)) for d in sorted(deps, key=lambda x: x.created_at, reverse=True)]
+    payload["user_identifier"] = user_identifier
+    await state.update_data(aria_action="cancel_deposit", aria_payload=payload, aria_step="deposit_pick")
+    await message.answer("Выберите депозит для отмены:", reply_markup=aria_deposits_pick_keyboard(deposit_rows))
+
+
+@router.callback_query(StateFilter("*"), F.data == "aria:suggest:cancel_deposit")
+async def aria_suggest_cancel_deposit(
+    callback: CallbackQuery,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    admin = await get_admin_or_deny(callback.message, session, **data)
+    if not admin:
+        return
+    await callback.answer()
+    if not callback.message:
+        return
+
+    state_data = await state.get_data()
+    payload = state_data.get("aria_payload", {})
+    user_identifier = str(payload.get("user_identifier") or "").strip()
+    if not user_identifier:
+        await state.set_state(AIAssistantStates.action_flow)
+        await state.update_data(aria_action="cancel_deposit", aria_step="user", aria_payload={})
+        await callback.message.answer(
+            "🚫 Отмена депозита\n\nУкажи пользователя: `@username` или `telegram_id`.",
+            parse_mode="Markdown",
+            reply_markup=aria_cancel_inline_keyboard(),
+        )
+        return
+
+    await state.set_state(AIAssistantStates.action_flow)
+    await _aria_list_confirmed_deposits_for_user(callback.message, session, state, user_identifier, payload)
 
 
 def _build_admin_data(admin: Any) -> dict[str, Any]:
@@ -360,7 +433,18 @@ async def aria_confirm_run(
         if result.get("success"):
             await callback.message.answer(str(result.get("message", "✅ Готово")))
         else:
-            await callback.message.answer(str(result.get("error", "❌ Ошибка")))
+            err_text = str(result.get("error", "❌ Ошибка"))
+            if (
+                action == "balance"
+                and str(payload.get("operation")) == "subtract"
+                and ("недостат" in err_text.lower() or "баланс" in err_text.lower())
+            ):
+                await callback.message.answer(
+                    err_text + "\n\nПохоже, нужная сумма находится в «Депозиты». Хотите отменить депозит?",
+                    reply_markup=aria_suggest_cancel_deposit_keyboard(),
+                )
+            else:
+                await callback.message.answer(err_text)
     finally:
         await state.set_state(AIAssistantStates.chatting)
         await state.update_data(aria_action=None, aria_step=None, aria_payload={})
@@ -413,32 +497,7 @@ async def aria_action_flow_input(
             return
 
         if action == "cancel_deposit":
-            # list confirmed deposits for user
-            from app.repositories.user_repository import UserRepository
-            from app.repositories.deposit_repository import DepositRepository
-            from app.models.enums import TransactionStatus
-
-            user_repo = UserRepository(session)
-            dep_repo = DepositRepository(session)
-
-            if text.startswith("@"):  # username
-                u = await user_repo.get_by_username(text[1:])
-            else:
-                u = await user_repo.get_by_telegram_id(int(text))
-
-            if not u:
-                await message.answer("❌ Пользователь не найден.")
-                return
-
-            deps = await dep_repo.find_by(user_id=u.id, status=TransactionStatus.CONFIRMED.value)
-            if not deps:
-                await message.answer("ℹ️ У пользователя нет подтверждённых депозитов.")
-                await state.set_state(AIAssistantStates.chatting)
-                return
-
-            deposit_rows = [(d.id, float(d.amount)) for d in sorted(deps, key=lambda x: x.created_at, reverse=True)]
-            await state.update_data(aria_payload=payload, aria_step="deposit_pick")
-            await message.answer("Выберите депозит для отмены:", reply_markup=aria_deposits_pick_keyboard(deposit_rows))
+            await _aria_list_confirmed_deposits_for_user(message, session, state, text, payload)
             return
 
         await message.answer("❌ Неизвестный сценарий")
@@ -482,7 +541,9 @@ async def aria_action_flow_input(
         return
 
     if step == "confirm":
-        await message.answer("Нажмите «✅ Подтвердить» или «❌ Отмена».", reply_markup=aria_confirm_keyboard("aria:confirm:run"))
+        await message.answer(
+            "Нажмите «✅ Подтвердить» или «❌ Отмена».", reply_markup=aria_confirm_keyboard("aria:confirm:run")
+        )
         return
 
 
