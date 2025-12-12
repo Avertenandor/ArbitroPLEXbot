@@ -401,8 +401,11 @@ class AIAssistantService:
         """
         Extract knowledge from conversation to add to knowledge base.
 
-        ВАЖНО: Самообучение работает от ВСЕХ ARYA_TEACHERS!
-        Проверка через can_teach_arya() - список в security.py.
+        ВАЖНО: Самообучение включено для ВСЕХ админов,
+        которые общаются с Арьей в админском режиме.
+        Доступ к этому режиму уже контролируется middleware и
+        get_admin_or_deny(), поэтому дополнительный жёсткий
+        whitelist (ARYA_TEACHERS) здесь больше не используется.
 
         Args:
             conversation: List of message dicts with role and content
@@ -415,10 +418,11 @@ class AIAssistantService:
         if not self.client:
             return None
 
-        # КРИТИЧЕСКИ ВАЖНО: Проверяем может ли собеседник учить Арью
-        if source_telegram_id and not can_teach_arya(source_telegram_id):
-            logger.debug(f"ARYA: user {source_user} (ID:{source_telegram_id}) cannot teach Арья - not in ARYA_TEACHERS")
-            return None
+        # РАНЬШЕ: здесь был жёсткий whitelist через can_teach_arya()
+        # и учить Арью могли только ARYA_TEACHERS.
+        # ТЕПЕРЬ: любые админы, имеющие доступ к админскому
+        # AI-хендлеру, могут обучать Арью. Дополнительная проверка
+        # на права уже выполнена на уровне хендлеров.
 
         try:
             # Определяем роль учителя для промпта
