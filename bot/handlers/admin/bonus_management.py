@@ -68,23 +68,27 @@ def bonus_menu_keyboard(can_grant: bool = True) -> ReplyKeyboardMarkup:
     if can_grant:
         buttons.append([KeyboardButton(text="➕ Начислить бонус")])
 
-    buttons.extend([
-        [KeyboardButton(text="📋 История бонусов")],
-        [KeyboardButton(text="🔍 Найти бонусы пользователя")],
-        [KeyboardButton(text="◀️ Назад в админку")],
-    ])
+    buttons.extend(
+        [
+            [KeyboardButton(text="📋 История бонусов")],
+            [KeyboardButton(text="🔍 Найти бонусы пользователя")],
+            [KeyboardButton(text="◀️ Назад в админку")],
+        ]
+    )
 
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
 
 def confirm_bonus_keyboard() -> InlineKeyboardMarkup:
     """Confirmation keyboard for bonus grant."""
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="✅ Подтвердить", callback_data="bonus_confirm"),
-            InlineKeyboardButton(text="❌ Отмена", callback_data="bonus_cancel"),
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Подтвердить", callback_data="bonus_confirm"),
+                InlineKeyboardButton(text="❌ Отмена", callback_data="bonus_cancel"),
+            ]
         ]
-    ])
+    )
 
 
 def cancel_keyboard() -> ReplyKeyboardMarkup:
@@ -96,6 +100,7 @@ def cancel_keyboard() -> ReplyKeyboardMarkup:
 
 
 # ============ MAIN MENU ============
+
 
 @router.message(StateFilter("*"), F.text == "🎁 Бонусы")
 async def open_bonus_menu(
@@ -144,6 +149,7 @@ async def open_bonus_menu(
 
 # ============ GRANT BONUS FLOW ============
 
+
 @router.message(BonusMgmtStates.menu, F.text == "➕ Начислить бонус")
 async def start_grant_bonus(
     message: Message,
@@ -158,10 +164,7 @@ async def start_grant_bonus(
 
     # Check permission
     if admin.role not in ("super_admin", "extended_admin", "admin"):
-        await message.answer(
-            "❌ У вас нет прав на начисление бонусов.\n"
-            "Обратитесь к старшему администратору."
-        )
+        await message.answer("❌ У вас нет прав на начисление бонусов.\nОбратитесь к старшему администратору.")
         return
 
     await state.set_state(BonusMgmtStates.waiting_user)
@@ -269,8 +272,7 @@ async def process_amount_input(
             raise ValueError("Amount too large")
     except (InvalidOperation, ValueError):
         await message.answer(
-            "❌ Неверная сумма. Введите число от 0.01 до 100000:\n\n"
-            "_Например: 50 или 100.5_",
+            "❌ Неверная сумма. Введите число от 0.01 до 100000:\n\n_Например: 50 или 100.5_",
             parse_mode="Markdown",
         )
         return
@@ -417,6 +419,7 @@ async def cancel_grant_bonus(
 
 # ============ BONUS HISTORY ============
 
+
 @router.message(BonusMgmtStates.menu, F.text == "📋 История бонусов")
 async def show_bonus_history(
     message: Message,
@@ -434,8 +437,7 @@ async def show_bonus_history(
 
     if not recent:
         await message.answer(
-            "📋 **История бонусов пуста.**\n\n"
-            "Ещё не было начислено ни одного бонуса.",
+            "📋 **История бонусов пуста.**\n\nЕщё не было начислено ни одного бонуса.",
             parse_mode="Markdown",
         )
         return
@@ -449,15 +451,13 @@ async def show_bonus_history(
         safe_user = escape_markdown(user_name) if user_name else str(b.user_id)
         safe_admin = escape_markdown(admin_name) if admin_name else "система"
 
-        text += (
-            f"{status} **{format_usdt(b.amount)} USDT** → @{safe_user}\n"
-            f"   _{b.reason[:30]}..._ | @{safe_admin}\n\n"
-        )
+        text += f"{status} **{format_usdt(b.amount)} USDT** → @{safe_user}\n   _{b.reason[:30]}..._ | @{safe_admin}\n\n"
 
     await message.answer(text, parse_mode="Markdown")
 
 
 # ============ SEARCH USER BONUSES ============
+
 
 @router.message(BonusMgmtStates.menu, F.text == "🔍 Найти бонусы пользователя")
 async def start_search_user_bonuses(
@@ -470,14 +470,14 @@ async def start_search_user_bonuses(
     await state.update_data(search_mode=True)
 
     await message.answer(
-        "🔍 **Поиск бонусов пользователя**\n\n"
-        "Введите @username или Telegram ID:",
+        "🔍 **Поиск бонусов пользователя**\n\nВведите @username или Telegram ID:",
         parse_mode="Markdown",
         reply_markup=cancel_keyboard(),
     )
 
 
 # ============ BACK TO ADMIN ============
+
 
 @router.message(BonusMgmtStates.menu, F.text == "◀️ Назад в админку")
 async def back_to_admin(
@@ -486,7 +486,9 @@ async def back_to_admin(
     **data: Any,
 ) -> None:
     """Return to admin panel."""
-    await state.clear()
+    from bot.utils.admin_utils import clear_state_preserve_admin_token
+
+    await clear_state_preserve_admin_token(state)
     await message.answer(
         "👑 Возвращаюсь в админ-панель...",
         reply_markup=get_admin_keyboard_from_data(data),

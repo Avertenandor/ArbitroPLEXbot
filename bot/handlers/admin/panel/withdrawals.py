@@ -21,6 +21,7 @@ from bot.keyboards.reply import (
     get_admin_keyboard_from_data,
 )
 from bot.states.admin_states import AdminStates
+from bot.utils.admin_utils import clear_state_preserve_admin_token
 from bot.utils.formatters import format_usdt
 
 
@@ -56,14 +57,10 @@ async def show_withdrawal_page(
 ) -> None:
     """Show withdrawal history page with optional search."""
     if search_query:
-        detailed = await withdrawal_service.search_withdrawals(
-            query=search_query, page=page, per_page=5
-        )
+        detailed = await withdrawal_service.search_withdrawals(query=search_query, page=page, per_page=5)
         text = f"🔍 **Поиск: {search_query}**\n\n"
     else:
-        detailed = await withdrawal_service.get_detailed_withdrawals(
-            page=page, per_page=5
-        )
+        detailed = await withdrawal_service.get_detailed_withdrawals(page=page, per_page=5)
         text = "📋 **История выводов на кошельки**\n\n"
 
     if not detailed["withdrawals"]:
@@ -75,18 +72,11 @@ async def show_withdrawal_page(
         for wd in detailed["withdrawals"]:
             wd_username = str(wd["username"] or "Без имени")
             safe_wd_username = (
-                wd_username.replace("_", "\\_")
-                .replace("*", "\\*")
-                .replace("`", "\\`")
-                .replace("[", "\\[")
+                wd_username.replace("_", "\\_").replace("*", "\\*").replace("`", "\\`").replace("[", "\\[")
             )
             tx_hash = wd["tx_hash"] or "N/A"
             tx_short = tx_hash[:16] + "..." if len(tx_hash) > 16 else tx_hash
-            created = (
-                wd["created_at"].strftime("%d.%m %H:%M")
-                if wd["created_at"]
-                else "N/A"
-            )
+            created = wd["created_at"].strftime("%d.%m %H:%M") if wd["created_at"] else "N/A"
 
             text += (
                 f"👤 @{safe_wd_username}\n"
@@ -151,7 +141,9 @@ async def handle_search_query(
 
     # Check if user wants to go back
     if query in ("◀️ Назад", "👑 Админ-панель"):
-        await state.clear()
+        # Возврат к истории или в админку не должен сбрасывать
+        # админскую сессию (admin_session_token).
+        await clear_state_preserve_admin_token(state)
         if query == "👑 Админ-панель":
             await message.answer(
                 "👑 **Панель администратора**\n\nВыберите действие:",
@@ -167,8 +159,7 @@ async def handle_search_query(
     # Check for empty query
     if not query:
         await message.answer(
-            "❌ Поисковый запрос не может быть пустым.\n"
-            "Введите username, telegram ID или хеш транзакции.",
+            "❌ Поисковый запрос не может быть пустым.\nВведите username, telegram ID или хеш транзакции.",
             parse_mode="Markdown",
         )
         return
@@ -178,9 +169,7 @@ async def handle_search_query(
     await state.set_state(None)
 
     withdrawal_service = WithdrawalService(session)
-    await show_withdrawal_page(
-        message, withdrawal_service, page=1, search_query=query
-    )
+    await show_withdrawal_page(message, withdrawal_service, page=1, search_query=query)
 
 
 @router.message(F.text == "🗑 Сбросить поиск")
@@ -223,9 +212,7 @@ async def handle_wd_prev_page(
     await state.update_data(wd_history_page=new_page)
 
     withdrawal_service = WithdrawalService(session)
-    await show_withdrawal_page(
-        message, withdrawal_service, page=new_page, search_query=search_query
-    )
+    await show_withdrawal_page(message, withdrawal_service, page=new_page, search_query=search_query)
 
 
 @router.message(F.text == "Вперёд страница выводов ➡️")
@@ -249,6 +236,4 @@ async def handle_wd_next_page(
     await state.update_data(wd_history_page=new_page)
 
     withdrawal_service = WithdrawalService(session)
-    await show_withdrawal_page(
-        message, withdrawal_service, page=new_page, search_query=search_query
-    )
+    await show_withdrawal_page(message, withdrawal_service, page=new_page, search_query=search_query)

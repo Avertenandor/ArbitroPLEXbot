@@ -975,7 +975,9 @@ async def back_to_admin(
     **data: Any,
 ) -> None:
     """Вернуться в админ-панель."""
-    await state.clear()
+    from bot.utils.admin_utils import clear_state_preserve_admin_token
+
+    await clear_state_preserve_admin_token(state)
     await message.answer(
         "👑 Возвращаюсь в админ-панель...",
         reply_markup=get_admin_keyboard_from_data(data),

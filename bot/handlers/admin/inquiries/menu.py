@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user_inquiry import InquiryStatus
 from app.services.inquiry_service import InquiryService
 from bot.keyboards.admin_keyboards import admin_inquiry_menu_keyboard
+from bot.utils.admin_utils import clear_state_preserve_admin_token
 
 
 router = Router(name="admin_inquiry_menu")
@@ -39,7 +40,9 @@ async def handle_admin_inquiries_menu(
         await message.answer("❌ Доступ запрещён")
         return
 
-    await state.clear()
+    # Сбрасываем состояние, но сохраняем admin_session_token,
+    # чтобы не требовать повторную аутентификацию при навигации.
+    await clear_state_preserve_admin_token(state)
 
     # Get counts
     inquiry_service = InquiryService(session)

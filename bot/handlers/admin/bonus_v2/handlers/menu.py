@@ -10,7 +10,6 @@ from aiogram import F, Router
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
-from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.bonus_service import BonusService
@@ -93,7 +92,9 @@ async def back_to_admin(
     **data: Any,
 ) -> None:
     """Вернуться в админ-панель."""
-    await state.clear()
+    from bot.utils.admin_utils import clear_state_preserve_admin_token
+
+    await clear_state_preserve_admin_token(state)
     await message.answer(
         "👑 Возвращаюсь в админ-панель...",
         reply_markup=get_admin_keyboard_from_data(data),

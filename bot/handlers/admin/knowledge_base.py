@@ -57,20 +57,13 @@ def categories_keyboard(categories: list[str]) -> InlineKeyboardMarkup:
     """Categories selection keyboard."""
     buttons = []
     for cat in categories:
-        buttons.append([InlineKeyboardButton(
-            text=cat, callback_data=f"kb_cat:{cat}"
-        )])
-    buttons.append([InlineKeyboardButton(
-        text="➕ Новая категория", callback_data="kb_cat:__new__"
-    )])
+        buttons.append([InlineKeyboardButton(text=cat, callback_data=f"kb_cat:{cat}")])
+    buttons.append([InlineKeyboardButton(text="➕ Новая категория", callback_data="kb_cat:__new__")])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
 def entries_list_keyboard(
-    entries: list[dict],
-    page: int = 0,
-    per_page: int = 5,
-    list_type: str = "all"
+    entries: list[dict], page: int = 0, per_page: int = 5, list_type: str = "all"
 ) -> InlineKeyboardMarkup:
     """Generate inline keyboard with entries list for navigation."""
     buttons = []
@@ -83,31 +76,19 @@ def entries_list_keyboard(
         verified = "✅" if e.get("verified_by_boss") else "⚠️"
         learned = "🧠" if e.get("learned_from_dialog") else ""
         label = f"{verified}{learned} #{e['id']}: {e['question'][:35]}..."
-        buttons.append([InlineKeyboardButton(
-            text=label,
-            callback_data=f"kb_view:{e['id']}"
-        )])
+        buttons.append([InlineKeyboardButton(text=label, callback_data=f"kb_view:{e['id']}")])
 
     # Pagination
     nav_row = []
     total_pages = (len(entries) + per_page - 1) // per_page
 
     if page > 0:
-        nav_row.append(InlineKeyboardButton(
-            text="⬅️ Назад",
-            callback_data=f"kb_page:{list_type}:{page - 1}"
-        ))
+        nav_row.append(InlineKeyboardButton(text="⬅️ Назад", callback_data=f"kb_page:{list_type}:{page - 1}"))
 
-    nav_row.append(InlineKeyboardButton(
-        text=f"{page + 1}/{total_pages}",
-        callback_data="kb_noop"
-    ))
+    nav_row.append(InlineKeyboardButton(text=f"{page + 1}/{total_pages}", callback_data="kb_noop"))
 
     if end < len(entries):
-        nav_row.append(InlineKeyboardButton(
-            text="Вперёд ➡️",
-            callback_data=f"kb_page:{list_type}:{page + 1}"
-        ))
+        nav_row.append(InlineKeyboardButton(text="Вперёд ➡️", callback_data=f"kb_page:{list_type}:{page + 1}"))
 
     if nav_row:
         buttons.append(nav_row)
@@ -115,52 +96,42 @@ def entries_list_keyboard(
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def entry_actions_keyboard(
-    entry_id: int, is_boss: bool, is_verified: bool = False
-) -> InlineKeyboardMarkup:
+def entry_actions_keyboard(entry_id: int, is_boss: bool, is_verified: bool = False) -> InlineKeyboardMarkup:
     """Entry actions keyboard with full navigation."""
     buttons = []
 
     # Boss verification controls
     if is_boss:
         if not is_verified:
-            buttons.append([
-                InlineKeyboardButton(
-                    text="✅ Подтвердить", callback_data=f"kb_verify:{entry_id}"
-                ),
-                InlineKeyboardButton(
-                    text="📝 Доработать", callback_data=f"kb_rework:{entry_id}"
-                ),
-            ])
+            buttons.append(
+                [
+                    InlineKeyboardButton(text="✅ Подтвердить", callback_data=f"kb_verify:{entry_id}"),
+                    InlineKeyboardButton(text="📝 Доработать", callback_data=f"kb_rework:{entry_id}"),
+                ]
+            )
         else:
-            buttons.append([InlineKeyboardButton(
-                text="🔓 Снять подтверждение", callback_data=f"kb_unverify:{entry_id}"
-            )])
+            buttons.append(
+                [InlineKeyboardButton(text="🔓 Снять подтверждение", callback_data=f"kb_unverify:{entry_id}")]
+            )
 
     # Edit and delete buttons
-    buttons.append([
-        InlineKeyboardButton(
-            text="✏️ Редактировать", callback_data=f"kb_edit:{entry_id}"
-        ),
-        InlineKeyboardButton(
-            text="🗑 Удалить", callback_data=f"kb_del:{entry_id}"
-        ),
-    ])
+    buttons.append(
+        [
+            InlineKeyboardButton(text="✏️ Редактировать", callback_data=f"kb_edit:{entry_id}"),
+            InlineKeyboardButton(text="🗑 Удалить", callback_data=f"kb_del:{entry_id}"),
+        ]
+    )
 
     # Navigation buttons
-    buttons.append([
-        InlineKeyboardButton(
-            text="⬅️ Предыдущая", callback_data=f"kb_prev:{entry_id}"
-        ),
-        InlineKeyboardButton(
-            text="➡️ Следующая", callback_data=f"kb_next:{entry_id}"
-        ),
-    ])
+    buttons.append(
+        [
+            InlineKeyboardButton(text="⬅️ Предыдущая", callback_data=f"kb_prev:{entry_id}"),
+            InlineKeyboardButton(text="➡️ Следующая", callback_data=f"kb_next:{entry_id}"),
+        ]
+    )
 
     # Back to list
-    buttons.append([InlineKeyboardButton(
-        text="📋 К списку", callback_data="kb_list"
-    )])
+    buttons.append([InlineKeyboardButton(text="📋 К списку", callback_data="kb_list")])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -258,10 +229,7 @@ async def list_categories(
     buttons = []
     for cat in categories:
         count = len([e for e in kb.entries if e.get("category") == cat])
-        buttons.append([InlineKeyboardButton(
-            text=f"📂 {cat} ({count})",
-            callback_data=f"kb_showcat:{cat[:30]}"
-        )])
+        buttons.append([InlineKeyboardButton(text=f"📂 {cat} ({count})", callback_data=f"kb_showcat:{cat[:30]}")])
 
     await message.answer(
         "📂 **Выбери категорию:**",
@@ -377,10 +345,7 @@ async def do_search(
     results = kb.search(message.text)
 
     if not results:
-        await message.answer(
-            f"🔍 По запросу «{message.text}» ничего не найдено.\n"
-            "Попробуй другой запрос или /cancel"
-        )
+        await message.answer(f"🔍 По запросу «{message.text}» ничего не найдено.\nПопробуй другой запрос или /cancel")
         return
 
     text = f"🔍 **Найдено: {len(results)}**\n\n"
@@ -470,8 +435,7 @@ async def start_add_entry(
     await state.update_data(adding_by=admin.username or str(admin.telegram_id))
 
     await message.answer(
-        "📝 **Добавление записи в базу знаний**\n\n"
-        "Шаг 1/4: Введи **вопрос** (как его задаст пользователь):",
+        "📝 **Добавление записи в базу знаний**\n\nШаг 1/4: Введи **вопрос** (как его задаст пользователь):",
         parse_mode="Markdown",
     )
 
@@ -483,8 +447,7 @@ async def add_question(message: Message, state: FSMContext) -> None:
     await state.set_state(KBStates.adding_answer)
 
     await message.answer(
-        "✅ Вопрос сохранён!\n\n"
-        "Шаг 2/4: Введи **ответ** на этот вопрос:",
+        "✅ Вопрос сохранён!\n\nШаг 2/4: Введи **ответ** на этот вопрос:",
         parse_mode="Markdown",
     )
 
@@ -496,9 +459,7 @@ async def add_answer(message: Message, state: FSMContext) -> None:
     await state.set_state(KBStates.adding_clarification)
 
     await message.answer(
-        "✅ Ответ сохранён!\n\n"
-        "Шаг 3/4: Введи **разъяснение** для сложных случаев\n"
-        "(или отправь `-` чтобы пропустить):",
+        "✅ Ответ сохранён!\n\nШаг 3/4: Введи **разъяснение** для сложных случаев\n(или отправь `-` чтобы пропустить):",
         parse_mode="Markdown",
     )
 
@@ -514,8 +475,7 @@ async def add_clarification(message: Message, state: FSMContext) -> None:
     categories = kb.get_categories()
 
     await message.answer(
-        "✅ Разъяснение сохранено!\n\n"
-        "Шаг 4/4: Выбери **категорию**:",
+        "✅ Разъяснение сохранено!\n\nШаг 4/4: Выбери **категорию**:",
         parse_mode="Markdown",
         reply_markup=categories_keyboard(categories),
     )
@@ -673,9 +633,7 @@ async def unverify_entry(
         if entry.get("id") == entry_id:
             entry["verified_by_boss"] = False
             kb.save()
-            await callback.message.answer(
-                f"🔓 Подтверждение снято с записи #{entry_id}"
-            )
+            await callback.message.answer(f"🔓 Подтверждение снято с записи #{entry_id}")
             break
 
     await callback.answer()
@@ -929,8 +887,10 @@ async def back_to_admin(
 ) -> None:
     """Return to admin panel."""
     from bot.handlers.admin.utils import get_admin_keyboard_from_data
+    from bot.utils.admin_utils import clear_state_preserve_admin_token
 
-    await state.clear()
+    # Возвращаемся в админку, не теряя admin_session_token.
+    await clear_state_preserve_admin_token(state)
     await message.answer(
         "👑 Возвращаюсь в админ-панель...",
         reply_markup=get_admin_keyboard_from_data(data),
@@ -938,6 +898,7 @@ async def back_to_admin(
 
 
 # ============ GLOBAL COMMAND HANDLER (works from any state) ============
+
 
 @router.message(F.text.regexp(r"^/kb_(\d+)$"))
 async def view_entry_global(
@@ -953,6 +914,7 @@ async def view_entry_global(
 
     # Extract entry_id from command
     import re
+
     match = re.match(r"^/kb_(\d+)$", message.text)
     if not match:
         return

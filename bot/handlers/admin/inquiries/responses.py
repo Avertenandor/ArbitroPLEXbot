@@ -106,7 +106,9 @@ async def handle_response_text(
     inquiry_id = state_data.get("inquiry_id")
 
     if not inquiry_id:
-        await state.clear()
+        from bot.utils.admin_utils import clear_state_preserve_admin_token
+
+        await clear_state_preserve_admin_token(state)
         await message.answer("❌ Обращение не найдено")
         return
 
@@ -114,7 +116,9 @@ async def handle_response_text(
     inquiry = await inquiry_service.get_inquiry_by_id(inquiry_id)
 
     if not inquiry:
-        await state.clear()
+        from bot.utils.admin_utils import clear_state_preserve_admin_token
+
+        await clear_state_preserve_admin_token(state)
         await message.answer("❌ Обращение не найдено")
         return
 

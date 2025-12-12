@@ -30,9 +30,7 @@ router = Router(name="admin_inquiry_actions")
 # ============================================================================
 
 
-@router.message(
-    AdminInquiryStates.viewing_inquiry, F.text == "✋ Взять в работу"
-)
+@router.message(AdminInquiryStates.viewing_inquiry, F.text == "✋ Взять в работу")
 async def handle_take_inquiry(
     message: Message,
     state: FSMContext,
@@ -58,26 +56,25 @@ async def handle_take_inquiry(
 
     if not inquiry:
         await message.answer(
-            "❌ Не удалось взять обращение. "
-            "Возможно, оно уже взято другим администратором.",
+            "❌ Не удалось взять обращение. Возможно, оно уже взято другим администратором.",
             reply_markup=admin_inquiry_menu_keyboard(),
         )
-        await state.clear()
+        from bot.utils.admin_utils import clear_state_preserve_admin_token
+
+        await clear_state_preserve_admin_token(state)
         return
 
     # Notify user
     try:
         await bot.send_message(
             inquiry.telegram_id,
-            f"✅ Ваше обращение #{inquiry_id} принято в работу!\n\n"
-            "Администратор скоро ответит вам.",
+            f"✅ Ваше обращение #{inquiry_id} принято в работу!\n\nАдминистратор скоро ответит вам.",
         )
     except Exception as e:
         logger.warning(f"Failed to notify user: {e}")
 
     await message.answer(
-        f"✅ Обращение #{inquiry_id} взято в работу!\n\n"
-        "Теперь вы можете ответить пользователю.",
+        f"✅ Обращение #{inquiry_id} взято в работу!\n\nТеперь вы можете ответить пользователю.",
         reply_markup=admin_inquiry_detail_keyboard(is_assigned=True),
     )
 
@@ -122,7 +119,9 @@ async def handle_admin_close_inquiry(
         except Exception as e:
             logger.warning(f"Failed to notify user: {e}")
 
-    await state.clear()
+    from bot.utils.admin_utils import clear_state_preserve_admin_token
+
+    await clear_state_preserve_admin_token(state)
     await message.answer(
         f"✅ Обращение #{inquiry_id} закрыто.",
         reply_markup=admin_inquiry_menu_keyboard(),

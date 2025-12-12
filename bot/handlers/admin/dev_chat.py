@@ -15,6 +15,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.dev_chat_service import DevChatService
+from bot.utils.admin_utils import clear_state_preserve_admin_token
 
 
 router = Router(name="dev_chat")
@@ -67,7 +68,7 @@ async def handle_cancel_dev_chat(
     **kwargs,
 ):
     """Cancel dev chat."""
-    await state.clear()
+    await clear_state_preserve_admin_token(state)
 
     # Return to admin panel
     from bot.keyboards.reply import get_admin_keyboard_from_data
@@ -123,7 +124,7 @@ async def handle_dev_chat_message(
                         reply_markup=chat_keyboard(),
                     )
                 else:
-                    await state.clear()
+                    await clear_state_preserve_admin_token(state)
 
                     from bot.keyboards.reply import get_admin_keyboard_from_data
 
@@ -141,7 +142,7 @@ async def handle_dev_chat_message(
         else:
             # Fallback without Redis - just log
             logger.info(f"DevChat (no Redis) from @{admin_username}: {response_text}")
-            await state.clear()
+            await clear_state_preserve_admin_token(state)
 
             from bot.keyboards.reply import get_admin_keyboard_from_data
 
