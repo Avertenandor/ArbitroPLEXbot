@@ -14,12 +14,14 @@ Handlers for navigating between admin panel menus and submenus:
 from typing import Any
 
 from aiogram import F, Router
+from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
-from bot.keyboards.reply import admin_users_keyboard
+from bot.keyboards.reply import admin_users_keyboard, get_admin_keyboard_from_data
+from bot.utils.admin_utils import clear_state_preserve_admin_token
 
 
 router = Router(name="admin_panel_navigation")
@@ -90,6 +92,7 @@ async def handle_admin_withdrawals(
 
     # Redirect to the detailed withdrawals handler
     from bot.handlers.admin.withdrawals import handle_pending_withdrawals
+
     await handle_pending_withdrawals(message, session, **data)
 
 
@@ -129,3 +132,25 @@ async def handle_admin_management(
     from bot.handlers.admin.admins import show_admin_management
 
     await show_admin_management(message, session, **data)
+
+
+@router.message(StateFilter(None), F.text == "❌ Отмена")
+async def handle_global_admin_cancel(
+    message: Message,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Глобальный обработчик отмены для админов без активного FSM-состояния.
+
+    Если админ нажимает "❌ Отмена" вне каких-либо шагов диалога,
+    возвращаем его в главное админ-меню, сохраняя admin_session_token.
+    """
+    # Обрабатываем только если это действительно админский контекст
+    if not data.get("is_admin") and not data.get("admin"):
+        return
+
+    await clear_state_preserve_admin_token(state)
+    await message.answer(
+        "👑 Админ-панель. Выберите раздел:",
+        reply_markup=get_admin_keyboard_from_data(data),
+    )
