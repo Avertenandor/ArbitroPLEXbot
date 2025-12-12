@@ -16,6 +16,7 @@ from app.config.database import async_session_maker
 from app.config.settings import settings
 from app.utils.datetime_utils import utc_now
 from app.utils.distributed_lock import DistributedLock
+from app.utils.redis_utils import get_redis_client
 from jobs.async_runner import run_async
 
 
@@ -44,13 +45,7 @@ async def _cleanup_logs_and_data_async() -> None:
     redis_client = None
     if redis:
         try:
-            redis_client = redis.Redis(
-                host=settings.redis_host,
-                port=settings.redis_port,
-                password=settings.redis_password,
-                db=settings.redis_db,
-                decode_responses=True,
-            )
+            redis_client = await get_redis_client()
         except Exception as e:
             logger.warning(f"Failed to create Redis client for lock: {e}")
 

@@ -157,8 +157,8 @@ async def show_earnings_dashboard(
         )
         try:
             await status_msg.delete()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to delete message: {e}")
         await message.answer(
             "❌ Произошла ошибка при загрузке статистики. Попробуйте позже."
         )

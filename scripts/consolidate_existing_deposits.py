@@ -29,10 +29,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from app.config.settings import settings
+from app.config.business_constants import PLEX_PER_DOLLAR_DAILY
 from app.models.deposit import Deposit
 from app.models.plex_payment import PlexPaymentRequirement
 from app.models.user import User
-from bot.constants.rules import PLEX_PER_DOLLAR_DAILY
 
 
 async def consolidate_user_deposits(

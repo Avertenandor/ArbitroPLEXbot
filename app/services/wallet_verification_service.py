@@ -11,10 +11,10 @@ from decimal import Decimal
 
 from loguru import logger
 
+from app.config.business_constants import MINIMUM_PLEX_BALANCE, get_user_level
 from app.services.blockchain_service import get_blockchain_service
 from app.utils.security import mask_address
 from app.utils.validation import validate_bsc_address
-from bot.constants import rules
 
 
 @dataclass
@@ -84,8 +84,8 @@ class WalletVerificationService:
             except (TypeError, ValueError):
                 plex_int = 0
 
-            result.detected_level = rules.get_user_level(plex_int)
-            result.has_required_plex = plex_int >= rules.MINIMUM_PLEX_BALANCE
+            result.detected_level = get_user_level(plex_int)
+            result.has_required_plex = plex_int >= MINIMUM_PLEX_BALANCE
 
             # TODO: has_required_rabbits will be implemented when on-chain
             # rabbit token checks are available.

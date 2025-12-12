@@ -20,6 +20,7 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config.business_constants import MAX_DEPOSITS_PER_USER
 from app.config.settings import settings
 from app.models.deposit import Deposit
 from app.models.user import User
@@ -27,13 +28,8 @@ from app.services.deposit import DepositService
 from app.services.deposit.transaction_notifier import TransactionNotifier
 from app.services.notification_service import NotificationService
 from app.utils.distributed_lock import get_distributed_lock
+from app.utils.formatters import escape_md
 from app.utils.security import mask_address, mask_tx_hash
-from bot.constants.rules import (
-    MAX_DEPOSITS_PER_USER,
-    PLEX_PER_DOLLAR_DAILY,
-    SYSTEM_WALLET,
-)
-from bot.utils.formatters import escape_md
 
 
 if TYPE_CHECKING:
@@ -243,7 +239,7 @@ class IncomingDepositService:
         try:
             # Create new deposit (each transaction = separate deposit)
             now = datetime.now(UTC)
-            daily_plex_required = amount * Decimal(str(PLEX_PER_DOLLAR_DAILY))
+            daily_plex_required = amount * Decimal(str(settings.plex_per_dollar_daily))
 
             # Determine level based on deposit count (1-5)
             level = active_deposits_count + 1
@@ -267,14 +263,11 @@ class IncomingDepositService:
 
             # Send transaction notification using TransactionNotifier
             try:
-                from bot.main import bot_instance
-
-                bot = bot_instance
-                if not bot:
-                    bot = Bot(
-                        token=settings.telegram_bot_token,
-                        default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN),
-                    )
+                # Create bot instance for notifications (app layer is independent of bot layer)
+                bot = Bot(
+                    token=settings.telegram_bot_token,
+                    default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN),
+                )
 
                 notifier = TransactionNotifier(bot, self.session)
                 await notifier.notify_usdt_received(
@@ -296,7 +289,7 @@ class IncomingDepositService:
                     f"⚠️ **ВАЖНО: Для активации депозита**\n"
                     f"Необходимо оплатить: **{int(daily_plex_required):,} PLEX**\n\n"
                     f"💳 Кошелек для оплаты:\n"
-                    f"`{SYSTEM_WALLET}`\n\n"
+                    f"`{settings.system_wallet_address}`\n\n"
                     f"После оплаты PLEX депозит начнет работать.\n"
                     f"Оплата требуется ежедневно (10 PLEX за каждый $1).\n"
                     f"Ваши индивидуальные сутки начнутся с момента первой оплаты."

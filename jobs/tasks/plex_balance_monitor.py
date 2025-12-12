@@ -19,11 +19,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from app.config.business_constants import WorkStatus
 from app.config.constants import TELEGRAM_MESSAGE_DELAY
 from app.config.settings import settings
 from app.models.user import User
 from app.services.blockchain_service import get_blockchain_service
-from bot.constants.rules import WorkStatus
 from jobs.async_runner import run_async
 
 

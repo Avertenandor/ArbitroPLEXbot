@@ -11,6 +11,7 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config.business_constants import MINIMUM_PLEX_BALANCE
 from app.config.settings import settings
 from app.models.global_settings import GlobalSettings
 from app.models.user import User
@@ -19,7 +20,6 @@ from app.repositories.global_settings_repository import (
     GlobalSettingsRepository,
 )
 from app.repositories.transaction_repository import TransactionRepository
-from bot.constants.rules import MINIMUM_PLEX_BALANCE
 
 
 @dataclass

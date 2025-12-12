@@ -21,6 +21,7 @@ from app.models.appeal import Appeal, AppealStatus
 from app.models.blacklist import Blacklist
 from app.models.user import User
 from app.repositories.admin_repository import AdminRepository
+from app.utils.formatters import format_user_identifier
 
 
 class AIAppealsService:
@@ -134,7 +135,7 @@ class AIAppealsService:
             # Get user info
             user = users_map.get(a.user_id)
             if user:
-                user_info = f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
+                user_info = format_user_identifier(user)
             else:
                 user_info = f"User#{a.user_id}"
 
@@ -207,7 +208,7 @@ class AIAppealsService:
             user_result = await self.session.execute(user_stmt)
             user = user_result.scalar_one_or_none()
             if user:
-                user_info = f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
+                user_info = format_user_identifier(user)
                 user_telegram = user.telegram_id
 
         status_emoji = {
@@ -364,7 +365,7 @@ class AIAppealsService:
             user_result = await self.session.execute(user_stmt)
             user = user_result.scalar_one_or_none()
             if user:
-                user_info = f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
+                user_info = format_user_identifier(user)
 
         decision_emoji = "✅" if decision == "approve" else "❌"
         decision_text = "одобрено" if decision == "approve" else "отклонено"
@@ -456,7 +457,7 @@ class AIAppealsService:
             logger.error(f"Failed to send reply to appeal {appeal_id}: {e}")
             return {"success": False, "error": f"❌ Не удалось отправить: {str(e)}"}
 
-        user_info = f"@{user.username}" if user.username else f"ID:{user.telegram_id}"
+        user_info = format_user_identifier(user)
 
         logger.info(
             f"AI APPEALS: Admin {admin.telegram_id} replied to appeal {appeal_id}: {message[:50]}..."

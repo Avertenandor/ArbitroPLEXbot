@@ -13,7 +13,6 @@ class AdminStates(StatesGroup):
     awaiting_master_key_input = State()  # Waiting for master key input
 
     # User management
-    awaiting_user_to_ban = State()  # DEPRECATED: Legacy, no handler exists
     awaiting_user_to_block = State()  # Block user (with appeal)
     awaiting_user_to_terminate = State()  # Terminate user (no appeal)
     awaiting_user_to_unban = State()  # Unban user confirmation
@@ -24,8 +23,6 @@ class AdminStates(StatesGroup):
     awaiting_broadcast_message = State()
     awaiting_broadcast_button_choice = State()  # Waiting for choice (add button or send)
     awaiting_broadcast_button_link = State()  # Waiting for button text|url
-    awaiting_user_message_target = State()  # TODO: implement handler
-    awaiting_user_message_content = State()  # TODO: implement handler
 
     # Support
     awaiting_support_reply = State()  # Waiting for admin reply text
@@ -41,3 +38,8 @@ class AdminStates(StatesGroup):
 
     # Withdrawal history search
     searching_withdrawal_history = State()  # Waiting for search query
+
+    # Removed deprecated states (2025-12-12):
+    # - awaiting_user_to_ban (Legacy, no handler exists)
+    # - awaiting_user_message_target (TODO handler never implemented)
+    # - awaiting_user_message_content (TODO handler never implemented)

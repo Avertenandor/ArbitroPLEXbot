@@ -106,8 +106,8 @@ class ButtonSpamProtectionMiddleware(BaseMiddleware):
             # Answer callback to prevent loading state
             try:
                 await event.answer("⏳ Подождите немного", show_alert=False)
-            except Exception:
-                pass  # Ignore if answer fails
+            except Exception as e:
+                logger.debug(f"Operation failed: {e}")
             return None  # Don't process handler
 
         # Set cooldown

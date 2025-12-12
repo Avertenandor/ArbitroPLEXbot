@@ -101,8 +101,8 @@ async def handle_update_deposit(
             blacklist_entry = await blacklist_repo.find_by_telegram_id(
                 message.from_user.id
             )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to get blacklist entry: {e}")
 
     await message.answer(
         "⬅️ Главное меню:",

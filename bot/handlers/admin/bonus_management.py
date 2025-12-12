@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.bonus_service import BonusService
 from app.services.user_service import UserService
+from bot.handlers.admin.bonus_v2.helpers import get_bonus_status
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny, get_admin_or_deny_callback
 from bot.keyboards.reply import get_admin_keyboard_from_data
 from bot.utils.formatters import format_usdt
@@ -38,17 +39,6 @@ from bot.utils.text_utils import escape_markdown
 
 
 router = Router(name="admin_bonus_management")
-
-
-def _get_bonus_status(bonus) -> str:
-    """Get status string from BonusCredit model."""
-    if bonus.cancelled_at is not None:
-        return "cancelled"
-    if bonus.is_roi_completed:
-        return "completed"
-    if bonus.is_active:
-        return "active"
-    return "inactive"
 
 
 class BonusMgmtStates(StatesGroup):
@@ -445,7 +435,7 @@ async def show_bonus_history(
     text = "📋 **Последние бонусы:**\n\n"
 
     for b in recent:
-        status = "🟢" if _get_bonus_status(b) == "active" else "⚪"
+        status = "🟢" if get_bonus_status(b) == "active" else "⚪"
         admin_name = b.admin.username if b.admin else "система"
         user_name = b.user.username if b.user else f"ID:{b.user_id}"
         safe_user = escape_markdown(user_name) if user_name else str(b.user_id)

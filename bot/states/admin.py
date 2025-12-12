@@ -78,9 +78,11 @@ class AdminSupportStates(StatesGroup):
 
     viewing_list = State()  # Viewing list of tickets
     viewing_ticket = State()  # Viewing specific ticket
-    answering_ticket = State()  # DEPRECATED - functionality moved to inline actions
-    confirming_close = State()  # DEPRECATED - functionality moved to inline actions
-    confirming_reopen = State()  # DEPRECATED - functionality moved to inline actions
+
+    # Removed deprecated states (2025-12-12):
+    # - answering_ticket (functionality moved to inline actions)
+    # - confirming_close (functionality moved to inline actions)
+    # - confirming_reopen (functionality moved to inline actions)
 
 
 class AdminFinpassRecoveryStates(StatesGroup):

@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.services.blockchain_service import get_blockchain_service
 from app.services.plex_payment_service import PlexPaymentService
-from bot.constants.rules import MINIMUM_PLEX_BALANCE, get_available_plex_balance
+from app.config.business_constants import MINIMUM_PLEX_BALANCE, get_available_plex_balance
 from bot.i18n.loader import get_translator, get_user_language
 from bot.utils.text_utils import safe_answer
 from bot.utils.user_loader import UserLoader
@@ -215,8 +215,8 @@ async def show_wallet_balance(
         # Delete scanning message and send result
         try:
             await scanning_msg.delete()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to delete message: {e}")
 
         await safe_answer(message, text)
 
@@ -231,8 +231,8 @@ async def show_wallet_balance(
         # Delete scanning message
         try:
             await scanning_msg.delete()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(f"Failed to delete message: {e}")
 
         # Show error with partial info
         text = (
