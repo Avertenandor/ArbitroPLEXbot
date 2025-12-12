@@ -22,18 +22,11 @@ from app.repositories.admin_repository import AdminRepository
 from app.repositories.global_settings_repository import GlobalSettingsRepository
 
 
-# Only these users can control emergency stops
-SUPER_ADMIN_IDS = [
-    1040687384,  # @VladarevInvestBrok (Командир/super_admin)
-]
+"""NOTE: Access control
 
-# Trusted admins can view but not change critical settings
-TRUSTED_ADMIN_IDS = [
-    1040687384,  # @VladarevInvestBrok (Командир/super_admin)
-    1691026253,  # @AI_XAN (Саша - Tech Deputy)
-    241568583,   # @natder (Наташа)
-    6540613027,  # @ded_vtapkax (Влад)
-]
+Per requirement: any active (non-blocked) admin can operate AI system controls.
+The only gate is presence in DB `admins` and not blocked.
+"""
 
 
 class AISystemService:
@@ -41,8 +34,7 @@ class AISystemService:
     AI-powered system administration service.
 
     SECURITY NOTES:
-    - Emergency controls: ONLY super_admin
-    - Read-only monitoring: Trusted admins
+    - Access is granted to any verified (non-blocked) admin
     - All actions are logged
     """
 
@@ -70,12 +62,12 @@ class AISystemService:
         return admin, None
 
     def _is_super_admin(self) -> bool:
-        """Check if current admin is super_admin."""
-        return self.admin_telegram_id in SUPER_ADMIN_IDS
+        """All verified admins have super-admin level access for ARYA controls."""
+        return True
 
     def _is_trusted_admin(self) -> bool:
-        """Check if current admin is trusted."""
-        return self.admin_telegram_id in TRUSTED_ADMIN_IDS
+        """All verified admins are trusted for ARYA controls."""
+        return True
 
     # ========================================================================
     # EMERGENCY CONTROLS (SUPER_ADMIN ONLY)

@@ -25,13 +25,10 @@ from app.services.finpass_recovery_service import (
 )
 
 
-# Only these admins can approve/reject
-TRUSTED_ADMIN_IDS = [
-    1040687384,  # @VladarevInvestBrok (Командир/super_admin)
-    1691026253,  # @AI_XAN (Саша - Tech Deputy)
-    241568583,  # @natder (Наташа)
-    6540613027,  # @ded_vtapkax (Влад)
-]
+"""NOTE: Access control
+
+Per requirement: any active (non-blocked) admin can manage finpass recovery via ARYA.
+"""
 
 
 class AIFinpassService:
@@ -65,8 +62,8 @@ class AIFinpassService:
         return admin, None
 
     def _is_trusted_admin(self) -> bool:
-        """Check if current admin can approve/reject."""
-        return self.admin_telegram_id in TRUSTED_ADMIN_IDS
+        """All verified admins are trusted for ARYA finpass tools."""
+        return True
 
     async def get_pending_requests(self, limit: int = 20) -> dict[str, Any]:
         """
@@ -79,7 +76,7 @@ class AIFinpassService:
         if error:
             return {"success": False, "error": error}
 
-        # Only trusted admins can view pending requests
+        # Any verified admin can view pending requests
         if not self._is_trusted_admin():
             return {"success": False, "error": "❌ Недостаточно прав для просмотра заявок"}
 
@@ -143,7 +140,7 @@ class AIFinpassService:
         if error:
             return {"success": False, "error": error}
 
-        # Only trusted admins can view request details
+        # Any verified admin can view request details
         if not self._is_trusted_admin():
             return {"success": False, "error": "❌ Недостаточно прав для просмотра деталей заявки"}
 

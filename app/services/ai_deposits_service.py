@@ -160,9 +160,8 @@ class AIDepositsService:
             logger.warning(f"AI_DEPOSITS: verify_admin failed: {error}")
             return {"success": False, "error": error}
 
-        # Only trusted admins can view user deposits
+        # Any verified admin can view user deposits
         if not self._is_trusted_admin():
-            logger.warning(f"AI_DEPOSITS: admin {self.admin_telegram_id} not in TRUSTED_ADMIN_IDS={TRUSTED_ADMIN_IDS}")
             return {"success": False, "error": "❌ Недостаточно прав для просмотра депозитов"}
 
         user, error = await self._find_user(user_identifier)
@@ -277,7 +276,7 @@ class AIDepositsService:
         if error:
             return {"success": False, "error": error}
 
-        # Only trusted admins can view deposit details
+        # Any verified admin can view deposit details
         if not self._is_trusted_admin():
             return {"success": False, "error": "❌ Недостаточно прав для просмотра деталей депозита"}
 

@@ -23,13 +23,10 @@ from app.repositories.deposit_corridor_history_repository import (
 from app.repositories.global_settings_repository import GlobalSettingsRepository
 
 
-# Only these admins can modify ROI
-TRUSTED_ADMIN_IDS = [
-    1040687384,  # @VladarevInvestBrok (Командир/super_admin)
-    1691026253,  # @AI_XAN (Саша - Tech Deputy)
-    241568583,  # @natder (Наташа)
-    6540613027,  # @ded_vtapkax (Влад)
-]
+"""NOTE: Access control
+
+Per requirement: any active (non-blocked) admin can modify ROI via ARYA.
+"""
 
 
 class AIRoiService:
@@ -61,8 +58,8 @@ class AIRoiService:
         return admin, None
 
     def _is_trusted_admin(self) -> bool:
-        """Check if current admin can modify ROI."""
-        return self.admin_telegram_id in TRUSTED_ADMIN_IDS
+        """All verified admins are trusted for ARYA ROI tools."""
+        return True
 
     async def get_roi_config(self, level: int | None = None) -> dict[str, Any]:
         """

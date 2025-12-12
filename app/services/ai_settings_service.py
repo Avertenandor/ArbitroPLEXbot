@@ -22,13 +22,10 @@ from app.repositories.deposit_level_config_repository import DepositLevelConfigR
 from app.repositories.global_settings_repository import GlobalSettingsRepository
 
 
-# Whitelist of admin telegram IDs who can modify settings
-TRUSTED_ADMIN_IDS = [
-    1040687384,  # @VladarevInvestBrok (Командир/super_admin)
-    1691026253,  # @AI_XAN (Саша - Tech Deputy)
-    241568583,   # @natder (Наташа)
-    6540613027,  # @ded_vtapkax (Влад)
-]
+"""NOTE: Access control
+
+Per requirement: any active (non-blocked) admin can modify settings via ARYA.
+"""
 
 
 class AISettingsService:
@@ -62,8 +59,8 @@ class AISettingsService:
         return admin, None
 
     def _is_trusted_admin(self) -> bool:
-        """Check if current admin is trusted."""
-        return self.admin_telegram_id in TRUSTED_ADMIN_IDS
+        """All verified admins are trusted for ARYA settings tools."""
+        return True
 
     # ========================================================================
     # WITHDRAWAL SETTINGS
@@ -108,7 +105,7 @@ class AISettingsService:
             return error
 
         if not self._is_trusted_admin():
-            return "❌ Только доверенные админы могут изменять настройки выводов"
+            return "❌ Недостаточно прав для изменения настроек"
 
         if amount < Decimal("0.1"):
             return "❌ Минимальная сумма не может быть меньше 0.1 USDT"
@@ -460,9 +457,7 @@ class AISettingsService:
         if error:
             return error
 
-        # Only super_admin can create admins
-        if self.admin_telegram_id != 1040687384:  # Командир
-            return "❌ Только Командир может создавать администраторов"
+        # Per requirement: any verified admin can manage admins via ARYA
 
         valid_roles = ["moderator", "admin", "extended_admin"]
         if role not in valid_roles:
@@ -509,12 +504,7 @@ class AISettingsService:
         if error:
             return error
 
-        # Only super_admin can delete admins
-        if self.admin_telegram_id != 1040687384:  # Командир
-            return "❌ Только Командир может удалять администраторов"
-
-        if telegram_id == 1040687384:
-            return "❌ Нельзя удалить владельца платформы"
+        # Per requirement: any verified admin can manage admins via ARYA
 
         try:
             admin_repo = AdminRepository(self.session)

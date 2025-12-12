@@ -10,16 +10,13 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Appeal, User
+from app.repositories.admin_repository import AdminRepository
 from app.repositories.user_repository import UserRepository
 
+"""NOTE: Access control
 
-# Only these admins can use broadcast functions
-TRUSTED_ADMIN_IDS = [
-    1040687384,  # @VladarevInvestBrok (Командир/super_admin)
-    1691026253,  # @AI_XAN (Саша - Tech Deputy)
-    241568583,  # @natder (Наташа)
-    6540613027,  # @ded_vtapkax (Влад)
-]
+Per requirement: any active (non-blocked) admin can use broadcast tools via ARYA.
+"""
 
 
 class AIBroadcastService:
@@ -38,9 +35,18 @@ class AIBroadcastService:
         self.admin_username = admin_username
         self.user_repo = UserRepository(session)
 
-    def _is_trusted_admin(self) -> bool:
-        """Check if current admin is trusted for broadcasts."""
-        return self.admin_telegram_id in TRUSTED_ADMIN_IDS
+    async def _verify_admin(self) -> tuple[bool, str | None]:
+        """Verify that the caller is an active (non-blocked) admin."""
+        if not self.admin_telegram_id:
+            return False, "❌ Не удалось определить администратора"
+
+        admin_repo = AdminRepository(self.session)
+        admin = await admin_repo.get_by_telegram_id(self.admin_telegram_id)
+
+        if not admin or admin.is_blocked:
+            return False, "❌ Администратор не найден или заблокирован"
+
+        return True, None
 
     async def send_message_to_user(
         self,
@@ -59,13 +65,10 @@ class AIBroadcastService:
         Returns:
             Result dict with status
         """
-        # Security check
-        if not self._is_trusted_admin():
-            logger.warning(f"BROADCAST DENIED: Untrusted admin {self.admin_telegram_id} attempted to send message")
-            return {
-                "success": False,
-                "error": "❌ Недостаточно прав для отправки сообщений",
-            }
+        ok, err = await self._verify_admin()
+        if not ok:
+            logger.warning(f"BROADCAST DENIED: {err} (admin_id={self.admin_telegram_id})")
+            return {"success": False, "error": err}
 
         try:
             # Find user
@@ -124,22 +127,12 @@ class AIBroadcastService:
         Returns:
             Result dict with stats
         """
-        # Security check
-        if not self._is_trusted_admin():
+        ok, err = await self._verify_admin()
+        if not ok:
             logger.warning(
-                f"BROADCAST DENIED: Untrusted admin {self.admin_telegram_id} attempted broadcast to group '{group}'"
+                f"BROADCAST DENIED: {err} (admin_id={self.admin_telegram_id}) attempted broadcast to group '{group}'"
             )
-            return {
-                "success": False,
-                "error": "❌ Недостаточно прав для рассылки",
-            }
-
-        # Only super_admin can broadcast to "all"
-        if group == "all" and self.admin_telegram_id != 1040687384:
-            return {
-                "success": False,
-                "error": "❌ Рассылка на 'all' доступна только Командиру",
-            }
+            return {"success": False, "error": err}
 
         try:
             # Get user IDs based on group

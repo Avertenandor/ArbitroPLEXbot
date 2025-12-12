@@ -1,8 +1,9 @@
-"""
-AI Withdrawals Service.
+"""AI Withdrawals Service.
 
 Provides withdrawal management for AI assistant.
-SECURITY: Only trusted admins can approve/reject.
+
+SECURITY NOTE:
+- Any active (non-blocked) admin is allowed to approve/reject via ARYA.
 """
 
 from datetime import UTC, datetime
@@ -18,15 +19,6 @@ from app.models.enums import TransactionStatus, TransactionType
 from app.models.transaction import Transaction
 from app.models.user import User
 from app.repositories.admin_repository import AdminRepository
-
-
-# Same whitelist as in ai_users_service
-TRUSTED_ADMIN_IDS = [
-    1040687384,  # @VladarevInvestBrok (Командир/super_admin)
-    1691026253,  # @AI_XAN (Саша - Tech Deputy)
-    241568583,  # @natder (Наташа)
-    6540613027,  # @ded_vtapkax (Влад)
-]
 
 
 class AIWithdrawalsService:
@@ -57,8 +49,8 @@ class AIWithdrawalsService:
         return admin, None
 
     def _is_trusted_admin(self) -> bool:
-        """Check if current admin is in trusted whitelist."""
-        return self.admin_telegram_id in TRUSTED_ADMIN_IDS
+        """All verified admins are trusted for ARYA withdrawals tools."""
+        return True
 
     async def get_pending_withdrawals(
         self,
@@ -95,7 +87,6 @@ class AIWithdrawalsService:
 
         withdrawals_list = []
         for w in withdrawals:
-            # Get user info
             user_stmt = select(User).where(User.id == w.user_id)
             user_result = await self.session.execute(user_stmt)
             user = user_result.scalar_one_or_none()
@@ -335,7 +326,6 @@ class AIWithdrawalsService:
         if error:
             return {"success": False, "error": error}
 
-        # Total stats by status
         status_stmt = (
             select(
                 Transaction.status,
@@ -348,31 +338,28 @@ class AIWithdrawalsService:
         status_result = await self.session.execute(status_stmt)
         status_rows = status_result.all()
 
-        status_stats = {}
+        status_stats: dict[str, dict[str, float]] = {}
         for row in status_rows:
             status_stats[row.status] = {
-                "count": row.count,
+                "count": float(row.count or 0),
                 "total": float(row.total or 0),
             }
 
-        # Overall totals
-        total_count = sum(s["count"] for s in status_stats.values())
-        total_amount = sum(s["total"] for s in status_stats.values())
+        total_count = int(sum(s["count"] for s in status_stats.values()))
+        total_amount = float(sum(s["total"] for s in status_stats.values()))
 
-        # Pending stats
-        pending = status_stats.get(TransactionStatus.PENDING.value, {"count": 0, "total": 0})
-        processing = status_stats.get(TransactionStatus.PROCESSING.value, {"count": 0, "total": 0})
-        confirmed = status_stats.get(TransactionStatus.CONFIRMED.value, {"count": 0, "total": 0})
-        failed = status_stats.get(TransactionStatus.FAILED.value, {"count": 0, "total": 0})
+        pending = status_stats.get(TransactionStatus.PENDING.value, {"count": 0.0, "total": 0.0})
+        processing = status_stats.get(TransactionStatus.PROCESSING.value, {"count": 0.0, "total": 0.0})
+        confirmed = status_stats.get(TransactionStatus.CONFIRMED.value, {"count": 0.0, "total": 0.0})
+        failed = status_stats.get(TransactionStatus.FAILED.value, {"count": 0.0, "total": 0.0})
 
-        # Average withdrawal amount
         avg_stmt = (
             select(func.avg(Transaction.amount))
             .where(Transaction.type == TransactionType.WITHDRAWAL.value)
             .where(Transaction.status == TransactionStatus.CONFIRMED.value)
         )
         avg_result = await self.session.execute(avg_stmt)
-        avg_amount = avg_result.scalar() or 0
+        avg_amount = float(avg_result.scalar() or 0)
 
         return {
             "success": True,
@@ -380,18 +367,18 @@ class AIWithdrawalsService:
                 "total_withdrawals": total_count,
                 "total_amount": round(total_amount, 2),
                 "pending": {
-                    "count": pending["count"] + processing["count"],
+                    "count": int(pending["count"] + processing["count"]),
                     "amount": round(pending["total"] + processing["total"], 2),
                 },
                 "completed": {
-                    "count": confirmed["count"],
+                    "count": int(confirmed["count"]),
                     "amount": round(confirmed["total"], 2),
                 },
                 "rejected": {
-                    "count": failed["count"],
+                    "count": int(failed["count"]),
                     "amount": round(failed["total"], 2),
                 },
-                "average_amount": round(float(avg_amount), 2),
+                "average_amount": round(avg_amount, 2),
             },
             "message": "📊 Статистика выводов",
         }

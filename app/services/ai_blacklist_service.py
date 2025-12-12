@@ -22,13 +22,10 @@ from app.repositories.blacklist_repository import BlacklistRepository
 from app.repositories.user_repository import UserRepository
 
 
-# Only these admins can modify blacklist
-TRUSTED_ADMIN_IDS = [
-    1040687384,  # @VladarevInvestBrok (Командир/super_admin)
-    1691026253,  # @AI_XAN (Саша - Tech Deputy)
-    241568583,  # @natder (Наташа)
-    6540613027,  # @ded_vtapkax (Влад)
-]
+"""NOTE: Access control
+
+Per requirement: any active (non-blocked) admin can manage blacklist via ARYA.
+"""
 
 
 class AIBlacklistService:
@@ -61,8 +58,8 @@ class AIBlacklistService:
         return admin, None
 
     def _is_trusted_admin(self) -> bool:
-        """Check if current admin can modify blacklist."""
-        return self.admin_telegram_id in TRUSTED_ADMIN_IDS
+        """All verified admins are trusted for ARYA blacklist tools."""
+        return True
 
     async def get_blacklist(self, limit: int = 50) -> dict[str, Any]:
         """
@@ -75,7 +72,7 @@ class AIBlacklistService:
         if error:
             return {"success": False, "error": error}
 
-        # Only trusted admins can view blacklist
+        # Any verified admin can view blacklist
         if not self._is_trusted_admin():
             return {"success": False, "error": "❌ Недостаточно прав для просмотра чёрного списка"}
 
@@ -141,7 +138,7 @@ class AIBlacklistService:
         if error:
             return {"success": False, "error": error}
 
-        # Only trusted admins can check blacklist
+        # Any verified admin can check blacklist
         if not self._is_trusted_admin():
             return {"success": False, "error": "❌ Недостаточно прав для проверки чёрного списка"}
 

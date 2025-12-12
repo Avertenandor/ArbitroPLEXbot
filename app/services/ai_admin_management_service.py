@@ -21,10 +21,10 @@ from app.models.admin import Admin
 from app.repositories.admin_repository import AdminRepository
 
 
-# Only these users can manage admins
-SUPER_ADMIN_IDS = [
-    1040687384,  # @VladarevInvestBrok (Командир/super_admin)
-]
+"""NOTE: Access control
+
+Per requirement: any active (non-blocked) admin can manage admins via ARYA.
+"""
 
 
 class AIAdminManagementService:
@@ -58,8 +58,8 @@ class AIAdminManagementService:
         return admin, None
 
     def _is_super_admin(self) -> bool:
-        """Check if current admin is super_admin."""
-        return self.admin_telegram_id in SUPER_ADMIN_IDS
+        """All verified admins have super-admin level access for ARYA admin-management tools."""
+        return True
 
     async def get_admins_list(self) -> dict[str, Any]:
         """
@@ -115,11 +115,11 @@ class AIAdminManagementService:
         if error:
             return {"success": False, "error": error}
 
-        # Only super_admin can view other admin details
+        # Any verified admin can view other admin details
         if not self._is_super_admin():
             return {
                 "success": False,
-                "error": "❌ Только Командир может просматривать детали администраторов"
+                "error": "❌ Недостаточно прав для просмотра деталей администраторов"
             }
 
         admin_repo = AdminRepository(self.session)
@@ -201,10 +201,6 @@ class AIAdminManagementService:
         if not target:
             return {"success": False, "error": f"❌ Администратор '{admin_identifier}' не найден"}
 
-        # Prevent blocking super_admin
-        if target.telegram_id in SUPER_ADMIN_IDS:
-            return {"success": False, "error": "❌ Нельзя заблокировать супер-администратора!"}
-
         if target.is_blocked:
             return {"success": False, "error": "❌ Администратор уже заблокирован"}
 
@@ -212,7 +208,7 @@ class AIAdminManagementService:
         await self.session.commit()
 
         logger.warning(
-            f"AI ADMIN: Super-admin {self.admin_telegram_id} blocked admin "
+            f"AI ADMIN: Admin {self.admin_telegram_id} blocked admin "
             f"{target.telegram_id} (@{target.username}): {reason}"
         )
 
