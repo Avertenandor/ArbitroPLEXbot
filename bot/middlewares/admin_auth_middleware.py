@@ -76,8 +76,17 @@ class AdminAuthMiddleware(BaseMiddleware):
         # Check if user is admin
         is_admin = data.get("is_admin", False)
         if not is_admin:
-            # Not an admin, skip middleware
-            return await handler(event, data)
+            # Not an admin: block access to admin routers entirely.
+            # This middleware is attached only to admin routers, so a non-admin
+            # must not be able to trigger admin handlers by sending matching text/callbacks.
+            if isinstance(event, Message):
+                await event.answer("❌ Эта функция доступна только администраторам")
+                return
+            if isinstance(event, CallbackQuery):
+                await event.answer("❌ Эта функция доступна только администраторам", show_alert=True)
+                return
+
+            return
 
         # Get admin from database
         admin_service = AdminService(session)
