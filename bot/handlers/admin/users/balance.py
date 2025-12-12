@@ -32,7 +32,9 @@ async def handle_profile_balance(
     **data: Any,
 ) -> None:
     """Start balance change flow"""
-    admin = await get_admin_or_deny(message, session, require_extended=True, **data)
+    # Разрешаем изменение баланса всем администраторам (любой роли),
+    # а не только extended/super admin.
+    admin = await get_admin_or_deny(message, session, **data)
     if not admin:
         return
 
@@ -71,10 +73,12 @@ async def process_balance_change(
             if user:
                 # Import here to avoid circular dependency
                 from bot.handlers.admin.users.profile import show_user_profile
+
                 await show_user_profile(message, user, state, session)
                 return
         # Import here to avoid circular dependency
         from bot.handlers.admin.users.menu import handle_admin_users_menu
+
         await handle_admin_users_menu(message, state, **data)
         return
 
@@ -92,6 +96,7 @@ async def process_balance_change(
         await message.answer("❌ Пользователь не выбран")
         # Import here to avoid circular dependency
         from bot.handlers.admin.users.menu import handle_admin_users_menu
+
         await handle_admin_users_menu(message, state, **data)
         return
 
@@ -110,18 +115,11 @@ async def process_balance_change(
     new_balance = old_balance + amount
 
     if new_balance < 0:
-        await message.reply(
-            f"❌ Нельзя списать больше, чем есть на балансе.\n"
-            f"Текущий баланс: {old_balance}"
-        )
+        await message.reply(f"❌ Нельзя списать больше, чем есть на балансе.\nТекущий баланс: {old_balance}")
         return
 
     # R9-2: Atomic balance update to prevent race conditions
-    stmt = (
-        update(User)
-        .where(User.id == user_id)
-        .values(balance=User.balance + amount)
-    )
+    stmt = update(User).where(User.id == user_id).values(balance=User.balance + amount)
     await session.execute(stmt)
     await session.commit()
 
@@ -129,10 +127,7 @@ async def process_balance_change(
     admin_id = admin.id if admin else None
 
     # Security log (simplified usage)
-    logger.warning(
-        f"Admin {admin_id} changed balance for user {user_id} by {amount}. "
-        f"New: {new_balance}"
-    )
+    logger.warning(f"Admin {admin_id} changed balance for user {user_id} by {amount}. New: {new_balance}")
 
     admin_log = AdminLogService(session)
     action = "Начисление" if amount > 0 else "Списание"
@@ -141,22 +136,15 @@ async def process_balance_change(
         action=f"balance_change_{'credit' if amount > 0 else 'debit'}",
         entity_type="user",
         entity_id=user_id,
-        details={
-            "amount": float(amount),
-            "old_balance": float(old_balance),
-            "new_balance": float(new_balance)
-        },
-        ip_address=None
+        details={"amount": float(amount), "old_balance": float(old_balance), "new_balance": float(new_balance)},
+        ip_address=None,
     )
 
-    await message.answer(
-        f"✅ Баланс успешно изменен.\n"
-        f"{action}: {amount} USDT\n"
-        f"Новый баланс: {new_balance} USDT"
-    )
+    await message.answer(f"✅ Баланс успешно изменен.\n{action}: {amount} USDT\nНовый баланс: {new_balance} USDT")
 
     # Reload user to show updated profile
     user = await user_service.get_by_id(user_id)
     # Import here to avoid circular dependency
     from bot.handlers.admin.users.profile import show_user_profile
+
     await show_user_profile(message, user, state, session)
