@@ -52,35 +52,41 @@ Example: A user with $100 deposit must pay 1000 PLEX daily.
 ### Installation
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/Avertenandor/ArbitroPLEXbot.git
 cd ArbitroPLEXbot
 ```
 
-2. Create virtual environment:
+1. Create virtual environment:
+
 ```bash
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
 # or: venv\Scripts\activate  # Windows
 ```
 
-3. Install dependencies:
+1. Install dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
 
-4. Configure environment:
+1. Configure environment:
+
 ```bash
 cp .env.example .env
 # Edit .env with your values
 ```
 
-5. Run database migrations:
+1. Run database migrations:
+
 ```bash
 alembic upgrade head
 ```
 
-6. Start the bot:
+1. Start the bot:
+
 ```bash
 python -m bot.main
 ```
@@ -88,7 +94,17 @@ python -m bot.main
 ### Docker Deployment
 
 ```bash
-docker-compose -f docker-compose.python.yml up -d
+docker compose -f docker-compose.python.yml up -d
+```
+
+### Postgres password rotation
+
+If you rotate the Postgres role password and update `DATABASE_URL` in `.env`, you must **recreate** containers (a plain `restart` does not re-read `.env`).
+
+From the project root (e.g. `/opt/arbitragebot`):
+
+```bash
+bash scripts/rotate_db_password.sh
 ```
 
 ## Configuration
@@ -115,7 +131,7 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 ## Project Structure
 
-```
+```text
 ArbitroPLEXbot/
 ├── app/
 │   ├── config/          # Settings and database config

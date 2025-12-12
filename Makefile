@@ -22,66 +22,66 @@ help:
 
 # Build Docker images
 build:
-	docker-compose -f docker-compose.python.yml build
+	docker compose -f docker-compose.python.yml build
 
 # Start all services
 up:
-	docker-compose -f docker-compose.python.yml up -d
+	docker compose -f docker-compose.python.yml up -d
 
 # Stop all services
 down:
-	docker-compose -f docker-compose.python.yml down
+	docker compose -f docker-compose.python.yml down
 
 # Restart all services
 restart:
-	docker-compose -f docker-compose.python.yml restart
+	docker compose -f docker-compose.python.yml restart
 
 # View logs
 logs:
-	docker-compose -f docker-compose.python.yml logs -f
+	docker compose -f docker-compose.python.yml logs -f
 
 # View bot logs
 logs-bot:
-	docker-compose -f docker-compose.python.yml logs -f bot
+	docker compose -f docker-compose.python.yml logs -f bot
 
 # View worker logs
 logs-worker:
-	docker-compose -f docker-compose.python.yml logs -f worker
+	docker compose -f docker-compose.python.yml logs -f worker
 
 # View scheduler logs
 logs-scheduler:
-	docker-compose -f docker-compose.python.yml logs -f scheduler
+	docker compose -f docker-compose.python.yml logs -f scheduler
 
 # Show running containers
 ps:
-	docker-compose -f docker-compose.python.yml ps
+	docker compose -f docker-compose.python.yml ps
 
 # Clean up (remove containers and volumes)
 clean:
-	docker-compose -f docker-compose.python.yml down -v
+	docker compose -f docker-compose.python.yml down -v
 	docker system prune -f
 
 # Run database migrations
 migrate:
-	docker-compose -f docker-compose.python.yml exec bot alembic upgrade head
+	docker compose -f docker-compose.python.yml exec bot alembic upgrade head
 
 # Open shell in bot container
 shell-bot:
-	docker-compose -f docker-compose.python.yml exec bot /bin/bash
+	docker compose -f docker-compose.python.yml exec bot /bin/bash
 
 # Open PostgreSQL shell
 shell-db:
-	docker-compose -f docker-compose.python.yml exec postgres psql -U sigmatrade -d sigmatrade
+	docker compose -f docker-compose.python.yml exec postgres sh -lc 'psql -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"'
 
 # Create new migration
 migration:
 	@read -p "Enter migration message: " msg; \
-	docker-compose -f docker-compose.python.yml exec bot alembic revision --autogenerate -m "$$msg"
+		docker compose -f docker-compose.python.yml exec bot alembic revision --autogenerate -m "$$msg"
 
 # Import partners database (dry run)
 import-partners-dry:
-	docker-compose -f docker-compose.python.yml exec bot python scripts/import_partners_base.py --dry-run
+	docker compose -f docker-compose.python.yml exec bot python scripts/import_partners_base.py --dry-run
 
 # Import partners database (real import)
 import-partners:
-	docker-compose -f docker-compose.python.yml exec bot python scripts/import_partners_base.py
+	docker compose -f docker-compose.python.yml exec bot python scripts/import_partners_base.py
