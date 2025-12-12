@@ -765,7 +765,7 @@ class AIAssistantService:
             AI response
         """
         # Извлекаем telegram_id собеседника для проверки прав
-        caller_telegram_id = None
+        caller_telegram_id: int | None = None
         if user_data:
             caller_telegram_id = user_data.get("ID") or user_data.get("telegram_id")
             if isinstance(caller_telegram_id, str):
@@ -774,9 +774,36 @@ class AIAssistantService:
                 except ValueError:
                     caller_telegram_id = None
 
-        # КРИТИЧЕСКИ ВАЖНО: Проверяем может ли собеседник командовать Арьей
-        # Арья выполняет команды ТОЛЬКО от авторизованных админов!
-        caller_can_command = caller_telegram_id and can_command_arya(caller_telegram_id)
+        # КРИТИЧЕСКИ ВАЖНО: Проверяем может ли собеседник командовать Арьей.
+        # Раньше тут был жёсткий whitelist (ARYA_COMMAND_GIVERS).
+        # Теперь любому действующему админу (есть запись в БД и он не заблокирован)
+        # разрешено отдавать команды, а уже внутри инструментов ограничения
+        # накладываются по его реальной роли и TRUSTED_ADMIN_IDS.
+        caller_can_command = False
+
+        if session and caller_telegram_id:
+            # 1) Сначала сохраняем старый whitelist для обратной совместимости
+            if can_command_arya(caller_telegram_id):
+                caller_can_command = True
+            else:
+                # 2) Если не в ARYA_COMMAND_GIVERS, проверяем, что это реальный админ в БД
+                try:
+                    from app.repositories.admin_repository import AdminRepository
+
+                    admin_repo = AdminRepository(session)
+                    admin_obj = await admin_repo.get_by_telegram_id(caller_telegram_id)
+
+                    if admin_obj and not admin_obj.is_blocked:
+                        caller_can_command = True
+                    else:
+                        logger.warning(
+                            "ARYA: caller is not allowed to command (not admin or blocked)",
+                            extra={"caller_telegram_id": caller_telegram_id},
+                        )
+                except Exception as e:
+                    logger.error(
+                        f"ARYA: failed to verify admin rights for caller {caller_telegram_id}: {e}"
+                    )
 
         # Если нет сессии/бота или собеседник не может командовать - обычный чат
         if not session or not bot or not caller_can_command:
