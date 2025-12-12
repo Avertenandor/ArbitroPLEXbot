@@ -29,6 +29,7 @@ from aiogram import Router
 from bot.handlers.admin.users import (
     balance,
     bonus,
+    deposit_void,
     deposits,
     list,
     menu,
@@ -70,10 +71,13 @@ router.include_router(transactions.router)
 # 8. Deposit scanning
 router.include_router(deposits.router)
 
-# 9. Referral statistics
+# 9. Deposit voiding (internal correction)
+router.include_router(deposit_void.router)
+
+# 10. Referral statistics
 router.include_router(referrals.router)
 
-# 10. Bonus management
+# 11. Bonus management
 router.include_router(bonus.router)
 
 # Export the main router for backward compatibility

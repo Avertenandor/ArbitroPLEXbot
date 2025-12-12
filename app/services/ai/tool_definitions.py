@@ -403,7 +403,7 @@ def get_user_management_tools() -> list[dict[str, Any]]:
         },
         {
             "name": "change_user_balance",
-            "description": "Изменить баланс пользователя. ТОЛЬКО доверенные админы!",
+            "description": "Изменить доступный баланс пользователя (НЕ депозиты). Выполнять только по явной команде админа с причиной.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -737,7 +737,7 @@ def get_deposits_tools() -> list[dict[str, Any]]:
         },
         {
             "name": "create_manual_deposit",
-            "description": "Создать ручной депозит. ТОЛЬКО ДОВЕРЕННЫЕ АДМИНЫ!",
+            "description": "Создать ручной депозит. Выполнять только по явной команде админа с причиной.",
             "input_schema": {
                 "type": "object",
                 "properties": {
@@ -765,7 +765,7 @@ def get_deposits_tools() -> list[dict[str, Any]]:
         },
         {
             "name": "cancel_deposit",
-            "description": "Отменить депозит. ТОЛЬКО ДОВЕРЕННЫЕ АДМИНЫ!",
+            "description": "Отменить депозит (исключить из учёта). Выполнять только по явной команде админа с причиной.",
             "input_schema": {
                 "type": "object",
                 "properties": {

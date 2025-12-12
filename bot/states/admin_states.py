@@ -18,6 +18,8 @@ class AdminStates(StatesGroup):
     awaiting_user_to_unban = State()  # Unban user confirmation
     finding_user = State()  # Searching for a user
     changing_user_balance = State()  # Changing user balance
+    selecting_deposit_to_void = State()  # Selecting user deposit to void
+    confirming_deposit_void = State()  # Confirming deposit void action
 
     # Broadcast
     awaiting_broadcast_message = State()
@@ -33,7 +35,7 @@ class AdminStates(StatesGroup):
 
     # Withdrawal management
     selecting_withdrawal = State()  # Selecting withdrawal ID to manage
-    viewing_withdrawal = State()    # Viewing details (Approve/Reject options)
+    viewing_withdrawal = State()  # Viewing details (Approve/Reject options)
     confirming_withdrawal_action = State()  # Confirming approve/reject
 
     # Withdrawal history search

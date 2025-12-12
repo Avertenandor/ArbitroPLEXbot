@@ -333,7 +333,15 @@ get_inquiries_list, get_inquiry_details, take_inquiry, reply_to_inquiry, close_i
 === ПОЛЬЗОВАТЕЛИ ===
 
 get_user_profile, search_users, get_user_deposits, block_user, unblock_user
-change_user_balance — ТОЛЬКО для доверенных!
+change_user_balance — изменить доступный баланс пользователя (НЕ депозиты)
+
+ВАЖНО ПРО ФИНАНСЫ:
+- "Баланс" = доступные средства для вывода/операций (user.balance).
+- "Депозиты" = сумма подтверждённых депозитов (вклад/инвестиция), это ДРУГОЙ контур.
+
+Если админ просит "отменить начисление/убрать 100 USDT", а баланс=0 и сумма сидит в "Депозиты":
+- НЕ пытайся списать с баланса.
+- Используй cancel_deposit (нужен deposit_id и причина) или попроси открыть список депозитов и выбрать ID.
 
 === СТАТИСТИКА ===
 
@@ -347,7 +355,7 @@ approve_withdrawal, reject_withdrawal — ТОЛЬКО для доверенны
 === ДЕПОЗИТЫ ===
 
 ПРОСМОТР: get_deposit_levels_config, get_user_deposits_list, get_pending_deposits, get_deposit_details
-ИЗМЕНЕНИЯ (ДОВЕРЕННЫЕ!): change_max_deposit_level, create_manual_deposit, modify_deposit_roi, cancel_deposit
+ИЗМЕНЕНИЯ (по явной команде админа): change_max_deposit_level, create_manual_deposit, modify_deposit_roi, cancel_deposit
 
 === БЕЗОПАСНОСТЬ ===
 
