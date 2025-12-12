@@ -6,7 +6,8 @@ Includes: search, profile, balance changes, blocking, deposits.
 
 SECURITY:
 - Only accessible from authenticated admin session
-- Dangerous operations require whitelist check
+- All admin roles can perform user operations (balance changes, etc.)
+- All operations are logged for audit purposes
 """
 
 from datetime import UTC, datetime
@@ -285,7 +286,8 @@ class AIUsersService:
         """
         Change user balance (add or subtract).
 
-        SECURITY: Only trusted admins can use this!
+        All authenticated admins can use this function.
+        Operations are logged for audit purposes.
 
         Args:
             user_identifier: @username or telegram_id
@@ -297,16 +299,13 @@ class AIUsersService:
         if error:
             return {"success": False, "error": error}
 
-        # Security check
-        if not self._is_trusted_admin():
-            logger.warning(
-                f"AI USERS SECURITY: Untrusted admin {self.admin_telegram_id} "
-                f"attempted balance change"
-            )
-            return {
-                "success": False,
-                "error": "❌ У вас нет прав на изменение баланса. Обратитесь к владельцу."
-            }
+        # Разрешаем изменение баланса всем администраторам (любой роли),
+        # а не только whitelist. Это согласовано с изменениями в balance.py.
+        # Логируем для аудита.
+        logger.info(
+            f"AI USERS: Admin {self.admin_telegram_id} ({self.admin_username}) "
+            f"initiating balance change"
+        )
 
         user, error = await self._find_user(user_identifier)
         if error:
