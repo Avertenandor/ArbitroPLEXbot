@@ -23,6 +23,7 @@ from app.services.payment_retry_service import PaymentRetryService
 from app.utils.distributed_lock import DistributedLock
 from app.utils.redis_utils import get_redis_client
 from jobs.async_runner import run_async
+from jobs.utils.database import task_engine, task_session_maker
 
 
 @dramatiq.actor(max_retries=3, time_limit=DRAMATIQ_TIME_LIMIT_STANDARD)
@@ -46,24 +47,6 @@ def process_payment_retries() -> None:
 
 async def _process_payment_retries_async() -> None:
     """Async implementation of payment retry processing."""
-    from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-    from sqlalchemy.pool import NullPool
-
-    # Create a local engine with NullPool to avoid connection pool lock issues
-    local_engine = create_async_engine(
-        settings.database_url,
-        echo=False,
-        poolclass=NullPool,
-    )
-
-    local_session_maker = async_sessionmaker(
-        local_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autocommit=False,
-        autoflush=False,
-    )
-
     # Create Redis client for distributed lock
     redis_client = None
     if redis:
@@ -77,7 +60,7 @@ async def _process_payment_retries_async() -> None:
 
     try:
         async with lock.lock("payment_retry_processing", timeout=300):
-            async with local_session_maker() as session:
+            async with task_session_maker() as session:
                 # Get blockchain service
                 blockchain_service = get_blockchain_service()
 
@@ -95,4 +78,4 @@ async def _process_payment_retries_async() -> None:
         if redis_client:
             await redis_client.close()
         # Dispose engine
-        await local_engine.dispose()
+        await task_engine.dispose()

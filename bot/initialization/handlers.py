@@ -27,7 +27,6 @@ def register_user_handlers(dp: Dispatcher) -> None:
         instructions,
         language,
         menu,
-        profile,
         referral,
         sponsor_inquiry_referral,
         sponsor_inquiry_sponsor,
@@ -59,7 +58,6 @@ def register_user_handlers(dp: Dispatcher) -> None:
     dp.include_router(withdrawal.router)
     dp.include_router(referral.router)
     dp.include_router(calculator.router)
-    dp.include_router(profile.router)
     dp.include_router(transaction.router)
     dp.include_router(support.router)
     dp.include_router(verification.router)

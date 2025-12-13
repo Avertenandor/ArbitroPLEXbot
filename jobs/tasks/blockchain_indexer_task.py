@@ -83,8 +83,11 @@ async def run_blockchain_indexer() -> dict:
                     f"(USDT={results['usdt']}, PLEX={results['plex']})"
                 )
 
+    except asyncio.CancelledError:
+        logger.info("[Indexer Task] Task cancelled")
+        raise
     except Exception as e:
-        logger.error(f"[Indexer Task] Failed: {e}")
+        logger.exception(f"[Indexer Task] Task failed: {e}")
         results["errors"].append(str(e))
 
     return results

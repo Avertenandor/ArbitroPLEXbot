@@ -10,6 +10,7 @@ Provides comprehensive deposit management for AI assistant:
 SECURITY: Deposit modifications require TRUSTED_ADMIN access.
 """
 
+import time
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -26,6 +27,11 @@ from app.repositories.global_settings_repository import GlobalSettingsRepository
 from app.repositories.user_repository import UserRepository
 from app.services.ai.commons import find_user_by_identifier, verify_admin
 from app.utils.formatters import format_user_identifier
+
+# Cache for deposit levels configuration
+_levels_cache = None
+_levels_cache_time = 0
+LEVELS_CACHE_TTL = 300  # 5 minutes
 
 
 class AIDepositsService:
@@ -70,10 +76,20 @@ class AIDepositsService:
 
         Returns:
             Levels config with enabled status and limits
+
+        Performance: Uses 5-minute cache to reduce DB queries.
         """
+        global _levels_cache, _levels_cache_time
+
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
+
+        # Check cache
+        current_time = time.time()
+        if _levels_cache and (current_time - _levels_cache_time) < LEVELS_CACHE_TTL:
+            logger.debug("Returning cached deposit levels configuration")
+            return _levels_cache
 
         settings_repo = GlobalSettingsRepository(self.session)
         settings = await settings_repo.get_settings()
@@ -109,12 +125,19 @@ class AIDepositsService:
                 }
             )
 
-        return {
+        result = {
             "success": True,
             "max_open_level": settings.max_open_deposit_level,
             "levels": levels,
             "message": "📊 Конфигурация уровней депозитов",
         }
+
+        # Update cache
+        _levels_cache = result
+        _levels_cache_time = current_time
+        logger.debug("Cached deposit levels configuration")
+
+        return result
 
     async def get_user_deposits(self, user_identifier: str) -> dict[str, Any]:
         """

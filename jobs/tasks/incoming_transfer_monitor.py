@@ -177,6 +177,11 @@ async def _monitor_incoming_async() -> None:
                     except Exception as e:
                         logger.warning(f"Failed to update last_scanned_block in Redis: {e}")
 
+        except asyncio.CancelledError:
+            logger.info("Incoming transfer monitoring task cancelled")
+            raise
+        except Exception as e:
+            logger.exception(f"Incoming transfer monitoring task failed: {e}")
         finally:
             if redis_client:
                 await redis_client.close()

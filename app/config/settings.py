@@ -10,6 +10,23 @@ from loguru import logger
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.config.admin_limits import (
+    ADMIN_LARGE_WITHDRAWAL_THRESHOLD_USDT,
+    ADMIN_MAX_BALANCE_ADJUSTMENTS_PER_WEEK,
+    ADMIN_MAX_BANS_PER_HOUR,
+    ADMIN_MAX_LARGE_WITHDRAWAL_APPROVALS_PER_HOUR,
+    ADMIN_MAX_TERMINATIONS_PER_HOUR,
+    ADMIN_MAX_WITHDRAWAL_AMOUNT_PER_DAY_USDT,
+    ADMIN_MAX_WITHDRAWAL_APPROVALS_PER_HOUR,
+    ADMIN_MAX_WITHDRAWALS_PER_DAY,
+    DUAL_CONTROL_ESCROW_EXPIRY_HOURS,
+    DUAL_CONTROL_WITHDRAWAL_THRESHOLD_USDT,
+)
+from app.config.timing_constants import (
+    BROADCAST_COOLDOWN_SECONDS,
+    BROADCAST_RATE_LIMIT_MSG_PER_SEC,
+)
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -106,8 +123,8 @@ class Settings(BaseSettings):
     )
 
     # Broadcast settings
-    broadcast_rate_limit: int = 15  # messages per second
-    broadcast_cooldown: int = 900  # 15 minutes in seconds
+    broadcast_rate_limit: int = BROADCAST_RATE_LIMIT_MSG_PER_SEC  # messages per second
+    broadcast_cooldown: int = BROADCAST_COOLDOWN_SECONDS  # 15 minutes in seconds
 
     # ROI settings
     roi_daily_percent: float = Field(
@@ -136,29 +153,29 @@ class Settings(BaseSettings):
 
     # R18-4: Dual control settings
     dual_control_withdrawal_threshold: float = Field(
-        default=1000.0,
+        default=DUAL_CONTROL_WITHDRAWAL_THRESHOLD_USDT,
         gt=0,
         description="Withdrawal amount threshold requiring dual control (USDT)"
     )
     dual_control_escrow_expiry_hours: int = Field(
-        default=24,
+        default=DUAL_CONTROL_ESCROW_EXPIRY_HOURS,
         gt=0,
         description="Escrow expiry time in hours"
     )
 
     # R18-4: Admin operation limits
     admin_max_withdrawals_per_day: int = Field(
-        default=50,
+        default=ADMIN_MAX_WITHDRAWALS_PER_DAY,
         gt=0,
         description="Maximum withdrawals per day per admin"
     )
     admin_max_withdrawal_amount_per_day: float = Field(
-        default=50000.0,
+        default=ADMIN_MAX_WITHDRAWAL_AMOUNT_PER_DAY_USDT,
         gt=0,
         description="Maximum total withdrawal amount per day per admin (USDT)"
     )
     admin_max_balance_adjustments_per_week: int = Field(
-        default=20,
+        default=ADMIN_MAX_BALANCE_ADJUSTMENTS_PER_WEEK,
         gt=0,
         description="Maximum balance adjustments per week per admin"
     )
@@ -169,17 +186,17 @@ class Settings(BaseSettings):
 
     # R10-3: Admin security monitor thresholds
     admin_max_bans_per_hour: int = Field(
-        default=20,
+        default=ADMIN_MAX_BANS_PER_HOUR,
         gt=0,
         description="Maximum bans per hour before admin is flagged"
     )
     admin_max_terminations_per_hour: int = Field(
-        default=20,
+        default=ADMIN_MAX_TERMINATIONS_PER_HOUR,
         gt=0,
         description="Maximum terminations per hour before admin is flagged"
     )
     admin_max_withdrawal_approvals_per_hour: int = Field(
-        default=50,
+        default=ADMIN_MAX_WITHDRAWAL_APPROVALS_PER_HOUR,
         gt=0,
         description="Maximum withdrawal approvals per hour"
     )
@@ -194,12 +211,12 @@ class Settings(BaseSettings):
         description="Maximum admin deletions per day"
     )
     admin_max_large_withdrawal_approvals_per_hour: int = Field(
-        default=10,
+        default=ADMIN_MAX_LARGE_WITHDRAWAL_APPROVALS_PER_HOUR,
         gt=0,
         description="Maximum large (>$1000) withdrawal approvals per hour"
     )
     admin_large_withdrawal_threshold: float = Field(
-        default=1000.0,
+        default=ADMIN_LARGE_WITHDRAWAL_THRESHOLD_USDT,
         gt=0,
         description="Threshold for 'large' withdrawal (USDT)"
     )

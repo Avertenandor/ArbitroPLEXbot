@@ -421,7 +421,7 @@ class BlockchainService:
         """
         try:
             def _fetch(w3: Web3):
-                return self.transaction_manager.fetch_transaction_details_sync(w3, tx_hash)
+                return self.transaction_manager.get_transaction_details_sync(w3, tx_hash)
 
             return await self.async_executor.run_with_failover(_fetch)
         except (TimeoutError, Web3Exception) as e:

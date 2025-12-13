@@ -71,8 +71,11 @@ async def scan_and_cache_blockchain_transactions() -> dict:
                 f"linked={results['users_linked']}"
             )
 
+    except asyncio.CancelledError:
+        logger.info("[TX Cache Task] Task cancelled")
+        raise
     except Exception as e:
-        logger.error(f"[TX Cache Task] Scan failed: {e}")
+        logger.exception(f"[TX Cache Task] Task failed: {e}")
         results["error"] = str(e)
 
     return results

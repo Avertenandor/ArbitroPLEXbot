@@ -5,19 +5,19 @@ Monitors financial metrics and detects anomalies.
 Runs every 5 minutes.
 """
 
+import asyncio
 from typing import Any
 
 import dramatiq
 from aiogram import Bot
 from loguru import logger
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
 
 from app.config.operational_constants import DRAMATIQ_TIME_LIMIT_MEDIUM
 from app.config.settings import settings
 from app.services.metrics_monitor_service import MetricsMonitorService
 from app.services.notification_service import NotificationService
 from jobs.async_runner import run_async
+from jobs.utils.database import task_engine, task_session_maker
 
 
 @dramatiq.actor(max_retries=3, time_limit=DRAMATIQ_TIME_LIMIT_MEDIUM)  # 2 min timeout
@@ -36,23 +36,8 @@ def monitor_metrics() -> None:
 
 async def _monitor_metrics_async() -> dict:
     """Async implementation of metrics monitoring."""
-    # Create a local engine with NullPool to avoid connection pool lock issues
-    local_engine = create_async_engine(
-        settings.database_url,
-        echo=False,
-        poolclass=NullPool,
-    )
-
-    local_session_maker = async_sessionmaker(
-        local_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autocommit=False,
-        autoflush=False,
-    )
-
     try:
-        async with local_session_maker() as session:
+        async with task_session_maker() as session:
             metrics_service = MetricsMonitorService(session)
 
             # Collect current metrics
@@ -85,8 +70,14 @@ async def _monitor_metrics_async() -> dict:
                 "anomalies_detected": len(anomalies),
                 "anomalies": anomalies,
             }
+    except asyncio.CancelledError:
+        logger.info("Metrics monitoring task cancelled")
+        raise
+    except Exception as e:
+        logger.exception(f"Metrics monitoring task failed: {e}")
+        raise
     finally:
-        await local_engine.dispose()
+        await task_engine.dispose()
 
 
 async def _send_anomaly_alerts(
@@ -97,20 +88,8 @@ async def _send_anomaly_alerts(
     try:
         bot = Bot(token=settings.telegram_bot_token)
 
-        # Create local session for notification service
-        local_engine = create_async_engine(
-            settings.database_url,
-            echo=False,
-            poolclass=NullPool,
-        )
-        local_session_maker = async_sessionmaker(
-            local_engine,
-            class_=AsyncSession,
-            expire_on_commit=False,
-        )
-
         try:
-            async with local_session_maker() as session:
+            async with task_session_maker() as session:
                 notification_service = NotificationService(session)
 
                 admin_ids = settings.get_admin_ids()
@@ -157,7 +136,7 @@ async def _send_anomaly_alerts(
                             bot, admin_id, message, critical=(severity == "critical")
                         )
         finally:
-            await local_engine.dispose()
+            await task_engine.dispose()
 
     except Exception as e:
         logger.error(f"Error sending anomaly alerts: {e}")

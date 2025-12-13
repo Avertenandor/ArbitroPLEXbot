@@ -7,6 +7,15 @@ This module can be imported by both app.services and bot handlers without circul
 
 from decimal import Decimal
 
+from app.config.deposit_levels import (
+    DEPOSIT_LEVELS as DEPOSIT_LEVELS_CONFIG,
+    DEPOSIT_LEVEL_ORDER as DEPOSIT_LEVEL_ORDER_TYPES,
+    DepositLevelType,
+    get_level_by_order as _get_level_by_order,
+    get_next_level as _get_next_level,
+    get_previous_level as _get_previous_level,
+    is_amount_in_corridor as _is_amount_in_corridor,
+)
 from app.config.settings import settings
 
 
@@ -20,13 +29,15 @@ LEVELS = {
 }
 
 # Deposit levels configuration with amount corridors
+# Импортировано из единого источника истины: app.config.deposit_levels
 DEPOSIT_LEVELS = {
-    "test": {"min": 30, "max": 100, "name": "Тестовый", "order": 0},
-    "level_1": {"min": 100, "max": 500, "name": "Уровень 1", "order": 1},
-    "level_2": {"min": 700, "max": 1200, "name": "Уровень 2", "order": 2},
-    "level_3": {"min": 1400, "max": 2200, "name": "Уровень 3", "order": 3},
-    "level_4": {"min": 2500, "max": 3500, "name": "Уровень 4", "order": 4},
-    "level_5": {"min": 4000, "max": 7000, "name": "Уровень 5", "order": 5},
+    level_type.value: {
+        "min": int(config.min_amount),
+        "max": int(config.max_amount),
+        "name": config.display_name,
+        "order": config.order,
+    }
+    for level_type, config in DEPOSIT_LEVELS_CONFIG.items()
 }
 
 # Daily PLEX cost per dollar of deposit
@@ -42,7 +53,8 @@ MAX_DEPOSITS_PER_USER = 5
 PLEX_CONTRACT_ADDRESS = "0xdf179b6cadbc61ffd86a3d2e55f6d6e083ade6c1"
 
 # Deposit level order for sequential validation
-DEPOSIT_LEVEL_ORDER = ["test", "level_1", "level_2", "level_3", "level_4", "level_5"]
+# Импортировано из единого источника истины: app.config.deposit_levels
+DEPOSIT_LEVEL_ORDER = [level_type.value for level_type in DEPOSIT_LEVEL_ORDER_TYPES]
 
 # System wallet for PLEX payments (from settings)
 SYSTEM_WALLET = settings.auth_system_wallet_address
@@ -183,6 +195,8 @@ def calculate_daily_plex_payment(deposit_amount_usd: Decimal) -> Decimal:
 
 
 # Deposit level helper functions
+# Импортируем функции из единого источника истины
+
 
 def get_level_by_order(order: int) -> str | None:
     """
@@ -194,10 +208,8 @@ def get_level_by_order(order: int) -> str | None:
     Returns:
         Level type string or None if not found
     """
-    for level_type, level_data in DEPOSIT_LEVELS.items():
-        if level_data["order"] == order:
-            return level_type
-    return None
+    config = _get_level_by_order(order)
+    return config.level_type.value if config else None
 
 
 def get_previous_level(level_type: str) -> str | None:
@@ -210,14 +222,8 @@ def get_previous_level(level_type: str) -> str | None:
     Returns:
         Previous level type or None if this is the first level
     """
-    if level_type not in DEPOSIT_LEVELS:
-        return None
-
-    current_order = DEPOSIT_LEVELS[level_type]["order"]
-    if current_order == 0:
-        return None
-
-    return get_level_by_order(current_order - 1)
+    config = _get_previous_level(level_type)
+    return config.level_type.value if config else None
 
 
 def get_next_level(level_type: str) -> str | None:
@@ -230,16 +236,8 @@ def get_next_level(level_type: str) -> str | None:
     Returns:
         Next level type or None if this is the last level
     """
-    if level_type not in DEPOSIT_LEVELS:
-        return None
-
-    current_order = DEPOSIT_LEVELS[level_type]["order"]
-    max_order = max(level["order"] for level in DEPOSIT_LEVELS.values())
-
-    if current_order >= max_order:
-        return None
-
-    return get_level_by_order(current_order + 1)
+    config = _get_next_level(level_type)
+    return config.level_type.value if config else None
 
 
 def is_amount_in_corridor(level_type: str, amount: Decimal) -> bool:
@@ -253,10 +251,4 @@ def is_amount_in_corridor(level_type: str, amount: Decimal) -> bool:
     Returns:
         True if amount is within min/max range for the level
     """
-    if level_type not in DEPOSIT_LEVELS:
-        return False
-
-    level_data = DEPOSIT_LEVELS[level_type]
-    amount_value = Decimal(str(amount))
-
-    return Decimal(str(level_data["min"])) <= amount_value <= Decimal(str(level_data["max"]))
+    return _is_amount_in_corridor(level_type, amount)

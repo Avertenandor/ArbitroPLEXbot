@@ -73,28 +73,34 @@ class TransactionService:
 
         Returns:
             Dict with transactions, total, has_more
+
+        Performance: Uses ORDER BY in SQL queries and limits data fetched from DB.
         """
         all_transactions: list[UnifiedTransaction] = []
 
-        # 1. Get deposits
+        # Fetch more records from each source to ensure accurate pagination
+        # after combining and filtering (fetch 3x the limit to be safe)
+        fetch_limit = max(limit + offset, limit * 3)
+
+        # 1. Get deposits (already sorted by DB)
         if not transaction_type or transaction_type == TransactionType.DEPOSIT:
-            deposits = await self._get_deposits(user_id, status)
+            deposits = await self._get_deposits(user_id, status, fetch_limit)
             all_transactions.extend(deposits)
 
-        # 2. Get withdrawals
+        # 2. Get withdrawals (already sorted by DB)
         if (
             not transaction_type
             or transaction_type == TransactionType.WITHDRAWAL
         ):
-            withdrawals = await self._get_withdrawals(user_id, status)
+            withdrawals = await self._get_withdrawals(user_id, status, fetch_limit)
             all_transactions.extend(withdrawals)
 
-        # 3. Get referral earnings
+        # 3. Get referral earnings (already sorted by DB)
         if (
             not transaction_type
             or transaction_type == TransactionType.REFERRAL_REWARD
         ):
-            earnings = await self._get_referral_earnings(user_id)
+            earnings = await self._get_referral_earnings(user_id, fetch_limit)
             all_transactions.extend(earnings)
 
         # Filter by blockchain presence
@@ -112,12 +118,12 @@ class TransactionService:
                     if not t.tx_hash or not t.tx_hash.startswith("0x")
                 ]
 
-        # Sort by date (newest first)
+        # Sort by date (newest first) - data is pre-sorted but we need to merge
         all_transactions.sort(
             key=lambda t: t.created_at, reverse=True
         )
 
-        # Pagination
+        # Pagination in memory (after filtering and sorting merged results)
         total = len(all_transactions)
         paginated = all_transactions[offset : offset + limit]
         has_more = offset + limit < total
@@ -139,13 +145,26 @@ class TransactionService:
         }
 
     async def _get_deposits(
-        self, user_id: int, status_filter: TransactionStatus | None
+        self, user_id: int, status_filter: TransactionStatus | None, limit: int | None = None
     ) -> list[UnifiedTransaction]:
-        """Get deposits as unified transactions."""
+        """Get deposits as unified transactions.
+
+        Args:
+            user_id: User ID
+            status_filter: Optional status filter
+            limit: Optional limit for DB query (for performance)
+        """
         stmt = select(Deposit).where(Deposit.user_id == user_id)
 
         if status_filter:
             stmt = stmt.where(Deposit.status == status_filter.value)
+
+        # ORDER BY for performance - sort in DB, not in memory
+        stmt = stmt.order_by(Deposit.created_at.desc())
+
+        # LIMIT for performance - reduce data transferred from DB
+        if limit:
+            stmt = stmt.limit(limit)
 
         result = await self.session.execute(stmt)
         deposits = result.scalars().all()
@@ -178,9 +197,15 @@ class TransactionService:
         return unified
 
     async def _get_withdrawals(
-        self, user_id: int, status_filter: TransactionStatus | None
+        self, user_id: int, status_filter: TransactionStatus | None, limit: int | None = None
     ) -> list[UnifiedTransaction]:
-        """Get withdrawals as unified transactions."""
+        """Get withdrawals as unified transactions.
+
+        Args:
+            user_id: User ID
+            status_filter: Optional status filter
+            limit: Optional limit for DB query (for performance)
+        """
         stmt = select(Transaction).where(
             Transaction.user_id == user_id,
             Transaction.type == TransactionType.WITHDRAWAL.value,
@@ -188,6 +213,13 @@ class TransactionService:
 
         if status_filter:
             stmt = stmt.where(Transaction.status == status_filter.value)
+
+        # ORDER BY for performance - sort in DB, not in memory
+        stmt = stmt.order_by(Transaction.created_at.desc())
+
+        # LIMIT for performance - reduce data transferred from DB
+        if limit:
+            stmt = stmt.limit(limit)
 
         result = await self.session.execute(stmt)
         withdrawals = result.scalars().all()
@@ -219,10 +251,16 @@ class TransactionService:
         return unified
 
     async def _get_referral_earnings(
-        self, user_id: int
+        self, user_id: int, limit: int | None = None
     ) -> list[UnifiedTransaction]:
-        """Get referral earnings as unified transactions."""
+        """Get referral earnings as unified transactions.
+
+        Args:
+            user_id: User ID
+            limit: Optional limit for DB query (for performance)
+        """
         # Get earnings through referral relationships
+        # Note: Repository method may need updating to support ORDER BY and LIMIT
         earnings = await self.earning_repo.get_all_for_referrer(user_id)
 
         unified = []

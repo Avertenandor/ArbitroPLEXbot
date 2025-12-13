@@ -5,6 +5,8 @@ Processes daily reward sessions for all confirmed deposits.
 Runs once per day to calculate and distribute rewards.
 """
 
+import asyncio
+
 import dramatiq
 from loguru import logger
 
@@ -135,6 +137,12 @@ async def _process_daily_rewards_async(
                     "rewards_calculated": total_calculated,
                     "total_amount": total_amount_sum,
                 }
+        except asyncio.CancelledError:
+            logger.info("Daily rewards task cancelled")
+            raise
+        except Exception as e:
+            logger.exception(f"Daily rewards task failed: {e}")
+            raise
         finally:
             # Close Redis client
             if redis_client:

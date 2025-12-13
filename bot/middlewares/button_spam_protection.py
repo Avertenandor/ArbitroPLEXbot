@@ -11,6 +11,12 @@ from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, TelegramObject
 from loguru import logger
 
+from app.config.timing_constants import (
+    BUTTON_COOLDOWN_CRITICAL_SECONDS,
+    BUTTON_COOLDOWN_FINANCIAL_SECONDS,
+    BUTTON_COOLDOWN_NORMAL_SECONDS,
+)
+
 
 try:
     import redis.asyncio as redis
@@ -27,9 +33,9 @@ class ButtonSpamProtectionMiddleware(BaseMiddleware):
     """
 
     # Cooldown periods (in seconds)
-    COOLDOWN_NORMAL = 0.5  # 500ms for normal actions
-    COOLDOWN_FINANCIAL = 2.0  # 2 seconds for financial actions
-    COOLDOWN_CRITICAL = 3.0  # 3 seconds for critical operations
+    COOLDOWN_NORMAL = BUTTON_COOLDOWN_NORMAL_SECONDS  # 500ms for normal actions
+    COOLDOWN_FINANCIAL = BUTTON_COOLDOWN_FINANCIAL_SECONDS  # 2 seconds for financial actions
+    COOLDOWN_CRITICAL = BUTTON_COOLDOWN_CRITICAL_SECONDS  # 3 seconds for critical operations
 
     # Financial action patterns
     FINANCIAL_PATTERNS = [

@@ -1,57 +1,26 @@
-"""
-Security Configuration - Centralized security whitelist constants.
+import os
 
-This module contains all security-related constants for the ArbitroPLEX platform,
-including admin IDs, trusted admin lists, and technical deputies.
-"""
-
-# Super admin (owner) - Командир (Alexander Vladarev)
-SUPER_ADMIN_IDS = [1040687384]
-
-# Trusted admins with elevated privileges (balance changes, withdrawals, etc.)
-# Format: [telegram_id, ...]
-TRUSTED_ADMIN_IDS = [
-    1040687384,  # Командир
-    1691026253,  # @AI_XAN (Tech Deputy)
-    241568583,  # Trusted admin
-    6540613027,  # Trusted admin
-]
-
-# Technical deputies (usernames without @)
-# These users have EXTENDED_ADMIN access level
 TECH_DEPUTIES = ["AIXAN", "AI_XAN"]
 
-# Tech deputy telegram ID for direct identification
-TECH_DEPUTY_TELEGRAM_ID = 1691026253
-
-# =============================================================================
-# АРЬЯ AI ASSISTANT - ВИРТУАЛЬНЫЙ АДМИНИСТРАТОР
-# =============================================================================
-# Арья является администратором системы и может выполнять команды от админов.
-# Telegram ID = 0 (виртуальный, не реальный пользователь)
-# Роль: EXTENDED_ADMIN (полный функционал кроме SUPER_ADMIN)
-
-ARYA_AI_ID = 0  # Виртуальный ID для Арьи
+ARYA_AI_ID = 0
 ARYA_AI_USERNAME = "ArbitroPLEX_AI"
-ARYA_AI_ROLE = "extended_admin"  # Полный функционал админа (кроме super_admin)
+ARYA_AI_ROLE = "extended_admin"
 
-# Админы, которые могут давать команды Арье
-# Арья выполняет команды от этих людей БЕЗ ЛИШНИХ ВОПРОСОВ
-ARYA_COMMAND_GIVERS = [
-    1040687384,  # Командир - ПОЛНОЕ ПОДЧИНЕНИЕ
-    1691026253,  # @AI_XAN (Tech Deputy)
-    241568583,   # Trusted admin
-    6540613027,  # Trusted admin
-]
 
-# Админы, от которых Арья может УЧИТЬСЯ (пополнять базу знаний)
-# КРИТИЧЕСКИ ВАЖНО: самообучение работает от этих людей
-ARYA_TEACHERS = [
-    1040687384,  # Командир - главный учитель
-    1691026253,  # @AI_XAN (Tech Deputy)
-    241568583,   # Trusted admin
-    6540613027,  # Trusted admin
-]
+def _parse_int_list(env_var: str, default: list[int] | None = None) -> list[int]:
+    if default is None:
+        default = []
+    value = os.getenv(env_var, "")
+    if not value:
+        return default
+    return [int(id.strip()) for id in value.split(",") if id.strip()]
+
+
+SUPER_ADMIN_IDS = _parse_int_list("SUPER_ADMIN_IDS", [])
+TRUSTED_ADMIN_IDS = _parse_int_list("TRUSTED_ADMIN_IDS", [])
+ARYA_COMMAND_GIVERS = _parse_int_list("ARYA_COMMAND_GIVERS", [])
+ARYA_TEACHERS = _parse_int_list("ARYA_TEACHERS", [])
+TECH_DEPUTY_TELEGRAM_ID = int(os.getenv("TECH_DEPUTY_TELEGRAM_ID", "0"))
 
 
 def is_super_admin(telegram_id: int) -> bool:

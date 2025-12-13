@@ -82,7 +82,7 @@ async def handle_withdrawal_selection(
 
     # Get user info and stats
     user_service = UserService(session)
-    user = await user_service.find_by_id(withdrawal.user_id)
+    user = await user_service.get_by_id(withdrawal.user_id)
     username = f"@{user.username}" if user and user.username else f"ID: {withdrawal.user_id}"
 
     user_balance = await user_service.get_user_balance(withdrawal.user_id)

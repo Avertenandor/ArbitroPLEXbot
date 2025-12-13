@@ -5,12 +5,13 @@ R11-3: Warms up Redis cache after recovery by loading frequently used data.
 Loads users, deposit levels, and system settings in batches.
 """
 
+import asyncio
+
 import dramatiq
 from loguru import logger
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
 
 from jobs.async_runner import run_async
+from jobs.utils.database import task_engine, task_session_maker
 
 
 try:
@@ -64,23 +65,8 @@ async def _warmup_redis_cache_async() -> None:
     users_loaded = 0
     deposit_levels_loaded = 0
 
-    # Create local engine to avoid event loop issues in threaded worker
-    local_engine = create_async_engine(
-        settings.database_url,
-        echo=False,
-        poolclass=NullPool,
-    )
-
-    local_session_maker = async_sessionmaker(
-        local_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autocommit=False,
-        autoflush=False,
-    )
-
     try:
-        async with local_session_maker() as session:
+        async with task_session_maker() as session:
             # 1. Load active users (batch of 1000)
             user_repo = UserRepository(session)
             users = await user_repo.find_all(limit=1000)
@@ -168,8 +154,11 @@ async def _warmup_redis_cache_async() -> None:
             except Exception as e:
                 logger.warning(f"R11-3: Failed to cache global settings: {e}")
 
+    except asyncio.CancelledError:
+        logger.info("R11-3: Redis cache warmup task cancelled")
+        raise
     except Exception as e:
-        logger.error(f"R11-3: Error during cache warmup: {e}", exc_info=True)
+        logger.exception(f"R11-3: Redis cache warmup task failed: {e}")
     finally:
         await redis_client.close()
-        await local_engine.dispose()
+        await task_engine.dispose()

@@ -16,8 +16,6 @@ import dramatiq
 from aiogram import Bot
 from loguru import logger
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
 
 from app.config.business_constants import WorkStatus
 from app.config.constants import TELEGRAM_MESSAGE_DELAY
@@ -29,6 +27,7 @@ from app.config.settings import settings
 from app.models.user import User
 from app.services.blockchain_service import get_blockchain_service
 from jobs.async_runner import run_async
+from jobs.utils.database import task_engine, task_session_maker
 
 
 @dramatiq.actor(max_retries=2, time_limit=DRAMATIQ_TIME_LIMIT_LONG)  # 10 min timeout
@@ -50,21 +49,6 @@ def monitor_plex_balances() -> None:
 
 async def _monitor_plex_balances_async() -> None:
     """Async implementation of PLEX balance monitoring."""
-    # Create local engine
-    local_engine = create_async_engine(
-        settings.database_url,
-        echo=False,
-        poolclass=NullPool,
-    )
-
-    local_session_maker = async_sessionmaker(
-        local_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autocommit=False,
-        autoflush=False,
-    )
-
     # FIXED: Use context manager for Bot to prevent session leak
     stats = {
         "total_checked": 0,
@@ -78,7 +62,7 @@ async def _monitor_plex_balances_async() -> None:
     bot = None
     try:
         bot = Bot(token=settings.telegram_bot_token)
-        async with local_session_maker() as session:
+        async with task_session_maker() as session:
             # Get all active depositors
             result = await session.execute(
                 select(User).where(
@@ -120,13 +104,16 @@ async def _monitor_plex_balances_async() -> None:
                 f"errors={stats['errors']}"
             )
 
+    except asyncio.CancelledError:
+        logger.info("PLEX balance monitoring task cancelled")
+        raise
     except Exception as e:
-        logger.exception(f"PLEX balance monitoring error: {e}")
+        logger.exception(f"PLEX balance monitoring task failed: {e}")
         raise
     finally:
         if bot:
             await bot.session.close()
-        await local_engine.dispose()
+        await task_engine.dispose()
 
 
 async def _check_user_plex_balance(
@@ -273,24 +260,12 @@ def check_single_user_plex_balance(user_id: int) -> None:
 
 async def _check_single_user_balance_async(user_id: int) -> dict:
     """Check PLEX balance for single user and return result."""
-    local_engine = create_async_engine(
-        settings.database_url,
-        echo=False,
-        poolclass=NullPool,
-    )
-
-    local_session_maker = async_sessionmaker(
-        local_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
-
     result = {"user_id": user_id, "success": False}
     bot = None
 
     try:
         bot = Bot(token=settings.telegram_bot_token)
-        async with local_session_maker() as session:
+        async with task_session_maker() as session:
             user_result = await session.execute(
                 select(User).where(User.id == user_id)
             )
@@ -310,11 +285,14 @@ async def _check_single_user_balance_async(user_id: int) -> dict:
             result["plex_balance"] = float(user.last_plex_balance or 0)
             result["work_status"] = user.work_status
 
+    except asyncio.CancelledError:
+        logger.info("Single user PLEX balance check task cancelled")
+        raise
     except Exception as e:
         result["error"] = str(e)
     finally:
         if bot:
             await bot.session.close()
-        await local_engine.dispose()
+        await task_engine.dispose()
 
     return result

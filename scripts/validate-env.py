@@ -37,14 +37,22 @@ def validate_telegram_token(token: str) -> tuple[bool, str]:
 
 def validate_wallet_address(address: str) -> tuple[bool, str]:
     """Validate Ethereum wallet address."""
-    if not address or not address.startswith("0x") or len(address) != 42:
-        return False, "Must start with 0x and be 42 characters"
+    # Import from unified validators
     try:
-        # Validate hex format
-        int(address[2:], 16)
-    except ValueError:
-        return False, "Invalid hexadecimal format"
-    return True, "OK"
+        from app.validators.unified import validate_wallet_address as _validate_wallet
+        is_valid, error = _validate_wallet(address)
+        if not is_valid:
+            return False, error
+        return True, "OK"
+    except ImportError:
+        # Fallback implementation for standalone execution
+        if not address or not address.startswith("0x") or len(address) != 42:
+            return False, "Must start with 0x and be 42 characters"
+        try:
+            int(address[2:], 16)
+        except ValueError:
+            return False, "Invalid hexadecimal format"
+        return True, "OK"
 
 
 def validate_database_url(url: str) -> tuple[bool, str]:

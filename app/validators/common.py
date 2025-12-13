@@ -2,12 +2,22 @@
 Common validators for user input.
 
 Each validator returns a tuple of (is_valid, parsed_value, error_message).
+
+This module provides backward-compatible wrappers around unified validators.
 """
 
 import re
 from decimal import Decimal, InvalidOperation
 
-from app.utils.validation import normalize_bsc_address, validate_bsc_address
+from app.validators.unified import (
+    validate_amount as _validate_amount,
+    validate_email as _validate_email,
+    validate_phone as _validate_phone,
+    validate_wallet_address as _validate_wallet_address,
+    normalize_wallet_address,
+    normalize_email as _normalize_email,
+    normalize_phone as _normalize_phone,
+)
 
 
 def validate_telegram_id(value: str) -> tuple[bool, int | None, str | None]:
@@ -71,35 +81,18 @@ def validate_wallet_address(
         >>> validate_wallet_address("invalid")
         (False, None, "Invalid wallet address format")
     """
-    if not value or not isinstance(value, str):
-        return False, None, "Wallet address cannot be empty"
+    # Use unified validator
+    is_valid, error = _validate_wallet_address(value)
 
-    value = value.strip()
-
-    if not value:
-        return False, None, "Wallet address cannot be empty"
-
-    # Check basic format
-    if not value.startswith("0x"):
-        return False, None, "Wallet address must start with '0x'"
-
-    if len(value) != 42:
-        return (
-            False,
-            None,
-            "Wallet address must be 42 characters long (0x + 40 hex chars)",
-        )
-
-    # Validate using existing validation function
-    if not validate_bsc_address(value, checksum=False):
-        return False, None, "Invalid wallet address format"
+    if not is_valid:
+        return False, None, error
 
     # Normalize to checksum format
     try:
-        normalized = normalize_bsc_address(value)
+        normalized = normalize_wallet_address(value)
         return True, normalized, None
     except ValueError as e:
-        return False, None, f"Invalid wallet address: {e}"
+        return False, None, str(e)
 
 
 def validate_amount(
@@ -123,44 +116,8 @@ def validate_amount(
         >>> validate_amount("-10")
         (False, None, "Amount must be greater than or equal to 0")
     """
-    if not value or not isinstance(value, str):
-        return False, None, "Amount cannot be empty"
-
-    value = value.strip()
-
-    if not value:
-        return False, None, "Amount cannot be empty"
-
-    # Replace comma with dot for decimal separator
-    value = value.replace(",", ".")
-
-    # Try to parse as Decimal
-    try:
-        amount = Decimal(value)
-    except (InvalidOperation, ValueError):
-        return False, None, "Amount must be a valid number"
-
-    # Check if amount is finite
-    if not amount.is_finite():
-        return False, None, "Amount must be a finite number"
-
-    # Check minimum amount
-    if amount < min_amount:
-        return (
-            False,
-            None,
-            f"Amount must be greater than or equal to {min_amount}",
-        )
-
-    # Check for reasonable precision (8 decimal places max)
-    if amount.as_tuple().exponent < -8:
-        return (
-            False,
-            None,
-            "Amount has too many decimal places (maximum 8)",
-        )
-
-    return True, amount, None
+    # Use unified validator
+    return _validate_amount(value, min_val=min_amount)
 
 
 def validate_email(value: str) -> tuple[bool, str | None, str | None]:
@@ -179,63 +136,18 @@ def validate_email(value: str) -> tuple[bool, str | None, str | None]:
         >>> validate_email("invalid")
         (False, None, "Email must contain '@'")
     """
-    if not value or not isinstance(value, str):
-        return False, None, "Email cannot be empty"
+    # Use unified validator
+    is_valid, error = _validate_email(value)
 
-    value = value.strip()
-
-    if not value:
-        return False, None, "Email cannot be empty"
-
-    # Check length
-    if len(value) > 255:
-        return False, None, "Email is too long (maximum 255 characters)"
-
-    # Check for @
-    if "@" not in value:
-        return False, None, "Email must contain '@'"
-
-    # Split local and domain parts
-    parts = value.split("@")
-    if len(parts) != 2:
-        return False, None, "Email must contain exactly one '@'"
-
-    local, domain = parts
-
-    # Check local part
-    if not local or len(local) > 64:
-        return (
-            False,
-            None,
-            "Email local part must be 1-64 characters",
-        )
-
-    # Check domain part
-    if not domain or len(domain) < 3:
-        return False, None, "Email domain is too short"
-
-    # Check for dot in domain
-    if "." not in domain:
-        return False, None, "Email domain must contain a dot (.)"
-
-    # Check domain has valid structure
-    domain_parts = domain.split(".")
-    if any(not part for part in domain_parts):
-        return False, None, "Email domain has invalid structure"
-
-    # Basic regex validation
-    email_pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
-    if not re.match(email_pattern, value):
-        return (
-            False,
-            None,
-            "Email format is invalid. Expected: user@example.com",
-        )
+    if not is_valid:
+        return False, None, error
 
     # Normalize to lowercase
-    normalized = value.lower()
-
-    return True, normalized, None
+    try:
+        normalized = _normalize_email(value)
+        return True, normalized, None
+    except ValueError as e:
+        return False, None, str(e)
 
 
 def validate_phone(value: str) -> tuple[bool, str | None, str | None]:
@@ -254,55 +166,15 @@ def validate_phone(value: str) -> tuple[bool, str | None, str | None]:
         >>> validate_phone("123")
         (False, None, "Phone number is too short (minimum 10 digits)")
     """
-    if not value or not isinstance(value, str):
-        return False, None, "Phone number cannot be empty"
+    # Use unified validator
+    is_valid, error = _validate_phone(value)
 
-    value = value.strip()
+    if not is_valid:
+        return False, None, error
 
-    if not value:
-        return False, None, "Phone number cannot be empty"
-
-    # Check length before cleaning
-    if len(value) > 50:
-        return False, None, "Phone number is too long (maximum 50 characters)"
-
-    # Clean phone: remove spaces, dashes, parentheses
-    cleaned = (
-        value.replace(" ", "")
-        .replace("-", "")
-        .replace("(", "")
-        .replace(")", "")
-        .replace(".", "")
-    )
-
-    # Check if cleaned value contains only digits and optional leading +
-    if cleaned.startswith("+"):
-        digits = cleaned[1:]
-        if not digits.isdigit():
-            return (
-                False,
-                None,
-                "Phone number must contain only digits after '+'",
-            )
-    else:
-        if not cleaned.isdigit():
-            return False, None, "Phone number must contain only digits"
-
-    # Check minimum length (10 digits)
-    digits_only = cleaned.lstrip("+")
-    if len(digits_only) < 10:
-        return (
-            False,
-            None,
-            "Phone number is too short (minimum 10 digits)",
-        )
-
-    # Check maximum length (15 digits, international standard)
-    if len(digits_only) > 15:
-        return (
-            False,
-            None,
-            "Phone number is too long (maximum 15 digits)",
-        )
-
-    return True, cleaned, None
+    # Clean and normalize phone
+    try:
+        cleaned = _normalize_phone(value)
+        return True, cleaned, None
+    except ValueError as e:
+        return False, None, str(e)

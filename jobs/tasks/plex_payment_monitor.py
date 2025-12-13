@@ -10,20 +10,20 @@ Monitors PLEX payment requirements:
 Runs every hour via scheduler.
 """
 
+import asyncio
+
 import dramatiq
 from loguru import logger
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
 
 from app.config.operational_constants import (
     DRAMATIQ_TIME_LIMIT_LONG,
     DRAMATIQ_TIME_LIMIT_SHORT,
 )
-from app.config.settings import settings
 from app.services.blockchain.singleton import get_blockchain_service
 from app.services.deposit.plex.monitor import PlexPaymentMonitor
 from app.utils.distributed_lock import get_distributed_lock
 from jobs.async_runner import run_async
+from jobs.utils.database import task_engine, task_session_maker
 
 
 @dramatiq.actor(max_retries=2, time_limit=DRAMATIQ_TIME_LIMIT_LONG)  # 10 min timeout
@@ -70,21 +70,6 @@ def monitor_plex_payments() -> dict:
 
 async def _monitor_plex_payments_async() -> dict:
     """Async implementation of PLEX payment monitoring."""
-    # Create local engine (for isolated task)
-    local_engine = create_async_engine(
-        settings.database_url,
-        echo=False,
-        poolclass=NullPool,
-    )
-
-    local_session_maker = async_sessionmaker(
-        local_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autocommit=False,
-        autoflush=False,
-    )
-
     stats = {
         "checked": 0,
         "paid": 0,
@@ -94,7 +79,7 @@ async def _monitor_plex_payments_async() -> dict:
     }
 
     try:
-        async with local_session_maker() as session:
+        async with task_session_maker() as session:
             # Use distributed lock to prevent concurrent monitoring
             lock = get_distributed_lock(session=session)
 
@@ -129,12 +114,15 @@ async def _monitor_plex_payments_async() -> dict:
 
                 logger.info(f"PLEX monitoring stats: {stats}")
 
+    except asyncio.CancelledError:
+        logger.info("PLEX payment monitoring task cancelled")
+        raise
     except Exception as e:
-        logger.exception(f"PLEX payment monitoring error: {e}")
+        logger.exception(f"PLEX payment monitoring task failed: {e}")
         stats["errors"] = 1
         raise
     finally:
-        await local_engine.dispose()
+        await task_engine.dispose()
 
     return stats
 
@@ -178,20 +166,8 @@ def check_single_user_plex(user_id: int, deposit_id: int) -> dict:
 
 async def _check_single_user_async(user_id: int, deposit_id: int) -> dict:
     """Check PLEX payment for single user deposit."""
-    local_engine = create_async_engine(
-        settings.database_url,
-        echo=False,
-        poolclass=NullPool,
-    )
-
-    local_session_maker = async_sessionmaker(
-        local_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
-
     try:
-        async with local_session_maker() as session:
+        async with task_session_maker() as session:
             # Get blockchain service
             blockchain = get_blockchain_service()
 
@@ -208,5 +184,11 @@ async def _check_single_user_async(user_id: int, deposit_id: int) -> dict:
             await session.commit()
 
             return result
+    except asyncio.CancelledError:
+        logger.info("Single user PLEX payment check task cancelled")
+        raise
+    except Exception as e:
+        logger.exception(f"Single user PLEX payment check task failed: {e}")
+        raise
     finally:
-        await local_engine.dispose()
+        await task_engine.dispose()

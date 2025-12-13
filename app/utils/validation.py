@@ -5,6 +5,11 @@ from decimal import Decimal
 
 from web3 import Web3
 
+from app.validators.unified import (
+    validate_wallet_address as _validate_wallet_address,
+    normalize_wallet_address as _normalize_wallet_address,
+)
+
 
 # Zero address - used as "no wallet bound" marker
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
@@ -71,20 +76,13 @@ def validate_bsc_address(address: str, checksum: bool = True) -> bool:
     Returns:
         True if valid
     """
-    if not address or not isinstance(address, str):
+    # Use unified validator for basic validation
+    is_valid, _ = _validate_wallet_address(address)
+
+    if not is_valid:
         return False
 
-    # Basic format check
-    if not address.startswith("0x") or len(address) != 42:
-        return False
-
-    # Hex validation
-    try:
-        int(address[2:], 16)
-    except ValueError:
-        return False
-
-    # Checksum validation (if enabled)
+    # Additional checksum validation if requested
     if checksum:
         try:
             return Web3.is_checksum_address(address)
@@ -107,10 +105,8 @@ def normalize_bsc_address(address: str) -> str:
     Raises:
         ValueError: If invalid address
     """
-    if not validate_bsc_address(address, checksum=False):
-        raise ValueError(f"Invalid BSC address: {address}")
-
-    return Web3.to_checksum_address(address)
+    # Use unified normalizer
+    return _normalize_wallet_address(address)
 
 
 def validate_usdt_amount(

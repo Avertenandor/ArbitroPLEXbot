@@ -14,10 +14,15 @@ from loguru import logger
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config.timing_constants import (
+    PLEX_BALANCE_CHECK_INTERVAL_SECONDS,
+    SESSION_TTL_SECONDS,
+)
 
-SESSION_TTL = 1500  # 25 minutes
+
+SESSION_TTL = SESSION_TTL_SECONDS  # 25 minutes
 SESSION_KEY_PREFIX = "auth_session:"
-PLEX_CHECK_INTERVAL = 3600  # 1 hour between PLEX balance checks
+PLEX_CHECK_INTERVAL = PLEX_BALANCE_CHECK_INTERVAL_SECONDS  # 1 hour between PLEX balance checks
 PLEX_CHECK_KEY_PREFIX = "plex_check:"
 
 

@@ -434,12 +434,17 @@ class FraudDetectionService:
                 f"Используйте `/dashboard` для обзора."
             )
 
-            from bot.main import bot_instance
+            from app.services.bot_provider import get_bot
+
+            bot = get_bot()
+            if not bot:
+                logger.warning("Bot instance not available for fraud alerts")
+                return
 
             for admin in admins:
                 if admin.telegram_id:
                     try:
-                        await bot_instance.send_message(
+                        await bot.send_message(
                             chat_id=admin.telegram_id,
                             text=message,
                             parse_mode="Markdown",

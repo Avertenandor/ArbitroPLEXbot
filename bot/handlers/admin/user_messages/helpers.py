@@ -60,7 +60,7 @@ async def find_user_by_query(
     # Search by username with @
     if search_query.startswith("@"):
         username = search_query.lstrip("@")
-        user = await user_service.find_by_username(username)
+        user = await user_service.get_by_username(username)
         return (user, user.telegram_id) if user else (None, None)
 
     # Search by wallet address
@@ -82,7 +82,7 @@ async def find_user_by_query(
 
     except ValueError:
         # Try as username without @
-        user = await user_service.find_by_username(search_query)
+        user = await user_service.get_by_username(search_query)
         return (user, user.telegram_id) if user else (None, None)
 
 

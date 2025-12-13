@@ -7,6 +7,8 @@ such as private keys and ensuring secure memory management.
 
 import ctypes
 
+from loguru import logger
+
 
 def secure_zero_memory(secret: str) -> None:
     """
@@ -28,6 +30,6 @@ def secure_zero_memory(secret: str) -> None:
         # Overwrite with zeros
         # This is a best-effort approach - Python's GC may have copies
         ctypes.memset(id(secret_bytes) + 32, 0, len(secret_bytes))
-    except Exception:
+    except Exception as e:
         # Fail silently - this is best-effort security
-        pass
+        logger.debug(f"Memory zeroing failed: {type(e).__name__}")
