@@ -49,7 +49,7 @@ class PaymentVerifier:
         self,
         w3: Web3,
         sender_address: str,
-        amount_plex: float,
+        amount_plex: float | Decimal,
         lookback_blocks: int = 200,  # ~10 minutes on BSC (3 sec/block)
     ) -> dict[str, Any]:
         """
@@ -64,7 +64,7 @@ class PaymentVerifier:
         Args:
             w3: Web3 instance
             sender_address: User's wallet address
-            amount_plex: Required PLEX amount
+            amount_plex: Required PLEX amount (float or Decimal)
             lookback_blocks: Number of blocks to scan back
 
         Returns:
@@ -81,8 +81,10 @@ class PaymentVerifier:
             return {"success": False, "error": f"Invalid address format: {e}"}
 
         # PLEX uses 9 decimals
+        # Use Decimal arithmetic to avoid float precision issues
         decimals = PLEX_DECIMALS
-        target_wei = int(amount_plex * (10**decimals))
+        amount_decimal = Decimal(str(amount_plex))
+        target_wei = int(amount_decimal * Decimal(10**decimals))
 
         logger.info(
             f"[PLEX Verify] Searching: sender={mask_address(sender)}, "

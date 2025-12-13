@@ -247,11 +247,10 @@ class PlexPaymentService:
 
         # Check for PLEX transfers to system wallet
         # lookback_blocks=200 covers ~10 minutes on BSC (3 sec/block)
-        # Note: verify_plex_payment accepts float for amount_plex (non-financial display value)
-        # OK to use float here - verification only, not financial calculation
+        # Pass Decimal directly to avoid float precision issues
         result = await blockchain.verify_plex_payment(
             sender_address=sender_wallet,
-            amount_plex=float(required),
+            amount_plex=required,  # Decimal - converted safely in verify method
             lookback_blocks=200,
         )
 
