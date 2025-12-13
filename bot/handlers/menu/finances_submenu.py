@@ -81,10 +81,13 @@ async def show_finances_submenu(
     roi_paid_total = float(deposit_roi_paid) + float(bonus_roi_paid)
     roi_cap_total = float(deposit_roi_cap) + float(bonus_roi_cap)
 
+    # Build deposits section with TOTAL in work
     if deposited_total > 0:
-        deposits_section = f"📦 В депозитах: `{format_usdt(total_deposited)} USDT`\n"
+        deposits_section = f"💼 В работе: `{format_usdt(deposited_total)} USDT`\n"
+        if total_deposited > 0:
+            deposits_section += f"  ├ 📦 Депозит: `{format_usdt(total_deposited)} USDT`\n"
         if bonus_deposited > 0:
-            deposits_section += f"🎁 Бонусный депозит: `{format_usdt(bonus_deposited)} USDT`\n"
+            deposits_section += f"  └ 🎁 Бонус: `{format_usdt(bonus_deposited)} USDT`\n"
 
         if roi_cap_total > 0 and roi_paid_total > 0:
             overall_progress = (roi_paid_total / roi_cap_total) * 100
@@ -94,17 +97,37 @@ async def show_finances_submenu(
             )
         total = float(available) + deposited_total
     else:
-        deposits_section = "📦 В депозитах: `0.00 USDT`\n"
+        deposits_section = "💼 В работе: `0.00 USDT`\n"
         total = float(available)
+
+    # Get PLEX payment status
+    plex_status_section = ""
+    try:
+        plex_service = DailyPaymentCheckService(session)
+        plex_status = await plex_service.check_daily_payment_status(user.id)
+        if not plex_status.get("error") and not plex_status.get("no_deposits"):
+            required_plex = int(plex_status.get("required_plex", 0))
+            is_paid = plex_status.get("is_paid", False)
+            if is_paid:
+                plex_status_section = f"⚡ PLEX: ✅ оплачено ({required_plex:,}/день)\n"
+            else:
+                wallet = plex_status.get("wallet_address", "")
+                plex_status_section = (
+                    f"⚡ PLEX: ❌ НЕ оплачено ({required_plex:,}/день)\n"
+                    f"  └ Кошелёк: `{wallet[:10]}...{wallet[-6:]}`\n"
+                )
+    except Exception as e:
+        logger.warning(f"Failed to get PLEX status: {e}")
 
     text = f"💰 *Финансы*\n\n💵 Доступно: `{available:.2f} USDT`\n"
 
-    # Keep bonus balance (if present) separate from bonus deposits
-    bonus_balance = balance_info.get("bonus_balance", 0) if balance_info else 0
-    if bonus_balance and bonus_balance > 0:
-        text += f"🎁 Бонусный баланс: `{float(bonus_balance):.2f} USDT`\n"
+    # Keep bonus balance (if present) separate from bonus deposits - REMOVED duplicate
+    # bonus_balance is already shown in deposits_section as part of "В работе"
 
-    text += f"{deposits_section}💎 Всего активов: `{total:.2f} USDT`\n\nВыберите действие:"
+    text += f"{deposits_section}"
+    if plex_status_section:
+        text += plex_status_section
+    text += f"💎 Всего активов: `{total:.2f} USDT`\n\nВыберите действие:"
 
     await message.answer(text, reply_markup=finances_submenu_keyboard(), parse_mode="Markdown")
     logger.info(f"[SUBMENU] Finances submenu shown to user {telegram_id}")

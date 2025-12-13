@@ -133,6 +133,48 @@ def aria_suggest_cancel_deposit_keyboard() -> Any:
     return kb.as_markup()
 
 
+# ===========================================================================
+# CRITICAL: Handle /start and main menu buttons to allow exit from ARIA chat
+# ===========================================================================
+from aiogram.filters import CommandStart
+
+
+@router.message(AIAssistantStates.chatting, CommandStart())
+@router.message(AIAssistantStates.action_flow, CommandStart())
+async def exit_aria_on_start(
+    message: Message,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Allow /start command to exit ARIA chat state."""
+    logger.info(f"ARIA: User {message.from_user.id} used /start to exit ARIA chat")
+    await state.clear()
+    # Re-route to normal /start handler by not consuming the message
+
+    from bot.handlers.start.registration.handlers import cmd_start
+
+    session = data.get("session")
+    if session:
+        await cmd_start(message, session, state, **data)
+
+
+@router.message(AIAssistantStates.chatting, F.text.in_(["📊 Главное меню", "◀️ Главное меню", "🏠 Главное меню"]))
+@router.message(AIAssistantStates.action_flow, F.text.in_(["📊 Главное меню", "◀️ Главное меню", "🏠 Главное меню"]))
+async def exit_aria_on_main_menu(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Allow main menu button to exit ARIA chat state."""
+    logger.info(f"ARIA: User {message.from_user.id} used main menu button to exit ARIA chat")
+    await state.clear()
+    # Redirect to main menu
+    from bot.handlers.menu.core import show_main_menu
+
+    await show_main_menu(message, session, state, **data)
+
+
 async def _aria_list_confirmed_deposits_for_user(
     message: Message,
     session: AsyncSession,

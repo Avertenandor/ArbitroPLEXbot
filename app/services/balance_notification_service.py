@@ -179,9 +179,7 @@ class BalanceNotificationService(BaseService):
             Dict with partners_earnings and income_from_partners
         """
         # Get total earned from direct referrals (level 1)
-        stmt = select(
-            func.coalesce(func.sum(Referral.total_earned), Decimal("0"))
-        ).where(
+        stmt = select(func.coalesce(func.sum(Referral.total_earned), Decimal("0"))).where(
             and_(
                 Referral.referrer_id == user_id,
                 Referral.level == 1,  # Only direct referrals
@@ -203,9 +201,9 @@ class BalanceNotificationService(BaseService):
         # Calculate total earnings of partners
         partners_earnings = Decimal("0")
         if referral_ids:
-            partners_stmt = select(
-                func.coalesce(func.sum(User.total_earned), Decimal("0"))
-            ).where(User.id.in_(referral_ids))
+            partners_stmt = select(func.coalesce(func.sum(User.total_earned), Decimal("0"))).where(
+                User.id.in_(referral_ids)
+            )
             partners_result = await self.session.execute(partners_stmt)
             partners_earnings = partners_result.scalar() or Decimal("0")
 
@@ -238,44 +236,33 @@ class BalanceNotificationService(BaseService):
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             "🤖 *АРБИТРОБОТ V.7.2*\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-
             f"📊 Арбитражная система Арбитробот V.7.2\n"
             f"провела за последний час *{operations}* операций\n\n"
-
             "┌───────────────────────────┐\n"
             "│      💼 *ВАША РАБОТА*      │\n"
             "└───────────────────────────┘\n\n"
-
             f"💰 У вас в работе участвует сумма:\n"
             f"   *{amount_in_work:.2f} USDT*\n\n"
-
             f"📈 Ваша доля успеха составила:\n"
             f"   *{user_earnings:.4f} USDT*\n\n"
-
             "┌───────────────────────────┐\n"
             "│   👥 *ПАРТНЁРСКАЯ*        │\n"
             "│      *ПРОГРАММА*          │\n"
             "└───────────────────────────┘\n\n"
-
             f"💸 Ваши партнёры заработали:\n"
             f"   *{partners_earnings:.4f} USDT*\n\n"
-
             f"🎁 Ваш доход от дохода ваших партнёров\n"
             f"   составил: *{income_from_partners:.4f} USDT*\n\n"
-
             "┌───────────────────────────┐\n"
             "│      💎 *PLEX СТАТУС*      │\n"
             "└───────────────────────────┘\n\n"
-
             f"⚡ Баланс PLEX: *{int(plex_balance):,}* токенов\n"
             f"📋 Расход в сутки: *{int(required_daily_plex):,}* PLEX\n"
             f"⏱ Хватит на: *~{plex_days_remaining}* дней\n\n"
-
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"💵 У вас доступно к выводу:\n"
             f"   *{available:.4f} USDT*\n"
             "━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-
             "_Арбитробот благодарит вас за доверие_\n"
             "_и продолжает развиваться!_ 🚀"
         )
@@ -326,21 +313,18 @@ class BalanceNotificationService(BaseService):
 
             # Check if bot was blocked by user
             if "blocked" in error_msg or "403" in error_msg:
-                logger.warning(
-                    f"Bot blocked by user {user.telegram_id}, skipping notification"
-                )
+                logger.warning(f"Bot blocked by user {user.telegram_id}, skipping notification")
                 # Mark user as bot_blocked
                 try:
                     from datetime import UTC, datetime
+
                     user.bot_blocked = True
                     user.bot_blocked_at = datetime.now(UTC)
                     await self.session.flush()
                 except Exception as update_error:
                     logger.error(f"Failed to mark user as bot_blocked: {update_error}")
             else:
-                logger.error(
-                    f"Failed to send balance notification to user {user.telegram_id}: {e}"
-                )
+                logger.error(f"Failed to send balance notification to user {user.telegram_id}: {e}")
 
             return False
 

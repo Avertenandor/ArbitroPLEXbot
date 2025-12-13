@@ -50,9 +50,7 @@ async def show_main_menu(
 
     # Get blacklist status
     blacklist_repo = BlacklistRepository(session)
-    blacklist_entry = await blacklist_repo.find_by_telegram_id(
-        user.telegram_id
-    )
+    blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
     logger.info(
         f"[MENU] Blacklist entry for user {user.telegram_id}: "
         f"exists={blacklist_entry is not None}, "
@@ -61,25 +59,24 @@ async def show_main_menu(
 
     # Get is_admin from middleware data (set by AuthMiddleware)
     is_admin = data.get("is_admin", False)
-    logger.info(
-        f"[MENU] is_admin from data for user {user.telegram_id}: {is_admin}, "
-        f"data keys: {list(data.keys())}"
-    )
+    logger.info(f"[MENU] is_admin from data for user {user.telegram_id}: {is_admin}, data keys: {list(data.keys())}")
 
     # R13-3: Get user language for i18n
     user_language = await get_user_language(session, user.id)
     _ = get_translator(user_language)
 
     # Escape username for Markdown
-    safe_username = escape_markdown(user.username) if user.username else _('common.user')
+    safe_username = escape_markdown(user.username) if user.username else _("common.user")
 
     # Get balance for quick view
     user_service = UserService(session)
     balance = await user_service.get_user_balance(user.id)
-    available = balance.get('available_balance', 0) if balance else 0
+    available = balance.get("available_balance", 0) if balance else 0
 
     # Get PLEX balance and calculate days
     from decimal import Decimal
+    from app.services.daily_payment_check_service import DailyPaymentCheckService
+
     plex_balance = user.last_plex_balance or Decimal("0")
     required_daily = user.required_daily_plex
 
@@ -88,6 +85,17 @@ async def show_main_menu(
         days = int(plex_balance / required_daily)
     else:
         days = 0
+
+    # Get PLEX payment status
+    plex_paid_status = ""
+    try:
+        plex_service = DailyPaymentCheckService(session)
+        plex_status = await plex_service.check_daily_payment_status(user.id)
+        if not plex_status.get("error") and not plex_status.get("no_deposits"):
+            is_paid = plex_status.get("is_paid", False)
+            plex_paid_status = "✅" if is_paid else "❌"
+    except Exception:
+        pass
 
     # Get deposits info from user model (primary source)
     total_deposited = float(user.total_deposited_usdt or Decimal("0"))
@@ -123,7 +131,7 @@ async def show_main_menu(
         f"Добро пожаловать, {safe_username}\\!\n\n"
         f"💰 Баланс: `{available:.2f} USDT`\n"
         f"{deposits_section}"
-        f"⚡ PLEX: `{float(plex_balance):.0f}` монет \\(\\~{days} дней\\)\n\n"
+        f"⚡ PLEX: `{float(plex_balance):.0f}` \\(\\~{days} дн\\.\\) {plex_paid_status}\n\n"
         f"Выберите раздел:"
     )
 
@@ -131,9 +139,7 @@ async def show_main_menu(
         f"[MENU] Creating keyboard for user {user.telegram_id} with "
         f"is_admin={is_admin}, blacklist_entry={blacklist_entry is not None}"
     )
-    keyboard = main_menu_reply_keyboard(
-        user=user, blacklist_entry=blacklist_entry, is_admin=is_admin
-    )
+    keyboard = main_menu_reply_keyboard(user=user, blacklist_entry=blacklist_entry, is_admin=is_admin)
     logger.info(f"[MENU] Sending main menu to user {user.telegram_id}")
 
     await message.answer(
@@ -144,13 +150,17 @@ async def show_main_menu(
     logger.info(f"[MENU] Main menu sent successfully to user {user.telegram_id}")
 
 
-@router.message(F.text.in_({
-    "📊 Главное меню",
-    "⬅ Назад",
-    "⏭ Пропустить",  # Registration skip (leftover keyboard)
-    "⏭️ Пропустить",  # Same with FE0F
-    "✅ Да, оставить контакты",  # Registration contacts (leftover keyboard)
-}))
+@router.message(
+    F.text.in_(
+        {
+            "📊 Главное меню",
+            "⬅ Назад",
+            "⏭ Пропустить",  # Registration skip (leftover keyboard)
+            "⏭️ Пропустить",  # Same with FE0F
+            "✅ Да, оставить контакты",  # Registration contacts (leftover keyboard)
+        }
+    )
+)
 async def handle_main_menu(
     message: Message,
     session: AsyncSession,
@@ -163,7 +173,9 @@ async def handle_main_menu(
 
     user: User | None = data.get("user")
     is_admin = data.get("is_admin")
-    logger.info(f"[MENU] User from data: {user.id if user else None}, is_admin={is_admin}, data keys: {list(data.keys())}")
+    logger.info(
+        f"[MENU] User from data: {user.id if user else None}, is_admin={is_admin}, data keys: {list(data.keys())}"
+    )
 
     if not user:
         # Если по какой-то причине DI не предоставил user, просто очистим
@@ -173,12 +185,8 @@ async def handle_main_menu(
         is_admin = data.get("is_admin", False)
         logger.info(f"[MENU] Fallback menu with is_admin={is_admin}")
         await message.answer(
-            "📊 *ГЛАВНОЕ МЕНЮ*\n"
-            "━━━━━━━━━━━━━━━━━━\n\n"
-            "Выберите раздел:",
-            reply_markup=main_menu_reply_keyboard(
-                user=None, blacklist_entry=None, is_admin=is_admin
-            ),
+            "📊 *ГЛАВНОЕ МЕНЮ*\n━━━━━━━━━━━━━━━━━━\n\nВыберите раздел:",
+            reply_markup=main_menu_reply_keyboard(user=None, blacklist_entry=None, is_admin=is_admin),
             parse_mode="Markdown",
         )
         return
@@ -186,8 +194,8 @@ async def handle_main_menu(
 
     # Create safe data copy and remove arguments that are passed positionally
     safe_data = data.copy()
-    safe_data.pop('user', None)
-    safe_data.pop('state', None)
-    safe_data.pop('session', None)  # session is also passed positionally
+    safe_data.pop("user", None)
+    safe_data.pop("state", None)
+    safe_data.pop("session", None)  # session is also passed positionally
 
     await show_main_menu(message, session, user, state, **safe_data)
