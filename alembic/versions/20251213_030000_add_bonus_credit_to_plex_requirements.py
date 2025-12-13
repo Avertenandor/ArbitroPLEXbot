@@ -34,10 +34,10 @@ def upgrade() -> None:
         DO $$
         BEGIN
             IF EXISTS (
-                SELECT 1 FROM pg_constraint 
+                SELECT 1 FROM pg_constraint
                 WHERE conname = 'ix_plex_payment_requirements_deposit_id'
             ) THEN
-                ALTER TABLE plex_payment_requirements 
+                ALTER TABLE plex_payment_requirements
                 DROP CONSTRAINT ix_plex_payment_requirements_deposit_id;
             END IF;
         END $$;
@@ -53,11 +53,11 @@ def upgrade() -> None:
         DO $$
         BEGIN
             IF NOT EXISTS (
-                SELECT 1 FROM information_schema.columns 
-                WHERE table_name = 'plex_payment_requirements' 
+                SELECT 1 FROM information_schema.columns
+                WHERE table_name = 'plex_payment_requirements'
                 AND column_name = 'bonus_credit_id'
             ) THEN
-                ALTER TABLE plex_payment_requirements 
+                ALTER TABLE plex_payment_requirements
                 ADD COLUMN bonus_credit_id INTEGER;
             END IF;
         END $$;
@@ -68,7 +68,7 @@ def upgrade() -> None:
         DO $$
         BEGIN
             IF NOT EXISTS (
-                SELECT 1 FROM pg_constraint 
+                SELECT 1 FROM pg_constraint
                 WHERE conname = 'plex_payment_requirements_bonus_credit_id_fkey'
             ) THEN
                 ALTER TABLE plex_payment_requirements
@@ -96,7 +96,7 @@ def upgrade() -> None:
         DO $$
         BEGIN
             IF NOT EXISTS (
-                SELECT 1 FROM pg_constraint 
+                SELECT 1 FROM pg_constraint
                 WHERE conname = 'check_deposit_or_bonus'
             ) THEN
                 ALTER TABLE plex_payment_requirements
