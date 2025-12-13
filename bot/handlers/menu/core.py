@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.repositories.blacklist_repository import BlacklistRepository
+from app.services.daily_payment_check_service import DailyPaymentCheckService
 from app.services.deposit import DepositService
 from app.services.user_service import UserService
 from bot.i18n.loader import get_translator, get_user_language
@@ -75,7 +76,6 @@ async def show_main_menu(
 
     # Get PLEX balance and calculate days
     from decimal import Decimal
-    from app.services.daily_payment_check_service import DailyPaymentCheckService
 
     plex_balance = user.last_plex_balance or Decimal("0")
     required_daily = user.required_daily_plex

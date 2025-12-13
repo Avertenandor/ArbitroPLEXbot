@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.repositories.bonus_credit_repository import BonusCreditRepository
+from app.services.daily_payment_check_service import DailyPaymentCheckService
 from app.services.deposit import DepositService
 from app.services.user_service import UserService
 from bot.keyboards.user import finances_submenu_keyboard
@@ -113,8 +114,7 @@ async def show_finances_submenu(
             else:
                 wallet = plex_status.get("wallet_address", "")
                 plex_status_section = (
-                    f"⚡ PLEX: ❌ НЕ оплачено ({required_plex:,}/день)\n"
-                    f"  └ Кошелёк: `{wallet[:10]}...{wallet[-6:]}`\n"
+                    f"⚡ PLEX: ❌ НЕ оплачено ({required_plex:,}/день)\n  └ Кошелёк: `{wallet[:10]}...{wallet[-6:]}`\n"
                 )
     except Exception as e:
         logger.warning(f"Failed to get PLEX status: {e}")
