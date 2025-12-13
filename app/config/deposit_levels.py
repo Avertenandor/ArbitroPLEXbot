@@ -324,3 +324,17 @@ def get_next_level_type(current_level_type: str | DepositLevelType) -> str | Non
     """
     next_level = get_next_level(current_level_type)
     return next_level.level_type.value if next_level else None
+
+
+def get_previous_level_type(current_level_type: str | DepositLevelType) -> str | None:
+    """
+    Получить тип предыдущего уровня.
+
+    Args:
+        current_level_type: Текущий тип уровня
+
+    Returns:
+        Строка типа предыдущего уровня или None если это первый уровень
+    """
+    prev_level = get_previous_level(current_level_type)
+    return prev_level.level_type.value if prev_level else None
