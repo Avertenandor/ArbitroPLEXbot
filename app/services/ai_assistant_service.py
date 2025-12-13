@@ -143,8 +143,8 @@ class AIAssistantService:
             if kb_context:
                 context_parts.append(kb_context)
                 context_parts.append("")
-        except Exception:
-            pass  # KB not available
+        except Exception as e:
+            logger.debug(f"Knowledge base not available: {e}")
 
         # Add real monitoring data for admins (but limit size)
         if monitoring_data and role != UserRole.USER:

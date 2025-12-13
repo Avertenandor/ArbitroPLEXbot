@@ -15,6 +15,7 @@ except ImportError:
     redis = None  # type: ignore
 
 from app.config.database import async_session_maker
+from app.config.operational_constants import DRAMATIQ_TIME_LIMIT_LONG
 from app.config.settings import settings
 from app.services.notification_service import NotificationService
 from app.services.reconciliation_service import ReconciliationService
@@ -22,7 +23,7 @@ from app.utils.distributed_lock import DistributedLock
 from jobs.async_runner import run_async
 
 
-@dramatiq.actor(max_retries=3, time_limit=600_000)  # 10 min timeout
+@dramatiq.actor(max_retries=3, time_limit=DRAMATIQ_TIME_LIMIT_LONG)  # 10 min timeout
 def perform_financial_reconciliation() -> None:
     """
     Perform daily financial reconciliation.

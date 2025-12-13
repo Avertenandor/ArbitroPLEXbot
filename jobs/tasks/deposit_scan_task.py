@@ -14,13 +14,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from app.config.operational_constants import (
+    DRAMATIQ_TIME_LIMIT_LONG,
+    DRAMATIQ_TIME_LIMIT_SHORT,
+)
 from app.config.settings import settings
 from app.models.user import User
 from app.services.deposit_scan_service import DepositScanService
 from jobs.async_runner import run_async
 
 
-@dramatiq.actor(max_retries=2, time_limit=600_000)  # 10 min timeout
+@dramatiq.actor(max_retries=2, time_limit=DRAMATIQ_TIME_LIMIT_LONG)  # 10 min timeout
 def scan_all_user_deposits() -> None:
     """
     Scan deposits for all active users with wallet addresses.
@@ -122,7 +126,7 @@ async def _scan_all_deposits_async() -> None:
         await local_engine.dispose()
 
 
-@dramatiq.actor(max_retries=1, time_limit=60_000)  # 1 min timeout
+@dramatiq.actor(max_retries=1, time_limit=DRAMATIQ_TIME_LIMIT_SHORT)  # 1 min timeout
 def scan_single_user_deposits(user_id: int) -> None:
     """
     Scan deposits for a single user.

@@ -203,8 +203,8 @@ async def handle_admin_response_photo(
             reply_markup=admin_inquiry_detail_keyboard(is_assigned=True),
         )
     except Exception as e:
-        logger.error(f"Failed to send photo to user: {e}")
-        await message.answer(f"⚠️ Ошибка отправки: {e}")
+        logger.error(f"Failed to send photo to user: {e}", exc_info=True)
+        await message.answer("⚠️ Ошибка отправки фото. Пользователь мог заблокировать бота.")
 
     await state.set_state(AdminInquiryStates.viewing_inquiry)
 
@@ -260,7 +260,7 @@ async def handle_admin_response_document(
             reply_markup=admin_inquiry_detail_keyboard(is_assigned=True),
         )
     except Exception as e:
-        logger.error(f"Failed to send document to user: {e}")
-        await message.answer(f"⚠️ Ошибка отправки: {e}")
+        logger.error(f"Failed to send document to user: {e}", exc_info=True)
+        await message.answer("⚠️ Ошибка отправки документа. Пользователь мог заблокировать бота.")
 
     await state.set_state(AdminInquiryStates.viewing_inquiry)

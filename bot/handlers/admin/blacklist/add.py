@@ -170,8 +170,8 @@ async def process_blacklist_reason(
         admin_obj = await admin_repo.get_by(telegram_id=message.from_user.id)
         if admin_obj:
             admin_id = admin_obj.id
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(f"Failed to fetch admin ID for user {message.from_user.id}: {e}")
 
     blacklist_service = BlacklistService(session)
 

@@ -304,7 +304,8 @@ async def process_derivation_index(message: Message, state: FSMContext):
         )
 
     except Exception as e:
-        await message.answer(f"❌ Ошибка деривации кошелька: {e}")
+        logger.error(f"Error deriving wallet: {e}", exc_info=True)
+        await message.answer("❌ Ошибка деривации кошелька. Попробуйте позже.")
         # SECURITY: Clear encrypted seed from state on error
         await state.update_data(temp_seed_phrase_encrypted=None)
         from .menu import handle_wallet_menu
@@ -403,13 +404,14 @@ async def confirm_output_wallet(message: Message, state: FSMContext):
         os._exit(0)
 
     except Exception as e:
+        logger.error(f"Error saving output wallet: {e}", exc_info=True)
         # SECURITY: Clear sensitive data even on error
         await state.update_data(
             temp_seed_phrase_encrypted=None,
             new_private_key_encrypted=None,
             new_output_address=None
         )
-        await message.answer(f"❌ Ошибка при сохранении: {e}")
+        await message.answer("❌ Ошибка при сохранении кошелька. Попробуйте позже.")
         from .menu import handle_wallet_menu
         await handle_wallet_menu(message, state)
     finally:

@@ -341,8 +341,8 @@ async def approve_request_action(
 
     except Exception as e:
         await session.rollback()
-        logger.error(f"Error approving request: {e}")
-        await message.answer(f"❌ Ошибка при одобрении: {e}")
+        logger.error(f"Error approving request: {e}", exc_info=True)
+        await message.answer("❌ Ошибка при одобрении запроса. Попробуйте позже.")
 
 
 @router.message(AdminFinpassRecoveryStates.viewing_request, F.text == "❌ Отклонить запрос")
@@ -401,8 +401,8 @@ async def reject_request_action(
 
     except Exception as e:
         await session.rollback()
-        logger.error(f"Error rejecting request: {e}")
-        await message.answer(f"❌ Ошибка при отклонении: {e}")
+        logger.error(f"Error rejecting request: {e}", exc_info=True)
+        await message.answer("❌ Ошибка при отклонении запроса. Попробуйте позже.")
 
 
 @router.message(StateFilter("*"), F.text == "◀️ Назад к списку")

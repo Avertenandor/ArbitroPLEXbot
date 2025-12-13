@@ -16,8 +16,8 @@ from typing import Any
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.admin_repository import AdminRepository
 from app.repositories.user_repository import UserRepository
+from app.services.ai.commons import find_user_by_identifier, verify_admin
 from app.services.bonus_service import BonusService
 from app.utils.formatters import format_user_identifier
 
@@ -43,6 +43,7 @@ class AIBonusService:
         # Extract admin info for security logging
         self.admin_telegram_id = self.admin_data.get("ID")
         self.admin_username = self.admin_data.get("username") or self.admin_data.get("Имя")
+        self.user_repo = UserRepository(session)
 
     async def _verify_admin(self) -> tuple[Any | None, str | None]:
         """
@@ -51,25 +52,7 @@ class AIBonusService:
         Returns:
             Tuple of (admin_model, error_message)
         """
-        if not self.admin_telegram_id:
-            return None, "❌ ОШИБКА БЕЗОПАСНОСТИ: Не удалось определить администратора"
-
-        admin_repo = AdminRepository(self.session)
-        admin = await admin_repo.get_by_telegram_id(self.admin_telegram_id)
-
-        if not admin:
-            logger.warning(
-                f"AI BONUS SECURITY: Unauthorized attempt from telegram_id={self.admin_telegram_id}"
-            )
-            return None, "❌ ОШИБКА БЕЗОПАСНОСТИ: Администратор не найден"
-
-        if admin.is_blocked:
-            logger.warning(
-                f"AI BONUS SECURITY: Blocked admin attempt: {admin.telegram_id} (@{admin.username})"
-            )
-            return None, "❌ ОШИБКА: Администратор заблокирован"
-
-        return admin, None
+        return await verify_admin(self.session, self.admin_telegram_id)
 
     async def _find_user(self, user_identifier: str) -> tuple[Any | None, str | None]:
         """
@@ -81,25 +64,7 @@ class AIBonusService:
         Returns:
             Tuple of (user_model, error_message)
         """
-        user_repo = UserRepository(self.session)
-
-        # Try by username
-        if user_identifier.startswith("@"):
-            username = user_identifier[1:]
-            user = await user_repo.get_by_username(username)
-            if user:
-                return user, None
-            return None, f"❌ Пользователь @{username} не найден"
-
-        # Try by telegram_id
-        try:
-            telegram_id = int(user_identifier)
-            user = await user_repo.get_by_telegram_id(telegram_id)
-            if user:
-                return user, None
-            return None, f"❌ Пользователь с ID {telegram_id} не найден"
-        except ValueError:
-            return None, "❌ Неверный формат: укажите @username или telegram_id"
+        return await find_user_by_identifier(self.session, user_identifier, self.user_repo)
 
     async def grant_bonus(
         self,

@@ -208,8 +208,8 @@ class BroadcastService:
                     f"❌ **Ошибка рассылки**: {e}",
                     parse_mode="Markdown",
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(f"Failed to update progress message with error status: {e}")
 
     async def _send_message_to_user(
         self,

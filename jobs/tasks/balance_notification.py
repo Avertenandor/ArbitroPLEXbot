@@ -27,13 +27,17 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from app.config.operational_constants import (
+    DRAMATIQ_TIME_LIMIT_LONG,
+    DRAMATIQ_TIME_LIMIT_SHORT,
+)
 from app.config.settings import settings
 from app.services.balance_notification_service import BalanceNotificationService
 from app.utils.distributed_lock import get_distributed_lock
 from jobs.async_runner import run_async
 
 
-@dramatiq.actor(max_retries=2, time_limit=600_000)  # 10 min timeout
+@dramatiq.actor(max_retries=2, time_limit=DRAMATIQ_TIME_LIMIT_LONG)  # 10 min timeout
 def send_balance_notifications() -> dict:
     """
     Send hourly balance notifications to all eligible users.
@@ -138,7 +142,7 @@ async def _send_balance_notifications_async() -> dict:
     return stats
 
 
-@dramatiq.actor(max_retries=1, time_limit=60_000)  # 1 min timeout
+@dramatiq.actor(max_retries=1, time_limit=DRAMATIQ_TIME_LIMIT_SHORT)  # 1 min timeout
 def send_single_balance_notification(user_id: int) -> dict:
     """
     Send balance notification to a single user (on-demand).

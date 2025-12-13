@@ -19,6 +19,7 @@ try:
 except ImportError:
     redis = None  # type: ignore
 
+from app.config.operational_constants import DRAMATIQ_TIME_LIMIT_STANDARD
 from app.config.settings import settings
 from app.models.enums import TransactionStatus
 from app.repositories.deposit_repository import DepositRepository
@@ -29,7 +30,7 @@ from app.utils.distributed_lock import DistributedLock
 from jobs.async_runner import run_async
 
 
-@dramatiq.actor(max_retries=3, time_limit=300_000)  # 5 min timeout
+@dramatiq.actor(max_retries=3, time_limit=DRAMATIQ_TIME_LIMIT_STANDARD)  # 5 min timeout
 def monitor_deposits() -> None:
     """
     Monitor pending deposits for blockchain confirmations.

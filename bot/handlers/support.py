@@ -196,8 +196,9 @@ async def process_ticket_message(
                     logger.warning(f"Failed to notify admin {admin_id}: {e}")
 
     except Exception as e:
+        logger.error(f"Error creating support ticket: {e}", exc_info=True)
         await state.clear()
-        await message.answer(f"❌ Ошибка создания обращения: {e}")
+        await message.answer("❌ Ошибка создания обращения. Попробуйте позже.")
 
 
 @router.message(F.text == "📋 Мои обращения")

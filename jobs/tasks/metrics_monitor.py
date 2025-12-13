@@ -13,13 +13,14 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from app.config.operational_constants import DRAMATIQ_TIME_LIMIT_MEDIUM
 from app.config.settings import settings
 from app.services.metrics_monitor_service import MetricsMonitorService
 from app.services.notification_service import NotificationService
 from jobs.async_runner import run_async
 
 
-@dramatiq.actor(max_retries=3, time_limit=120_000)  # 2 min timeout
+@dramatiq.actor(max_retries=3, time_limit=DRAMATIQ_TIME_LIMIT_MEDIUM)  # 2 min timeout
 def monitor_metrics() -> None:
     """
     Monitor financial metrics and detect anomalies (R14-1).

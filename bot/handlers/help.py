@@ -5,6 +5,7 @@ This module provides the /help command for ArbitroPLEXbot.
 Shows brief information about the bot, available commands, and navigation.
 """
 
+import logging
 from typing import Any
 
 from aiogram import F, Router
@@ -15,6 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from bot.keyboards.reply import main_menu_reply_keyboard
+
+
+logger = logging.getLogger(__name__)
 
 
 router = Router(name="help")
@@ -55,9 +59,13 @@ async def cmd_help(
             from app.repositories.blacklist_repository import BlacklistRepository
             blacklist_repo = BlacklistRepository(session)
             blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
-        except Exception:
-            # If blacklist check fails, continue without it
-            pass
+        except Exception as e:
+            logger.error(
+                "Failed to check blacklist status for user %s: %s",
+                user.telegram_id,
+                e,
+                exc_info=True
+            )
 
     help_text = (
         "ℹ️ *Справка ArbitroPLEXbot*\n\n"

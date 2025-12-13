@@ -21,13 +21,17 @@ from sqlalchemy.pool import NullPool
 
 from app.config.business_constants import WorkStatus
 from app.config.constants import TELEGRAM_MESSAGE_DELAY
+from app.config.operational_constants import (
+    DRAMATIQ_TIME_LIMIT_LONG,
+    DRAMATIQ_TIME_LIMIT_SHORT,
+)
 from app.config.settings import settings
 from app.models.user import User
 from app.services.blockchain_service import get_blockchain_service
 from jobs.async_runner import run_async
 
 
-@dramatiq.actor(max_retries=2, time_limit=600_000)  # 10 min timeout
+@dramatiq.actor(max_retries=2, time_limit=DRAMATIQ_TIME_LIMIT_LONG)  # 10 min timeout
 def monitor_plex_balances() -> None:
     """
     Monitor PLEX balances for all active users.
@@ -252,7 +256,7 @@ async def _send_notification(bot: Bot, telegram_id: int, message: str) -> bool:
         return False
 
 
-@dramatiq.actor(max_retries=1, time_limit=60_000)
+@dramatiq.actor(max_retries=1, time_limit=DRAMATIQ_TIME_LIMIT_SHORT)
 def check_single_user_plex_balance(user_id: int) -> None:
     """
     Check PLEX balance for a single user (on-demand).

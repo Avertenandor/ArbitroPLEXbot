@@ -21,6 +21,7 @@ from app.models.appeal import Appeal, AppealStatus
 from app.models.blacklist import Blacklist
 from app.models.user import User
 from app.repositories.admin_repository import AdminRepository
+from app.services.ai.commons import verify_admin
 from app.utils.formatters import format_user_identifier
 
 
@@ -53,25 +54,7 @@ class AIAppealsService:
         Returns:
             Tuple of (admin_model, error_message)
         """
-        if not self.admin_telegram_id:
-            return None, "❌ ОШИБКА БЕЗОПАСНОСТИ: Не удалось определить администратора"
-
-        admin_repo = AdminRepository(self.session)
-        admin = await admin_repo.get_by_telegram_id(self.admin_telegram_id)
-
-        if not admin:
-            logger.warning(
-                f"AI APPEALS SECURITY: Unauthorized attempt from telegram_id={self.admin_telegram_id}"
-            )
-            return None, "❌ ОШИБКА БЕЗОПАСНОСТИ: Администратор не найден"
-
-        if admin.is_blocked:
-            logger.warning(
-                f"AI APPEALS SECURITY: Blocked admin attempt: {admin.telegram_id} (@{admin.username})"
-            )
-            return None, "❌ ОШИБКА: Администратор заблокирован"
-
-        return admin, None
+        return await verify_admin(self.session, self.admin_telegram_id)
 
     async def get_appeals_list(
         self,

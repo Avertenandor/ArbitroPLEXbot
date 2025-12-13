@@ -9,6 +9,7 @@ CloudSonet 4.5 AI Assistant Handler
     /ai help - Справка по командам
 """
 import json
+import logging
 from datetime import datetime
 from pathlib import Path
 
@@ -16,6 +17,8 @@ from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
 
+
+logger = logging.getLogger(__name__)
 
 router = Router(name="cloudsonet_ai")
 
@@ -66,7 +69,11 @@ def save_message(admin_id: int, admin_name: str, message: str) -> int:
     if MESSAGES_FILE.exists():
         try:
             messages = json.loads(MESSAGES_FILE.read_text())
-        except Exception:
+        except Exception as e:
+            logger.error(
+                f"Failed to read/parse messages file {MESSAGES_FILE}: {e}",
+                exc_info=True
+            )
             messages = []
 
     messages.append({

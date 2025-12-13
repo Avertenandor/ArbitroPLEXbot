@@ -8,6 +8,12 @@ Contains all AI assistant related components:
 - tool_executor: Tool execution logic (to be added)
 """
 
+from app.services.ai.commons import (
+    AIServiceResponse,
+    find_user_by_identifier,
+    response,
+    verify_admin,
+)
 from app.services.ai.helpers import (
     build_messages,
     create_tool_result,
@@ -63,6 +69,11 @@ from app.services.ai.tool_executor import ToolExecutor
 
 
 __all__ = [
+    # Commons
+    "AIServiceResponse",
+    "find_user_by_identifier",
+    "response",
+    "verify_admin",
     # Prompts
     "AI_NAME",
     "AI_FULL_NAME",
