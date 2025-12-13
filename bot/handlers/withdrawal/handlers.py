@@ -5,13 +5,13 @@ This module contains the primary withdrawal menu handlers and entry points
 for initiating withdrawal requests.
 """
 
-import logging
 from decimal import Decimal
 from typing import Any
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, ReplyKeyboardRemove
+from loguru import logger
 
 from app.models.user import User
 from app.services.user_service import UserService
@@ -21,9 +21,6 @@ from bot.keyboards.reply import withdrawal_keyboard
 from bot.states.withdrawal import WithdrawalStates
 
 from .eligibility import check_withdrawal_eligibility
-
-
-logger = logging.getLogger(__name__)
 
 # Router will be created in __init__.py and imported there
 router = Router()

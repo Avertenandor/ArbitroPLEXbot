@@ -46,7 +46,7 @@ async def handle_admin_stats(
 
     # Get statistics
     total_users = await user_service.get_total_users()
-    verified_users = await user_service.get_verified_users()
+    verified_users = await user_service.get_verified_users_count()
     deposit_stats = await deposit_service.get_platform_stats()
     referral_stats = await referral_service.get_platform_referral_stats()
     withdrawal_stats = await withdrawal_service.get_platform_withdrawal_stats()

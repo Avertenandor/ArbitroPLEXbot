@@ -193,7 +193,7 @@ async def handle_confirm_withdrawal_action(
                 return
 
             # Notify user
-            user = await user_service.find_by_id(withdrawal.user_id)
+            user = await user_service.get_by_id(withdrawal.user_id)
             if user:
                 logger.info(f"Attempting to notify user {user.id} (TG: {user.telegram_id}) about withdrawal {tx_hash}")
                 notify_result = await notification_service.notify_withdrawal_processed(
@@ -235,7 +235,7 @@ async def handle_confirm_withdrawal_action(
                 return
 
             # Notify user
-            user = await user_service.find_by_id(withdrawal.user_id)
+            user = await user_service.get_by_id(withdrawal.user_id)
             if user:
                 await notification_service.notify_withdrawal_rejected(
                     user.telegram_id, float(withdrawal.amount)

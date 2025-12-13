@@ -217,28 +217,3 @@ class AdminService:
             session_token
         )
 
-    # =========================================================================
-    # Private methods (for backward compatibility)
-    # =========================================================================
-
-    async def _track_failed_login(self, telegram_id: int) -> None:
-        """Track failed login attempt (deprecated, use rate_limiter)."""
-        await self.rate_limiter.track_failed_login(telegram_id)
-
-    async def _clear_failed_login_attempts(self, telegram_id: int) -> None:
-        """Clear failed login attempts (deprecated, use rate_limiter)."""
-        await self.rate_limiter.clear_failed_login_attempts(telegram_id)
-
-    async def _block_telegram_id_for_failed_logins(
-        self, telegram_id: int
-    ) -> None:
-        """Block Telegram ID (deprecated, use rate_limiter)."""
-        await self.rate_limiter._block_telegram_id(telegram_id)
-
-    async def _notify_super_admins_of_block(
-        self, telegram_id: int
-    ) -> None:
-        """Notify super_admins (deprecated, use rate_limiter)."""
-        await self.rate_limiter._notify_super_admins_of_block(
-            telegram_id
-        )

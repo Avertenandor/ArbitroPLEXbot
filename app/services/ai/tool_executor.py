@@ -14,11 +14,11 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from app.config.security import (
-    is_arya_admin,
-    get_arya_role,
-    can_command_arya,
     ARYA_AI_ID,
     ARYA_AI_USERNAME,
+    can_command_arya,
+    get_arya_role,
+    is_arya_admin,
 )
 
 
@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 # ========== Input Validation Helpers ==========
 
 
-def validate_required_string(value: Any, field_name: str, max_length: int = 1000) -> str:
+def validate_required_string(value: str | None, field_name: str, max_length: int = 1000) -> str:
     """Validate and sanitize a required string field."""
     if value is None:
         raise ValueError(f"{field_name} is required")
@@ -42,7 +42,7 @@ def validate_required_string(value: Any, field_name: str, max_length: int = 1000
     return value
 
 
-def validate_optional_string(value: Any, field_name: str, max_length: int = 1000) -> str | None:
+def validate_optional_string(value: str | None, field_name: str, max_length: int = 1000) -> str | None:
     """Validate and sanitize an optional string field."""
     if value is None:
         return None
@@ -56,7 +56,7 @@ def validate_optional_string(value: Any, field_name: str, max_length: int = 1000
     return value
 
 
-def validate_positive_int(value: Any, field_name: str, max_value: int = 1000000) -> int:
+def validate_positive_int(value: int | str | None, field_name: str, max_value: int = 1000000) -> int:
     """Validate a positive integer field."""
     if value is None:
         raise ValueError(f"{field_name} is required")
@@ -71,7 +71,7 @@ def validate_positive_int(value: Any, field_name: str, max_value: int = 1000000)
     return value
 
 
-def validate_positive_decimal(value: Any, field_name: str, max_value: Decimal = Decimal("1000000000")) -> Decimal:
+def validate_positive_decimal(value: str | int | float | Decimal | None, field_name: str, max_value: Decimal = Decimal("1000000000")) -> Decimal:
     """Validate a positive decimal field."""
     if value is None:
         raise ValueError(f"{field_name} is required")
@@ -86,7 +86,7 @@ def validate_positive_decimal(value: Any, field_name: str, max_value: Decimal = 
     return value
 
 
-def validate_user_identifier(value: Any, field_name: str = "user_identifier") -> str:
+def validate_user_identifier(value: str | int | None, field_name: str = "user_identifier") -> str:
     """Validate a user identifier (telegram_id or @username)."""
     if value is None:
         raise ValueError(f"{field_name} is required")
@@ -104,7 +104,7 @@ def validate_user_identifier(value: Any, field_name: str = "user_identifier") ->
     return value
 
 
-def validate_limit(value: Any, default: int = 20, max_limit: int = 100) -> int:
+def validate_limit(value: int | str | None, default: int = 20, max_limit: int = 100) -> int:
     """Validate a limit parameter."""
     if value is None:
         return default

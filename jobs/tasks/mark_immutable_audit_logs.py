@@ -90,7 +90,10 @@ async def _mark_immutable_async() -> dict:
 
             return {"marked": len(actions_to_mark)}
 
+        except asyncio.CancelledError:
+            logger.info("R18-4: Mark immutable audit logs task cancelled")
+            raise
         except Exception as e:
             await session.rollback()
-            logger.error(f"R18-4: Failed to mark immutable audit logs: {e}")
+            logger.exception(f"R18-4: Mark immutable audit logs task failed: {e}")
             raise

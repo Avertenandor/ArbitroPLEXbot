@@ -77,6 +77,10 @@ async def main() -> None:  # noqa: C901
     )
     bot_instance = bot
 
+    # Register bot provider for dependency injection (avoid circular imports)
+    from app.services.bot_provider import set_bot_getter
+    set_bot_getter(lambda: bot_instance)
+
     # Initialize dispatcher with storage
     dp = Dispatcher(storage=storage)
 

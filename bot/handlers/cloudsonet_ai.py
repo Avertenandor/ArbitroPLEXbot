@@ -9,16 +9,13 @@ CloudSonet 4.5 AI Assistant Handler
     /ai help - Справка по командам
 """
 import json
-import logging
 from datetime import datetime
 from pathlib import Path
 
 from aiogram import Router
 from aiogram.filters import Command
 from aiogram.types import Message
-
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 router = Router(name="cloudsonet_ai")
 

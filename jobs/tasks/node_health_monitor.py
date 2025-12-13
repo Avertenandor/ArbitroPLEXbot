@@ -63,8 +63,11 @@ async def _monitor_node_health_async() -> None:
             # Notify admins
             await _notify_admins_maintenance_mode()
 
+    except asyncio.CancelledError:
+        logger.info("Node health monitoring task cancelled")
+        raise
     except Exception as e:
-        logger.error(f"Error during node health check: {e}")
+        logger.exception(f"Node health monitoring task failed: {e}")
 
         # Activate maintenance mode on error
         if not settings.blockchain_maintenance_mode:

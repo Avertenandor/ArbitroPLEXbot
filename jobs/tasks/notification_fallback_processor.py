@@ -5,19 +5,19 @@ R11-3: Processes notifications from PostgreSQL fallback queue when Redis is unav
 Polls the notification_queue_fallback table every 5 seconds and sends pending notifications.
 """
 
+import asyncio
 from datetime import UTC, datetime
 
 import dramatiq
 from aiogram import Bot
 from loguru import logger
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
 
 from app.config.settings import settings
 from app.models.notification_queue_fallback import NotificationQueueFallback
 from app.services.notification_service import NotificationService
 from jobs.async_runner import run_async
+from jobs.utils.database import task_engine, task_session_maker
 
 
 @dramatiq.actor(max_retries=3, time_limit=300_000)  # 5 min timeout
@@ -38,25 +38,8 @@ def process_notification_fallback() -> None:
 
 async def _process_notification_fallback_async() -> None:
     """Async implementation of notification fallback processing."""
-    # Create a local engine to ensure it attaches to the current event loop
-    # created by asyncio.run() in the worker thread.
-    # Use NullPool to avoid keeping connections open since we create/dispose per run.
-    local_engine = create_async_engine(
-        settings.database_url,
-        echo=False,
-        poolclass=NullPool,
-    )
-
-    local_session_maker = async_sessionmaker(
-        local_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autocommit=False,
-        autoflush=False,
-    )
-
     try:
-        async with local_session_maker() as session:
+        async with task_session_maker() as session:
             # Get pending notifications (processed_at is NULL)
             stmt = (
                 select(NotificationQueueFallback)
@@ -156,5 +139,10 @@ async def _process_notification_fallback_async() -> None:
                 f"{sent} sent, {failed} failed"
             )
 
+    except asyncio.CancelledError:
+        logger.info("R11-3: Notification fallback processing task cancelled")
+        raise
+    except Exception as e:
+        logger.exception(f"R11-3: Notification fallback processing task failed: {e}")
     finally:
-        await local_engine.dispose()
+        await task_engine.dispose()

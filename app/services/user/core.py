@@ -106,44 +106,6 @@ class UserServiceCore:
         """
         return await self.user_repo.get_by_username(username)
 
-    async def find_by_id(self, user_id: int) -> User | None:
-        """
-        Find user by ID (alias for get_by_id).
-
-        Args:
-            user_id: User ID
-
-        Returns:
-            User or None
-        """
-        return await self.user_repo.get_by_id(user_id)
-
-    async def find_by_username(self, username: str) -> User | None:
-        """
-        Find user by username.
-
-        Args:
-            username: Username (without @)
-
-        Returns:
-            User or None
-        """
-        users = await self.user_repo.find_by(username=username)
-        return users[0] if users else None
-
-    async def find_by_telegram_id(self, telegram_id: int) -> User | None:
-        """
-        Find user by Telegram ID.
-
-        Args:
-            telegram_id: Telegram ID
-
-        Returns:
-            User or None
-        """
-        users = await self.user_repo.find_by(telegram_id=telegram_id)
-        return users[0] if users else None
-
     async def get_by_wallet(self, wallet_address: str) -> User | None:
         """
         Get user by wallet address.
@@ -293,22 +255,12 @@ class UserServiceCore:
         """
         return await self.user_repo.count()
 
-    async def get_verified_users(self) -> int:
+    async def get_verified_users_count(self) -> int:
         """
         Get number of verified users.
 
         Returns:
             Verified user count
-        """
-        # Use SQL COUNT to avoid loading all user records
-        return await self.user_repo.count(is_verified=True)
-
-    async def count_verified_users(self) -> int:
-        """
-        Count verified users.
-
-        Returns:
-            Number of verified users
         """
         return await self.user_repo.count_verified_users()
 

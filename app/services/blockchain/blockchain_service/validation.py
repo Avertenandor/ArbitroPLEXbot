@@ -4,6 +4,8 @@ Validation Module.
 Contains validation utilities for the BlockchainService.
 """
 
+from app.validators.unified import validate_wallet_address as _validate_wallet_address
+
 
 class Validation:
     """
@@ -24,18 +26,6 @@ class Validation:
         Returns:
             True if valid
         """
-        if not address or not isinstance(address, str):
-            return False
-
-        if not address.startswith("0x"):
-            return False
-
-        if len(address) != 42:  # 0x + 40 hex chars
-            return False
-
-        # Check if all chars after 0x are hex
-        try:
-            int(address[2:], 16)
-            return True
-        except ValueError:
-            return False
+        # Use unified validator
+        is_valid, _ = _validate_wallet_address(address)
+        return is_valid

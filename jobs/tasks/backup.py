@@ -82,8 +82,11 @@ async def backup_database() -> None:
         # Cleanup old backups (keep last 30 days)
         await _cleanup_old_backups(backup_dir, retention_days=30)
 
+    except asyncio.CancelledError:
+        logger.info("Backup task cancelled")
+        raise
     except Exception as e:
-        logger.error(f"Backup error: {e}")
+        logger.exception(f"Backup task failed: {e}")
 
 
 async def _cleanup_old_backups(backup_dir: Path, retention_days: int) -> None:

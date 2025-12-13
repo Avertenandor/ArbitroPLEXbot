@@ -19,13 +19,13 @@ Only sends to users with:
 - Not banned
 """
 
+import asyncio
+
 import dramatiq
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from loguru import logger
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
 
 from app.config.operational_constants import (
     DRAMATIQ_TIME_LIMIT_LONG,
@@ -35,6 +35,7 @@ from app.config.settings import settings
 from app.services.balance_notification_service import BalanceNotificationService
 from app.utils.distributed_lock import get_distributed_lock
 from jobs.async_runner import run_async
+from jobs.utils.database import task_engine, task_session_maker
 
 
 @dramatiq.actor(max_retries=2, time_limit=DRAMATIQ_TIME_LIMIT_LONG)  # 10 min timeout
@@ -74,21 +75,6 @@ def send_balance_notifications() -> dict:
 
 async def _send_balance_notifications_async() -> dict:
     """Async implementation of balance notifications."""
-    # Create local engine (for isolated task)
-    local_engine = create_async_engine(
-        settings.database_url,
-        echo=False,
-        poolclass=NullPool,
-    )
-
-    local_session_maker = async_sessionmaker(
-        local_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autocommit=False,
-        autoflush=False,
-    )
-
     stats = {
         "total": 0,
         "sent": 0,
@@ -99,7 +85,7 @@ async def _send_balance_notifications_async() -> dict:
     bot = None
 
     try:
-        async with local_session_maker() as session:
+        async with task_session_maker() as session:
             # Use distributed lock to prevent concurrent notifications
             lock = get_distributed_lock(session=session)
 
@@ -128,8 +114,11 @@ async def _send_balance_notifications_async() -> dict:
 
                 logger.info(f"Balance notification stats: {stats}")
 
+    except asyncio.CancelledError:
+        logger.info("Balance notification task cancelled")
+        raise
     except Exception as e:
-        logger.exception(f"Balance notification error: {e}")
+        logger.exception(f"Balance notification task failed: {e}")
         stats["error"] = str(e)
         raise
     finally:
@@ -137,7 +126,7 @@ async def _send_balance_notifications_async() -> dict:
         if bot:
             await bot.session.close()
         # Dispose engine
-        await local_engine.dispose()
+        await task_engine.dispose()
 
     return stats
 
@@ -176,22 +165,10 @@ def send_single_balance_notification(user_id: int) -> dict:
 
 async def _send_single_notification_async(user_id: int) -> dict:
     """Send notification to single user."""
-    local_engine = create_async_engine(
-        settings.database_url,
-        echo=False,
-        poolclass=NullPool,
-    )
-
-    local_session_maker = async_sessionmaker(
-        local_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
-
     bot = None
 
     try:
-        async with local_session_maker() as session:
+        async with task_session_maker() as session:
             from sqlalchemy import select
             from sqlalchemy.orm import selectinload
 
@@ -247,7 +224,17 @@ async def _send_single_notification_async(user_id: int) -> dict:
                 "error": None if success else "Failed to send",
             }
 
+    except asyncio.CancelledError:
+        logger.info("Single balance notification task cancelled")
+        raise
+    except Exception as e:
+        logger.exception(f"Single balance notification task failed: {e}")
+        return {
+            "success": False,
+            "user_id": user_id,
+            "error": str(e),
+        }
     finally:
         if bot:
             await bot.session.close()
-        await local_engine.dispose()
+        await task_engine.dispose()

@@ -5,6 +5,8 @@ Performs daily financial reconciliation to verify system balance integrity.
 Runs daily at 01:00 UTC.
 """
 
+import asyncio
+
 import dramatiq
 from loguru import logger
 
@@ -113,6 +115,12 @@ async def _perform_reconciliation_async() -> dict:
                         logger.error(f"Error sending admin notification: {e}")
 
                 return result
+        except asyncio.CancelledError:
+            logger.info("Financial reconciliation task cancelled")
+            raise
+        except Exception as e:
+            logger.exception(f"Financial reconciliation task failed: {e}")
+            raise
         finally:
             # Close Redis client
             if redis_client:

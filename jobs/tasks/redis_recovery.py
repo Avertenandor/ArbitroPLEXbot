@@ -5,6 +5,7 @@ R11-3: Handles recovery of notification queue and FSM states when Redis recovers
 Migrates data from PostgreSQL fallback back to Redis.
 """
 
+import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 
@@ -236,8 +237,11 @@ async def _recover_redis_data_async() -> dict:
             # Migrate FSM states
             fsm_states_migrated = await _migrate_fsm_states(session, redis_client)
 
+    except asyncio.CancelledError:
+        logger.info("R11-3: Redis recovery task cancelled")
+        raise
     except Exception as e:
-        logger.error(f"R11-3: Error during Redis recovery: {e}", exc_info=True)
+        logger.exception(f"R11-3: Redis recovery task failed: {e}")
     finally:
         await redis_client.close()
 

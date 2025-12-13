@@ -27,9 +27,9 @@ class EncryptionService:
             try:
                 self.fernet = Fernet(encryption_key.encode())
                 self.enabled = True
-            except Exception:
+            except Exception as e:
                 # SECURITY: Do not log exception details - may contain key info
-                logger.error("Invalid encryption key format (key validation failed)")
+                logger.warning("Encryption operation failed (details hidden for security)")
                 self.fernet = None
                 self.enabled = False
                 if self.environment == "production":
@@ -76,9 +76,9 @@ class EncryptionService:
             encrypted = self.fernet.encrypt(plaintext.encode())
             return base64.b64encode(encrypted).decode()
 
-        except Exception:
+        except Exception as e:
             # SECURITY: Do not log exception details - may contain sensitive data
-            logger.error("Encryption operation failed")
+            logger.warning("Encryption operation failed (details hidden for security)")
             return None
 
     def decrypt(self, ciphertext: str) -> str | None:

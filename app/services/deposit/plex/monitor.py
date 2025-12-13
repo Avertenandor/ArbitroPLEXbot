@@ -256,9 +256,10 @@ class PlexPaymentMonitor:
         # Callback при оплате
         async def on_paid(requirement, payment_status):
             from app.models.user import User
-            from bot.main import bot_instance
+            from app.services.bot_provider import get_bot
 
-            if bot_instance:
+            bot = get_bot()
+            if bot:
                 from .notifier import PlexPaymentNotifier
 
                 stmt = select(User.telegram_id).where(User.id == requirement.user_id)
@@ -266,7 +267,7 @@ class PlexPaymentMonitor:
                 telegram_id = result.scalar_one_or_none()
 
                 if telegram_id:
-                    notifier = PlexPaymentNotifier(bot_instance, self.session)
+                    notifier = PlexPaymentNotifier(bot, self.session)
                     await notifier.notify_payment_received(
                         user_telegram_id=telegram_id,
                         deposit_id=requirement.deposit_id,
@@ -346,9 +347,10 @@ class PlexPaymentMonitor:
 
             # Отправляем уведомление
             from app.models.user import User
-            from bot.main import bot_instance
+            from app.services.bot_provider import get_bot
 
-            if bot_instance:
+            bot = get_bot()
+            if bot:
                 from .notifier import PlexPaymentNotifier
 
                 # Получаем telegram_id и requirement
@@ -364,7 +366,7 @@ class PlexPaymentMonitor:
                 requirement = result.scalar_one_or_none()
 
                 if telegram_id and requirement:
-                    notifier = PlexPaymentNotifier(bot_instance, self.session)
+                    notifier = PlexPaymentNotifier(bot, self.session)
                     await notifier.notify_warning(
                         user_telegram_id=telegram_id,
                         deposit_id=deposit_id,
@@ -402,9 +404,10 @@ class PlexPaymentMonitor:
 
             # Отправляем уведомление
             from app.models.user import User
-            from bot.main import bot_instance
+            from app.services.bot_provider import get_bot
 
-            if bot_instance:
+            bot = get_bot()
+            if bot:
                 from .notifier import PlexPaymentNotifier
 
                 # Получаем telegram_id
@@ -418,7 +421,7 @@ class PlexPaymentMonitor:
                     telegram_id = result.scalar_one_or_none()
 
                     if telegram_id:
-                        notifier = PlexPaymentNotifier(bot_instance, self.session)
+                        notifier = PlexPaymentNotifier(bot, self.session)
                         await notifier.notify_deposit_blocked(
                             user_telegram_id=telegram_id,
                             deposit_id=deposit_id,

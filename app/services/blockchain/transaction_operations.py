@@ -344,9 +344,9 @@ class TransactionManager:
             logger.warning(f"Failed to check transaction status: {e}")
             return {"status": "unknown", "confirmations": 0}
 
-    def fetch_transaction_details_sync(self, w3: Web3, tx_hash: str) -> dict[str, Any] | None:
+    def get_transaction_details_sync(self, w3: Web3, tx_hash: str) -> dict[str, Any] | None:
         """
-        Fetch transaction details (sync method for executor).
+        Get transaction details (sync method for executor).
 
         Args:
             w3: Web3 instance

@@ -1,0 +1,18 @@
+"""Константы таймингов и интервалов."""
+
+# Session timeouts (seconds)
+SESSION_TTL_SECONDS = 1500  # 25 minutes
+PLEX_BALANCE_CHECK_INTERVAL_SECONDS = 3600  # 1 hour
+
+# Button cooldowns (seconds)
+BUTTON_COOLDOWN_NORMAL_SECONDS = 0.5
+BUTTON_COOLDOWN_FINANCIAL_SECONDS = 2.0
+BUTTON_COOLDOWN_CRITICAL_SECONDS = 3.0
+
+# Lock timeouts (seconds)
+LOCK_TIMEOUT_STANDARD = 300
+STUCK_WITHDRAWAL_MINUTES = 15
+
+# Broadcast
+BROADCAST_COOLDOWN_SECONDS = 900  # 15 minutes
+BROADCAST_RATE_LIMIT_MSG_PER_SEC = 15

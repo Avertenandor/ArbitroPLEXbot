@@ -11,8 +11,6 @@ from datetime import UTC, datetime, timedelta
 import dramatiq
 from loguru import logger
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
 
 from app.config.operational_constants import (
     DRAMATIQ_TIME_LIMIT_LONG,
@@ -22,6 +20,7 @@ from app.config.settings import settings
 from app.models.user import User
 from app.services.deposit_scan_service import DepositScanService
 from jobs.async_runner import run_async
+from jobs.utils.database import task_engine, task_session_maker
 
 
 @dramatiq.actor(max_retries=2, time_limit=DRAMATIQ_TIME_LIMIT_LONG)  # 10 min timeout
@@ -43,23 +42,8 @@ def scan_all_user_deposits() -> None:
 
 async def _scan_all_deposits_async() -> None:
     """Async implementation of deposit scanning."""
-    # Create local engine (for isolated task)
-    local_engine = create_async_engine(
-        settings.database_url,
-        echo=False,
-        poolclass=NullPool,
-    )
-
-    local_session_maker = async_sessionmaker(
-        local_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autocommit=False,
-        autoflush=False,
-    )
-
     try:
-        async with local_session_maker() as session:
+        async with task_session_maker() as session:
             # Get users with wallets who haven't been scanned recently
             one_hour_ago = datetime.now(UTC) - timedelta(hours=1)
 
@@ -119,11 +103,14 @@ async def _scan_all_deposits_async() -> None:
                 f"scanned={scanned}, updated={updated}, errors={errors}"
             )
 
+    except asyncio.CancelledError:
+        logger.info("Deposit scan task cancelled")
+        raise
     except Exception as e:
-        logger.exception(f"Deposit scan error: {e}")
+        logger.exception(f"Deposit scan task failed: {e}")
         raise
     finally:
-        await local_engine.dispose()
+        await task_engine.dispose()
 
 
 @dramatiq.actor(max_retries=1, time_limit=DRAMATIQ_TIME_LIMIT_SHORT)  # 1 min timeout
@@ -143,20 +130,8 @@ def scan_single_user_deposits(user_id: int) -> None:
 
 async def _scan_single_user_async(user_id: int) -> None:
     """Scan deposits for single user."""
-    local_engine = create_async_engine(
-        settings.database_url,
-        echo=False,
-        poolclass=NullPool,
-    )
-
-    local_session_maker = async_sessionmaker(
-        local_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
-
     try:
-        async with local_session_maker() as session:
+        async with task_session_maker() as session:
             deposit_service = DepositScanService(session)
             result = await deposit_service.scan_user_deposits(user_id)
 
@@ -172,5 +147,10 @@ async def _scan_single_user_async(user_id: int) -> None:
                     f"Deposit scan failed for user {user_id}: "
                     f"{result.get('error')}"
                 )
+    except asyncio.CancelledError:
+        logger.info("Single user deposit scan task cancelled")
+        raise
+    except Exception as e:
+        logger.exception(f"Single user deposit scan task failed: {e}")
     finally:
-        await local_engine.dispose()
+        await task_engine.dispose()

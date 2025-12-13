@@ -5,10 +5,10 @@ Cleans up expired and inactive admin sessions.
 Runs every 5 minutes to deactivate expired sessions.
 """
 
+import asyncio
+
 import dramatiq
 from loguru import logger
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
 
 
 try:
@@ -21,6 +21,7 @@ from app.config.settings import settings
 from app.repositories.admin_session_repository import AdminSessionRepository
 from app.utils.distributed_lock import DistributedLock
 from jobs.async_runner import run_async
+from jobs.utils.database import task_engine, task_session_maker
 
 
 @dramatiq.actor(max_retries=3, time_limit=DRAMATIQ_TIME_LIMIT_SHORT)
@@ -60,21 +61,6 @@ async def _cleanup_sessions_async() -> dict:
     Returns:
         Dict with cleaned_up count
     """
-    # Create a local engine with NullPool to avoid connection pool lock issues
-    local_engine = create_async_engine(
-        settings.database_url,
-        echo=False,
-        poolclass=NullPool,
-    )
-
-    local_session_maker = async_sessionmaker(
-        local_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autocommit=False,
-        autoflush=False,
-    )
-
     # Create Redis client for distributed lock
     redis_client = None
     if redis:
@@ -94,7 +80,7 @@ async def _cleanup_sessions_async() -> dict:
 
     try:
         async with lock.lock("admin_session_cleanup", timeout=30):
-            async with local_session_maker() as session:
+            async with task_session_maker() as session:
                 session_repo = AdminSessionRepository(session)
 
                 # Cleanup expired sessions
@@ -134,9 +120,15 @@ async def _cleanup_sessions_async() -> dict:
                     )
 
                 return {"cleaned_up": total_cleaned}
+    except asyncio.CancelledError:
+        logger.info("Admin session cleanup task cancelled")
+        raise
+    except Exception as e:
+        logger.exception(f"Admin session cleanup task failed: {e}")
+        raise
     finally:
         # Close Redis client
         if redis_client:
             await redis_client.close()
         # Dispose engine
-        await local_engine.dispose()
+        await task_engine.dispose()

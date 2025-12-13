@@ -11,8 +11,6 @@ from datetime import UTC, datetime, timedelta
 import dramatiq
 from aiogram import Bot
 from loguru import logger
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
 
 
 try:
@@ -29,6 +27,7 @@ from app.services.deposit import DepositService
 from app.services.notification_service import NotificationService
 from app.utils.distributed_lock import DistributedLock
 from jobs.async_runner import run_async
+from jobs.utils.database import task_engine, task_session_maker
 
 
 @dramatiq.actor(max_retries=3, time_limit=DRAMATIQ_TIME_LIMIT_STANDARD)  # 5 min timeout
@@ -52,21 +51,6 @@ def monitor_deposits() -> None:
 
 async def _monitor_deposits_async() -> None:
     """Async implementation of deposit monitoring."""
-    # Create a local engine with NullPool to avoid connection pool lock issues
-    local_engine = create_async_engine(
-        settings.database_url,
-        echo=False,
-        poolclass=NullPool,
-    )
-
-    local_session_maker = async_sessionmaker(
-        local_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autocommit=False,
-        autoflush=False,
-    )
-
     # Create Redis client for distributed lock
     redis_client = None
     if redis:
@@ -90,7 +74,7 @@ async def _monitor_deposits_async() -> None:
             bot = Bot(token=settings.telegram_bot_token)
 
             try:
-                async with local_session_maker() as session:
+                async with task_session_maker() as session:
                     deposit_repo = DepositRepository(session)
                     deposit_service = DepositService(session)
                     blockchain_service = get_blockchain_service()
@@ -404,4 +388,4 @@ async def _monitor_deposits_async() -> None:
         if redis_client:
             await redis_client.close()
         # Dispose engine
-        await local_engine.dispose()
+        await task_engine.dispose()

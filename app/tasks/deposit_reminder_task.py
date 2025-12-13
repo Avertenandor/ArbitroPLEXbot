@@ -62,7 +62,12 @@ async def run_deposit_reminder_task() -> None:
                         continue
 
                     try:
-                        from bot.main import bot_instance
+                        from app.services.bot_provider import get_bot
+
+                        bot = get_bot()
+                        if not bot:
+                            logger.warning("Bot instance not available for deposit reminders")
+                            continue
 
                         message = (
                             f"⏰ *Напоминание о депозите*\n\n"
@@ -71,7 +76,7 @@ async def run_deposit_reminder_task() -> None:
                             f"Хотите продолжить? Перейдите в раздел '💰 Депозит'."
                         )
 
-                        await bot_instance.send_message(
+                        await bot.send_message(
                             chat_id=user.telegram_id,
                             text=message,
                             parse_mode="Markdown",

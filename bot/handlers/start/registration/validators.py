@@ -10,6 +10,11 @@ Contains validators for:
 
 import re
 
+from app.validators.unified import (
+    validate_email as _validate_email_unified,
+    validate_phone as _validate_phone_unified,
+)
+
 
 def validate_password(password: str) -> tuple[bool, str | None]:
     """
@@ -43,12 +48,10 @@ def validate_phone(phone: str) -> tuple[bool, str | None]:
     if not phone:
         return True, None  # Phone is optional
 
-    # Remove spaces, dashes, parentheses
-    phone_clean = re.sub(r'[\s\-\(\)]', '', phone)
+    # Use unified validator
+    is_valid, error = _validate_phone_unified(phone)
 
-    # Must start with + and contain only digits after
-    phone_pattern = r'^\+\d{10,15}$'
-    if not re.match(phone_pattern, phone_clean):
+    if not is_valid:
         return False, (
             "❌ **Неверный формат телефона!**\n\n"
             "Введите номер в международном формате:\n"
@@ -86,8 +89,10 @@ def validate_email(email: str) -> tuple[bool, str | None]:
     if not email:
         return True, None  # Email is optional
 
-    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    if not re.match(email_pattern, email):
+    # Use unified validator
+    is_valid, error = _validate_email_unified(email)
+
+    if not is_valid:
         return False, (
             "❌ **Неверный формат email!**\n\n"
             "Введите корректный адрес, например:\n"

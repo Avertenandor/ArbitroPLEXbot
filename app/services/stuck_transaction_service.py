@@ -30,11 +30,11 @@ class StuckTransactionService:
         self.transaction_repo = TransactionRepository(session)
         self.user_service = UserService(session)
 
-    async def find_stuck_withdrawals(
+    async def get_stuck_withdrawals(
         self, older_than_minutes: int = 15
     ) -> list[Transaction]:
         """
-        Find withdrawal transactions in PROCESSING status older than threshold.
+        Get withdrawal transactions in PROCESSING status older than threshold.
 
         Args:
             older_than_minutes: Minimum age in minutes to consider stuck

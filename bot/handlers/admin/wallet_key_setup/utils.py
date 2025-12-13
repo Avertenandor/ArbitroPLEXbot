@@ -28,9 +28,9 @@ def secure_zero_memory(secret: str) -> None:
         secret_bytes = secret.encode() if isinstance(secret, str) else secret
         # Overwrite with zeros
         ctypes.memset(id(secret_bytes) + 32, 0, len(secret_bytes))
-    except Exception:
+    except Exception as e:
         # Fail silently - this is best-effort security
-        pass
+        logger.debug(f"Memory zeroing failed: {type(e).__name__}")
 
 
 def update_env_variable(key: str, value: str) -> None:

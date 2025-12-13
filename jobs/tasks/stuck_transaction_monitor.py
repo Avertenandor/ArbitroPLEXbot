@@ -5,13 +5,14 @@ Monitors withdrawal transactions stuck in PROCESSING status.
 Runs every 5 minutes to check for stuck transactions.
 """
 
+import asyncio
+
 import dramatiq
 from aiogram import Bot
 from loguru import logger
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
 
 from jobs.async_runner import run_async
+from jobs.utils.database import task_engine, task_session_maker
 
 
 try:
@@ -21,6 +22,7 @@ except ImportError:
 
 from app.config.operational_constants import DRAMATIQ_TIME_LIMIT_STANDARD
 from app.config.settings import settings
+from app.config.timing_constants import LOCK_TIMEOUT_STANDARD, STUCK_WITHDRAWAL_MINUTES
 from app.services.blockchain_service import get_blockchain_service
 from app.services.notification_service import NotificationService
 from app.services.stuck_transaction_service import StuckTransactionService
@@ -70,21 +72,6 @@ def monitor_stuck_transactions() -> dict:
 
 async def _monitor_stuck_transactions_async() -> dict:
     """Async implementation of stuck transaction monitoring."""
-    # Create a local engine with NullPool to avoid connection pool lock issues
-    local_engine = create_async_engine(
-        settings.database_url,
-        echo=False,
-        poolclass=NullPool,
-    )
-
-    local_session_maker = async_sessionmaker(
-        local_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        autocommit=False,
-        autoflush=False,
-    )
-
     # Create Redis client for distributed lock
     redis_client = None
     if redis:
@@ -103,14 +90,14 @@ async def _monitor_stuck_transactions_async() -> dict:
     lock = DistributedLock(redis_client=redis_client)
 
     try:
-        async with lock.lock("stuck_transaction_monitoring", timeout=300):
-            async with local_session_maker() as session:
+        async with lock.lock("stuck_transaction_monitoring", timeout=LOCK_TIMEOUT_STANDARD):
+            async with task_session_maker() as session:
                 stuck_service = StuckTransactionService(session)
                 blockchain_service = get_blockchain_service()
 
                 # Get stuck withdrawals (older than 15 minutes)
-                stuck_withdrawals = await stuck_service.find_stuck_withdrawals(
-                    older_than_minutes=15
+                stuck_withdrawals = await stuck_service.get_stuck_withdrawals(
+                    older_than_minutes=STUCK_WITHDRAWAL_MINUTES
                 )
 
                 if not stuck_withdrawals:
@@ -273,9 +260,15 @@ async def _monitor_stuck_transactions_async() -> dict:
                     "pending": pending,
                     "total_stuck": len(stuck_withdrawals),
                 }
+    except asyncio.CancelledError:
+        logger.info("Stuck transaction monitoring task cancelled")
+        raise
+    except Exception as e:
+        logger.exception(f"Stuck transaction monitoring task failed: {e}")
+        raise
     finally:
         # Close Redis client
         if redis_client:
             await redis_client.close()
         # Dispose engine
-        await local_engine.dispose()
+        await task_engine.dispose()

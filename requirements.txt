@@ -1,6 +1,6 @@
 # Core Framework
 aiogram==3.4.1  # CRITICAL: Do not update without testing - major API changes in newer versions
-aiohttp==3.11.0
+aiohttp==3.11.9
 
 # Database
 sqlalchemy[asyncio]==2.0.36  # CRITICAL: Core database ORM
@@ -8,8 +8,8 @@ alembic==1.13.1
 asyncpg==0.29.0
 
 # Settings & Configuration
-pydantic==2.10.0  # CRITICAL: Used throughout for data validation
-pydantic-settings==2.7.0
+pydantic==2.10.5  # CRITICAL: Used throughout for data validation
+pydantic-settings==2.7.1
 
 # Blockchain & Web3
 web3==6.15.0  # CRITICAL: Do not update without extensive blockchain testing
@@ -19,7 +19,7 @@ mnemonic==0.20
 
 # Security & Encryption
 bcrypt==4.1.2
-cryptography==42.0.0
+cryptography==42.0.7
 
 # Task Queue & Background Jobs
 dramatiq[redis]==1.15.0
@@ -37,9 +37,3 @@ python-dateutil==2.8.2
 qrcode[pil]==7.4.2
 Pillow>=10.0.0,<12.0.0
 
-# Development & Testing
-pytest==7.4.4
-pytest-asyncio==0.23.3
-pytest-cov==4.1.0
-pytest-mock==3.12.0
-ruff==0.8.3

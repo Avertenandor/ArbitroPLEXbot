@@ -164,7 +164,7 @@ class NotificationService:
                     from app.repositories.user_repository import UserRepository
 
                     user_repo = UserRepository(self.session)
-                    user = await user_repo.find_by_telegram_id(user_telegram_id)
+                    user = await user_repo.get_by_telegram_id(user_telegram_id)
                     if user and not user.bot_blocked:
                         await user_repo.update(
                             user.id,
@@ -287,7 +287,7 @@ class NotificationService:
         try:
             from app.repositories.user_repository import UserRepository
             user_repo = UserRepository(self.session)
-            user = await user_repo.find_by_id(user_id)
+            user = await user_repo.get_by_id(user_id)
 
             if not user or not user.telegram_id:
                 logger.warning(f"Cannot notify user {user_id}: User not found or no telegram_id")
@@ -298,9 +298,9 @@ class NotificationService:
             from aiogram.enums import ParseMode
 
             from app.config.settings import settings
-            from bot.main import bot_instance
+            from app.services.bot_provider import get_bot
 
-            bot = bot_instance
+            bot = get_bot()
             should_close = False
 
             if not bot:

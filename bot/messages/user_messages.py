@@ -6,10 +6,14 @@ for formatting data in a consistent way across the bot.
 """
 
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING
 
 from bot.utils.formatters import format_usdt
 from bot.utils.text_utils import escape_markdown
+
+if TYPE_CHECKING:
+    from app.models.deposit import Deposit
+    from app.models.withdrawal import Withdrawal
 
 
 # ============================================================================
@@ -139,7 +143,7 @@ def format_balance(balance: Decimal, pending: Decimal) -> str:
     )
 
 
-def format_deposit_status(deposit: Any) -> str:
+def format_deposit_status(deposit: "Deposit") -> str:
     """
     Format deposit status information for display.
 
@@ -174,7 +178,7 @@ def format_deposit_status(deposit: Any) -> str:
     return f"{status_emoji} Уровень {level}: {amount:.2f} USDT - {status_text}"
 
 
-def format_withdrawal_status(withdrawal: Any) -> str:
+def format_withdrawal_status(withdrawal: "Withdrawal") -> str:
     """
     Format withdrawal status information for display.
 

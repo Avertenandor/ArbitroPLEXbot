@@ -2,56 +2,78 @@
 Default constants for profitability calculator.
 
 Contains default deposit levels configuration for ArbitroPLEX.
+Импортировано из единого источника истины: app.config.deposit_levels
 """
 
 from decimal import Decimal
 
 from calculator.core.models import DepositLevel
 
+# Импортируем из единого источника истины
+try:
+    # Пытаемся импортировать из app.config.deposit_levels
+    from app.config.deposit_levels import DEPOSIT_LEVELS, DepositLevelType
 
-# Default deposit levels for ArbitroPLEX
-DEFAULT_LEVELS: list[DepositLevel] = [
-    DepositLevel(
-        level_number=1,
-        min_amount=Decimal("1000"),
-        roi_percent=Decimal("1.117"),
-        roi_cap_percent=Decimal("500"),
-        is_active=True,
-        name="Starter",
-    ),
-    DepositLevel(
-        level_number=2,
-        min_amount=Decimal("5000"),
-        roi_percent=Decimal("1.020"),
-        roi_cap_percent=Decimal("500"),
-        is_active=True,
-        name="Standard",
-    ),
-    DepositLevel(
-        level_number=3,
-        min_amount=Decimal("10000"),
-        roi_percent=Decimal("0.950"),
-        roi_cap_percent=Decimal("500"),
-        is_active=True,
-        name="Professional",
-    ),
-    DepositLevel(
-        level_number=4,
-        min_amount=Decimal("50000"),
-        roi_percent=Decimal("0.880"),
-        roi_cap_percent=Decimal("500"),
-        is_active=True,
-        name="Premium",
-    ),
-    DepositLevel(
-        level_number=5,
-        min_amount=Decimal("100000"),
-        roi_percent=Decimal("0.800"),
-        roi_cap_percent=Decimal("500"),
-        is_active=True,
-        name="Elite",
-    ),
-]
+    # Создаем DEFAULT_LEVELS из единого источника истины
+    # Исключаем тестовый уровень (level_number=0) для калькулятора
+    DEFAULT_LEVELS: list[DepositLevel] = [
+        DepositLevel(
+            level_number=config.level_number,
+            min_amount=config.min_amount,
+            roi_percent=config.roi_percent,
+            roi_cap_percent=Decimal(str(config.roi_cap_percent)),
+            is_active=True,
+            name=config.display_name,
+        )
+        for level_type, config in DEPOSIT_LEVELS.items()
+        if config.level_number > 0  # Только уровни 1-5, без test
+    ]
+
+except ImportError:
+    # Fallback на старые значения, если импорт не удался
+    # (для обратной совместимости со старыми версиями)
+    DEFAULT_LEVELS: list[DepositLevel] = [
+        DepositLevel(
+            level_number=1,
+            min_amount=Decimal("100"),
+            roi_percent=Decimal("2.0"),
+            roi_cap_percent=Decimal("500"),
+            is_active=True,
+            name="Уровень 1",
+        ),
+        DepositLevel(
+            level_number=2,
+            min_amount=Decimal("700"),
+            roi_percent=Decimal("2.0"),
+            roi_cap_percent=Decimal("500"),
+            is_active=True,
+            name="Уровень 2",
+        ),
+        DepositLevel(
+            level_number=3,
+            min_amount=Decimal("1400"),
+            roi_percent=Decimal("2.0"),
+            roi_cap_percent=Decimal("500"),
+            is_active=True,
+            name="Уровень 3",
+        ),
+        DepositLevel(
+            level_number=4,
+            min_amount=Decimal("2500"),
+            roi_percent=Decimal("2.0"),
+            roi_cap_percent=Decimal("500"),
+            is_active=True,
+            name="Уровень 4",
+        ),
+        DepositLevel(
+            level_number=5,
+            min_amount=Decimal("4000"),
+            roi_percent=Decimal("2.0"),
+            roi_cap_percent=Decimal("500"),
+            is_active=True,
+            name="Уровень 5",
+        ),
+    ]
 
 
 def get_level_by_number(level_number: int) -> DepositLevel | None:

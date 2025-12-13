@@ -68,6 +68,9 @@ async def broadcast_message(
                 "failed": fail_count,
             }
 
+    except asyncio.CancelledError:
+        logger.info("Broadcast task cancelled")
+        raise
     except Exception as e:
-        logger.error(f"Broadcast error: {e}")
+        logger.exception(f"Broadcast task failed: {e}")
         return {"total": 0, "success": 0, "failed": 0, "error": str(e)}

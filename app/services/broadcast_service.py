@@ -97,6 +97,79 @@ class BroadcastService:
             broadcast_data = self._active_broadcasts.get(broadcast_id)
             return broadcast_data.copy() if broadcast_data else None
 
+    async def broadcast_to_users(self, user_ids: list[int], message: str) -> dict:
+        """
+        Send message to specific users with batching and rate limiting.
+
+        Args:
+            user_ids: List of user telegram IDs
+            message: Message text to send
+
+        Returns:
+            Dict with sent/failed counts
+
+        Performance: Uses batching (20 users/batch) with 1s delay between batches
+        to avoid Telegram rate limits.
+        """
+        BATCH_SIZE = 20
+        results = {"sent": 0, "failed": 0}
+
+        for i in range(0, len(user_ids), BATCH_SIZE):
+            batch = user_ids[i : i + BATCH_SIZE]
+            tasks = [self._send_message_safe(uid, message) for uid in batch]
+            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            for r in batch_results:
+                if isinstance(r, Exception):
+                    results["failed"] += 1
+                    logger.debug(f"Failed to send message: {r}")
+                else:
+                    results["sent"] += 1
+
+            # Pause between batches to avoid rate limiting
+            if i + BATCH_SIZE < len(user_ids):
+                await asyncio.sleep(1.0)
+
+        logger.info(
+            f"Broadcast to users completed: {results['sent']} sent, "
+            f"{results['failed']} failed out of {len(user_ids)} total"
+        )
+        return results
+
+    async def _send_message_safe(self, user_id: int, message: str) -> bool:
+        """
+        Safely send message to a user.
+
+        Args:
+            user_id: User telegram ID
+            message: Message text
+
+        Returns:
+            True if sent successfully, False otherwise
+
+        Raises:
+            Exception if send fails (caught by caller)
+        """
+        try:
+            await asyncio.wait_for(
+                self.bot.send_message(
+                    user_id,
+                    message,
+                    parse_mode="Markdown",
+                ),
+                timeout=TELEGRAM_TIMEOUT,
+            )
+            return True
+        except TelegramForbiddenError:
+            logger.debug(f"User {user_id} blocked the bot")
+            return False
+        except TimeoutError:
+            logger.warning(f"Timeout sending to {user_id}")
+            return False
+        except Exception as e:
+            logger.debug(f"Failed to send to {user_id}: {e}")
+            return False
+
     async def send_broadcast_with_progress(
         self,
         admin_message: Message,
@@ -114,7 +187,7 @@ class BroadcastService:
 
         # Count total users
         user_service = UserService(self.session)
-        total_users = await user_service.count_verified_users()
+        total_users = await user_service.get_verified_users_count()
 
         if total_users == 0:
             await admin_message.answer("Нет пользователей для рассылки.")
@@ -370,7 +443,7 @@ class BroadcastService:
             user_service = UserService(self.session)
 
             # Count total users for progress tracking
-            total_users = await user_service.count_verified_users()
+            total_users = await user_service.get_verified_users_count()
             async with self._broadcasts_lock:
                 self._active_broadcasts[broadcast_id]["total"] = total_users
 

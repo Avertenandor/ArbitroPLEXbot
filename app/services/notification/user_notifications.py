@@ -40,9 +40,9 @@ class UserNotificationMixin:
         from aiogram.enums import ParseMode
 
         from app.config.settings import settings
-        from bot.main import bot_instance
+        from app.services.bot_provider import get_bot
 
-        bot = bot_instance
+        bot = get_bot()
         should_close = False
 
         if not bot:
@@ -99,9 +99,9 @@ class UserNotificationMixin:
         from aiogram.enums import ParseMode
 
         from app.config.settings import settings
-        from bot.main import bot_instance
+        from app.services.bot_provider import get_bot
 
-        bot = bot_instance
+        bot = get_bot()
         should_close = False
 
         if not bot:
@@ -168,9 +168,9 @@ class UserNotificationMixin:
         from aiogram.enums import ParseMode
 
         from app.config.settings import settings
-        from bot.main import bot_instance
+        from app.services.bot_provider import get_bot
 
-        bot = bot_instance
+        bot = get_bot()
         should_close = False
 
         if not bot:

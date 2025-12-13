@@ -1,5 +1,6 @@
 """Cleanup task for logs and orphaned data."""
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -61,6 +62,11 @@ async def _cleanup_logs_and_data_async() -> None:
             # Cleanup database
             await _cleanup_database()
 
+        except asyncio.CancelledError:
+            logger.info("Cleanup task cancelled")
+            raise
+        except Exception as e:
+            logger.exception(f"Cleanup task failed: {e}")
         finally:
             # Close Redis client
             if redis_client:
