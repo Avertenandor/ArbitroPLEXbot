@@ -310,3 +310,17 @@ def calculate_daily_plex_payment(
             plex_per_dollar = config.plex_per_dollar
 
     return Decimal(str(deposit_amount_usd)) * Decimal(str(plex_per_dollar))
+
+
+def get_next_level_type(current_level_type: str | DepositLevelType) -> str | None:
+    """
+    Получить тип следующего уровня.
+
+    Args:
+        current_level_type: Текущий тип уровня
+
+    Returns:
+        Строка типа следующего уровня или None если это последний уровень
+    """
+    next_level = get_next_level(current_level_type)
+    return next_level.level_type.value if next_level else None
