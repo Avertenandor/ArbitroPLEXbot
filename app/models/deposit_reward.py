@@ -68,10 +68,11 @@ class DepositReward(Base):
     deposit_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("deposits.id"), nullable=False, index=True
     )
-    reward_session_id: Mapped[int] = mapped_column(
+    # reward_session_id is nullable for individual accruals (no session-based rewards)
+    reward_session_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("reward_sessions.id"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
 
@@ -111,7 +112,7 @@ class DepositReward(Base):
     # Relationships
     user: Mapped["User"] = relationship("User", lazy="joined")
     deposit: Mapped["Deposit"] = relationship("Deposit", lazy="joined")
-    reward_session: Mapped["RewardSession"] = relationship(
+    reward_session: Mapped["RewardSession | None"] = relationship(
         "RewardSession", lazy="joined"
     )
 
