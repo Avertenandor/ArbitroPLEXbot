@@ -57,14 +57,9 @@ def upgrade() -> None:
         WHERE reward_session_id IS NOT NULL
     """)
     
-    # Add a unique constraint for individual accruals based on deposit and calculated_at date
-    # This prevents duplicate accruals on the same day for the same deposit
-    # Use timezone cast to ensure immutability for the index
-    op.execute("""
-        CREATE UNIQUE INDEX uq_deposit_reward_individual_daily 
-        ON deposit_rewards (deposit_id, (calculated_at::date)) 
-        WHERE reward_session_id IS NULL
-    """)
+    # Note: For individual accruals (where reward_session_id IS NULL),
+    # duplicate prevention is handled by application logic that checks
+    # next_accrual_at timestamp. No additional unique index needed.
 
 
 def downgrade() -> None:
