@@ -15,8 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from app.repositories.blacklist_repository import BlacklistRepository
-from app.services.daily_payment_check_service import DailyPaymentCheckService
-from app.services.deposit import DepositService
 from app.services.user_service import UserService
 from bot.i18n.loader import get_translator, get_user_language
 from bot.keyboards.reply import main_menu_reply_keyboard
@@ -86,42 +84,19 @@ async def show_main_menu(
     else:
         days = 0
 
-    # Get PLEX payment status
+    # Get PLEX payment status - use cached data to avoid DB errors
     plex_paid_status = ""
-    try:
-        plex_service = DailyPaymentCheckService(session)
-        plex_status = await plex_service.check_daily_payment_status(user.id)
-        if not plex_status.get("error") and not plex_status.get("no_deposits"):
-            is_paid = plex_status.get("is_paid", False)
-            plex_paid_status = "✅" if is_paid else "❌"
-    except Exception:
-        pass
+    # Skip PLEX check in main menu to avoid transaction issues
+    # Status is shown in detail in Finances section
 
-    # Get deposits info from user model (primary source)
+    # Get deposits info from user model (cached, no DB call needed)
     total_deposited = float(user.total_deposited_usdt or Decimal("0"))
     bonus_balance = float(user.bonus_balance or Decimal("0"))
     total_in_work = total_deposited + bonus_balance
 
-    # Build deposits summary section
+    # Build deposits summary section (simplified - no extra DB calls)
     if total_in_work > 0:
-        # Check for ROI data from deposits table
-        deposit_service = DepositService(session)
-        active_deposits = await deposit_service.get_active_deposits(user.id)
-
-        if active_deposits:
-            total_roi_paid = sum(float(d.roi_paid_amount or 0) for d in active_deposits)
-            total_roi_cap = sum(float(d.roi_cap_amount or 0) for d in active_deposits)
-
-            if total_roi_cap > 0:
-                overall_progress = (total_roi_paid / total_roi_cap) * 100
-                deposits_section = (
-                    f"📦 В работе: `{format_usdt(total_in_work)} USDT`\n"
-                    f"📈 ROI: `{overall_progress:.1f}%` получено `{format_usdt(total_roi_paid)} USDT`\n"
-                )
-            else:
-                deposits_section = f"📦 В работе: `{format_usdt(total_in_work)} USDT`\n"
-        else:
-            deposits_section = f"📦 В работе: `{format_usdt(total_in_work)} USDT`\n"
+        deposits_section = f"📦 В работе: `{format_usdt(total_in_work)} USDT`\n"
     else:
         deposits_section = "📦 В работе: _нет активных_\n"
 
@@ -131,7 +106,7 @@ async def show_main_menu(
         f"Добро пожаловать, {safe_username}\\!\n\n"
         f"💰 Баланс: `{available:.2f} USDT`\n"
         f"{deposits_section}"
-        f"⚡ PLEX: `{float(plex_balance):.0f}` \\(\\~{days} дн\\.\\) {plex_paid_status}\n\n"
+        f"⚡ PLEX: `{float(plex_balance):.0f}` \\(\\~{days} дн\\.\\)\n\n"
         f"Выберите раздел:"
     )
 

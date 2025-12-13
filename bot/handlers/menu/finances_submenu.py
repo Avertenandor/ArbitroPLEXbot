@@ -20,7 +20,6 @@ from app.models.user import User
 from app.repositories.bonus_credit_repository import BonusCreditRepository
 from app.services.daily_payment_check_service import DailyPaymentCheckService
 from app.services.deposit import DepositService
-from app.services.user_service import UserService
 from bot.keyboards.user import finances_submenu_keyboard
 from bot.utils.formatters import format_usdt
 from bot.utils.user_loader import UserLoader
@@ -57,30 +56,33 @@ async def show_finances_submenu(
 
     await state.clear()
 
-    # Get user balance for quick overview
-    user_service = UserService(session)
-    balance_info = await user_service.get_user_balance(user.id)
+    # Use cached user data to avoid transaction errors
+    available = float(user.balance or 0)
+    total_deposited = float(user.total_deposited_usdt or 0)
+    bonus_deposited = float(user.bonus_balance or 0)
+    deposited_total = total_deposited + bonus_deposited
 
-    available = balance_info.get("available_balance", 0) if balance_info else 0
+    # Try to get ROI details from DB, but fallback to simple display
+    deposit_roi_paid = 0.0
+    deposit_roi_cap = 0.0
+    bonus_roi_paid = 0.0
+    bonus_roi_cap = 0.0
+    
+    try:
+        deposit_service = DepositService(session)
+        active_deposits = await deposit_service.get_active_deposits(user.id)
+        deposit_roi_paid = sum(float(d.roi_paid_amount or 0) for d in (active_deposits or []))
+        deposit_roi_cap = sum(float(d.roi_cap_amount or 0) for d in (active_deposits or []))
 
-    # Deposits MUST be calculated from DB (source of truth), not from user cached fields.
-    deposit_service = DepositService(session)
-    active_deposits = await deposit_service.get_active_deposits(user.id)
+        bonus_repo = BonusCreditRepository(session)
+        active_bonus = await bonus_repo.get_active_by_user(user.id)
+        bonus_roi_paid = sum(float(b.roi_paid_amount or 0) for b in (active_bonus or []))
+        bonus_roi_cap = sum(float(b.roi_cap_amount or 0) for b in (active_bonus or []))
+    except Exception as e:
+        logger.warning(f"Failed to get ROI details: {e}")
 
-    total_deposited = sum(float(d.amount or 0) for d in (active_deposits or []))
-    deposit_roi_paid = sum(float(d.roi_paid_amount or 0) for d in (active_deposits or []))
-    deposit_roi_cap = sum(float(d.roi_cap_amount or 0) for d in (active_deposits or []))
-
-    # Bonus deposits (BonusCredit) - active + not completed
-    bonus_repo = BonusCreditRepository(session)
-    active_bonus = await bonus_repo.get_active_by_user(user.id)
-    bonus_deposited = sum(float(b.amount or 0) for b in (active_bonus or []))
-    bonus_roi_paid = sum(float(b.roi_paid_amount or 0) for b in (active_bonus or []))
-    bonus_roi_cap = sum(float(b.roi_cap_amount or 0) for b in (active_bonus or []))
-
-    deposited_total = float(total_deposited) + float(bonus_deposited)
-    roi_paid_total = float(deposit_roi_paid) + float(bonus_roi_paid)
-    roi_cap_total = float(deposit_roi_cap) + float(bonus_roi_cap)
+    roi_paid_total = deposit_roi_paid + bonus_roi_paid
+    roi_cap_total = deposit_roi_cap + bonus_roi_cap
 
     # Build deposits section with TOTAL in work
     if deposited_total > 0:
@@ -96,10 +98,10 @@ async def show_finances_submenu(
                 f"📈 ROI прогресс: `{overall_progress:.1f}%`\n"
                 f"✅ Заработано (ROI): `{format_usdt(roi_paid_total)} USDT`\n"
             )
-        total = float(available) + deposited_total
+        total = available + deposited_total
     else:
         deposits_section = "💼 В работе: `0.00 USDT`\n"
-        total = float(available)
+        total = available
 
     # Get PLEX payment status
     plex_status_section = ""
@@ -113,17 +115,17 @@ async def show_finances_submenu(
                 plex_status_section = f"⚡ PLEX: ✅ оплачено ({required_plex:,}/день)\n"
             else:
                 wallet = plex_status.get("wallet_address", "")
-                plex_status_section = (
-                    f"⚡ PLEX: ❌ НЕ оплачено ({required_plex:,}/день)\n  └ Кошелёк: `{wallet[:10]}...{wallet[-6:]}`\n"
-                )
+                if wallet and len(wallet) > 16:
+                    plex_status_section = (
+                        f"⚡ PLEX: ❌ НЕ оплачено ({required_plex:,}/день)\n"
+                        f"  └ Кошелёк: `{wallet[:10]}...{wallet[-6:]}`\n"
+                    )
+                else:
+                    plex_status_section = f"⚡ PLEX: ❌ НЕ оплачено ({required_plex:,}/день)\n"
     except Exception as e:
         logger.warning(f"Failed to get PLEX status: {e}")
 
     text = f"💰 *Финансы*\n\n💵 Доступно: `{available:.2f} USDT`\n"
-
-    # Keep bonus balance (if present) separate from bonus deposits - REMOVED duplicate
-    # bonus_balance is already shown in deposits_section as part of "В работе"
-
     text += f"{deposits_section}"
     if plex_status_section:
         text += plex_status_section
