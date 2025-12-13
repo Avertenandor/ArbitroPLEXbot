@@ -15,6 +15,7 @@ from web3.contract import AsyncContract
 from web3.exceptions import ContractLogicError
 
 from app.config.constants import BLOCKCHAIN_TIMEOUT
+from app.config.operational_constants import LOCK_TIMEOUT_MEDIUM, TX_CONFIRMATION_TIMEOUT
 from app.utils.security import mask_address
 
 from ..constants import (
@@ -125,7 +126,7 @@ class TransactionSender:
                             self.web3.eth.wait_for_transaction_receipt(
                                 previous_tx_hash
                             ),
-                            timeout=60,
+                            timeout=LOCK_TIMEOUT_MEDIUM,
                         )
                         if receipt["status"] == 1:
                             return {
@@ -379,7 +380,7 @@ class TransactionSender:
                 try:
                     receipt = await asyncio.wait_for(
                         self.web3.eth.wait_for_transaction_receipt(tx_hash),
-                        timeout=120,  # 2 minutes
+                        timeout=TX_CONFIRMATION_TIMEOUT,
                     )
 
                     if receipt["status"] == 1:

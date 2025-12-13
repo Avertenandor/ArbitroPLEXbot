@@ -12,6 +12,11 @@ from typing import Any
 
 from loguru import logger
 
+from app.config.operational_constants import (
+    AI_MAX_TOKENS_LONG,
+    AI_MAX_TOKENS_MEDIUM,
+    AI_MAX_TOKENS_SHORT,
+)
 from app.config.security import (
     ARYA_COMMAND_GIVERS,
     ARYA_TEACHERS,
@@ -339,7 +344,7 @@ class AIAssistantService:
             # Call Claude API with caching
             response = self.client.messages.create(
                 model=selected_model,
-                max_tokens=1024,
+                max_tokens=AI_MAX_TOKENS_SHORT,
                 system=system_with_cache,
                 messages=messages,
             )
@@ -484,7 +489,7 @@ class AIAssistantService:
 
             response = self.client.messages.create(
                 model=self.model_haiku,  # Use Haiku for extraction (12x cheaper)
-                max_tokens=4096,
+                max_tokens=AI_MAX_TOKENS_LONG,
                 system=system_with_cache,
                 messages=messages,
             )
@@ -646,7 +651,7 @@ class AIAssistantService:
             # First call - use Haiku for users (cheaper)
             response = self.client.messages.create(
                 model=self.model_haiku,  # Users get Haiku (12x cheaper)
-                max_tokens=1024,
+                max_tokens=AI_MAX_TOKENS_SHORT,
                 system=system_with_cache,
                 messages=messages,
                 tools=tools,
@@ -681,7 +686,7 @@ class AIAssistantService:
                 # Get final response (no tools - final answer should be text only)
                 response = self.client.messages.create(
                     model=self.model_haiku,  # Keep Haiku for users
-                    max_tokens=1024,
+                    max_tokens=AI_MAX_TOKENS_SHORT,
                     system=system_with_cache,
                     messages=messages,
                 )
@@ -865,7 +870,7 @@ class AIAssistantService:
 
             response = self.client.messages.create(
                 model=self.model,
-                max_tokens=2048,
+                max_tokens=AI_MAX_TOKENS_MEDIUM,
                 system=system_with_cache,
                 messages=messages,
                 tools=tools,
@@ -920,7 +925,7 @@ class AIAssistantService:
                 # Get final response (no tools - final answer should be text only)
                 final_response = self.client.messages.create(
                     model=self.model,
-                    max_tokens=2048,
+                    max_tokens=AI_MAX_TOKENS_MEDIUM,
                     system=system_with_cache,
                     messages=messages,
                 )
