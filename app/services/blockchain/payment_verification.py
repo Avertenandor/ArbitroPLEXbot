@@ -17,6 +17,7 @@ from loguru import logger
 from web3 import Web3
 
 from app.utils.security import mask_address
+from app.utils.validation import is_valid_wallet_for_transactions
 
 from .core_constants import PLEX_ABI, PLEX_DECIMALS, USDT_ABI, USDT_DECIMALS
 
@@ -194,6 +195,21 @@ class PaymentVerifier:
             - error: str (if failed)
         """
         try:
+            # Validate wallet address before sending to blockchain
+            if not user_wallet or not validate_bsc_address(user_wallet, checksum=False):
+                error_msg = (
+                    f"Invalid wallet address format: {user_wallet[:30] if user_wallet else 'None'}..."
+                    if user_wallet else "Wallet address is empty"
+                )
+                logger.warning(f"[USDT Scan] {error_msg}")
+                return {
+                    'success': False,
+                    'error': error_msg,
+                    'total_amount': Decimal("0"),
+                    'tx_count': 0,
+                    'transactions': [],
+                }
+
             sender = to_checksum_address(user_wallet)
             receiver = self.system_wallet_address
             usdt_address = self.usdt_contract_address

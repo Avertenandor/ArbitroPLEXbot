@@ -133,11 +133,7 @@ def format_transactions_message(
             "_перевода на этот кошелек._"
         )
 
-    text = (
-        f"{emoji} *Транзакции {token}*\n"
-        f"📍 `{wallet_short}`\n"
-        "━━━━━━━━━━━━━━━━━━━━\n\n"
-    )
+    text = f"{emoji} *Транзакции {token}*\n📍 `{wallet_short}`\n━━━━━━━━━━━━━━━━━━━━\n\n"
 
     for i, tx in enumerate(transactions[:20], 1):
         # Format date
@@ -154,11 +150,7 @@ def format_transactions_message(
         # Format value
         value_str = tx.formatted_value
 
-        text += (
-            f"{i}. {direction} {sign}{value_str} {token}\n"
-            f"   `{tx.short_hash}`\n"
-            f"   📅 {date_str}\n\n"
-        )
+        text += f"{i}. {direction} {sign}{value_str} {token}\n   `{tx.short_hash}`\n   📅 {date_str}\n\n"
 
     text += (
         "━━━━━━━━━━━━━━━━━━━━\n"
@@ -169,7 +161,7 @@ def format_transactions_message(
     return text
 
 
-@router.message(StateFilter('*'), F.text == "👛 Мой кошелек")
+@router.message(StateFilter("*"), F.text == "👛 Мой кошелек")
 async def show_my_wallet(
     message: Message,
     session: AsyncSession,
@@ -192,10 +184,7 @@ async def show_my_wallet(
         user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
 
     if not user:
-        await message.answer(
-            "⚠️ Ошибка: не удалось загрузить данные пользователя. "
-            "Попробуйте отправить /start"
-        )
+        await message.answer("⚠️ Ошибка: не удалось загрузить данные пользователя. Попробуйте отправить /start")
         return
 
     # Check if user has wallet
@@ -238,8 +227,7 @@ async def show_my_wallet(
         logger.error(f"[WALLET] Failed to show wallet for user {telegram_id}: {e}")
         await status_msg.delete()
         await message.answer(
-            "❌ Произошла ошибка при загрузке данных кошелька.\n"
-            "Попробуйте позже.",
+            "❌ Произошла ошибка при загрузке данных кошелька.\nПопробуйте позже.",
             reply_markup=main_menu_reply_keyboard(user=user),
         )
 
@@ -368,9 +356,7 @@ async def show_plex_transactions(
 
     try:
         wallet_service = WalletInfoService()
-        transactions = await wallet_service.get_plex_transactions(
-            user.wallet_address, limit=20
-        )
+        transactions = await wallet_service.get_plex_transactions(user.wallet_address, limit=20)
 
         text = format_transactions_message("PLEX", transactions, user.wallet_address)
 
@@ -421,9 +407,7 @@ async def show_usdt_transactions(
 
     try:
         wallet_service = WalletInfoService()
-        transactions = await wallet_service.get_usdt_transactions(
-            user.wallet_address, limit=20
-        )
+        transactions = await wallet_service.get_usdt_transactions(user.wallet_address, limit=20)
 
         text = format_transactions_message("USDT", transactions, user.wallet_address)
 
@@ -474,9 +458,7 @@ async def show_bnb_transactions(
 
     try:
         wallet_service = WalletInfoService()
-        transactions = await wallet_service.get_bnb_transactions(
-            user.wallet_address, limit=20
-        )
+        transactions = await wallet_service.get_bnb_transactions(user.wallet_address, limit=20)
 
         text = format_transactions_message("BNB", transactions, user.wallet_address)
 

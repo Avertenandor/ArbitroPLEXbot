@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.user_repository import UserRepository
 from app.services.blockchain_service import get_blockchain_service
+from app.utils.validation import is_placeholder_wallet, is_valid_wallet_for_transactions
 
 
 # Minimum deposit to be considered an active depositor
@@ -73,6 +74,30 @@ class DepositScanService:
             return {
                 "success": False,
                 "error": "User has no wallet address",
+            }
+
+        # Validate wallet address is a proper hex address (not a placeholder)
+        wallet = user.wallet_address
+        if is_placeholder_wallet(wallet):
+            logger.warning(
+                f"[Deposit Scan] User {user_id} has placeholder/invalid wallet address: "
+                f"{wallet[:20]}... - skipping blockchain scan"
+            )
+            return {
+                "success": False,
+                "error": "У пользователя нет реального кошелька (временный адрес). "
+                         "Попросите пользователя привязать свой кошелёк.",
+            }
+
+        if not is_valid_wallet_for_transactions(wallet):
+            logger.warning(
+                f"[Deposit Scan] User {user_id} has invalid wallet address: "
+                f"{wallet[:20]}..."
+            )
+            return {
+                "success": False,
+                "error": "Некорректный формат адреса кошелька. "
+                         "Адрес должен быть валидным BSC-адресом (0x + 40 hex символов).",
             }
 
         logger.info(

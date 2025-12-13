@@ -104,8 +104,7 @@ class BonusService(BaseService):
         await self.session.flush()
 
         logger.info(
-            f"Granted bonus to user {user_id}: {amount} USDT "
-            f"(ROI cap: {roi_cap_amount} USDT, admin: {admin_id})"
+            f"Granted bonus to user {user_id}: {amount} USDT (ROI cap: {roi_cap_amount} USDT, admin: {admin_id})"
         )
 
         return bonus, None
@@ -156,10 +155,7 @@ class BonusService(BaseService):
 
         await self.session.flush()
 
-        logger.info(
-            f"Cancelled bonus {bonus_id} for user {bonus.user_id} "
-            f"(admin: {admin_id}, reason: {reason})"
-        )
+        logger.info(f"Cancelled bonus {bonus_id} for user {bonus.user_id} (admin: {admin_id}, reason: {reason})")
 
         return True, None
 
@@ -281,16 +277,12 @@ class BonusService(BaseService):
             try:
                 # Determine rate
                 if config["mode"] == "custom":
-                    rate = corridor_service.generate_rate_from_corridor(
-                        config["roi_min"], config["roi_max"]
-                    )
+                    rate = corridor_service.generate_rate_from_corridor(config["roi_min"], config["roi_max"])
                 else:
                     rate = config["roi_fixed"]
 
                 # Calculate reward
-                reward_amount = calculator.calculate_reward_amount(
-                    bonus.amount, rate, days=1
-                )
+                reward_amount = calculator.calculate_reward_amount(bonus.amount, rate, days=1)
 
                 # Cap to remaining ROI
                 remaining_roi = bonus.roi_cap_amount - bonus.roi_paid_amount
@@ -328,8 +320,7 @@ class BonusService(BaseService):
                 if is_completed:
                     stats["completed"] += 1
                     logger.info(
-                        f"Bonus {bonus.id} ROI completed for user {bonus.user_id}: "
-                        f"total paid {new_roi_paid} USDT"
+                        f"Bonus {bonus.id} ROI completed for user {bonus.user_id}: total paid {new_roi_paid} USDT"
                     )
 
             except Exception as e:
@@ -338,10 +329,7 @@ class BonusService(BaseService):
 
         await self.session.commit()
 
-        logger.info(
-            f"Bonus rewards processed: {stats['processed']} bonuses, "
-            f"{stats['total_rewards']} USDT total"
-        )
+        logger.info(f"Bonus rewards processed: {stats['processed']} bonuses, {stats['total_rewards']} USDT total")
 
         return stats
 
@@ -359,10 +347,7 @@ class BonusService(BaseService):
         active = [b for b in all_bonuses if b.is_active]
 
         total_granted = sum(b.amount for b in all_bonuses)
-        last_24h = sum(
-            b.amount for b in all_bonuses
-            if b.created_at and b.created_at >= day_ago
-        )
+        last_24h = sum(b.amount for b in all_bonuses if b.created_at and b.created_at >= day_ago)
 
         return {
             "total_granted": total_granted,

@@ -28,7 +28,7 @@ from bot.utils.user_loader import UserLoader
 router = Router()
 
 
-@router.message(StateFilter('*'), F.text == "💰 Финансы")
+@router.message(StateFilter("*"), F.text == "💰 Финансы")
 async def show_finances_submenu(
     message: Message,
     session: AsyncSession,
@@ -51,10 +51,7 @@ async def show_finances_submenu(
     if not user and telegram_id:
         user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
     if not user:
-        await message.answer(
-            "⚠️ Ошибка: не удалось загрузить данные пользователя. "
-            "Попробуйте отправить /start"
-        )
+        await message.answer("⚠️ Ошибка: не удалось загрузить данные пользователя. Попробуйте отправить /start")
         return
 
     await state.clear()
@@ -63,7 +60,7 @@ async def show_finances_submenu(
     user_service = UserService(session)
     balance_info = await user_service.get_user_balance(user.id)
 
-    available = balance_info.get('available_balance', 0) if balance_info else 0
+    available = balance_info.get("available_balance", 0) if balance_info else 0
 
     # Deposits MUST be calculated from DB (source of truth), not from user cached fields.
     deposit_service = DepositService(session)
@@ -100,31 +97,20 @@ async def show_finances_submenu(
         deposits_section = "📦 В депозитах: `0.00 USDT`\n"
         total = float(available)
 
-    text = (
-        "💰 *Финансы*\n\n"
-        f"💵 Доступно: `{available:.2f} USDT`\n"
-    )
+    text = f"💰 *Финансы*\n\n💵 Доступно: `{available:.2f} USDT`\n"
 
     # Keep bonus balance (if present) separate from bonus deposits
-    bonus_balance = balance_info.get('bonus_balance', 0) if balance_info else 0
+    bonus_balance = balance_info.get("bonus_balance", 0) if balance_info else 0
     if bonus_balance and bonus_balance > 0:
         text += f"🎁 Бонусный баланс: `{float(bonus_balance):.2f} USDT`\n"
 
-    text += (
-        f"{deposits_section}"
-        f"💎 Всего активов: `{total:.2f} USDT`\n\n"
-        "Выберите действие:"
-    )
+    text += f"{deposits_section}💎 Всего активов: `{total:.2f} USDT`\n\nВыберите действие:"
 
-    await message.answer(
-        text,
-        reply_markup=finances_submenu_keyboard(),
-        parse_mode="Markdown"
-    )
+    await message.answer(text, reply_markup=finances_submenu_keyboard(), parse_mode="Markdown")
     logger.info(f"[SUBMENU] Finances submenu shown to user {telegram_id}")
 
 
-@router.message(StateFilter('*'), F.text == "📊 Мои средства")
+@router.message(StateFilter("*"), F.text == "📊 Мои средства")
 async def show_funds_overview(
     message: Message,
     session: AsyncSession,
@@ -147,10 +133,7 @@ async def show_funds_overview(
     if not user and telegram_id:
         user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
     if not user:
-        await message.answer(
-            "⚠️ Ошибка: не удалось загрузить данные пользователя. "
-            "Попробуйте отправить /start"
-        )
+        await message.answer("⚠️ Ошибка: не удалось загрузить данные пользователя. Попробуйте отправить /start")
         return
 
     await state.clear()
@@ -160,17 +143,14 @@ async def show_funds_overview(
     balance_info = await user_service.get_user_balance(user.id)
 
     if not balance_info:
-        await message.answer(
-            "⚠️ Не удалось загрузить информацию о балансе.",
-            reply_markup=finances_submenu_keyboard()
-        )
+        await message.answer("⚠️ Не удалось загрузить информацию о балансе.", reply_markup=finances_submenu_keyboard())
         return
 
     # Extract balance components
-    available = balance_info.get('available_balance', 0)
-    locked = balance_info.get('locked_balance', 0)
-    wallet = balance_info.get('wallet_balance', 0)
-    pending_withdrawals = balance_info.get('pending_withdrawals', 0)
+    available = balance_info.get("available_balance", 0)
+    locked = balance_info.get("locked_balance", 0)
+    wallet = balance_info.get("wallet_balance", 0)
+    pending_withdrawals = balance_info.get("pending_withdrawals", 0)
 
     total_balance = available + locked
     total_with_wallet = total_balance + wallet
@@ -198,8 +178,14 @@ async def show_funds_overview(
         text += "\n━━━━━━━━━━━━━━━━━\n"
         text += "*📦 Активные депозиты:*\n\n"
 
-        level_names = {0: "🎯 Тестовый", 1: "💰 Уровень 1", 2: "💎 Уровень 2",
-                       3: "🏆 Уровень 3", 4: "👑 Уровень 4", 5: "🚀 Уровень 5"}
+        level_names = {
+            0: "🎯 Тестовый",
+            1: "💰 Уровень 1",
+            2: "💎 Уровень 2",
+            3: "🏆 Уровень 3",
+            4: "👑 Уровень 4",
+            5: "🚀 Уровень 5",
+        }
 
         total_deposited = 0
         total_roi_paid = 0
@@ -240,15 +226,11 @@ async def show_funds_overview(
     # Use funds overview keyboard with wallet button
     from bot.keyboards.user.menus.financial_menu import funds_overview_keyboard
 
-    await message.answer(
-        text,
-        reply_markup=funds_overview_keyboard(),
-        parse_mode="Markdown"
-    )
+    await message.answer(text, reply_markup=funds_overview_keyboard(), parse_mode="Markdown")
     logger.info(f"[FUNDS] Funds overview shown to user {telegram_id}")
 
 
-@router.message(StateFilter('*'), F.text == "◀️ Назад")
+@router.message(StateFilter("*"), F.text == "◀️ Назад")
 async def back_to_main_from_finances(
     message: Message,
     session: AsyncSession,
@@ -279,17 +261,14 @@ async def back_to_main_from_finances(
         user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
 
     if not user:
-        await message.answer(
-            "⚠️ Ошибка: не удалось загрузить данные пользователя. "
-            "Попробуйте отправить /start"
-        )
+        await message.answer("⚠️ Ошибка: не удалось загрузить данные пользователя. Попробуйте отправить /start")
         return
 
     # Create safe data copy and remove arguments that are passed positionally
     safe_data = data.copy()
-    safe_data.pop('user', None)
-    safe_data.pop('state', None)
-    safe_data.pop('session', None)
+    safe_data.pop("user", None)
+    safe_data.pop("state", None)
+    safe_data.pop("session", None)
 
     # Redirect to main menu
     await show_main_menu(message, session, user, state, **safe_data)

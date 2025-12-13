@@ -13,8 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.deposit import Deposit
 from app.models.plex_payment import PlexPaymentRequirement, PlexPaymentStatus
-from app.services.blockchain.blockchain_service import BlockchainService
 from app.repositories.global_settings_repository import GlobalSettingsRepository
+from app.services.blockchain.blockchain_service import BlockchainService
 
 from .processor import PlexPaymentProcessor
 from .scanner import PlexTransferScanner
@@ -76,9 +76,7 @@ class PlexPaymentMonitor:
         requirement = result.scalar_one_or_none()
 
         if not requirement:
-            logger.warning(
-                f"PLEX payment requirement not found for deposit {deposit_id}"
-            )
+            logger.warning(f"PLEX payment requirement not found for deposit {deposit_id}")
             return {
                 "status": "error",
                 "required": Decimal("0"),
@@ -107,9 +105,7 @@ class PlexPaymentMonitor:
             await self.session.commit()
 
         # Проверяем статус
-        hours_overdue = max(
-            0, int((now - requirement.next_payment_due).total_seconds() / 3600)
-        )
+        hours_overdue = max(0, int((now - requirement.next_payment_due).total_seconds() / 3600))
 
         # Если уже оплачено
         if requirement.status == PlexPaymentStatus.PAID:
@@ -252,6 +248,7 @@ class PlexPaymentMonitor:
                 "blocked": int
             }
         """
+
         # Callback для проверки платежа
         async def check_callback(user_id: int, deposit_id: int):
             return await self.check_user_plex_payment(user_id, deposit_id)
@@ -375,9 +372,7 @@ class PlexPaymentMonitor:
                         required_amount=requirement.daily_plex_required,
                     )
 
-            logger.info(
-                f"Warning sent for deposit {deposit_id} ({hours_left}h until block)"
-            )
+            logger.info(f"Warning sent for deposit {deposit_id} ({hours_left}h until block)")
             return True
 
         except Exception as e:
@@ -413,16 +408,12 @@ class PlexPaymentMonitor:
                 from .notifier import PlexPaymentNotifier
 
                 # Получаем telegram_id
-                stmt = select(PlexPaymentRequirement).where(
-                    PlexPaymentRequirement.deposit_id == deposit_id
-                )
+                stmt = select(PlexPaymentRequirement).where(PlexPaymentRequirement.deposit_id == deposit_id)
                 result = await self.session.execute(stmt)
                 requirement = result.scalar_one_or_none()
 
                 if requirement:
-                    stmt = select(User.telegram_id).where(
-                        User.id == requirement.user_id
-                    )
+                    stmt = select(User.telegram_id).where(User.id == requirement.user_id)
                     result = await self.session.execute(stmt)
                     telegram_id = result.scalar_one_or_none()
 

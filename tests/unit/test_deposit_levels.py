@@ -21,9 +21,9 @@ class TestDepositLevelAmounts:
     """Test deposit level amount configuration."""
 
     def test_all_levels_defined(self):
-        """Test that all 5 levels are defined."""
-        assert len(DEPOSIT_LEVELS) == 5
-        for level in range(1, 6):
+        """Test that all levels are defined (including test level 0)."""
+        assert len(DEPOSIT_LEVELS) == 6
+        for level in range(0, 6):
             assert level in DEPOSIT_LEVELS
 
     def test_level_amounts_positive(self):
@@ -33,28 +33,32 @@ class TestDepositLevelAmounts:
 
     def test_level_amounts_ascending(self):
         """Test that level amounts are in ascending order."""
-        amounts = [DEPOSIT_LEVELS[i] for i in range(1, 6)]
+        amounts = [DEPOSIT_LEVELS[i] for i in range(0, 6)]
         assert amounts == sorted(amounts)
 
+    def test_test_level_amount(self):
+        """Test test level (0) minimum amount is 30 USDT."""
+        assert DEPOSIT_LEVELS[0] == Decimal("30")
+
     def test_level_1_amount(self):
-        """Test level 1 amount is 10 USDT."""
-        assert DEPOSIT_LEVELS[1] == Decimal("10")
+        """Test level 1 minimum amount is 100 USDT."""
+        assert DEPOSIT_LEVELS[1] == Decimal("100")
 
     def test_level_2_amount(self):
-        """Test level 2 amount is 50 USDT."""
-        assert DEPOSIT_LEVELS[2] == Decimal("50")
+        """Test level 2 minimum amount is 700 USDT."""
+        assert DEPOSIT_LEVELS[2] == Decimal("700")
 
     def test_level_3_amount(self):
-        """Test level 3 amount is 100 USDT."""
-        assert DEPOSIT_LEVELS[3] == Decimal("100")
+        """Test level 3 minimum amount is 1400 USDT."""
+        assert DEPOSIT_LEVELS[3] == Decimal("1400")
 
     def test_level_4_amount(self):
-        """Test level 4 amount is 150 USDT."""
-        assert DEPOSIT_LEVELS[4] == Decimal("150")
+        """Test level 4 minimum amount is 2500 USDT."""
+        assert DEPOSIT_LEVELS[4] == Decimal("2500")
 
     def test_level_5_amount(self):
-        """Test level 5 amount is 300 USDT."""
-        assert DEPOSIT_LEVELS[5] == Decimal("300")
+        """Test level 5 minimum amount is 4000 USDT."""
+        assert DEPOSIT_LEVELS[5] == Decimal("4000")
 
 
 class TestPartnerRequirements:
@@ -80,14 +84,9 @@ class TestDepositLevelValidation:
     """Test deposit level validation logic."""
 
     def test_valid_level_range(self):
-        """Test valid level range (1-5)."""
-        for level in range(1, 6):
+        """Test valid level range (0-5)."""
+        for level in range(0, 6):
             assert level in DEPOSIT_LEVELS
-
-    def test_invalid_level_zero(self):
-        """Test invalid level 0."""
-        level = 0
-        assert level not in DEPOSIT_LEVELS
 
     def test_invalid_level_six(self):
         """Test invalid level 6."""
