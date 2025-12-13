@@ -37,7 +37,9 @@ from app.services.ai import (
     SYSTEM_PROMPT_USER,
     ToolExecutor,
     UserRole,
+    extract_text_from_response,
     get_all_admin_tools,
+    get_api_error_message,
     get_system_prompt,
     get_user_wallet_tools,
     wrap_system_prompt,
@@ -357,18 +359,9 @@ class AIAssistantService:
 
             return "🤖 Не удалось получить ответ. Попробуйте переформулировать вопрос."
 
-        except anthropic.APIConnectionError:
-            logger.error("Anthropic API connection error")
-            return "🤖 Проблема с подключением к AI. Проверьте интернет-соединение и попробуйте снова."
-        except anthropic.RateLimitError:
-            logger.error("Anthropic API rate limit exceeded")
-            return "🤖 Слишком много запросов. Пожалуйста, подождите минуту и попробуйте снова."
-        except anthropic.APIStatusError as e:
-            logger.error(f"Anthropic API error: {e}")
-            return "🤖 Ошибка сервиса AI. Попробуйте позже или обратитесь в поддержку."
         except Exception as e:
-            logger.error(f"Unexpected AI error: {e}")
-            return "🤖 Произошла непредвиденная ошибка. Пожалуйста, обратитесь в техподдержку."
+            logger.error(f"AI chat error: {type(e).__name__}: {e}")
+            return get_api_error_message(e)
 
     async def get_quick_help(self, topic: str, role: UserRole) -> str:
         """
@@ -991,11 +984,7 @@ class AIAssistantService:
 
     def _extract_text_from_response(self, content: list) -> str:
         """Extract text from response content blocks."""
-        text_parts = []
-        for block in content:
-            if hasattr(block, "text"):
-                text_parts.append(block.text)
-        return "\n".join(text_parts) if text_parts else "🤖 Готово!"
+        return extract_text_from_response(content)
 
 
 # Singleton instance

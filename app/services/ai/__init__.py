@@ -11,9 +11,11 @@ Contains all AI assistant related components:
 from app.services.ai.helpers import (
     build_messages,
     create_tool_result,
+    extract_text_from_response,
     extract_user_identifiers,
     format_tool_error,
     format_tool_success,
+    get_api_error_message,
     get_unavailable_message,
     is_valid_telegram_id,
     is_valid_username,
@@ -98,9 +100,11 @@ __all__ = [
     # Helpers
     "build_messages",
     "create_tool_result",
+    "extract_text_from_response",
     "extract_user_identifiers",
     "format_tool_error",
     "format_tool_success",
+    "get_api_error_message",
     "get_unavailable_message",
     "is_valid_telegram_id",
     "is_valid_username",
