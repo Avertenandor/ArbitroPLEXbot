@@ -39,61 +39,31 @@ class User(Base):
 
     __tablename__ = "users"
     __table_args__ = (
-        CheckConstraint(
-            'balance >= 0', name='check_user_balance_non_negative'
-        ),
-        CheckConstraint(
-            'total_earned >= 0',
-            name='check_user_total_earned_non_negative'
-        ),
-        CheckConstraint(
-            'pending_earnings >= 0',
-            name='check_user_pending_earnings_non_negative'
-        ),
+        CheckConstraint("balance >= 0", name="check_user_balance_non_negative"),
+        CheckConstraint("total_earned >= 0", name="check_user_total_earned_non_negative"),
+        CheckConstraint("pending_earnings >= 0", name="check_user_pending_earnings_non_negative"),
     )
 
     # Primary key
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Telegram data
-    telegram_id: Mapped[int] = mapped_column(
-        BigInteger, unique=True, index=True, nullable=False
-    )
-    username: Mapped[str | None] = mapped_column(
-        String(255), nullable=True, index=True
-    )
-    referral_code: Mapped[str | None] = mapped_column(
-        String(20), nullable=True, unique=True, index=True
-    )
+    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True, nullable=False)
+    username: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    referral_code: Mapped[str | None] = mapped_column(String(20), nullable=True, unique=True, index=True)
 
     # Wallet and financial
-    wallet_address: Mapped[str] = mapped_column(
-        String(255), nullable=False, unique=True
-    )
-    financial_password: Mapped[str] = mapped_column(
-        String(255), nullable=False
-    )
+    wallet_address: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    financial_password: Mapped[str] = mapped_column(String(255), nullable=False)
 
     # Optional contacts (from TZ)
-    phone: Mapped[str | None] = mapped_column(
-        String(50), nullable=True
-    )
-    email: Mapped[str | None] = mapped_column(
-        String(255), nullable=True
-    )
+    phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Balances
-    balance: Mapped[Decimal] = mapped_column(
-        DECIMAL(18, 8), default=Decimal("0"), nullable=False
-    )
-    total_earned: Mapped[Decimal] = mapped_column(
-        DECIMAL(18, 8), default=Decimal("0"), nullable=False
-    )
-    pending_earnings: Mapped[Decimal] = mapped_column(
-        DECIMAL(18, 8), default=Decimal("0"), nullable=False
-    )
+    balance: Mapped[Decimal] = mapped_column(DECIMAL(18, 8), default=Decimal("0"), nullable=False)
+    total_earned: Mapped[Decimal] = mapped_column(DECIMAL(18, 8), default=Decimal("0"), nullable=False)
+    pending_earnings: Mapped[Decimal] = mapped_column(DECIMAL(18, 8), default=Decimal("0"), nullable=False)
 
     # Bonus balance (admin-granted, participates in ROI calculations)
     bonus_balance: Mapped[Decimal] = mapped_column(
@@ -111,78 +81,43 @@ class User(Base):
 
     # Referral
     referrer_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
 
     # Status flags
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, default=True, nullable=False
-    )
-    is_verified: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False
-    )
-    is_banned: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False
-    )
-    is_admin: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False
-    )
-    earnings_blocked: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False
-    )
-    suspicious: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False, index=True
-    )
-    withdrawal_blocked: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False, index=True
-    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_banned: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    earnings_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    suspicious: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    withdrawal_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     # R8-2: Bot blocked tracking
-    bot_blocked: Mapped[bool] = mapped_column(
-        Boolean, default=False, nullable=False, index=True
-    )
-    bot_blocked_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    bot_blocked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
+    bot_blocked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # R13-3: Language preference
-    language: Mapped[str | None] = mapped_column(
-        String(10), nullable=True, default="ru", index=True
-    )
+    language: Mapped[str | None] = mapped_column(String(10), nullable=True, default="ru", index=True)
 
     # Rate limiting for financial password
-    finpass_attempts: Mapped[int] = mapped_column(
-        Integer, default=0, nullable=False
-    )
-    finpass_locked_until: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    finpass_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    finpass_locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Deposit tracking (auto-detection from blockchain)
     total_deposited_usdt: Mapped[Decimal] = mapped_column(
         DECIMAL(18, 8),
         default=Decimal("0"),
         nullable=False,
-        comment="Total USDT deposited to system wallet from user wallet"
+        comment="Total USDT deposited to system wallet from user wallet",
     )
     is_active_depositor: Mapped[bool] = mapped_column(
-        Boolean,
-        default=False,
-        nullable=False,
-        index=True,
-        comment="True if total_deposited_usdt >= 30 USDT"
+        Boolean, default=False, nullable=False, index=True, comment="True if total_deposited_usdt >= 30 USDT"
     )
     last_deposit_scan_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-        comment="Last time deposits were scanned from blockchain"
+        DateTime(timezone=True), nullable=True, comment="Last time deposits were scanned from blockchain"
     )
     deposit_tx_count: Mapped[int] = mapped_column(
-        Integer,
-        default=0,
-        nullable=False,
-        comment="Number of deposit transactions found"
+        Integer, default=0, nullable=False, comment="Number of deposit transactions found"
     )
 
     # Work status tracking
@@ -191,28 +126,19 @@ class User(Base):
         default="active",
         nullable=False,
         index=True,
-        comment="Work status: active, suspended_no_plex, suspended_no_payment"
+        comment="Work status: active, suspended_no_plex, suspended_no_payment",
     )
     last_plex_check_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-        comment="Last time PLEX balance was checked"
+        DateTime(timezone=True), nullable=True, comment="Last time PLEX balance was checked"
     )
     last_plex_balance: Mapped[Decimal | None] = mapped_column(
-        DECIMAL(18, 8),
-        nullable=True,
-        comment="Last checked PLEX balance on wallet"
+        DECIMAL(18, 8), nullable=True, comment="Last checked PLEX balance on wallet"
     )
     plex_insufficient_since: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True,
-        comment="When PLEX balance first dropped below minimum"
+        DateTime(timezone=True), nullable=True, comment="When PLEX balance first dropped below minimum"
     )
     deposits_consolidated: Mapped[bool] = mapped_column(
-        Boolean,
-        default=False,
-        nullable=False,
-        comment="True if pre-existing deposits were consolidated"
+        Boolean, default=False, nullable=False, comment="True if pre-existing deposits were consolidated"
     )
 
     # Timestamps
@@ -220,14 +146,9 @@ class User(Base):
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        onupdate=lambda: datetime.now(UTC),
-        nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC), nullable=False
     )
-    last_active: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_active: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     referrer: Mapped[Optional["User"]] = relationship(
@@ -236,11 +157,7 @@ class User(Base):
         back_populates="referrals",
         foreign_keys=[referrer_id],
     )
-    referrals: Mapped[list["User"]] = relationship(
-        "User",
-        back_populates="referrer",
-        foreign_keys=[referrer_id]
-    )
+    referrals: Mapped[list["User"]] = relationship("User", back_populates="referrer", foreign_keys=[referrer_id])
 
     # Deposits relationship
     deposits: Mapped[list["Deposit"]] = relationship(
@@ -341,9 +258,7 @@ class User(Base):
         Args:
             password: Plain text password to hash and store
         """
-        self.financial_password = bcrypt.hashpw(
-            password.encode(), bcrypt.gensalt()
-        ).decode()
+        self.financial_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
     def verify_financial_password(self, password: str) -> bool:
         """
@@ -357,13 +272,8 @@ class User(Base):
         """
         if not self.financial_password:
             return False
-        return bcrypt.checkpw(
-            password.encode(), self.financial_password.encode()
-        )
+        return bcrypt.checkpw(password.encode(), self.financial_password.encode())
 
     def __repr__(self) -> str:
         """String representation."""
-        return (
-            f"<User(id={self.id}, telegram_id={self.telegram_id}, "
-            f"username={self.username})>"
-        )
+        return f"<User(id={self.id}, telegram_id={self.telegram_id}, username={self.username})>"

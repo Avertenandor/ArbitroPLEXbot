@@ -49,32 +49,20 @@ class ReferralEarning(Base):
     __tablename__ = "referral_earnings"
 
     # Primary key
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Referral relationship
-    referral_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("referrals.id"), nullable=False, index=True
-    )
+    referral_id: Mapped[int] = mapped_column(Integer, ForeignKey("referrals.id"), nullable=False, index=True)
 
     # Amount
-    amount: Mapped[Decimal] = mapped_column(
-        Numeric(precision=18, scale=8), nullable=False
-    )
+    amount: Mapped[Decimal] = mapped_column(Numeric(precision=18, scale=8), nullable=False)
 
     # Source transaction (optional)
-    source_transaction_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("transactions.id"), nullable=True
-    )
+    source_transaction_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("transactions.id"), nullable=True)
 
     # Payment tracking
-    tx_hash: Mapped[str | None] = mapped_column(
-        String(66), nullable=True
-    )
-    paid: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, index=True
-    )
+    tx_hash: Mapped[str | None] = mapped_column(String(66), nullable=True)
+    paid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
@@ -82,12 +70,8 @@ class ReferralEarning(Base):
     )
 
     # Relationships
-    referral: Mapped["Referral"] = relationship(
-        "Referral", lazy="joined"
-    )
-    source_transaction: Mapped[Optional["Transaction"]] = relationship(
-        "Transaction", lazy="joined"
-    )
+    referral: Mapped["Referral"] = relationship("Referral", lazy="joined")
+    source_transaction: Mapped[Optional["Transaction"]] = relationship("Transaction", lazy="joined")
 
     # Properties
 
@@ -108,12 +92,7 @@ class ReferralEarning(Base):
 
     def __repr__(self) -> str:
         """String representation."""
-        return (
-            f"ReferralEarning(id={self.id}, "
-            f"referral_id={self.referral_id}, "
-            f"amount={self.amount}, "
-            f"paid={self.paid})"
-        )
+        return f"ReferralEarning(id={self.id}, referral_id={self.referral_id}, amount={self.amount}, paid={self.paid})"
 
 
 # Composite indexes

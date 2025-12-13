@@ -7,6 +7,7 @@ Contains all balance query functionality for the BlockchainService.
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+
 if TYPE_CHECKING:
     from ..payment_sender import PaymentSender
 

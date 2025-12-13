@@ -45,24 +45,16 @@ class SupportTicket(Base):
     __tablename__ = "support_tickets"
 
     # Primary key
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # User (nullable for guest tickets)
-    user_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("users.id"), nullable=True, index=True
-    )
+    user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
     # Telegram ID for guest tickets (when user_id is None)
-    telegram_id: Mapped[int | None] = mapped_column(
-        Integer, nullable=True, index=True
-    )
+    telegram_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
 
     # Category & Status
-    category: Mapped[str] = mapped_column(
-        String(20), nullable=False
-    )
+    category: Mapped[str] = mapped_column(String(20), nullable=False)
     status: Mapped[str] = mapped_column(
         String(20),
         nullable=False,
@@ -71,23 +63,15 @@ class SupportTicket(Base):
     )
 
     # Admin assignment
-    assigned_admin_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("admins.id"), nullable=True, index=True
-    )
+    assigned_admin_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("admins.id"), nullable=True, index=True)
 
     # Activity tracking
-    last_user_message_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    last_admin_message_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_user_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_admin_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -98,9 +82,7 @@ class SupportTicket(Base):
 
     # Relationships
     user: Mapped[Optional["User"]] = relationship("User", lazy="joined")
-    assigned_admin: Mapped[Optional["Admin"]] = relationship(
-        "Admin", lazy="joined"
-    )
+    assigned_admin: Mapped[Optional["Admin"]] = relationship("Admin", lazy="joined")
     messages: Mapped[list["SupportMessage"]] = relationship(
         "SupportMessage",
         back_populates="ticket",
@@ -110,8 +92,4 @@ class SupportTicket(Base):
 
     def __repr__(self) -> str:
         """String representation."""
-        return (
-            f"SupportTicket(id={self.id}, "
-            f"user_id={self.user_id}, "
-            f"status={self.status!r})"
-        )
+        return f"SupportTicket(id={self.id}, user_id={self.user_id}, status={self.status!r})"

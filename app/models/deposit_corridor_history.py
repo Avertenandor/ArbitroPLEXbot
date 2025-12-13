@@ -29,9 +29,7 @@ class DepositCorridorHistory(Base):
     __tablename__ = "deposit_corridor_history"
 
     # Primary key
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Level number (1-5)
     level: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
@@ -40,17 +38,11 @@ class DepositCorridorHistory(Base):
     mode: Mapped[str] = mapped_column(String(20), nullable=False)
 
     # Corridor settings (for 'custom' mode)
-    roi_min: Mapped[Decimal | None] = mapped_column(
-        DECIMAL(5, 2), nullable=True
-    )
-    roi_max: Mapped[Decimal | None] = mapped_column(
-        DECIMAL(5, 2), nullable=True
-    )
+    roi_min: Mapped[Decimal | None] = mapped_column(DECIMAL(5, 2), nullable=True)
+    roi_max: Mapped[Decimal | None] = mapped_column(DECIMAL(5, 2), nullable=True)
 
     # Fixed rate (for 'equal' mode)
-    roi_fixed: Mapped[Decimal | None] = mapped_column(
-        DECIMAL(5, 2), nullable=True
-    )
+    roi_fixed: Mapped[Decimal | None] = mapped_column(DECIMAL(5, 2), nullable=True)
 
     # Optional human-readable reason/comment for the change
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -72,9 +64,7 @@ class DepositCorridorHistory(Base):
     applies_to: Mapped[str] = mapped_column(String(20), nullable=False)
 
     # Relationships
-    changed_by: Mapped[Optional["Admin"]] = relationship(
-        "Admin", foreign_keys=[changed_by_admin_id]
-    )
+    changed_by: Mapped[Optional["Admin"]] = relationship("Admin", foreign_keys=[changed_by_admin_id])
 
     def __repr__(self) -> str:
         """String representation."""

@@ -7,6 +7,7 @@ Contains all payment-related functionality for the BlockchainService.
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
+
 if TYPE_CHECKING:
     from ..payment_sender import PaymentSender
 

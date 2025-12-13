@@ -40,37 +40,23 @@ class Admin(Base):
     __tablename__ = "admins"
 
     # Primary Key
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Telegram Info
-    telegram_id: Mapped[int] = mapped_column(
-        BigInteger, unique=True, nullable=False, index=True
-    )
-    username: Mapped[str | None] = mapped_column(
-        String(255), nullable=True
-    )
+    telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False, index=True)
+    username: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Role & Permissions
-    role: Mapped[str] = mapped_column(
-        String(20), nullable=False, default="admin"
-    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="admin")
 
     # R10-3: Block status for compromised admins
-    is_blocked: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, index=True
-    )
+    is_blocked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
 
     # Authentication
-    master_key: Mapped[str | None] = mapped_column(
-        String(255), nullable=True
-    )
+    master_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Creator tracking (self-referencing)
-    created_by: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("admins.id"), nullable=True
-    )
+    created_by: Mapped[int | None] = mapped_column(Integer, ForeignKey("admins.id"), nullable=True)
 
     # Relationships
 
@@ -90,14 +76,10 @@ class Admin(Base):
     )
 
     # OneToMany: Sessions
-    sessions: Mapped[list["AdminSession"]] = relationship(
-        "AdminSession", back_populates="admin", lazy="selectin"
-    )
+    sessions: Mapped[list["AdminSession"]] = relationship("AdminSession", back_populates="admin", lazy="selectin")
 
     # OneToMany: Initiated wallet changes
-    initiated_wallet_changes: Mapped[
-        list["WalletChangeRequest"]
-    ] = relationship(
+    initiated_wallet_changes: Mapped[list["WalletChangeRequest"]] = relationship(
         "WalletChangeRequest",
         foreign_keys="WalletChangeRequest.initiated_by_admin_id",
         back_populates="initiated_by",
@@ -105,9 +87,7 @@ class Admin(Base):
     )
 
     # OneToMany: Approved wallet changes
-    approved_wallet_changes: Mapped[
-        list["WalletChangeRequest"]
-    ] = relationship(
+    approved_wallet_changes: Mapped[list["WalletChangeRequest"]] = relationship(
         "WalletChangeRequest",
         foreign_keys="WalletChangeRequest.approved_by_admin_id",
         back_populates="approved_by",
@@ -165,8 +145,4 @@ class Admin(Base):
 
     def __repr__(self) -> str:
         """String representation."""
-        return (
-            f"Admin(id={self.id}, "
-            f"telegram_id={self.telegram_id}, "
-            f"role={self.role!r})"
-        )
+        return f"Admin(id={self.id}, telegram_id={self.telegram_id}, role={self.role!r})"

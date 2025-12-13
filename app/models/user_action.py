@@ -39,27 +39,17 @@ class UserAction(Base):
     __tablename__ = "user_actions"
 
     # Primary key
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # User (nullable for anonymous actions)
-    user_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("users.id"), nullable=True, index=True
-    )
+    user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
     # Action details
-    action_type: Mapped[str] = mapped_column(
-        String(50), nullable=False, index=True
-    )
-    details: Mapped[dict[str, Any] | None] = mapped_column(
-        JSON, nullable=True
-    )
+    action_type: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    details: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     # IP address (PostgreSQL INET type)
-    ip_address: Mapped[str | None] = mapped_column(
-        INET, nullable=True
-    )
+    ip_address: Mapped[str | None] = mapped_column(INET, nullable=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
@@ -67,9 +57,7 @@ class UserAction(Base):
     )
 
     # Relationships
-    user: Mapped[Optional["User"]] = relationship(
-        "User", lazy="joined"
-    )
+    user: Mapped[Optional["User"]] = relationship("User", lazy="joined")
 
     # Properties
 
@@ -81,18 +69,12 @@ class UserAction(Base):
         Returns:
             True if action is older than 7 days
         """
-        seven_days_ago = datetime.now(
-            self.created_at.tzinfo
-        ) - timedelta(days=7)
+        seven_days_ago = datetime.now(self.created_at.tzinfo) - timedelta(days=7)
         return self.created_at < seven_days_ago
 
     def __repr__(self) -> str:
         """String representation."""
-        return (
-            f"UserAction(id={self.id}, "
-            f"user_id={self.user_id}, "
-            f"action_type={self.action_type!r})"
-        )
+        return f"UserAction(id={self.id}, user_id={self.user_id}, action_type={self.action_type!r})"
 
 
 # Index on created_at for cleanup job

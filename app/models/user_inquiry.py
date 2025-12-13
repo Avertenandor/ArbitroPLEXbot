@@ -60,24 +60,16 @@ class UserInquiry(Base):
     __tablename__ = "user_inquiries"
 
     # Primary key
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # User who created inquiry
-    user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id"), nullable=False, index=True
-    )
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
     # Telegram ID for sending notifications
-    telegram_id: Mapped[int] = mapped_column(
-        BigInteger, nullable=False, index=True
-    )
+    telegram_id: Mapped[int] = mapped_column(BigInteger, nullable=False, index=True)
 
     # Initial question text
-    initial_question: Mapped[str] = mapped_column(
-        Text, nullable=False
-    )
+    initial_question: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Status tracking
     status: Mapped[str] = mapped_column(
@@ -88,31 +80,22 @@ class UserInquiry(Base):
     )
 
     # Admin assignment
-    assigned_admin_id: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("admins.id"), nullable=True, index=True
-    )
+    assigned_admin_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("admins.id"), nullable=True, index=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
-    assigned_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    closed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     closed_by: Mapped[str | None] = mapped_column(
-        String(20), nullable=True  # "user" or "admin"
+        String(20),
+        nullable=True,  # "user" or "admin"
     )
 
     # Relationships
     user: Mapped["User"] = relationship("User", lazy="joined")
-    assigned_admin: Mapped[Optional["Admin"]] = relationship(
-        "Admin", lazy="joined"
-    )
+    assigned_admin: Mapped[Optional["Admin"]] = relationship("Admin", lazy="joined")
     messages: Mapped[list["InquiryMessage"]] = relationship(
         "InquiryMessage",
         back_populates="inquiry",
@@ -121,10 +104,7 @@ class UserInquiry(Base):
     )
 
     def __repr__(self) -> str:
-        return (
-            f"<UserInquiry(id={self.id}, user_id={self.user_id}, "
-            f"status={self.status})>"
-        )
+        return f"<UserInquiry(id={self.id}, user_id={self.user_id}, status={self.status})>"
 
 
 class InquiryMessage(Base):
@@ -145,42 +125,28 @@ class InquiryMessage(Base):
     __tablename__ = "inquiry_messages"
 
     # Primary key
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # Parent inquiry
-    inquiry_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("user_inquiries.id"), nullable=False, index=True
-    )
+    inquiry_id: Mapped[int] = mapped_column(Integer, ForeignKey("user_inquiries.id"), nullable=False, index=True)
 
     # Sender info
     sender_type: Mapped[str] = mapped_column(
-        String(20), nullable=False  # "user" or "admin"
+        String(20),
+        nullable=False,  # "user" or "admin"
     )
-    sender_id: Mapped[int] = mapped_column(
-        Integer, nullable=False
-    )
+    sender_id: Mapped[int] = mapped_column(Integer, nullable=False)
 
     # Message content
-    message_text: Mapped[str] = mapped_column(
-        Text, nullable=False
-    )
+    message_text: Mapped[str] = mapped_column(Text, nullable=False)
 
     # Timestamp
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        default=lambda: datetime.now(UTC),
-        nullable=False
+        DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )
 
     # Relationship
-    inquiry: Mapped["UserInquiry"] = relationship(
-        "UserInquiry", back_populates="messages"
-    )
+    inquiry: Mapped["UserInquiry"] = relationship("UserInquiry", back_populates="messages")
 
     def __repr__(self) -> str:
-        return (
-            f"<InquiryMessage(id={self.id}, inquiry_id={self.inquiry_id}, "
-            f"sender_type={self.sender_type})>"
-        )
+        return f"<InquiryMessage(id={self.id}, inquiry_id={self.inquiry_id}, sender_type={self.sender_type})>"
