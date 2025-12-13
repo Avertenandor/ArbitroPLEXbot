@@ -48,40 +48,62 @@ def upgrade() -> None:
         DROP INDEX IF EXISTS ix_plex_payment_requirements_deposit_id;
     """)
 
-    # 3. Add bonus_credit_id column
-    op.add_column(
-        "plex_payment_requirements",
-        sa.Column(
-            "bonus_credit_id",
-            sa.Integer(),
-            sa.ForeignKey("bonus_credits.id", ondelete="CASCADE"),
-            nullable=True,
-            index=True,
-        ),
-    )
+    # 3. Add bonus_credit_id column (if not exists)
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'plex_payment_requirements' 
+                AND column_name = 'bonus_credit_id'
+            ) THEN
+                ALTER TABLE plex_payment_requirements 
+                ADD COLUMN bonus_credit_id INTEGER;
+            END IF;
+        END $$;
+    """)
 
-    # 4. Create partial unique indexes
-    op.create_index(
-        "ix_plex_payment_requirements_deposit_id",
-        "plex_payment_requirements",
-        ["deposit_id"],
-        unique=True,
-        postgresql_where=sa.text("deposit_id IS NOT NULL"),
-    )
+    # Add foreign key constraint if not exists
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint 
+                WHERE conname = 'plex_payment_requirements_bonus_credit_id_fkey'
+            ) THEN
+                ALTER TABLE plex_payment_requirements
+                ADD CONSTRAINT plex_payment_requirements_bonus_credit_id_fkey
+                FOREIGN KEY (bonus_credit_id) REFERENCES bonus_credits(id) ON DELETE CASCADE;
+            END IF;
+        END $$;
+    """)
 
-    op.create_index(
-        "ix_plex_payment_requirements_bonus_credit_id",
-        "plex_payment_requirements",
-        ["bonus_credit_id"],
-        unique=True,
-        postgresql_where=sa.text("bonus_credit_id IS NOT NULL"),
-    )
+    # 4. Create partial unique indexes (if not exists)
+    op.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_plex_payment_requirements_deposit_id
+        ON plex_payment_requirements (deposit_id)
+        WHERE deposit_id IS NOT NULL;
+    """)
+
+    op.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS ix_plex_payment_requirements_bonus_credit_id
+        ON plex_payment_requirements (bonus_credit_id)
+        WHERE bonus_credit_id IS NOT NULL;
+    """)
 
     # 5. Add check constraint: at least one of deposit_id or bonus_credit_id must be set
     op.execute("""
-        ALTER TABLE plex_payment_requirements
-        ADD CONSTRAINT check_deposit_or_bonus
-        CHECK (deposit_id IS NOT NULL OR bonus_credit_id IS NOT NULL)
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint 
+                WHERE conname = 'check_deposit_or_bonus'
+            ) THEN
+                ALTER TABLE plex_payment_requirements
+                ADD CONSTRAINT check_deposit_or_bonus
+                CHECK (deposit_id IS NOT NULL OR bonus_credit_id IS NOT NULL);
+            END IF;
+        END $$;
     """)
 
 
