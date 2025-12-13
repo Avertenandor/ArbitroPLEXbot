@@ -88,7 +88,7 @@ async def check_blockchain() -> dict[str, Any]:
         blockchain_service = get_blockchain_service()
 
         # Try to get chain ID (lightweight check)
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         chain_id = await loop.run_in_executor(
             None,
             lambda: blockchain_service.web3.eth.chain_id

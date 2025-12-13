@@ -8,6 +8,8 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING
 
+from app.config.constants import BLOCKCHAIN_EXECUTOR_TIMEOUT
+
 
 if TYPE_CHECKING:
     from app.services.blockchain.rpc_rate_limiter import RPCRateLimiter
@@ -42,9 +44,37 @@ class BlockOperations:
         Returns:
             Current block number
         """
-        loop = asyncio.get_event_loop()
+        # Update settings from DB first (async operation)
+        await self.provider_manager._update_settings_from_db()
+
+        # Get active Web3 instance
+        w3 = self.provider_manager.get_active_web3()
+
+        loop = asyncio.get_running_loop()
         async with self.rpc_limiter:
-            return await loop.run_in_executor(
-                self._executor,
-                lambda: asyncio.run(self.provider_manager._execute_with_failover(lambda w3: w3.eth.block_number)),
-            )
+            try:
+                return await asyncio.wait_for(
+                    loop.run_in_executor(
+                        self._executor,
+                        lambda: w3.eth.block_number  # Synchronous call in thread pool
+                    ),
+                    timeout=BLOCKCHAIN_EXECUTOR_TIMEOUT,
+                )
+            except TimeoutError:
+                # Try failover if enabled
+                if self.provider_manager.is_auto_switch_enabled:
+                    backup_name = next(
+                        (n for n in self.provider_manager.providers
+                         if n != self.provider_manager.active_provider_name),
+                        None
+                    )
+                    if backup_name:
+                        w3_backup = self.provider_manager.providers[backup_name]
+                        return await asyncio.wait_for(
+                            loop.run_in_executor(
+                                self._executor,
+                                lambda: w3_backup.eth.block_number
+                            ),
+                            timeout=BLOCKCHAIN_EXECUTOR_TIMEOUT,
+                        )
+                raise

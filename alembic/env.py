@@ -12,30 +12,59 @@ from app.config.settings import settings
 # Import all models to ensure they are registered with Base.metadata
 # Import all models to register them with Base.metadata
 from app.models import (  # noqa: F401
+    # Base
+    Base,
+    # Admin Models
     Admin,
     AdminAction,
     AdminActionEscrow,  # R18-4: Dual control escrow
     AdminSession,
     Appeal,
-    Base,
+    # Security Models
     Blacklist,
+    # Blockchain Cache
+    BlockchainSyncState,
+    BlockchainTxCache,
+    # Bonus Credits
+    BonusCredit,
+    # Core Models
     Deposit,
+    DepositCorridorHistory,
+    DepositLevelConfig,
+    DepositLevelVersion,
     DepositReward,
     FailedNotification,
     FinancialPasswordRecovery,
+    # System Models
     GlobalSettings,  # Global dynamic settings
     NotificationQueueFallback,  # R11-3: PostgreSQL fallback for notifications
+    # PLEX Payment
     PaymentRetry,
+    PlexPaymentRequirement,
+    # Referral Models
     Referral,
     ReferralEarning,
+    # Reward Models
     RewardSession,
+    # Sponsor Inquiry Models
+    SponsorInquiry,
+    SponsorInquiryMessage,
+    # Support Models
     SupportMessage,
     SupportTicket,
+    # Transaction
     Transaction,
+    # User Models
     User,
     UserAction,
+    UserActivity,
     UserFsmState,  # R11-2: FSM states fallback
+    # User Inquiry Models
+    UserInquiry,
+    InquiryMessage,
+    UserMessageLog,
     UserNotificationSettings,
+    UserWalletHistory,
     WalletChangeRequest,
 )
 

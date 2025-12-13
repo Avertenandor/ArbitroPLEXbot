@@ -129,7 +129,7 @@ class TransactionManager:
                     blocking_timeout=10.0  # Wait max 10 seconds for lock
                 ):
                     # Get nonce inside the lock
-                    loop = asyncio.get_event_loop()
+                    loop = asyncio.get_running_loop()
                     nonce = await loop.run_in_executor(
                         executor,
                         lambda: self._get_safe_nonce(w3, address)
@@ -138,7 +138,7 @@ class TransactionManager:
         else:
             # Fallback to local lock if no session factory
             logger.warning("No session factory available, using local lock only")
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             nonce = await loop.run_in_executor(
                 executor,
                 lambda: self._get_safe_nonce(w3, address)
@@ -217,7 +217,7 @@ class TransactionManager:
                     return tx_hash.hex()
 
                 # Execute with pre-acquired nonce
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 tx_hash_str = await loop.run_in_executor(
                     executor, lambda: _send_tx(w3, nonce)
                 )
@@ -293,7 +293,7 @@ class TransactionManager:
                     return tx_hash.hex()
 
                 # Execute with pre-acquired nonce
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 tx_hash_str = await loop.run_in_executor(
                     executor, lambda: _send_native(w3, nonce)
                 )

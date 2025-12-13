@@ -234,9 +234,9 @@ class SyncProviderManager:
                 repo = GlobalSettingsRepository(session)
                 await repo.update_settings(active_rpc_provider=new_provider)
                 await session.commit()
-            logger.success(f"Persisted active provider switch to: {new_provider}")
+                logger.success(f"Persisted active provider switch to: {new_provider}")
         except Exception as e:
-            await session.rollback()
+            # Note: session context manager handles rollback automatically on exception
             logger.error(f"Failed to persist provider switch: {e}", exc_info=True)
             raise
 
@@ -258,7 +258,7 @@ class SyncProviderManager:
         with ThreadPoolExecutor(max_workers=4, thread_name_prefix="web3") as executor:
             for name, w3 in self.providers.items():
                 try:
-                    loop = asyncio.get_event_loop()
+                    loop = asyncio.get_running_loop()
                     # Run ping in executor with timeout
                     from app.config.constants import BLOCKCHAIN_EXECUTOR_TIMEOUT
                     try:

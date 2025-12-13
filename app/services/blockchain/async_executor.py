@@ -61,7 +61,7 @@ class AsyncBlockchainExecutor:
             Exception: If all providers fail
         """
         await self.provider_manager._update_settings_from_db()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
 
         current_name = self.provider_manager.active_provider_name
 

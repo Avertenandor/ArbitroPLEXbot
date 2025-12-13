@@ -20,6 +20,7 @@ from app.repositories.global_settings_repository import (
     GlobalSettingsRepository,
 )
 from app.repositories.transaction_repository import TransactionRepository
+from app.utils.security import mask_address
 
 
 @dataclass
@@ -383,7 +384,7 @@ class WithdrawalValidator:
             if plex_balance is None:
                 # If we can't get balance due to blockchain issues, don't block withdrawal
                 logger.warning(
-                    f"Could not get PLEX balance for user {user_id}, wallet {user.wallet_address}"
+                    f"Could not get PLEX balance for user {user_id}, wallet {mask_address(user.wallet_address)}"
                 )
                 return True, None
 
@@ -393,7 +394,7 @@ class WithdrawalValidator:
                     "Withdrawal blocked: insufficient PLEX wallet balance",
                     extra={
                         "user_id": user_id,
-                        "wallet_address": user.wallet_address[:10] + "...",
+                        "wallet_address": mask_address(user.wallet_address),
                         "plex_balance": str(plex_balance),
                         "minimum_required": str(MINIMUM_PLEX_BALANCE),
                     },

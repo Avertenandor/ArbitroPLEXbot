@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.user_repository import UserRepository
 from app.services.blockchain_service import get_blockchain_service
+from app.utils.security import mask_address
 from app.utils.validation import is_placeholder_wallet, is_valid_wallet_for_transactions
 
 
@@ -97,7 +98,7 @@ class DepositScanService:
                 "Адрес должен быть валидным BSC-адресом (0x + 40 hex символов).",
             }
 
-        logger.info(f"[Deposit Scan] Starting scan for user {user_id}, wallet: {user.wallet_address}")
+        logger.info(f"[Deposit Scan] Starting scan for user {user_id}, wallet: {mask_address(user.wallet_address)}")
 
         # Try cache first
         try:

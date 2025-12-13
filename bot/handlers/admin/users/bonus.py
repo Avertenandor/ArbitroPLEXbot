@@ -34,8 +34,13 @@ if TYPE_CHECKING:
     from aiogram.types import ReplyKeyboardMarkup
 
 
-class BonusStates(StatesGroup):
-    """States for bonus management flow."""
+class UserBonusStates(StatesGroup):
+    """States for user profile bonus management flow.
+
+    Note: Named UserBonusStates to avoid conflict with
+    bot.handlers.admin.bonus_v2.states.BonusStates which handles
+    the main bonus management menu workflow.
+    """
 
     waiting_amount = State()
     waiting_reason = State()
@@ -103,7 +108,7 @@ async def show_bonus_menu(
         f"с теми же ставками, что и обычные депозиты (до 500%)."
     )
 
-    await state.set_state(BonusStates.waiting_amount)
+    await state.set_state(UserBonusStates.waiting_amount)
 
     await message.answer(
         text,
@@ -133,7 +138,7 @@ async def start_grant_bonus(
     if not admin:
         return
 
-    await state.set_state(BonusStates.waiting_amount)
+    await state.set_state(UserBonusStates.waiting_amount)
 
     await message.answer(
         "💰 **Начисление бонуса**\n\n"
@@ -146,7 +151,7 @@ async def start_grant_bonus(
     )
 
 
-@router.message(BonusStates.waiting_amount)
+@router.message(UserBonusStates.waiting_amount)
 async def process_bonus_amount(
     message: Message,
     state: FSMContext,
@@ -179,7 +184,7 @@ async def process_bonus_amount(
         return
 
     await state.update_data(bonus_amount=str(amount))
-    await state.set_state(BonusStates.waiting_reason)
+    await state.set_state(UserBonusStates.waiting_reason)
 
     await message.answer(
         f"💰 Сумма: **{format_usdt(amount)} USDT**\n\n"
@@ -191,7 +196,7 @@ async def process_bonus_amount(
     )
 
 
-@router.message(BonusStates.waiting_reason)
+@router.message(UserBonusStates.waiting_reason)
 async def process_bonus_reason(
     message: Message,
     state: FSMContext,
@@ -423,7 +428,7 @@ async def start_cancel_bonus(
         "_При отмене бонус становится неактивным, ROI начисления прекращаются._"
     )
 
-    await state.set_state(BonusStates.cancel_select_bonus)
+    await state.set_state(UserBonusStates.cancel_select_bonus)
     await state.update_data(
         active_bonus_ids=[b.id for b in active_bonuses],
         bonuses_info={
@@ -443,7 +448,7 @@ async def start_cancel_bonus(
     )
 
 
-@router.message(BonusStates.cancel_select_bonus)
+@router.message(UserBonusStates.cancel_select_bonus)
 async def process_cancel_select_bonus(
     message: Message,
     state: FSMContext,
@@ -494,7 +499,7 @@ async def process_cancel_select_bonus(
         cancel_bonus_id=bonus_id,
         cancel_bonus_amount=bonus_info.get("amount", "0"),
     )
-    await state.set_state(BonusStates.cancel_select_reason)
+    await state.set_state(UserBonusStates.cancel_select_reason)
 
     text = (
         f"📝 **Шаг 2 из 3: Причина отмены**\n"
@@ -511,7 +516,7 @@ async def process_cancel_select_bonus(
     )
 
 
-@router.message(BonusStates.cancel_select_reason)
+@router.message(UserBonusStates.cancel_select_reason)
 async def process_cancel_select_reason(
     message: Message,
     state: FSMContext,
@@ -562,7 +567,7 @@ async def process_cancel_select_reason(
 
     # Save reason and show confirmation
     await state.update_data(cancel_reason=reason)
-    await state.set_state(BonusStates.cancel_confirm)
+    await state.set_state(UserBonusStates.cancel_confirm)
 
     # Get user info for confirmation
     user_id = state_data.get("selected_user_id")
@@ -593,7 +598,7 @@ async def process_cancel_select_reason(
     )
 
 
-@router.message(BonusStates.cancel_confirm)
+@router.message(UserBonusStates.cancel_confirm)
 async def process_cancel_confirm(
     message: Message,
     state: FSMContext,
@@ -613,7 +618,7 @@ async def process_cancel_confirm(
         bonus_id = state_data.get("cancel_bonus_id")
         bonus_amount = state_data.get("cancel_bonus_amount", "0")
 
-        await state.set_state(BonusStates.cancel_select_reason)
+        await state.set_state(UserBonusStates.cancel_select_reason)
 
         text = (
             f"📝 **Шаг 2 из 3: Причина отмены**\n"

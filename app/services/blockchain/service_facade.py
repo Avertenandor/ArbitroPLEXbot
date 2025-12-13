@@ -266,9 +266,7 @@ class BlockchainService:
         """
         try:
             def _get_bal(w3: Web3):
-                return asyncio.run(
-                    self.balance_manager.get_usdt_balance(w3, address)
-                )
+                return self.balance_manager.get_usdt_balance(w3, address)
 
             return await self.async_executor.run_with_failover(_get_bal)
         except Exception as e:
@@ -287,9 +285,7 @@ class BlockchainService:
         """
         try:
             def _get_bal(w3: Web3):
-                return asyncio.run(
-                    self.balance_manager.get_plex_balance(w3, address)
-                )
+                return self.balance_manager.get_plex_balance(w3, address)
 
             return await self.async_executor.run_with_failover(_get_bal)
         except Exception as e:
@@ -308,9 +304,7 @@ class BlockchainService:
         """
         try:
             def _get_bal(w3: Web3):
-                return asyncio.run(
-                    self.balance_manager.get_native_balance(w3, address)
-                )
+                return self.balance_manager.get_native_balance(w3, address)
 
             return await self.async_executor.run_with_failover(_get_bal)
         except Exception as e:
@@ -332,10 +326,8 @@ class BlockchainService:
         """
         try:
             def _est_gas(w3: Web3):
-                return asyncio.run(
-                    self.gas_manager.estimate_gas_fee(
-                        w3, to_address, amount, self.wallet_address
-                    )
+                return self.gas_manager.estimate_gas_fee(
+                    w3, to_address, amount, self.wallet_address
                 )
 
             return await self.async_executor.run_with_failover(_est_gas)
