@@ -120,6 +120,31 @@ RU_TRANSLATIONS = {
             "⏳ Сканируем ваши депозиты..."
         ),
     },
+    "daily_payment": {
+        "title_paid": "✅ **ОПЛАТА ТЕКУЩИХ СУТОК**",
+        "title_unpaid": "❌ **ОПЛАТА ТЕКУЩИХ СУТОК**",
+        "deposits": "💰 Ваши депозиты: **{amount:.2f}** USDT",
+        "bonus_balance": "🎁 Бонусный баланс: **{amount:.2f}** USDT",
+        "total_investment": "📊 Всего инвестиций: **{amount:.2f}** USDT",
+        "required_plex": "💎 Требуется PLEX в сутки: **{amount:,}** PLEX",
+        "status_paid": "✅ **Текущие сутки оплачены!**",
+        "status_unpaid": "❌ **Текущие сутки НЕ оплачены!**",
+        "last_payment": "⏱ Последний платёж: {hours:.1f} ч. назад",
+        "plex_balance": "💼 Ваш баланс PLEX: **{amount:,}** PLEX",
+        "payment_instructions": (
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "📱 **Для оплаты отправьте PLEX на кошелёк:**\n\n"
+            "`{wallet_address}`\n\n"
+            "💳 **Сумма к оплате:** **{amount:,}** PLEX\n\n"
+            "⚠️ Без оплаты работа депозитов приостановлена!"
+        ),
+        "qr_caption": (
+            "📱 **QR-код для оплаты**\n\n"
+            "Кошелёк:\n`{wallet_address}`\n\n"
+            "Сумма: **{amount:,}** PLEX"
+        ),
+        "check_error": "⚠️ Ошибка проверки: {error}",
+    },
     "withdrawal": {
         "menu_title": "💸 *Вывод средств*",
         "available_balance": "Доступно для вывода: `{amount} USDT`",
@@ -288,6 +313,31 @@ EN_TRANSLATIONS = {
             "Transaction: `{tx_hash_short}`\n\n"
             "⏳ Scanning your deposits..."
         ),
+    },
+    "daily_payment": {
+        "title_paid": "✅ **CURRENT DAY PAYMENT**",
+        "title_unpaid": "❌ **CURRENT DAY PAYMENT**",
+        "deposits": "💰 Your deposits: **{amount:.2f}** USDT",
+        "bonus_balance": "🎁 Bonus balance: **{amount:.2f}** USDT",
+        "total_investment": "📊 Total investment: **{amount:.2f}** USDT",
+        "required_plex": "💎 Required PLEX per day: **{amount:,}** PLEX",
+        "status_paid": "✅ **Current day is paid!**",
+        "status_unpaid": "❌ **Current day is NOT paid!**",
+        "last_payment": "⏱ Last payment: {hours:.1f} hours ago",
+        "plex_balance": "💼 Your PLEX balance: **{amount:,}** PLEX",
+        "payment_instructions": (
+            "━━━━━━━━━━━━━━━━━━━━━━\n"
+            "📱 **To pay, send PLEX to wallet:**\n\n"
+            "`{wallet_address}`\n\n"
+            "💳 **Amount to pay:** **{amount:,}** PLEX\n\n"
+            "⚠️ Deposits are paused without payment!"
+        ),
+        "qr_caption": (
+            "📱 **Payment QR code**\n\n"
+            "Wallet:\n`{wallet_address}`\n\n"
+            "Amount: **{amount:,}** PLEX"
+        ),
+        "check_error": "⚠️ Check error: {error}",
     },
     "withdrawal": {
         "menu_title": "💸 *Withdrawal*",
