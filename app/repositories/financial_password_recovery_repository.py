@@ -8,6 +8,7 @@ Data access layer for FinancialPasswordRecovery model.
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.enums import FinancialRecoveryStatus
 from app.models.financial_password_recovery import (
     FinancialPasswordRecovery,
 )
@@ -53,7 +54,7 @@ class FinancialPasswordRecoveryRepository(
         """
         stmt = (
             select(FinancialPasswordRecovery)
-            .where(FinancialPasswordRecovery.status == "pending")
+            .where(FinancialPasswordRecovery.status == FinancialRecoveryStatus.PENDING.value)
             .order_by(FinancialPasswordRecovery.created_at.asc())
         )
         result = await self.session.execute(stmt)
@@ -73,5 +74,5 @@ class FinancialPasswordRecoveryRepository(
         """
         return await self.exists(
             user_id=user_id,
-            status="pending",
+            status=FinancialRecoveryStatus.PENDING.value,
         )

@@ -17,6 +17,7 @@ from app.models.admin import Admin
 from app.models.admin_action import AdminAction
 from app.models.admin_session import AdminSession
 from app.models.deposit import Deposit
+from app.models.enums import DepositStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.models.user import User
 
@@ -190,13 +191,13 @@ class MonitoringService:
 
             # Total deposits (all time)
             total_deposits_result = await self.session.execute(
-                select(func.sum(Deposit.amount)).where(Deposit.status == "active")
+                select(func.sum(Deposit.amount)).where(Deposit.status == DepositStatus.ACTIVE.value)
             )
             total_deposits = total_deposits_result.scalar() or Decimal("0")
 
             # Deposits count
             deposits_count_result = await self.session.execute(
-                select(func.count(Deposit.id)).where(Deposit.status == "active")
+                select(func.count(Deposit.id)).where(Deposit.status == DepositStatus.ACTIVE.value)
             )
             deposits_count = deposits_count_result.scalar() or 0
 
@@ -231,7 +232,7 @@ class MonitoringService:
             pending_result = await self.session.execute(
                 select(func.count(Transaction.id), func.sum(Transaction.amount))
                 .where(Transaction.type == "withdrawal")
-                .where(Transaction.status == "pending")
+                .where(Transaction.status == TransactionStatus.PENDING.value)
             )
             pending_row = pending_result.fetchone()
             pending_count = pending_row[0] or 0
@@ -465,7 +466,7 @@ class MonitoringService:
                 )
                 .join(User, Transaction.user_id == User.id)
                 .where(Transaction.type == "withdrawal")
-                .where(Transaction.status == "pending")
+                .where(Transaction.status == TransactionStatus.PENDING.value)
                 .order_by(Transaction.created_at.asc())
                 .limit(20)
             )

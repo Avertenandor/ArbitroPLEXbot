@@ -16,13 +16,11 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.enums import FinancialRecoveryStatus
 from app.models.financial_password_recovery import FinancialPasswordRecovery
 from app.repositories.user_repository import UserRepository
 from app.services.ai.commons import verify_admin
-from app.services.finpass_recovery_service import (
-    FinancialRecoveryStatus,
-    FinpassRecoveryService,
-)
+from app.services.finpass_recovery_service import FinpassRecoveryService
 
 
 """NOTE: Access control

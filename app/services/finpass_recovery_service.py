@@ -1,7 +1,7 @@
 # MCP-MARKER:CREATE:FINPASS_RECOVERY_SERVICE
 # MCP-ANCHOR: finpass-recovery-service
 # MCP-DEPS: [sqlalchemy, loguru]
-# MCP-PROVIDES: FinpassRecoveryService, FinancialRecoveryStatus
+# MCP-PROVIDES: FinpassRecoveryService (FinancialRecoveryStatus is in app.models.enums)
 # MCP-SUMMARY: Service layer for handling financial password recovery workflow.
 """Finpass recovery service.
 
@@ -12,12 +12,12 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from datetime import UTC, datetime
-from enum import StrEnum
 
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.enums import FinancialRecoveryStatus
 from app.models.financial_password_recovery import (
     FinancialPasswordRecovery,
 )
@@ -25,16 +25,6 @@ from app.repositories.financial_password_recovery_repository import (
     FinancialPasswordRecoveryRepository,
 )
 from app.repositories.user_repository import UserRepository
-
-
-class FinancialRecoveryStatus(StrEnum):
-    """Lifecycle states for a financial password recovery request."""
-
-    PENDING = "pending"
-    IN_REVIEW = "in_review"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    SENT = "sent"
 
 
 # Active statuses that block new requests (NOT including SENT - that's completed)

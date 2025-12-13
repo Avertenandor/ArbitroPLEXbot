@@ -12,6 +12,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.deposit import Deposit
+from app.models.enums import DepositStatus
 from app.models.user import User
 
 
@@ -118,7 +119,7 @@ class AnalyticsService:
                 and_(
                     Deposit.created_at >= day_start,
                     Deposit.created_at < day_end,
-                    Deposit.status == "ACTIVE",
+                    Deposit.status == DepositStatus.ACTIVE.value,
                 )
             )
             result = await self.session.execute(stmt)
@@ -203,21 +204,21 @@ class AnalyticsService:
         """
         # Average deposit amount
         stmt = select(func.avg(Deposit.amount)).where(
-            Deposit.status == "ACTIVE"
+            Deposit.status == DepositStatus.ACTIVE.value
         )
         result = await self.session.execute(stmt)
         avg_deposit = result.scalar() or Decimal("0")
 
         # Total deposited
         stmt = select(func.sum(Deposit.amount)).where(
-            Deposit.status == "ACTIVE"
+            Deposit.status == DepositStatus.ACTIVE.value
         )
         result = await self.session.execute(stmt)
         total_deposited = result.scalar() or Decimal("0")
 
         # Users with deposits
         stmt = select(func.count(func.distinct(Deposit.user_id))).where(
-            Deposit.status == "ACTIVE"
+            Deposit.status == DepositStatus.ACTIVE.value
         )
         result = await self.session.execute(stmt)
         users_with_deposits = result.scalar() or 0

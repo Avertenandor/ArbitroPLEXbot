@@ -274,6 +274,7 @@ class PlexPaymentRequirement(Base):
         self.last_check_at = now
         self.total_plex_paid += amount
         # Approximate how many full days covered by total_paid
+        # Note: Using int() for intentional floor division of Decimal values
         try:
             full_days = int(self.total_plex_paid / self.daily_plex_required)
         except Exception:  # pragma: no cover - defensive

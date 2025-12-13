@@ -118,6 +118,10 @@ class WithdrawalRequestHandler:
                 if fee_amount >= amount:
                     return None, "Комиссия превышает или равна сумме вывода", False
 
+                # Warning: High fee detection
+                if fee_amount > amount * Decimal("0.5"):
+                    logger.warning(f"High fee detected: {fee_amount} is more than 50% of {amount}")
+
                 # Deduct balance BEFORE creating transaction (Gross amount)
                 # User requests 'amount', we deduct 'amount', but send 'net_amount' to blockchain
                 balance_before = user.balance

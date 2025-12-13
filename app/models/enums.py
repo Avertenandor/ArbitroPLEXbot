@@ -87,3 +87,26 @@ class SupportSender(StrEnum):
     USER = "user"
     ADMIN = "admin"
     SYSTEM = "system"
+
+
+class DepositStatus(StrEnum):
+    """Deposit status values."""
+
+    PENDING = "pending"
+    CONFIRMED = "confirmed"
+    FAILED = "failed"
+    ACTIVE = "active"  # Active deposits (confirmed and earning)
+    CONSOLIDATED = "consolidated"  # Deposit consolidated into another
+    BLOCKED_PLEX_PAYMENT = "blocked_plex_payment"  # Blocked due to PLEX payment
+    ROI_COMPLETED = "roi_completed"  # ROI fully paid
+    PENDING_NETWORK_RECOVERY = "pending_network_recovery"  # R11-2: Waiting for blockchain network recovery
+
+
+class FinancialRecoveryStatus(StrEnum):
+    """Financial password recovery request status values."""
+
+    PENDING = "pending"
+    IN_REVIEW = "in_review"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    SENT = "sent"

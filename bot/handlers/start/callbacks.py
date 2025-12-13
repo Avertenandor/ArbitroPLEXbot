@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from bot.i18n.loader import get_translator, get_user_language
 from bot.keyboards.reply import auth_continue_keyboard, auth_rescan_keyboard
+from bot.utils.callback_parsers import parse_callback_id
 
 
 router = Router()
@@ -35,12 +36,13 @@ async def handle_show_password_again(
         callback: Callback query
         data: Handler data
     """
-    # Извлекаем user_id из callback_data
-    user_id_str = callback.data.replace("show_password_", "")
-    try:
-        user_id = int(user_id_str)
-    except ValueError:
+    # Извлекаем user_id из callback_data с валидацией
+    user_id = parse_callback_id(callback.data, "show_password_")
+    if user_id is None:
         await callback.answer("❌ Ошибка: неверный формат запроса", show_alert=True)
+        logger.warning(
+            f"Invalid callback data format for show_password: {callback.data}"
+        )
         return
 
     # Проверяем, что пользователь существует и совпадает

@@ -19,6 +19,7 @@ from web3 import Web3
 from web3.exceptions import ContractLogicError, Web3Exception
 
 from app.config.operational_constants import BLOCKING_TIMEOUT_LONG, LOCK_TIMEOUT_SHORT
+from app.models.enums import TransactionStatus
 from app.utils.security import mask_address, mask_tx_hash
 
 from .core_constants import (
@@ -326,13 +327,13 @@ class TransactionManager:
                 current = w3.eth.block_number
             except Web3Exception as e:
                 logger.debug(f"Could not get transaction receipt: {e}")
-                return {"status": "pending", "confirmations": 0}
+                return {"status": TransactionStatus.PENDING.value, "confirmations": 0}
 
             if not receipt:
-                return {"status": "pending", "confirmations": 0}
+                return {"status": TransactionStatus.PENDING.value, "confirmations": 0}
 
             confirmations = max(0, current - receipt.blockNumber)
-            status = "confirmed" if receipt.status == 1 else "failed"
+            status = TransactionStatus.CONFIRMED.value if receipt.status == 1 else TransactionStatus.FAILED.value
 
             return {
                 "status": status,
@@ -383,7 +384,7 @@ class TransactionManager:
                 "from_address": from_address,
                 "to_address": to_address,
                 "value": value,
-                "status": "confirmed" if receipt and receipt.status == 1 else "pending",
+                "status": TransactionStatus.CONFIRMED.value if receipt and receipt.status == 1 else TransactionStatus.PENDING.value,
             }
         except (Web3Exception, ValueError) as e:
             logger.debug(f"Could not fetch transaction details: {e}")
