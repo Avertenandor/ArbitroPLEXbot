@@ -6,7 +6,7 @@ Tracks changes to ROI corridors for each deposit level.
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import DECIMAL, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -72,7 +72,7 @@ class DepositCorridorHistory(Base):
     applies_to: Mapped[str] = mapped_column(String(20), nullable=False)
 
     # Relationships
-    changed_by: Mapped[Admin | None] = relationship(
+    changed_by: Mapped[Optional["Admin"]] = relationship(
         "Admin", foreign_keys=[changed_by_admin_id]
     )
 
