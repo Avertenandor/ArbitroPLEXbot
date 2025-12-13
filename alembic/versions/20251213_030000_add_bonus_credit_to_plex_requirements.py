@@ -1,7 +1,7 @@
 """Add bonus_credit_id to plex_payment_requirements.
 
 Revision ID: 20251213_030000
-Revises:
+Revises: 20251213_014500
 Create Date: 2025-12-13
 
 This migration allows plex_payment_requirements to track both
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = "20251213_030000"
-down_revision = None
+down_revision = "20251213_014500"
 branch_labels = None
 depends_on = None
 

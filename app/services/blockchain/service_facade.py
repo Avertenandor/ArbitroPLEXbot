@@ -266,9 +266,7 @@ class BlockchainService:
         """
         try:
             def _get_bal(w3: Web3):
-                return asyncio.run(
-                    self.balance_manager.get_usdt_balance(w3, address)
-                )
+                return self.balance_manager.get_usdt_balance(w3, address)
 
             return await self.async_executor.run_with_failover(_get_bal)
         except Exception as e:
@@ -287,9 +285,7 @@ class BlockchainService:
         """
         try:
             def _get_bal(w3: Web3):
-                return asyncio.run(
-                    self.balance_manager.get_plex_balance(w3, address)
-                )
+                return self.balance_manager.get_plex_balance(w3, address)
 
             return await self.async_executor.run_with_failover(_get_bal)
         except Exception as e:
@@ -308,9 +304,7 @@ class BlockchainService:
         """
         try:
             def _get_bal(w3: Web3):
-                return asyncio.run(
-                    self.balance_manager.get_native_balance(w3, address)
-                )
+                return self.balance_manager.get_native_balance(w3, address)
 
             return await self.async_executor.run_with_failover(_get_bal)
         except Exception as e:
@@ -332,10 +326,8 @@ class BlockchainService:
         """
         try:
             def _est_gas(w3: Web3):
-                return asyncio.run(
-                    self.gas_manager.estimate_gas_fee(
-                        w3, to_address, amount, self.wallet_address
-                    )
+                return self.gas_manager.estimate_gas_fee(
+                    w3, to_address, amount, self.wallet_address
                 )
 
             return await self.async_executor.run_with_failover(_est_gas)
@@ -441,7 +433,7 @@ class BlockchainService:
     async def verify_plex_payment(
         self,
         sender_address: str,
-        amount_plex: float | None = None,
+        amount_plex: float | Decimal | None = None,
         lookback_blocks: int = 200,  # ~10 minutes on BSC (3 sec/block)
     ) -> dict[str, Any]:
         """
@@ -449,13 +441,13 @@ class BlockchainService:
 
         Args:
             sender_address: User's wallet address
-            amount_plex: Required PLEX amount (uses default from settings if None)
+            amount_plex: Required PLEX amount (float or Decimal, uses default from settings if None)
             lookback_blocks: Number of blocks to scan back
 
         Returns:
             Dict with success, tx_hash, amount, block, or error
         """
-        target_amount = amount_plex or self.settings.auth_price_plex
+        target_amount = amount_plex if amount_plex is not None else self.settings.auth_price_plex
 
         def _verify(w3: Web3):
             return self.payment_verifier.verify_plex_payment_sync(

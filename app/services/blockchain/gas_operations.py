@@ -71,7 +71,7 @@ class GasManager:
             logger.warning(f"Failed to get gas price, using MIN: {e}")
             return int(MIN_GAS_PRICE_WEI)
 
-    async def estimate_gas_fee(
+    def estimate_gas_fee(
         self,
         w3: Web3,
         to_address: str,
@@ -80,6 +80,9 @@ class GasManager:
     ) -> Decimal | None:
         """
         Estimate gas fee for USDT transfer.
+
+        This is a synchronous method that performs blockchain calls.
+        Should be run in a thread pool executor.
 
         Args:
             w3: Web3 instance

@@ -1,6 +1,15 @@
 """
 Admin Bonus Management Handler V2.
 
+⚠️ DEPRECATED: This module has been refactored into bot/handlers/admin/bonus_v2/
+The active bonus management code is now in:
+- bot/handlers/admin/bonus_v2/states.py (FSM states)
+- bot/handlers/admin/bonus_v2/handlers/ (handlers)
+- bot/handlers/admin/bonus_v2/helpers.py (helper functions)
+
+This file is kept for reference only and is NOT registered in the router.
+Do NOT import or use classes from this file - use bonus_v2/ module instead.
+
 ПОЛНОСТЬЮ ПЕРЕРАБОТАННЫЙ модуль управления бонусами:
 - Интуитивное меню с понятной навигацией
 - Быстрые шаблоны причин

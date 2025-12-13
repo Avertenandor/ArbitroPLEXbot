@@ -36,9 +36,12 @@ class BalanceManager:
             to_checksum_address(plex_token_address) if plex_token_address else None
         )
 
-    async def get_usdt_balance(self, w3: Web3, address: str) -> Decimal | None:
+    def get_usdt_balance(self, w3: Web3, address: str) -> Decimal | None:
         """
         Get USDT balance for address.
+
+        This is a synchronous method that performs blockchain calls.
+        Should be run in a thread pool executor.
 
         Args:
             w3: Web3 instance
@@ -56,11 +59,13 @@ class BalanceManager:
             logger.error(f"Get USDT balance failed: {e}")
             return None
 
-    async def get_plex_balance(self, w3: Web3, address: str) -> Decimal | None:
+    def get_plex_balance(self, w3: Web3, address: str) -> Decimal | None:
         """
         Get PLEX token balance for address.
 
         PLEX token uses 9 decimals (per business rules).
+        This is a synchronous method that performs blockchain calls.
+        Should be run in a thread pool executor.
 
         Args:
             w3: Web3 instance
@@ -84,9 +89,12 @@ class BalanceManager:
             logger.error(f"Get PLEX balance failed for {mask_address(address)}: {e}")
             return None
 
-    async def get_native_balance(self, w3: Web3, address: str) -> Decimal | None:
+    def get_native_balance(self, w3: Web3, address: str) -> Decimal | None:
         """
         Get Native Token (BNB) balance for address.
+
+        This is a synchronous method that performs blockchain calls.
+        Should be run in a thread pool executor.
 
         Args:
             w3: Web3 instance
