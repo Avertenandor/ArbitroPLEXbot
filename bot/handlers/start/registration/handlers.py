@@ -19,6 +19,10 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
+from app.services.daily_payment_check_service import (
+    DailyPaymentCheckService,
+    format_daily_payment_message,
+)
 from app.services.user_service import UserService
 from app.utils.validation import normalize_bsc_address, validate_bsc_address
 from bot.i18n.loader import get_translator, get_user_language
@@ -175,6 +179,60 @@ async def cmd_start(
         logger.info(
             f"[START] Main menu keyboard sent successfully to user {user.telegram_id}"
         )
+
+        # --- CHECK DAILY PAYMENT STATUS ---
+        # Show payment status message after login
+        try:
+            payment_check_service = DailyPaymentCheckService(session)
+            payment_status = await payment_check_service.check_daily_payment_status(
+                user.id
+            )
+
+            # Only show message if user has deposits
+            if not payment_status.get("no_deposits") and not payment_status.get("error"):
+                payment_message = format_daily_payment_message(
+                    payment_status, user_language
+                )
+                if payment_message:
+                    # Send payment status message
+                    await message.answer(
+                        payment_message,
+                        parse_mode="Markdown",
+                    )
+
+                    # If not paid, send QR code for payment
+                    if not payment_status.get("is_paid"):
+                        from aiogram.types import BufferedInputFile
+
+                        from bot.utils.qr_generator import generate_payment_qr
+
+                        wallet_address = payment_status.get("wallet_address", "")
+                        required_plex = payment_status.get("required_plex", 0)
+
+                        qr_bytes = generate_payment_qr(wallet_address)
+                        if qr_bytes:
+                            qr_file = BufferedInputFile(
+                                qr_bytes, filename="payment_qr.png"
+                            )
+                            await message.answer_photo(
+                                photo=qr_file,
+                                caption=(
+                                    f"📱 **QR-код для оплаты**\n\n"
+                                    f"Кошелёк:\n`{wallet_address}`\n\n"
+                                    f"Сумма: **{int(required_plex):,}** PLEX"
+                                ),
+                                parse_mode="Markdown",
+                            )
+                        logger.info(
+                            f"[START] Sent daily payment reminder to user "
+                            f"{user.telegram_id}, required: {required_plex} PLEX"
+                        )
+        except Exception as e:
+            logger.error(
+                f"[START] Failed to check daily payment for user {user.telegram_id}: {e}"
+            )
+        # ----------------------------------
+
         return
 
     # R1-3: Check blacklist for non-registered users (REGISTRATION_DENIED)
