@@ -43,12 +43,16 @@ async def start_input_wallet_setup(message: Message, state: FSMContext, **data: 
 @router.message(WalletSetupStates.setting_input_wallet)
 async def process_input_wallet(message: Message, state: FSMContext):
     """Validate input wallet address."""
-    address = message.text.strip()
+    if not message.text:
+        await message.answer("❌ Пожалуйста, введите адрес кошелька.")
+        return
 
     if message.text == "❌ Отмена":
         from .menu import handle_wallet_menu
         await handle_wallet_menu(message, state)
         return
+
+    address = message.text.strip()
 
     if not is_address(address):
         await message.answer(

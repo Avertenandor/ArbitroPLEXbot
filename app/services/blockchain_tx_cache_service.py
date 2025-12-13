@@ -13,6 +13,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from web3 import Web3
 
+from app.config.operational_constants import MAX_BLOCKS_PER_SCAN
 from app.config.settings import settings
 from app.models.blockchain_tx_cache import BlockchainTxCache
 from app.repositories.blockchain_tx_cache_repository import BlockchainTxCacheRepository
@@ -82,7 +83,7 @@ class BlockchainTxCacheService:
 
         # Scan settings
         self.chunk_size = 2000  # Blocks per scan chunk
-        self.max_blocks_per_scan = 10000  # Max blocks to scan in one run
+        self.max_blocks_per_scan = MAX_BLOCKS_PER_SCAN
 
     async def get_cached_deposits(
         self,

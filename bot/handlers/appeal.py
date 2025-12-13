@@ -149,6 +149,11 @@ async def process_appeal_text(
         await state.clear()
         return  # Let menu handlers process this
 
+    # Validate message text exists
+    if not message.text:
+        await message.answer("❌ Пожалуйста, введите текст апелляции.")
+        return
+
     appeal_text = message.text.strip()
 
     if len(appeal_text) < 20:

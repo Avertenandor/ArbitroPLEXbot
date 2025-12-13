@@ -10,6 +10,7 @@ from aiogram import Dispatcher
 from loguru import logger
 
 from app.config.database import async_session_maker
+from app.config.operational_constants import RATE_LIMIT_WINDOW, USER_RATE_LIMIT
 from bot.middlewares.auth import AuthMiddleware
 from bot.middlewares.ban_middleware import BanMiddleware
 from bot.middlewares.database import DatabaseMiddleware
@@ -59,8 +60,8 @@ def register_middlewares(dp: Dispatcher, redis_client) -> None:
         dp.update.middleware(
             RateLimitMiddleware(
                 redis_client=redis_client,  # Can be None for in-memory fallback
-                user_limit=30,  # requests per window
-                user_window=60,  # seconds
+                user_limit=USER_RATE_LIMIT,
+                user_window=RATE_LIMIT_WINDOW,
             )
         )
         if redis_client:

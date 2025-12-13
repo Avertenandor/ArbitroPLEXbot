@@ -21,6 +21,12 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.business_constants import MAX_DEPOSITS_PER_USER
+from app.config.operational_constants import (
+    BLOCKING_TIMEOUT_DEFAULT,
+    BLOCKING_TIMEOUT_SHORT,
+    LOCK_TIMEOUT_MEDIUM,
+    LOCK_TIMEOUT_SHORT,
+)
 from app.config.settings import settings
 from app.models.deposit import Deposit
 from app.models.user import User
@@ -94,9 +100,9 @@ class IncomingDepositService:
         lock_key = f"deposit_process:{tx_hash}"
         async with self.distributed_lock.lock(
             lock_key,
-            timeout=60,
+            timeout=LOCK_TIMEOUT_MEDIUM,
             blocking=True,
-            blocking_timeout=5.0
+            blocking_timeout=BLOCKING_TIMEOUT_DEFAULT
         ) as acquired:
             if not acquired:
                 logger.warning(
@@ -169,9 +175,9 @@ class IncomingDepositService:
         user_lock_key = f"user_deposit:{user.id}"
         async with self.distributed_lock.lock(
             user_lock_key,
-            timeout=30,
+            timeout=LOCK_TIMEOUT_SHORT,
             blocking=True,
-            blocking_timeout=3.0
+            blocking_timeout=BLOCKING_TIMEOUT_SHORT
         ) as user_lock_acquired:
             if not user_lock_acquired:
                 logger.warning(

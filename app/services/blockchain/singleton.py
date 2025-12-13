@@ -13,7 +13,7 @@ from app.config.settings import Settings
 _blockchain_service: Any = None
 
 
-def get_blockchain_service():
+def get_blockchain_service() -> Any:
     """
     Get the singleton blockchain service instance.
 

@@ -166,8 +166,8 @@ class BlockchainService:
         return self.wallet_manager.wallet_address
 
     @property
-    def wallet_account(self):
-        """Get wallet account."""
+    def wallet_account(self) -> Any:
+        """Get wallet account (LocalAccount)."""
         return self.wallet_manager.wallet_account
 
     @property
@@ -201,7 +201,7 @@ class BlockchainService:
         return self.get_active_web3()
 
     @property
-    def usdt_contract(self):
+    def usdt_contract(self) -> Any:
         """Get USDT contract on active provider."""
         w3 = self.get_active_web3()
         return w3.eth.contract(address=self.usdt_contract_address, abi=USDT_ABI)

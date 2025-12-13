@@ -12,6 +12,11 @@ from typing import Any
 
 from loguru import logger
 
+from app.config.operational_constants import (
+    AI_MAX_TOKENS_LONG,
+    AI_MAX_TOKENS_MEDIUM,
+    AI_MAX_TOKENS_SHORT,
+)
 from app.config.security import (
     ARYA_COMMAND_GIVERS,
     ARYA_TEACHERS,
@@ -32,7 +37,9 @@ from app.services.ai import (
     SYSTEM_PROMPT_USER,
     ToolExecutor,
     UserRole,
+    extract_text_from_response,
     get_all_admin_tools,
+    get_api_error_message,
     get_system_prompt,
     get_user_wallet_tools,
     wrap_system_prompt,
@@ -339,7 +346,7 @@ class AIAssistantService:
             # Call Claude API with caching
             response = self.client.messages.create(
                 model=selected_model,
-                max_tokens=1024,
+                max_tokens=AI_MAX_TOKENS_SHORT,
                 system=system_with_cache,
                 messages=messages,
             )
@@ -352,18 +359,9 @@ class AIAssistantService:
 
             return "🤖 Не удалось получить ответ. Попробуйте переформулировать вопрос."
 
-        except anthropic.APIConnectionError:
-            logger.error("Anthropic API connection error")
-            return "🤖 Проблема с подключением к AI. Проверьте интернет-соединение и попробуйте снова."
-        except anthropic.RateLimitError:
-            logger.error("Anthropic API rate limit exceeded")
-            return "🤖 Слишком много запросов. Пожалуйста, подождите минуту и попробуйте снова."
-        except anthropic.APIStatusError as e:
-            logger.error(f"Anthropic API error: {e}")
-            return "🤖 Ошибка сервиса AI. Попробуйте позже или обратитесь в поддержку."
         except Exception as e:
-            logger.error(f"Unexpected AI error: {e}")
-            return "🤖 Произошла непредвиденная ошибка. Пожалуйста, обратитесь в техподдержку."
+            logger.error(f"AI chat error: {type(e).__name__}: {e}")
+            return get_api_error_message(e)
 
     async def get_quick_help(self, topic: str, role: UserRole) -> str:
         """
@@ -484,7 +482,7 @@ class AIAssistantService:
 
             response = self.client.messages.create(
                 model=self.model_haiku,  # Use Haiku for extraction (12x cheaper)
-                max_tokens=4096,
+                max_tokens=AI_MAX_TOKENS_LONG,
                 system=system_with_cache,
                 messages=messages,
             )
@@ -646,7 +644,7 @@ class AIAssistantService:
             # First call - use Haiku for users (cheaper)
             response = self.client.messages.create(
                 model=self.model_haiku,  # Users get Haiku (12x cheaper)
-                max_tokens=1024,
+                max_tokens=AI_MAX_TOKENS_SHORT,
                 system=system_with_cache,
                 messages=messages,
                 tools=tools,
@@ -681,7 +679,7 @@ class AIAssistantService:
                 # Get final response (no tools - final answer should be text only)
                 response = self.client.messages.create(
                     model=self.model_haiku,  # Keep Haiku for users
-                    max_tokens=1024,
+                    max_tokens=AI_MAX_TOKENS_SHORT,
                     system=system_with_cache,
                     messages=messages,
                 )
@@ -865,7 +863,7 @@ class AIAssistantService:
 
             response = self.client.messages.create(
                 model=self.model,
-                max_tokens=2048,
+                max_tokens=AI_MAX_TOKENS_MEDIUM,
                 system=system_with_cache,
                 messages=messages,
                 tools=tools,
@@ -920,7 +918,7 @@ class AIAssistantService:
                 # Get final response (no tools - final answer should be text only)
                 final_response = self.client.messages.create(
                     model=self.model,
-                    max_tokens=2048,
+                    max_tokens=AI_MAX_TOKENS_MEDIUM,
                     system=system_with_cache,
                     messages=messages,
                 )
@@ -986,11 +984,7 @@ class AIAssistantService:
 
     def _extract_text_from_response(self, content: list) -> str:
         """Extract text from response content blocks."""
-        text_parts = []
-        for block in content:
-            if hasattr(block, "text"):
-                text_parts.append(block.text)
-        return "\n".join(text_parts) if text_parts else "🤖 Готово!"
+        return extract_text_from_response(content)
 
 
 # Singleton instance

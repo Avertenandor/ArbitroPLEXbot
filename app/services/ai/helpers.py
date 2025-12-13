@@ -290,3 +290,42 @@ def parse_user_identifier(identifier: str) -> tuple[str | None, int | None]:
         return f"@{identifier}", None
 
     return None, None
+
+
+def extract_text_from_response(content: list) -> str:
+    """
+    Extract text from Anthropic API response content blocks.
+
+    Args:
+        content: List of content blocks from API response
+
+    Returns:
+        Combined text from all text blocks, or default message
+    """
+    text_parts = []
+    for block in content:
+        if hasattr(block, "text"):
+            text_parts.append(block.text)
+    return "\n".join(text_parts) if text_parts else "🤖 Готово!"
+
+
+def get_api_error_message(error: Exception) -> str:
+    """
+    Get user-friendly error message for API errors.
+
+    Args:
+        error: The exception that occurred
+
+    Returns:
+        User-friendly error message in Russian
+    """
+    error_type = type(error).__name__
+
+    if error_type == "APIConnectionError":
+        return "🤖 Проблема с подключением к AI. Проверьте интернет-соединение и попробуйте снова."
+    elif error_type == "RateLimitError":
+        return "🤖 Слишком много запросов. Пожалуйста, подождите минуту и попробуйте снова."
+    elif error_type == "APIStatusError":
+        return "🤖 Ошибка сервиса AI. Попробуйте позже или обратитесь в поддержку."
+    else:
+        return "🤖 Произошла непредвиденная ошибка. Пожалуйста, обратитесь в техподдержку."

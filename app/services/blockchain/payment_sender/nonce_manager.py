@@ -10,6 +10,8 @@ from typing import Any
 from loguru import logger
 from web3 import AsyncWeb3
 
+from app.config.operational_constants import BLOCKING_TIMEOUT_LONG, LOCK_TIMEOUT_SHORT
+
 
 class NonceManager:
     """
@@ -87,9 +89,9 @@ class NonceManager:
                 # Acquire distributed lock with timeout
                 async with distributed_lock.lock(
                     key=lock_key,
-                    timeout=30,  # Lock expires after 30 seconds
+                    timeout=LOCK_TIMEOUT_SHORT,
                     blocking=True,
-                    blocking_timeout=10.0  # Wait max 10 seconds for lock
+                    blocking_timeout=BLOCKING_TIMEOUT_LONG
                 ):
                     # Get nonce inside the distributed lock
                     return await self.get_safe_nonce(address)
