@@ -17,6 +17,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
+from app.repositories.bonus_credit_repository import BonusCreditRepository
 from app.services.deposit import DepositService
 from app.services.user_service import UserService
 from bot.keyboards.user import finances_submenu_keyboard
@@ -64,32 +65,37 @@ async def show_finances_submenu(
 
     available = balance_info.get('available_balance', 0) if balance_info else 0
 
-    # Get deposits info from user model (primary source)
-    from decimal import Decimal
-    total_deposited = float(user.total_deposited_usdt or Decimal("0"))
+    # Deposits MUST be calculated from DB (source of truth), not from user cached fields.
+    deposit_service = DepositService(session)
+    active_deposits = await deposit_service.get_active_deposits(user.id)
 
-    # Calculate deposits totals
-    if total_deposited > 0:
-        # Check for ROI data from deposits table
-        deposit_service = DepositService(session)
-        active_deposits = await deposit_service.get_active_deposits(user.id)
+    total_deposited = sum(float(d.amount or 0) for d in (active_deposits or []))
+    deposit_roi_paid = sum(float(d.roi_paid_amount or 0) for d in (active_deposits or []))
+    deposit_roi_cap = sum(float(d.roi_cap_amount or 0) for d in (active_deposits or []))
 
-        if active_deposits:
-            total_roi_paid = sum(float(d.roi_paid_amount or 0) for d in active_deposits)
-            total_roi_cap = sum(float(d.roi_cap_amount or 0) for d in active_deposits)
+    # Bonus deposits (BonusCredit) - active + not completed
+    bonus_repo = BonusCreditRepository(session)
+    active_bonus = await bonus_repo.get_active_by_user(user.id)
+    bonus_deposited = sum(float(b.amount or 0) for b in (active_bonus or []))
+    bonus_roi_paid = sum(float(b.roi_paid_amount or 0) for b in (active_bonus or []))
+    bonus_roi_cap = sum(float(b.roi_cap_amount or 0) for b in (active_bonus or []))
 
-            if total_roi_cap > 0:
-                overall_progress = (total_roi_paid / total_roi_cap) * 100
-                deposits_section = (
-                    f"📦 В депозитах: `{format_usdt(total_deposited)} USDT`\n"
-                    f"📈 ROI прогресс: `{overall_progress:.1f}%`\n"
-                    f"✅ Заработано: `{format_usdt(total_roi_paid)} USDT`\n"
-                )
-            else:
-                deposits_section = f"📦 В депозитах: `{format_usdt(total_deposited)} USDT`\n"
-        else:
-            deposits_section = f"📦 В депозитах: `{format_usdt(total_deposited)} USDT`\n"
-        total = float(available) + total_deposited
+    deposited_total = float(total_deposited) + float(bonus_deposited)
+    roi_paid_total = float(deposit_roi_paid) + float(bonus_roi_paid)
+    roi_cap_total = float(deposit_roi_cap) + float(bonus_roi_cap)
+
+    if deposited_total > 0:
+        deposits_section = f"📦 В депозитах: `{format_usdt(total_deposited)} USDT`\n"
+        if bonus_deposited > 0:
+            deposits_section += f"🎁 Бонусный депозит: `{format_usdt(bonus_deposited)} USDT`\n"
+
+        if roi_cap_total > 0 and roi_paid_total > 0:
+            overall_progress = (roi_paid_total / roi_cap_total) * 100
+            deposits_section += (
+                f"📈 ROI прогресс: `{overall_progress:.1f}%`\n"
+                f"✅ Заработано (ROI): `{format_usdt(roi_paid_total)} USDT`\n"
+            )
+        total = float(available) + deposited_total
     else:
         deposits_section = "📦 В депозитах: `0.00 USDT`\n"
         total = float(available)
@@ -99,7 +105,7 @@ async def show_finances_submenu(
         f"💵 Доступно: `{available:.2f} USDT`\n"
     )
 
-    # Add bonus section if user has bonuses
+    # Keep bonus balance (if present) separate from bonus deposits
     bonus_balance = balance_info.get('bonus_balance', 0) if balance_info else 0
     if bonus_balance and bonus_balance > 0:
         text += f"🎁 Бонусный баланс: `{float(bonus_balance):.2f} USDT`\n"

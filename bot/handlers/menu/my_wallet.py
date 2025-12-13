@@ -270,11 +270,25 @@ async def refresh_wallet(
 
         text = format_wallet_message(user, balance_data)
 
-        await callback.message.edit_text(
-            text,
-            parse_mode="Markdown",
-            reply_markup=wallet_menu_inline_keyboard(),
-        )
+        # Prefer editing the current message, but fall back to sending a new one
+        # if Telegram disallows editing (e.g., message too old / already deleted).
+        if callback.message:
+            try:
+                await callback.message.edit_text(
+                    text,
+                    parse_mode="Markdown",
+                    reply_markup=wallet_menu_inline_keyboard(),
+                )
+            except Exception as edit_error:
+                logger.warning(f"[WALLET] edit_text failed on refresh, sending new message: {edit_error}")
+                await callback.message.answer(
+                    text,
+                    parse_mode="Markdown",
+                    reply_markup=wallet_menu_inline_keyboard(),
+                )
+        else:
+            await callback.answer("❌ Не удалось обновить: сообщение не найдено", show_alert=True)
+            return
 
     except Exception as e:
         logger.error(f"[WALLET] Failed to refresh wallet: {e}")
@@ -307,11 +321,23 @@ async def back_to_wallet(
 
         text = format_wallet_message(user, balance_data)
 
-        await callback.message.edit_text(
-            text,
-            parse_mode="Markdown",
-            reply_markup=wallet_menu_inline_keyboard(),
-        )
+        if callback.message:
+            try:
+                await callback.message.edit_text(
+                    text,
+                    parse_mode="Markdown",
+                    reply_markup=wallet_menu_inline_keyboard(),
+                )
+            except Exception as edit_error:
+                logger.warning(f"[WALLET] edit_text failed on back, sending new message: {edit_error}")
+                await callback.message.answer(
+                    text,
+                    parse_mode="Markdown",
+                    reply_markup=wallet_menu_inline_keyboard(),
+                )
+        else:
+            await callback.answer("❌ Не удалось открыть кошелек", show_alert=True)
+            return
 
         await state.set_state(WalletStates.viewing_balances)
 
@@ -348,11 +374,23 @@ async def show_plex_transactions(
 
         text = format_transactions_message("PLEX", transactions, user.wallet_address)
 
-        await callback.message.edit_text(
-            text,
-            parse_mode="Markdown",
-            reply_markup=transactions_inline_keyboard("plex"),
-        )
+        if callback.message:
+            try:
+                await callback.message.edit_text(
+                    text,
+                    parse_mode="Markdown",
+                    reply_markup=transactions_inline_keyboard("plex"),
+                )
+            except Exception as edit_error:
+                logger.warning(f"[WALLET] edit_text failed on plex txs, sending new message: {edit_error}")
+                await callback.message.answer(
+                    text,
+                    parse_mode="Markdown",
+                    reply_markup=transactions_inline_keyboard("plex"),
+                )
+        else:
+            await callback.answer("❌ Не удалось показать транзакции", show_alert=True)
+            return
 
         await state.set_state(WalletStates.viewing_plex_txs)
 
@@ -389,11 +427,23 @@ async def show_usdt_transactions(
 
         text = format_transactions_message("USDT", transactions, user.wallet_address)
 
-        await callback.message.edit_text(
-            text,
-            parse_mode="Markdown",
-            reply_markup=transactions_inline_keyboard("usdt"),
-        )
+        if callback.message:
+            try:
+                await callback.message.edit_text(
+                    text,
+                    parse_mode="Markdown",
+                    reply_markup=transactions_inline_keyboard("usdt"),
+                )
+            except Exception as edit_error:
+                logger.warning(f"[WALLET] edit_text failed on usdt txs, sending new message: {edit_error}")
+                await callback.message.answer(
+                    text,
+                    parse_mode="Markdown",
+                    reply_markup=transactions_inline_keyboard("usdt"),
+                )
+        else:
+            await callback.answer("❌ Не удалось показать транзакции", show_alert=True)
+            return
 
         await state.set_state(WalletStates.viewing_usdt_txs)
 
@@ -430,11 +480,23 @@ async def show_bnb_transactions(
 
         text = format_transactions_message("BNB", transactions, user.wallet_address)
 
-        await callback.message.edit_text(
-            text,
-            parse_mode="Markdown",
-            reply_markup=transactions_inline_keyboard("bnb"),
-        )
+        if callback.message:
+            try:
+                await callback.message.edit_text(
+                    text,
+                    parse_mode="Markdown",
+                    reply_markup=transactions_inline_keyboard("bnb"),
+                )
+            except Exception as edit_error:
+                logger.warning(f"[WALLET] edit_text failed on bnb txs, sending new message: {edit_error}")
+                await callback.message.answer(
+                    text,
+                    parse_mode="Markdown",
+                    reply_markup=transactions_inline_keyboard("bnb"),
+                )
+        else:
+            await callback.answer("❌ Не удалось показать транзакции", show_alert=True)
+            return
 
         await state.set_state(WalletStates.viewing_bnb_txs)
 
