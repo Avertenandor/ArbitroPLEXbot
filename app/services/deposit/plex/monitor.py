@@ -3,7 +3,7 @@
 Проверяет поступление PLEX токенов для активных депозитов.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.deposit import Deposit
 from app.models.plex_payment import PlexPaymentRequirement, PlexPaymentStatus
 from app.services.blockchain.blockchain_service import BlockchainService
+from app.repositories.global_settings_repository import GlobalSettingsRepository
 
 from .processor import PlexPaymentProcessor
 from .scanner import PlexTransferScanner
@@ -86,8 +87,26 @@ class PlexPaymentMonitor:
                 "hours_overdue": 0,
             }
 
-        # Проверяем статус
+        # Нормализуем дедлайны под глобальный старт проекта,
+        # чтобы старые депозиты не улетали сразу в warning/blocked.
+        settings_repo = GlobalSettingsRepository(self.session)
+        project_start_at = await settings_repo.get_project_start_at()
+
         now = datetime.now(UTC)
+        if requirement.next_payment_due < project_start_at:
+            requirement.next_payment_due = project_start_at + timedelta(hours=24)
+            requirement.warning_due = project_start_at + timedelta(hours=25)
+            requirement.block_due = project_start_at + timedelta(hours=49)
+            # Сбрасываем «исторические» предупреждения, чтобы запуск был чистым
+            requirement.warning_sent_at = None
+            requirement.warning_count = 0
+            requirement.last_check_at = now
+            # Не разлочиваем вручную заблокированные статусы, только выравниваем таймеры
+            if requirement.status in (PlexPaymentStatus.WARNING_SENT, PlexPaymentStatus.OVERDUE):
+                requirement.status = PlexPaymentStatus.ACTIVE
+            await self.session.commit()
+
+        # Проверяем статус
         hours_overdue = max(
             0, int((now - requirement.next_payment_due).total_seconds() / 3600)
         )

@@ -1,5 +1,4 @@
-"""
-PLEX Payment Service.
+"""PLEX Payment Service.
 
 Manages PLEX payment requirements, verification, and access level checks.
 """
@@ -21,6 +20,7 @@ from app.config.business_constants import (
 )
 from app.models.plex_payment import PlexPaymentRequirement, PlexPaymentStatus
 from app.repositories.deposit_repository import DepositRepository
+from app.repositories.global_settings_repository import GlobalSettingsRepository
 from app.repositories.plex_payment_repository import PlexPaymentRepository
 from app.repositories.user_repository import UserRepository
 from app.services.blockchain_service import get_blockchain_service
@@ -134,6 +134,9 @@ class PlexPaymentService:
         """
         payments = await self._plex_repo.get_active_by_user_id(user_id)
 
+        settings_repo = GlobalSettingsRepository(self._session)
+        project_start_at = await settings_repo.get_project_start_at()
+
         total_daily_required = Decimal("0")
         overdue_count = 0
         warning_count = 0
@@ -160,11 +163,16 @@ class PlexPaymentService:
                 overdue_count += 1
 
             # --- Historical debt calculation ---
-            # Base point: when the deposit was created (or requirement itself)
+            # Base point: max(project_start_at, deposit_created_at) to avoid retro-debt before launch
             deposit_created_at = getattr(payment.deposit, "created_at", None) or payment.created_at
+            if deposit_created_at and deposit_created_at.tzinfo is None:
+                deposit_created_at = deposit_created_at.replace(tzinfo=UTC)
+            base_start = project_start_at
+            if deposit_created_at and deposit_created_at > base_start:
+                base_start = deposit_created_at
 
-            if daily_required > 0 and deposit_created_at:
-                delta_days = (now - deposit_created_at).total_seconds() / 86400
+            if daily_required > 0 and base_start:
+                delta_days = (now - base_start).total_seconds() / 86400
                 # At least 1 day of obligation once deposit exists
                 days_expected = int(delta_days) + 1
                 if days_expected < 1:

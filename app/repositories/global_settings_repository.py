@@ -1,7 +1,6 @@
-"""
-Global Settings repository.
-"""
+"""Global Settings repository."""
 
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -46,7 +45,34 @@ class GlobalSettingsRepository:
             await self.session.commit()
             await self.session.refresh(settings)
 
+        # Ensure stable project start timestamp exists (used as a global epoch)
+        roi_settings = settings.roi_settings or {}
+        if "PROJECT_START_AT" not in roi_settings:
+            roi_settings = dict(roi_settings)
+            roi_settings["PROJECT_START_AT"] = datetime.now(UTC).isoformat()
+            settings.roi_settings = roi_settings
+            await self.session.commit()
+            await self.session.refresh(settings)
+
         return settings
+
+    async def get_project_start_at(self) -> datetime:
+        """Get (and ensure) project start timestamp in UTC."""
+        settings = await self.get_settings()
+        raw = str((settings.roi_settings or {}).get("PROJECT_START_AT", "") or "")
+        try:
+            dt = datetime.fromisoformat(raw)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=UTC)
+            return dt.astimezone(UTC)
+        except Exception:
+            # If corrupted, reset to now (safe, explicit 'start now')
+            now = datetime.now(UTC)
+            roi_settings = dict(settings.roi_settings or {})
+            roi_settings["PROJECT_START_AT"] = now.isoformat()
+            settings.roi_settings = roi_settings
+            await self.session.commit()
+            return now
 
     async def update_settings(
         self,

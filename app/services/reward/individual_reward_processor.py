@@ -10,12 +10,13 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.deposit import Deposit
 from app.repositories.deposit_repository import DepositRepository
 from app.repositories.deposit_reward_repository import DepositRewardRepository
+from app.repositories.global_settings_repository import GlobalSettingsRepository
 from app.services.reward.reward_calculator import RewardCalculator
 
 
@@ -56,10 +57,33 @@ class IndividualRewardProcessor:
 
         corridor_service = RoiCorridorService(self.session)
         referral_service = ReferralService(self.session)
+        settings_repo = GlobalSettingsRepository(self.session)
+
+        # Respect global project start timestamp (epoch for accruals)
+        now = datetime.now(UTC)
+        project_start_at = await settings_repo.get_project_start_at()
+        if now < project_start_at:
+            logger.info(
+                "Skipping individual rewards before project start",
+                extra={"project_start_at": project_start_at.isoformat()},
+            )
+            return
+
+        # Normalize scheduling so nothing accrues before project start
+        period_hours = await corridor_service.get_accrual_period_hours()
+        normalized_next_accrual = project_start_at + timedelta(hours=period_hours)
+        await self.session.execute(
+            update(Deposit)
+            .where(
+                Deposit.status == "confirmed",
+                Deposit.is_roi_completed == False,  # noqa: E712
+                (Deposit.next_accrual_at.is_(None)) | (Deposit.next_accrual_at < project_start_at),
+            )
+            .values(next_accrual_at=normalized_next_accrual)
+        )
 
         # Get deposits due for accrual with pessimistic lock
         # This prevents race conditions with concurrent reward calculations
-        now = datetime.now(UTC)
         stmt = (
             select(Deposit)
             .where(
@@ -116,7 +140,6 @@ class IndividualRewardProcessor:
 
                 # Update deposit
                 new_roi_paid = (deposit.roi_paid_amount or Decimal("0")) + reward_amount
-                period_hours = await corridor_service.get_accrual_period_hours()
                 next_accrual = now + timedelta(hours=period_hours)
 
                 await self.deposit_repo.update(

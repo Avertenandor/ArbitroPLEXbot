@@ -9,10 +9,12 @@ from decimal import Decimal
 from typing import Any
 
 from loguru import logger
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.bonus_credit import BonusCredit
 from app.repositories.bonus_credit_repository import BonusCreditRepository
+from app.repositories.global_settings_repository import GlobalSettingsRepository
 from app.repositories.user_repository import UserRepository
 from app.services.base_service import BaseService
 
@@ -246,14 +248,31 @@ class BonusService(BaseService):
             "errors": 0,
         }
 
+        corridor_service = RoiCorridorService(self.session)
+        calculator = RewardCalculator(self.session)
+
+        settings_repo = GlobalSettingsRepository(self.session)
+        project_start_at = await settings_repo.get_project_start_at()
+        if now < project_start_at:
+            return stats
+
+        period_hours = await corridor_service.get_accrual_period_hours()
+        normalized_next_accrual = project_start_at + timedelta(hours=period_hours)
+        await self.session.execute(
+            update(BonusCredit)
+            .where(
+                BonusCredit.is_active.is_(True),
+                BonusCredit.is_roi_completed.is_(False),
+                (BonusCredit.next_accrual_at.is_(None)) | (BonusCredit.next_accrual_at < project_start_at),
+            )
+            .values(next_accrual_at=normalized_next_accrual)
+        )
+
         # Get due bonus credits
         due_bonuses = await self.bonus_repo.get_due_for_accrual(now)
 
         if not due_bonuses:
             return stats
-
-        corridor_service = RoiCorridorService(self.session)
-        calculator = RewardCalculator(self.session)
 
         # Get corridor config (use level 1 settings for bonuses)
         config = await corridor_service.get_corridor_config(1)
@@ -286,7 +305,6 @@ class BonusService(BaseService):
                 is_completed = new_roi_paid >= bonus.roi_cap_amount
 
                 # Get accrual period
-                period_hours = await corridor_service.get_accrual_period_hours()
                 next_accrual = now + timedelta(hours=period_hours)
 
                 await self.bonus_repo.update_roi(
