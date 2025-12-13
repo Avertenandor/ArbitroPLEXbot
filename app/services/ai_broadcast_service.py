@@ -10,8 +10,8 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Appeal, User
-from app.repositories.admin_repository import AdminRepository
 from app.repositories.user_repository import UserRepository
+from app.services.ai.commons import verify_admin
 
 """NOTE: Access control
 
@@ -37,15 +37,9 @@ class AIBroadcastService:
 
     async def _verify_admin(self) -> tuple[bool, str | None]:
         """Verify that the caller is an active (non-blocked) admin."""
-        if not self.admin_telegram_id:
-            return False, "❌ Не удалось определить администратора"
-
-        admin_repo = AdminRepository(self.session)
-        admin = await admin_repo.get_by_telegram_id(self.admin_telegram_id)
-
-        if not admin or admin.is_blocked:
-            return False, "❌ Администратор не найден или заблокирован"
-
+        admin, error = await verify_admin(self.session, self.admin_telegram_id)
+        if error:
+            return False, error
         return True, None
 
     async def send_message_to_user(

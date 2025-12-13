@@ -119,6 +119,7 @@ async def confirm_input_wallet(message: Message, state: FSMContext):
         await handle_wallet_menu(message, state)
 
     except Exception as e:
-        await message.answer(f"❌ Ошибка при сохранении: {e}")
+        logger.error(f"Error saving input wallet: {e}", exc_info=True)
+        await message.answer("❌ Ошибка при сохранении кошелька. Попробуйте позже.")
         from .menu import handle_wallet_menu
         await handle_wallet_menu(message, state)

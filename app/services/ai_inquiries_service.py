@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
 from app.models.user_inquiry import InquiryMessage, InquiryStatus, UserInquiry
-from app.repositories.admin_repository import AdminRepository
+from app.services.ai.commons import verify_admin
 
 
 class AIInquiriesService:
@@ -48,27 +48,7 @@ class AIInquiriesService:
 
     async def _verify_admin(self) -> tuple[Any | None, str | None]:
         """Verify admin credentials from session data."""
-        if not self.admin_telegram_id:
-            return None, "❌ ОШИБКА БЕЗОПАСНОСТИ: Не удалось определить администратора"
-
-        admin_repo = AdminRepository(self.session)
-        admin = await admin_repo.get_by_telegram_id(self.admin_telegram_id)
-
-        if not admin:
-            logger.warning(
-                f"AI INQUIRIES SECURITY: Unauthorized attempt "
-                f"from telegram_id={self.admin_telegram_id}"
-            )
-            return None, "❌ ОШИБКА БЕЗОПАСНОСТИ: Администратор не найден"
-
-        if admin.is_blocked:
-            logger.warning(
-                f"AI INQUIRIES SECURITY: Blocked admin attempt: "
-                f"{admin.telegram_id} (@{admin.username})"
-            )
-            return None, "❌ ОШИБКА: Администратор заблокирован"
-
-        return admin, None
+        return await verify_admin(self.session, self.admin_telegram_id)
 
     async def get_inquiries_list(
         self,

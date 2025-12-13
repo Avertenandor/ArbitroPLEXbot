@@ -20,6 +20,7 @@ except ImportError:
 
     AsyncRedis = aioredis.Redis
 
+from app.config.operational_constants import DRAMATIQ_TIME_LIMIT_STANDARD
 from app.config.settings import settings
 from app.repositories.deposit_level_version_repository import (
     DepositLevelVersionRepository,
@@ -28,7 +29,7 @@ from app.repositories.global_settings_repository import GlobalSettingsRepository
 from app.repositories.user_repository import UserRepository
 
 
-@dramatiq.actor(max_retries=3, time_limit=300_000)  # 5 min timeout
+@dramatiq.actor(max_retries=3, time_limit=DRAMATIQ_TIME_LIMIT_STANDARD)  # 5 min timeout
 def warmup_redis_cache() -> None:
     """
     Warm up Redis cache after recovery.

@@ -15,6 +15,10 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from app.config.operational_constants import (
+    DRAMATIQ_TIME_LIMIT_LONG,
+    DRAMATIQ_TIME_LIMIT_SHORT,
+)
 from app.config.settings import settings
 from app.services.blockchain.singleton import get_blockchain_service
 from app.services.deposit.plex.monitor import PlexPaymentMonitor
@@ -22,7 +26,7 @@ from app.utils.distributed_lock import get_distributed_lock
 from jobs.async_runner import run_async
 
 
-@dramatiq.actor(max_retries=2, time_limit=600_000)  # 10 min timeout
+@dramatiq.actor(max_retries=2, time_limit=DRAMATIQ_TIME_LIMIT_LONG)  # 10 min timeout
 def monitor_plex_payments() -> dict:
     """
     Периодическая проверка PLEX платежей.
@@ -135,7 +139,7 @@ async def _monitor_plex_payments_async() -> dict:
     return stats
 
 
-@dramatiq.actor(max_retries=1, time_limit=60_000)  # 1 min timeout
+@dramatiq.actor(max_retries=1, time_limit=DRAMATIQ_TIME_LIMIT_SHORT)  # 1 min timeout
 def check_single_user_plex(user_id: int, deposit_id: int) -> dict:
     """
     Check PLEX payment for a single user deposit.

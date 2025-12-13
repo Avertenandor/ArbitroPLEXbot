@@ -22,6 +22,7 @@ except ImportError:
 from aiogram.fsm.storage.redis import RedisStorage
 
 from app.config.database import async_session_maker
+from app.config.operational_constants import DRAMATIQ_TIME_LIMIT_LONG
 from app.config.settings import settings
 from app.models.notification_queue_fallback import NotificationQueueFallback
 from app.models.user_fsm_state import UserFsmState
@@ -29,7 +30,7 @@ from app.repositories.user_repository import UserRepository
 from jobs.async_runner import run_async
 
 
-@dramatiq.actor(max_retries=3, time_limit=600_000)  # 10 min timeout
+@dramatiq.actor(max_retries=3, time_limit=DRAMATIQ_TIME_LIMIT_LONG)  # 10 min timeout
 def recover_redis_data() -> dict:
     """
     Recover notification queue and FSM states when Redis recovers.

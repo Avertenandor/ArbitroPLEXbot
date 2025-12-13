@@ -50,10 +50,23 @@ async def show_withdrawal_menu(
     user_service = UserService(session)
     balance = await user_service.get_user_balance(user.id)
 
+    # Validate balance response
+    if not balance or "available_balance" not in balance:
+        logger.error(f"[MENU] Failed to get balance for user {user.id}")
+        await message.answer(
+            "⚠️ Ошибка: не удалось получить баланс. Попробуйте позже."
+        )
+        return
+
     # Get min withdrawal amount
     from app.services.withdrawal_service import WithdrawalService
     withdrawal_service = WithdrawalService(session)
     min_amount = await withdrawal_service.get_min_withdrawal_amount()
+
+    # Validate min_amount
+    if min_amount is None:
+        logger.error(f"[MENU] Failed to get min withdrawal amount")
+        min_amount = 10  # Fallback to safe default
 
     text = (
         f"💸 *Вывод средств*\n\n"

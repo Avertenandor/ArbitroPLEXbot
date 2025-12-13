@@ -23,8 +23,8 @@ from app.models.deposit import Deposit
 from app.models.enums import TransactionStatus, TransactionType
 from app.models.transaction import Transaction
 from app.models.user import User
-from app.repositories.admin_repository import AdminRepository
 from app.repositories.user_repository import UserRepository
+from app.services.ai.commons import find_user_by_identifier, verify_admin
 from app.utils.formatters import format_user_identifier
 
 
@@ -47,56 +47,12 @@ class AIUsersService:
         self.user_repo = UserRepository(session)
 
     async def _verify_admin(self) -> tuple[Any | None, str | None]:
-        """Verify admin credentials."""
-        if not self.admin_telegram_id:
-            return None, "❌ Не удалось определить администратора"
-
-        admin_repo = AdminRepository(self.session)
-        admin = await admin_repo.get_by_telegram_id(self.admin_telegram_id)
-
-        if not admin:
-            return None, "❌ Администратор не найден"
-
-        if admin.is_blocked:
-            return None, "❌ Администратор заблокирован"
-
-        return admin, None
+        """Verify admin credentials using shared utility."""
+        return await verify_admin(self.session, self.admin_telegram_id)
 
     async def _find_user(self, identifier: str) -> tuple[User | None, str | None]:
-        """Find user by username, telegram_id, or wallet address."""
-        identifier = identifier.strip()
-
-        # By username (@username or plain username)
-        if identifier.startswith("@"):
-            username = identifier[1:]
-        else:
-            # validate_user_identifier() допускает plain username
-            username = identifier if all(c.isalnum() or c == "_" for c in identifier) else ""
-
-        if username:
-            user = await self.user_repo.get_by_username(username)
-            if user:
-                return user, None
-            return None, f"❌ Пользователь @{username} не найден"
-
-        # By telegram ID
-        if identifier.isdigit():
-            telegram_id = int(identifier)
-            user = await self.user_repo.get_by_telegram_id(telegram_id)
-            if user:
-                return user, None
-            return None, f"❌ Пользователь с ID {telegram_id} не найден"
-
-        # By wallet address
-        if identifier.startswith("0x") and len(identifier) == 42:
-            stmt = select(User).where(User.wallet_address == identifier)
-            result = await self.session.execute(stmt)
-            user = result.scalar_one_or_none()
-            if user:
-                return user, None
-            return None, f"❌ Пользователь с кошельком {identifier[:10]}... не найден"
-
-        return None, "❌ Укажите @username/username, telegram_id или адрес кошелька"
+        """Find user by username, telegram_id, or wallet address using shared utility."""
+        return await find_user_by_identifier(self.session, identifier, self.user_repo)
 
     async def get_user_profile(self, user_identifier: str) -> dict[str, Any]:
         """

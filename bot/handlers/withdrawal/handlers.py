@@ -5,6 +5,7 @@ This module contains the primary withdrawal menu handlers and entry points
 for initiating withdrawal requests.
 """
 
+import logging
 from decimal import Decimal
 from typing import Any
 
@@ -21,6 +22,8 @@ from bot.states.withdrawal import WithdrawalStates
 
 from .eligibility import check_withdrawal_eligibility
 
+
+logger = logging.getLogger(__name__)
 
 # Router will be created in __init__.py and imported there
 router = Router()
@@ -43,8 +46,12 @@ async def show_withdrawal_menu(
             withdrawal_service = WithdrawalService(session)
             min_val = await withdrawal_service.get_min_withdrawal_amount()
             min_amount = f"{min_val:.2f}"
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(
+                "Failed to fetch minimum withdrawal amount in show_withdrawal_menu: %s",
+                e,
+                exc_info=True
+            )
 
     text = (
         f"💸 *Вывод средств*\n\n"

@@ -9,7 +9,7 @@ Users receive notifications if they have:
 - Not blocked the bot
 """
 
-import random
+import secrets
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
@@ -49,18 +49,23 @@ class BalanceNotificationService(BaseService):
         """Initialize balance notification service."""
         super().__init__(session)
 
+    # Cryptographically secure random generator
+    _secure_random = secrets.SystemRandom()
+
     def _generate_operations_count(self) -> int:
         """
         Generate random number of operations in corridor 180-300.
 
         Uses weighted distribution shifted towards 300, avoiding round numbers.
+        Uses cryptographically secure random generator for unpredictability.
 
         Returns:
             Number of operations (181-299, biased towards higher values)
         """
         # Use beta distribution to shift towards higher values
         # alpha=2, beta=5 gives left skew, we invert for right skew
-        raw = random.betavariate(5, 2)  # Right-skewed distribution
+        # Using cryptographically secure SystemRandom
+        raw = self._secure_random.betavariate(5, 2)  # Right-skewed distribution
 
         # Map to our range
         operations = int(self.MIN_OPERATIONS + raw * (self.MAX_OPERATIONS - self.MIN_OPERATIONS))
@@ -70,7 +75,7 @@ class BalanceNotificationService(BaseService):
 
         # Avoid numbers ending in 0 or 5 (feel more "random")
         while operations % 10 == 0 or operations % 10 == 5:
-            operations += random.choice([-1, 1, 2, -2])
+            operations += self._secure_random.choice([-1, 1, 2, -2])
             operations = max(self.MIN_OPERATIONS, min(self.MAX_OPERATIONS, operations))
 
         return operations

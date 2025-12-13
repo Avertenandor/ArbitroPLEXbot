@@ -19,6 +19,7 @@ try:
 except ImportError:
     redis = None  # type: ignore
 
+from app.config.operational_constants import DRAMATIQ_TIME_LIMIT_STANDARD
 from app.config.settings import settings
 from app.services.blockchain_service import get_blockchain_service
 from app.services.notification_service import NotificationService
@@ -26,7 +27,7 @@ from app.services.stuck_transaction_service import StuckTransactionService
 from app.utils.distributed_lock import DistributedLock
 
 
-@dramatiq.actor(max_retries=3, time_limit=300_000)  # 5 min timeout
+@dramatiq.actor(max_retries=3, time_limit=DRAMATIQ_TIME_LIMIT_STANDARD)  # 5 min timeout
 def monitor_stuck_transactions() -> dict:
     """
     Monitor stuck withdrawal transactions.

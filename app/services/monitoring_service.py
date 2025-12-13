@@ -669,8 +669,8 @@ class MonitoringService:
                         }
                         for i in inq_result.scalars().all()
                     ]
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.error(f"Error fetching inquiries for user {user.id}: {e}")
 
             # Admin actions on this user
             actions_result = await self.session.execute(

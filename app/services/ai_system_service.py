@@ -18,8 +18,8 @@ from typing import Any
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.repositories.admin_repository import AdminRepository
 from app.repositories.global_settings_repository import GlobalSettingsRepository
+from app.services.ai.commons import verify_admin
 
 
 """NOTE: Access control
@@ -50,16 +50,7 @@ class AISystemService:
 
     async def _verify_admin(self) -> tuple[Any | None, str | None]:
         """Verify admin credentials."""
-        if not self.admin_telegram_id:
-            return None, "❌ Не удалось определить администратора"
-
-        admin_repo = AdminRepository(self.session)
-        admin = await admin_repo.get_by_telegram_id(self.admin_telegram_id)
-
-        if not admin or admin.is_blocked:
-            return None, "❌ Администратор не найден или заблокирован"
-
-        return admin, None
+        return await verify_admin(self.session, self.admin_telegram_id)
 
     def _is_super_admin(self) -> bool:
         """All verified admins have super-admin level access for ARYA controls."""

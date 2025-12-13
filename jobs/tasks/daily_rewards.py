@@ -15,6 +15,7 @@ except ImportError:
     redis = None  # type: ignore
 
 from app.config.database import async_session_maker
+from app.config.operational_constants import DRAMATIQ_TIME_LIMIT_MEDIUM
 from app.config.settings import settings
 from app.services.reward_service import RewardService
 from app.utils.distributed_lock import DistributedLock
@@ -22,7 +23,7 @@ from app.utils.redis_utils import get_redis_client
 from jobs.async_runner import run_async
 
 
-@dramatiq.actor(max_retries=3, time_limit=120_000)  # 2 min timeout (must be > lock timeout)
+@dramatiq.actor(max_retries=3, time_limit=DRAMATIQ_TIME_LIMIT_MEDIUM)  # 2 min timeout (must be > lock timeout)
 def process_daily_rewards(session_id: int | None = None) -> None:
     """
     Process daily rewards for active session.

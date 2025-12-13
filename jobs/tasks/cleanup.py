@@ -13,6 +13,7 @@ except ImportError:
     redis = None  # type: ignore
 
 from app.config.database import async_session_maker
+from app.config.operational_constants import DRAMATIQ_TIME_LIMIT_STANDARD
 from app.config.settings import settings
 from app.utils.datetime_utils import utc_now
 from app.utils.distributed_lock import DistributedLock
@@ -20,7 +21,7 @@ from app.utils.redis_utils import get_redis_client
 from jobs.async_runner import run_async
 
 
-@dramatiq.actor(max_retries=3, time_limit=300_000)  # 5 min timeout
+@dramatiq.actor(max_retries=3, time_limit=DRAMATIQ_TIME_LIMIT_STANDARD)  # 5 min timeout
 def cleanup_logs_and_data() -> None:
     """
     Cleanup old logs and orphaned data.

@@ -17,6 +17,7 @@ try:
 except ImportError:
     redis = None  # type: ignore
 
+from app.config.operational_constants import DRAMATIQ_TIME_LIMIT_STANDARD
 from app.config.settings import settings
 from app.services.notification_retry_service import (
     NotificationRetryService,
@@ -26,7 +27,7 @@ from app.utils.redis_utils import get_redis_client
 from jobs.async_runner import run_async
 
 
-@dramatiq.actor(max_retries=3, time_limit=300_000)  # 5 min timeout
+@dramatiq.actor(max_retries=3, time_limit=DRAMATIQ_TIME_LIMIT_STANDARD)  # 5 min timeout
 def process_notification_retries() -> None:
     """
     Process failed notification retries.

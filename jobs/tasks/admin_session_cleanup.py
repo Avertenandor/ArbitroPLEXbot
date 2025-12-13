@@ -16,13 +16,14 @@ try:
 except ImportError:
     redis = None  # type: ignore
 
+from app.config.operational_constants import DRAMATIQ_TIME_LIMIT_SHORT
 from app.config.settings import settings
 from app.repositories.admin_session_repository import AdminSessionRepository
 from app.utils.distributed_lock import DistributedLock
 from jobs.async_runner import run_async
 
 
-@dramatiq.actor(max_retries=3, time_limit=60_000)  # 1 min timeout
+@dramatiq.actor(max_retries=3, time_limit=DRAMATIQ_TIME_LIMIT_SHORT)
 def cleanup_expired_admin_sessions() -> dict:
     """
     Cleanup expired and inactive admin sessions.
