@@ -47,12 +47,19 @@ async def process_new_wallet(
     state: FSMContext,
 ) -> None:
     """Process new wallet address."""
-    new_wallet = message.text.strip()
+    if not message.text:
+        await message.answer(
+            "❌ Пожалуйста, введите адрес кошелька.",
+            reply_markup=cancel_keyboard(),
+        )
+        return
 
     if message.text == "❌ Отмена":
         await state.clear()
         await message.answer("❌ Отменено", reply_markup=settings_keyboard())
         return
+
+    new_wallet = message.text.strip()
 
     # BEP-20 validation (basic)
     if not re.match(r"^0x[a-fA-F0-9]{40}$", new_wallet):

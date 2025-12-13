@@ -59,6 +59,10 @@ async def process_min_input(
         message: Message object
         state: FSM context
     """
+    if not message.text:
+        await message.answer("❌ Пожалуйста, введите число.")
+        return
+
     # Validate amount (percentage)
     is_valid, roi_min, error_msg = validate_amount(
         message.text.strip(),
@@ -100,6 +104,10 @@ async def process_max_input(
         session: Database session
         data: Handler data
     """
+    if not message.text:
+        await message.answer("❌ Пожалуйста, введите число.")
+        return
+
     # Validate amount (percentage)
     is_valid, roi_max, error_msg = validate_amount(
         message.text.strip(),
@@ -157,6 +165,10 @@ async def process_fixed_input(
         session: Database session
         data: Handler data
     """
+    if not message.text:
+        await message.answer("❌ Пожалуйста, введите число.")
+        return
+
     # Validate amount (percentage)
     is_valid, roi_fixed, error_msg = validate_amount(
         message.text.strip(),
