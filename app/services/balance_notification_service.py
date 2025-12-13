@@ -14,7 +14,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -81,7 +81,7 @@ class BalanceNotificationService(BaseService):
 
         Criteria:
         - work_status = "active" (PLEX is paid, checked by plex_balance_monitor)
-        - total_deposited_usdt > 0 (has deposits confirmed by blockchain)
+        - Has deposits OR bonus balance (participating in ROI)
         - bot_blocked = False
         - is_banned = False
         - is_active = True
@@ -96,7 +96,10 @@ class BalanceNotificationService(BaseService):
             .where(
                 and_(
                     User.work_status == WorkStatus.ACTIVE,
-                    User.total_deposited_usdt > Decimal("0"),  # Has confirmed deposits
+                    or_(
+                        User.total_deposited_usdt > Decimal("0"),  # Has confirmed deposits
+                        User.bonus_balance > Decimal("0"),  # Or has bonus credits
+                    ),
                     User.bot_blocked == False,  # noqa: E712
                     User.is_banned == False,  # noqa: E712
                     User.is_active == True,  # noqa: E712
@@ -130,8 +133,10 @@ class BalanceNotificationService(BaseService):
         # Generate operations count
         operations_count = self._generate_operations_count()
 
-        # Amount in work = total deposited from blockchain (primary source)
-        amount_in_work = user.total_deposited_usdt or Decimal("0")
+        # Amount in work = total deposited + bonus balance (full working capital)
+        total_deposited = user.total_deposited_usdt or Decimal("0")
+        bonus_balance = user.bonus_balance or Decimal("0")
+        amount_in_work = total_deposited + bonus_balance
 
         # Calculate simulated hourly earnings based on daily rate
         # Average daily ROI is ~1.117%, so hourly is ~0.0465%

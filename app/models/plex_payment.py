@@ -61,10 +61,7 @@ class PlexPaymentRequirement(Base):
     __tablename__ = "plex_payment_requirements"
     __table_args__ = (
         CheckConstraint("daily_plex_required > 0", name="check_plex_daily_required_positive"),
-        CheckConstraint(
-            "deposit_id IS NOT NULL OR bonus_credit_id IS NOT NULL",
-            name="check_deposit_or_bonus"
-        ),
+        CheckConstraint("deposit_id IS NOT NULL OR bonus_credit_id IS NOT NULL", name="check_deposit_or_bonus"),
     )
 
     # Primary key
@@ -80,8 +77,11 @@ class PlexPaymentRequirement(Base):
 
     # Bonus credit reference (nullable - can be None if deposit_id is set)
     bonus_credit_id: Mapped[int | None] = mapped_column(
-        ForeignKey("bonus_credits.id", ondelete="CASCADE"), nullable=True, unique=True, index=True,
-        comment="Reference to bonus credit if this is a bonus payment requirement"
+        ForeignKey("bonus_credits.id", ondelete="CASCADE"),
+        nullable=True,
+        unique=True,
+        index=True,
+        comment="Reference to bonus credit if this is a bonus payment requirement",
     )
 
     # Requirements
@@ -166,7 +166,9 @@ class PlexPaymentRequirement(Base):
 
     deposit: Mapped["Deposit | None"] = relationship("Deposit", back_populates="plex_payment", lazy="selectin")
 
-    bonus_credit: Mapped["BonusCredit | None"] = relationship("BonusCredit", back_populates="plex_payment", lazy="selectin")
+    bonus_credit: Mapped["BonusCredit | None"] = relationship(
+        "BonusCredit", back_populates="plex_payment", lazy="selectin"
+    )
 
     def __repr__(self) -> str:
         """String representation."""

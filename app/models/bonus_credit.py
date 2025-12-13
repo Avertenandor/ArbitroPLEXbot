@@ -65,9 +65,7 @@ class BonusCredit(Base):
     )
 
     # Primary key
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # User reference
     user_id: Mapped[int] = mapped_column(
@@ -190,10 +188,7 @@ class BonusCredit(Base):
 
     def __repr__(self) -> str:
         """String representation."""
-        return (
-            f"<BonusCredit(id={self.id}, user_id={self.user_id}, "
-            f"amount={self.amount}, active={self.is_active})>"
-        )
+        return f"<BonusCredit(id={self.id}, user_id={self.user_id}, amount={self.amount}, active={self.is_active})>"
 
     @property
     def roi_remaining(self) -> Decimal:

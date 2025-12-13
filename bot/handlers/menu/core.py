@@ -91,9 +91,11 @@ async def show_main_menu(
 
     # Get deposits info from user model (primary source)
     total_deposited = float(user.total_deposited_usdt or Decimal("0"))
+    bonus_balance = float(user.bonus_balance or Decimal("0"))
+    total_in_work = total_deposited + bonus_balance
 
     # Build deposits summary section
-    if total_deposited > 0:
+    if total_in_work > 0:
         # Check for ROI data from deposits table
         deposit_service = DepositService(session)
         active_deposits = await deposit_service.get_active_deposits(user.id)
@@ -105,15 +107,15 @@ async def show_main_menu(
             if total_roi_cap > 0:
                 overall_progress = (total_roi_paid / total_roi_cap) * 100
                 deposits_section = (
-                    f"📦 Депозит: `{format_usdt(total_deposited)} USDT`\n"
+                    f"📦 В работе: `{format_usdt(total_in_work)} USDT`\n"
                     f"📈 ROI: `{overall_progress:.1f}%` получено `{format_usdt(total_roi_paid)} USDT`\n"
                 )
             else:
-                deposits_section = f"📦 Депозит: `{format_usdt(total_deposited)} USDT`\n"
+                deposits_section = f"📦 В работе: `{format_usdt(total_in_work)} USDT`\n"
         else:
-            deposits_section = f"📦 Депозит: `{format_usdt(total_deposited)} USDT`\n"
+            deposits_section = f"📦 В работе: `{format_usdt(total_in_work)} USDT`\n"
     else:
-        deposits_section = "📦 Депозит: _нет активных_\n"
+        deposits_section = "📦 В работе: _нет активных_\n"
 
     text = (
         f"📊 *ГЛАВНОЕ МЕНЮ*\n"
