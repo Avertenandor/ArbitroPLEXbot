@@ -5,7 +5,7 @@ import asyncio
 from aiogram import Bot
 from loguru import logger
 
-from app.database import async_session_maker
+from app.config.database import async_session_maker
 
 
 async def broadcast_message(
@@ -57,9 +57,9 @@ async def broadcast_message(
                     logger.warning(f"Failed to send to {user_id}: {e}")
                     fail_count += 1
 
-            logger.success(
-                f"Broadcast completed: {success_count} sent,"
-                    "{fail_count} failed"
+            logger.info(
+                f"Broadcast completed: {success_count} sent, "
+                f"{fail_count} failed"
             )
 
             return {

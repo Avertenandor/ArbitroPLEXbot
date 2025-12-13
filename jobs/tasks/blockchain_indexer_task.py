@@ -10,6 +10,8 @@ This ensures the system always has complete transaction history
 with minimal RPC calls after initial indexing.
 """
 
+import asyncio
+
 from loguru import logger
 
 from app.config.database import async_session_maker

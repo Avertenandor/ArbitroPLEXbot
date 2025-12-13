@@ -359,7 +359,11 @@ async def execute_grant_bonus(
             f"Failed to grant bonus: user_id={user_id}, amount={amount}, "
             f"reason={reason}, admin_id={admin.id}, error={error}"
         )
-        await callback.message.edit_text(f"❌ **Ошибка:** {error}", parse_mode="Markdown")
+        safe_error = escape_markdown(str(error))
+        await callback.message.edit_text(
+            f"❌ **Ошибка:** {safe_error}",
+            parse_mode="Markdown"
+        )
         await callback.answer("Ошибка!", show_alert=True)
         return
 
@@ -368,15 +372,17 @@ async def execute_grant_bonus(
     safe_username = escape_markdown(state_data.get("target_username", ""))
     roi_cap = amount * 5
 
+    safe_reason = escape_markdown(reason)
     text = (
         f"✅ **Бонус успешно начислен!**\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"👤 Получатель: @{safe_username}\n"
         f"💰 Сумма: **{format_usdt(amount)} USDT**\n"
         f"🎯 ROI Cap: **{format_usdt(roi_cap)} USDT**\n"
-        f"📝 Причина: {reason}\n\n"
+        f"📝 Причина: {safe_reason}\n\n"
         f"🆔 ID бонуса: `{bonus.id}`\n\n"
-        f"ℹ️ _Бонус начнёт участвовать в начислении ROI со следующего расчётного периода._"
+        f"ℹ️ _Бонус начнёт участвовать в начислении ROI "
+        f"со следующего расчётного периода._"
     )
 
     await state.set_state(BonusStates.menu)

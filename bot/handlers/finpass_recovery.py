@@ -1,10 +1,7 @@
 """
 Financial password recovery handler.
-
-Allows users to request financial password recovery with admin approval.
-Supports optional wallet change for users who lost access to their wallet.
+Allows users to request recovery with admin approval.
 """
-
 import re
 from typing import Any
 
@@ -20,9 +17,7 @@ from app.services.finpass_recovery_service import FinpassRecoveryService
 from bot.keyboards.reply import main_menu_reply_keyboard
 from bot.states.finpass_recovery import FinpassRecoveryStates
 
-
 router = Router()
-
 
 async def _start_finpass_recovery_flow(
     message: Message,
@@ -31,31 +26,19 @@ async def _start_finpass_recovery_flow(
     state: FSMContext,
     **data: Any,
 ) -> None:
-    """
-    Common logic for starting financial password recovery.
-
-    Args:
-        message: Telegram message
-        session: Database session
-        user: Current user
-        state: FSM state
-        **data: Handler data
-    """
+    """Common logic for starting financial password recovery."""
     from bot.keyboards.user.financial import finpass_recovery_type_keyboard
-
     recovery_service = FinpassRecoveryService(session)
-
     # Check if already has pending request
     pending = await recovery_service.get_pending_by_user(user.id)
-
     if pending:
         text = (
-            "⚠️ **У вас уже есть активный запрос на восстановление пароля**\n\n"
+            "⚠️ **У вас уже есть активный запрос "
+            "на восстановление пароля**\n\n"
             f"Статус: {pending.status}\n"
             f"Создан: {pending.created_at.strftime('%d.%m.%Y %H:%M')}\n\n"
             "Дождитесь рассмотрения администратором."
         )
-
         is_admin = data.get("is_admin", False)
         from app.repositories.blacklist_repository import BlacklistRepository
         blacklist_repo = BlacklistRepository(session)
@@ -69,22 +52,22 @@ async def _start_finpass_recovery_flow(
             ),
         )
         return
-
     # Check if has active recovery (approved but not verified)
     has_active = await recovery_service.has_active_recovery(user.id)
-
     if has_active:
         text = (
             "✅ **Ваш запрос одобрен!**\n\n"
-            "Новый финансовый пароль был отправлен вам в личные сообщения.\n\n"
+            "Новый финансовый пароль был отправлен вам "
+            "в личные сообщения.\n\n"
             "🔒 **Почему выплаты заблокированы?**\n"
-            "Это защита: если злоумышленник запросил смену пароля, "
-            "он не сможет вывести ваши средства без подтверждения.\n\n"
+            "Это защита: если злоумышленник "
+            "запросил смену пароля, он не сможет вывести "
+            "ваши средства без подтверждения.\n\n"
             "✅ **Как разблокировать:**\n"
-            "Сделайте любой вывод с новым паролем — блокировка снимется автоматически.\n\n"
+            "Сделайте любой вывод с новым паролем — "
+            "блокировка снимется автоматически.\n\n"
             "👉 Используйте '💸 Вывод' для проверки."
         )
-
         is_admin = data.get("is_admin", False)
         from app.repositories.blacklist_repository import BlacklistRepository
         blacklist_repo = BlacklistRepository(session)
@@ -98,27 +81,26 @@ async def _start_finpass_recovery_flow(
             ),
         )
         return
-
     # Show recovery type selection
     text = (
         "🔐 **Восстановление финансового пароля**\n\n"
         "⚠️ **Важно:**\n"
         "• Запрос рассматривается администратором\n"
-        "• Выплаты заблокированы до первого вывода с новым паролем\n\n"
+        "• Выплаты заблокированы до первого вывода "
+        "с новым паролем\n\n"
         "❓ **Что вам нужно восстановить?**\n\n"
-        "🔑 **Только пароль** — если забыли пароль, но кошелёк в порядке\n\n"
-        "💼 **Пароль + Новый кошелёк** — если потеряли доступ к кошельку "
-        "(смена SIM, утеря телефона, взлом кошелька и т.д.)"
+        "🔑 **Только пароль** — если забыли пароль, "
+        "но кошелёк в порядке\n\n"
+        "💼 **Пароль + Новый кошелёк** — "
+        "если потеряли доступ к кошельку\n"
+        "(смена SIM, утеря телефона, взлом и т.д.)"
     )
-
     await message.answer(
         text,
         parse_mode="Markdown",
         reply_markup=finpass_recovery_type_keyboard(),
     )
-
     await state.set_state(FinpassRecoveryStates.choosing_recovery_type)
-
 
 @router.message(F.text == "🔑 Восстановить финпароль")
 async def start_finpass_recovery_from_button(
@@ -128,18 +110,8 @@ async def start_finpass_recovery_from_button(
     state: FSMContext,
     **data: Any,
 ) -> None:
-    """
-    Start financial password recovery from menu button.
-
-    Args:
-        message: Telegram message
-        session: Database session
-        user: Current user
-        state: FSM state
-        **data: Handler data
-    """
+    """Start financial password recovery from menu button."""
     await _start_finpass_recovery_flow(message, session, user, state, **data)
-
 
 @router.message(FinpassRecoveryStates.choosing_recovery_type)
 async def process_recovery_type_choice(
@@ -150,11 +122,11 @@ async def process_recovery_type_choice(
     **data: Any,
 ) -> None:
     """Process recovery type selection."""
-    from bot.keyboards.reply import cancel_keyboard, finpass_recovery_keyboard
+    from bot.keyboards.reply import (
+        cancel_keyboard, finpass_recovery_keyboard
+    )
     from bot.utils.menu_buttons import is_menu_button
-
     is_admin = data.get("is_admin", False)
-
     if is_menu_button(message.text) or message.text == "❌ Отмена":
         await state.clear()
         blacklist_entry = None
@@ -171,7 +143,6 @@ async def process_recovery_type_choice(
             ),
         )
         return
-
     if message.text == "🔑 Только пароль":
         # Standard password-only recovery
         await state.update_data(include_wallet_change=False, new_wallet=None)
@@ -181,7 +152,6 @@ async def process_recovery_type_choice(
             reply_markup=finpass_recovery_keyboard(),
         )
         await state.set_state(FinpassRecoveryStates.waiting_for_reason)
-
     elif message.text == "💼 Пароль + Новый кошелёк":
         # Password + wallet change
         await state.update_data(include_wallet_change=True)
@@ -189,8 +159,8 @@ async def process_recovery_type_choice(
             "💼 **Смена кошелька + Восстановление пароля**\n\n"
             "Введите адрес вашего **НОВОГО** BEP-20 кошелька:\n\n"
             "⚠️ **КРИТИЧНО:**\n"
-            "• Указывайте только *ЛИЧНЫЙ* кошелёк "
-            "(Trust Wallet, MetaMask, SafePal)\n"
+            "• Указывайте только *ЛИЧНЫЙ* кошелёк\n"
+            "  (Trust Wallet, MetaMask, SafePal)\n"
             "• 🚫 *НЕ указывайте* адрес биржи!\n\n"
             "Формат: `0x...` (42 символа)",
             parse_mode="Markdown",
@@ -214,11 +184,11 @@ async def process_new_wallet_for_recovery(
     **data: Any,
 ) -> None:
     """Process new wallet address for recovery with wallet change."""
-    from bot.keyboards.reply import cancel_keyboard, finpass_recovery_keyboard
+    from bot.keyboards.reply import (
+        cancel_keyboard, finpass_recovery_keyboard
+    )
     from bot.utils.menu_buttons import is_menu_button
-
     is_admin = data.get("is_admin", False)
-
     if is_menu_button(message.text) or message.text == "❌ Отмена":
         await state.clear()
         blacklist_entry = None
@@ -235,19 +205,17 @@ async def process_new_wallet_for_recovery(
             ),
         )
         return
-
     new_wallet = message.text.strip()
-
     # Validate BEP-20 format
     if not re.match(r"^0x[a-fA-F0-9]{40}$", new_wallet):
         await message.answer(
             "❌ Неверный формат адреса кошелька.\n"
-            "Адрес должен начинаться с 0x и содержать 42 символа.\n\n"
+            "Адрес должен начинаться с 0x "
+            "и содержать 42 символа.\n\n"
             "Попробуйте ещё раз:",
             reply_markup=cancel_keyboard(),
         )
         return
-
     # Check if wallet is in blacklist
     from app.repositories.blacklist_repository import BlacklistRepository
     blacklist_repo = BlacklistRepository(session)
@@ -259,25 +227,25 @@ async def process_new_wallet_for_recovery(
             reply_markup=cancel_keyboard(),
         )
         return
-
     # Check if wallet is already used
     from app.repositories.user_repository import UserRepository
     user_repo = UserRepository(session)
     existing = await user_repo.get_by_wallet_address(new_wallet)
     if existing and existing.id != user.id:
         await message.answer(
-            "❌ Этот кошелёк уже используется другим пользователем.\n"
+            "❌ Этот кошелёк уже используется "
+            "другим пользователем.\n"
             "Укажите другой адрес:",
             reply_markup=cancel_keyboard(),
         )
         return
-
     # Save new wallet and proceed to reason
     await state.update_data(new_wallet=new_wallet)
     await message.answer(
         f"✅ Новый кошелёк принят:\n`{new_wallet}`\n\n"
         "📝 Теперь укажите причину восстановления:\n"
-        "(Опишите почему потеряли доступ к старому кошельку)",
+        "(Опишите почему потеряли доступ "
+        "к старому кошельку)",
         parse_mode="Markdown",
         reply_markup=finpass_recovery_keyboard(),
     )
@@ -292,21 +260,10 @@ async def process_recovery_reason(
     state: FSMContext,
     **data: Any,
 ) -> None:
-    """
-    Process recovery reason - show confirmation before creating request.
-
-    Args:
-        message: Telegram message
-        session: Database session
-        user: Current user
-        state: FSM state
-        **data: Handler data
-    """
+    """Process recovery reason - show confirmation before creating request."""
     from bot.keyboards.reply import finpass_recovery_confirm_keyboard
     from bot.utils.menu_buttons import is_menu_button
-
     is_admin = data.get("is_admin", False)
-
     if is_menu_button(message.text) or message.text == "❌ Отмена":
         await state.clear()
         blacklist_entry = None
@@ -325,9 +282,7 @@ async def process_recovery_reason(
             ),
         )
         return
-
     reason = message.text.strip()
-
     if len(reason) < 10:
         await message.answer(
             "❌ Причина слишком короткая!\n\n"
@@ -335,16 +290,13 @@ async def process_recovery_reason(
             "(минимум 10 символов)."
         )
         return
-
     # Save reason to state and ask for confirmation
     await state.update_data(reason=reason)
     await state.set_state(FinpassRecoveryStates.waiting_for_confirmation)
-
     # Get state data to check if wallet change requested
     state_data = await state.get_data()
     include_wallet = state_data.get("include_wallet_change", False)
     new_wallet = state_data.get("new_wallet")
-
     if include_wallet and new_wallet:
         text = (
             "📋 **Проверьте вашу заявку:**\n\n"
@@ -352,21 +304,23 @@ async def process_recovery_reason(
             f"📝 **Причина:**\n{reason}\n\n"
             "⚠️ **Напоминание:**\n"
             "• После одобрения ваш кошелёк будет изменён\n"
-            "• Выплаты будут заблокированы до первого вывода\n"
+            "• Выплаты блокируются до первого вывода\n"
             "• Администратор рассмотрит запрос вручную\n\n"
-            "Нажмите **✅ Отправить заявку** для подтверждения:"
+            "Нажмите **✅ Отправить заявку** "
+            "для подтверждения:"
         )
     else:
         text = (
             "📋 **Проверьте вашу заявку:**\n\n"
             f"📝 **Причина:**\n{reason}\n\n"
             "⚠️ **Напоминание:**\n"
-            "• После отправки заявки выплаты будут заблокированы\n"
+            "• После отправки заявки выплаты блокируются\n"
             "• Администратор рассмотрит запрос вручную\n"
-            "• Разблокировка произойдет при первом выводе с новым паролем\n\n"
-            "Нажмите **✅ Отправить заявку** для подтверждения:"
+            "• Разблокировка — при первом выводе "
+            "с новым паролем\n\n"
+            "Нажмите **✅ Отправить заявку** "
+            "для подтверждения:"
         )
-
     await message.answer(
         text,
         parse_mode="Markdown",
@@ -382,24 +336,13 @@ async def process_recovery_confirmation(
     state: FSMContext,
     **data: Any,
 ) -> None:
-    """
-    Process confirmation and create the recovery request.
-
-    Args:
-        message: Telegram message
-        session: Database session
-        user: Current user
-        state: FSM state
-        **data: Handler data
-    """
+    """Process confirmation and create the recovery request."""
     from bot.utils.menu_buttons import is_menu_button
-
     is_admin = data.get("is_admin", False)
-
     # Handle cancel button FIRST to avoid getting stuck
     if message.text == "❌ Отменить" or message.text == "❌ Отмена":
         await state.clear()
-        blacklist_entry = None
+        bl_entry = None
         try:
             from app.repositories.blacklist_repository import BlacklistRepository
             blacklist_repo = BlacklistRepository(session)
@@ -411,15 +354,14 @@ async def process_recovery_confirmation(
         await message.answer(
             "Заявка отменена.",
             reply_markup=main_menu_reply_keyboard(
-                user=user, blacklist_entry=blacklist_entry, is_admin=is_admin
+                user=user, blacklist_entry=bl_entry, is_admin=is_admin
             ),
         )
         return
-
     # Handle menu buttons
     if is_menu_button(message.text):
         await state.clear()
-        blacklist_entry = None
+        bl_entry = None
         try:
             from app.repositories.blacklist_repository import BlacklistRepository
             blacklist_repo = BlacklistRepository(session)
@@ -435,7 +377,6 @@ async def process_recovery_confirmation(
             ),
         )
         return
-
     # Handle confirm
     if message.text != "✅ Отправить заявку":
         await message.answer(
@@ -445,88 +386,80 @@ async def process_recovery_confirmation(
             parse_mode="Markdown",
         )
         return
-
     # Get reason from state
     state_data = await state.get_data()
     reason = state_data.get("reason", "")
-    new_wallet = state_data.get("new_wallet")  # May be None if password-only
-
+    new_wallet = state_data.get("new_wallet")
     if not reason:
         await state.clear()
         await message.answer(
-            "❌ Ошибка: причина не найдена. Попробуйте заново.",
+            "❌ Ошибка: причина не найдена. "
+            "Попробуйте заново.",
             reply_markup=main_menu_reply_keyboard(user=user, is_admin=is_admin),
         )
         return
-
     # Create recovery request
     recovery_service = FinpassRecoveryService(session)
-
     try:
         request = await recovery_service.create_recovery_request(
             user_id=user.id,
             reason=reason,
-            new_wallet_address=new_wallet,  # Pass new wallet if provided
+            new_wallet_address=new_wallet,
         )
-
         await session.commit()
-
-        # Get blacklist_entry for keyboard
-        blacklist_entry = None
+        # Get bl_entry for keyboard
+        bl_entry = None
         try:
             from app.repositories.blacklist_repository import BlacklistRepository
             blacklist_repo = BlacklistRepository(session)
             blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
         except OperationalError as e:
             logger.error(f"DB error checking blacklist: {e}")
-            # For display purposes, we can fallback to None
-            pass
-
         await message.answer(
-            "✅ **Заявка на восстановление пароля отправлена!**\n\n"
+            "✅ **Заявка на восстановление отправлена!**\n\n"
             f"🔢 Номер заявки: **#{request.id}**\n\n"
             "📬 Что дальше:\n"
             "• Администратор рассмотрит вашу заявку\n"
             "• Вы получите уведомление с новым паролем\n"
-            "• После получения пароля — сделайте вывод для разблокировки\n\n"
+            "• После получения — сделайте вывод "
+            "для разблокировки\n\n"
             "⏱ Обычно рассмотрение занимает до 24 часов.",
             parse_mode="Markdown",
             reply_markup=main_menu_reply_keyboard(
                 user=user, blacklist_entry=blacklist_entry, is_admin=is_admin
             ),
         )
-
         # Notify admins
         from app.config.settings import settings
-
         admin_ids = settings.get_admin_ids()
         if admin_ids:
             from bot.utils.notifications import notify_admins
-
             try:
                 username_or_id = user.username or user.telegram_id
                 wallet_info = ""
                 if new_wallet:
-                    wallet_info = f"\n💼 ЗАПРОШЕНА СМЕНА КОШЕЛЬКА!\nНовый: {new_wallet[:20]}..."
-
+                    wallet_info = (
+                        f"\n💼 ЗАПРОШЕНА СМЕНА КОШЕЛЬКА!\n"
+                        f"Новый: {new_wallet[:20]}..."
+                    )
                 await notify_admins(
                     message.bot,
                     admin_ids,
-                    f"🔐 **Новый запрос на восстановление пароля**\n\n"
+                    f"🔐 **Новый запрос на восстановление**\n\n"
                     f"👤 Пользователь: {username_or_id}\n"
-                    f"🔢 ID запроса: #{request.id}\n"
-                    f"📝 Причина: {reason[:100]}{'...' if len(reason) > 100 else ''}"
+                    f"🔢 ID: #{request.id}\n"
+                    f"📝 Причина: {reason[:100]}"
+                    f"{'...' if len(reason) > 100 else ''}"
                     f"{wallet_info}\n\n"
-                    f"👉 Для рассмотрения: Админ-панель → 🔑 Восстановление пароля",
+                    f"👉 Админ-панель → "
+                    f"🔑 Восстановление пароля",
                 )
             except Exception as e:
                 logger.error(f"Failed to notify admins: {e}")
-
     except ValueError as e:
         await message.answer(
             f"❌ Ошибка: {e}\n\n"
             "Попробуйте позже или обратитесь в поддержку.",
             reply_markup=main_menu_reply_keyboard(user=user, is_admin=is_admin),
         )
-
     await state.clear()

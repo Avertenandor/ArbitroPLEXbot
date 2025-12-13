@@ -9,18 +9,14 @@ Provides user inquiry management tools for AI assistant with STRICT security:
 SECURITY: This service is ONLY accessible through the AI assistant
 when a verified admin is in an authenticated admin session.
 """
-
 from datetime import UTC, datetime
 from typing import Any
-
 from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
-
 from app.models.user_inquiry import InquiryMessage, InquiryStatus, UserInquiry
 from app.services.ai.commons import verify_admin
-
 
 class AIInquiriesService:
     """
@@ -31,7 +27,6 @@ class AIInquiriesService:
     - All operations are logged with admin info
     - Only admins can perform actions
     """
-
     def __init__(
         self,
         session: AsyncSession,
@@ -42,8 +37,7 @@ class AIInquiriesService:
 
         # Extract admin info for security logging
         self.admin_telegram_id = self.admin_data.get("ID")
-        self.admin_username = (
-            self.admin_data.get("username") or self.admin_data.get("Имя")
+        self.admin_username = ( self.admin_data.get("username") or self.admin_data.get("Имя")
         )
 
     async def _verify_admin(self) -> tuple[Any | None, str | None]:
@@ -71,8 +65,7 @@ class AIInquiriesService:
             return {"success": False, "error": error}
 
         # Build query with relationships
-        stmt = (
-            select(UserInquiry)
+        stmt = ( select(UserInquiry)
             .options(joinedload(UserInquiry.user))
             .options(joinedload(UserInquiry.assigned_admin))
             .order_by(UserInquiry.created_at.desc())
@@ -84,7 +77,8 @@ class AIInquiriesService:
             if status.lower() not in valid_statuses:
                 return {
                     "success": False,
-                    "error": f"❌ Неверный статус. Допустимые: {', '.join(valid_statuses)}"
+                    "error": (
+                        f"❌ Неверный статус. " f"Допустимые: {', '.join(valid_statuses)}" )
                 }
             stmt = stmt.where(UserInquiry.status == status.lower())
 
@@ -137,20 +131,17 @@ class AIInquiriesService:
                     ("..." if len(inq.initial_question or "") > 100 else "")
                 ),
                 "assigned_to": admin_info,
-                "created": (
-                    inq.created_at.strftime("%d.%m.%Y %H:%M")
+                "created": ( inq.created_at.strftime("%d.%m.%Y %H:%M")
                     if inq.created_at else "—"
                 ),
             })
 
         # Count by status
-        count_stmt = (
-            select(UserInquiry.status, func.count(UserInquiry.id))
+        count_stmt = ( select(UserInquiry.status, func.count(UserInquiry.id))
             .group_by(UserInquiry.status)
         )
         count_result = await self.session.execute(count_stmt)
         counts = {row[0]: row[1] for row in count_result.all()}
-
         return {
             "success": True,
             "total_count": len(inquiries_list),
@@ -182,8 +173,7 @@ class AIInquiriesService:
             return {"success": False, "error": error}
 
         # Get inquiry with relationships
-        stmt = (
-            select(UserInquiry)
+        stmt = ( select(UserInquiry)
             .options(joinedload(UserInquiry.user))
             .options(joinedload(UserInquiry.assigned_admin))
             .options(joinedload(UserInquiry.messages))
@@ -193,10 +183,7 @@ class AIInquiriesService:
         inquiry = result.scalar_one_or_none()
 
         if not inquiry:
-            return {
-                "success": False,
-                "error": f"❌ Обращение ID {inquiry_id} не найдено"
-            }
+            return {"success": False, "error": f"❌ Обращение ID {inquiry_id} не найдено"}
 
         # Get user info
         user_info = "Неизвестен"
@@ -225,13 +212,15 @@ class AIInquiriesService:
         # Format messages
         messages_list = []
         for msg in (inquiry.messages or []):
-            sender = "👤 Пользователь" if msg.sender_type == "user" else "👨‍💼 Админ"
+            sender = (
+                "👤 Пользователь"
+                if msg.sender_type == "user"
+                else "👨‍💼 Админ"
+            )
             messages_list.append({
                 "sender": sender,
                 "text": msg.message_text[:200] + ("..." if len(msg.message_text) > 200 else ""),
-                "time": msg.created_at.strftime("%d.%m %H:%M") if msg.created_at else "—",
-            })
-
+                "time": msg.created_at.strftime("%d.%m %H:%M") if msg.created_at else "—", })
         return {
             "success": True,
             "inquiry": {
@@ -242,16 +231,13 @@ class AIInquiriesService:
                 "status": status_emoji,
                 "question": inquiry.initial_question,
                 "assigned_to": admin_info,
-                "created": (
-                    inquiry.created_at.strftime("%d.%m.%Y %H:%M")
+                "created": ( inquiry.created_at.strftime("%d.%m.%Y %H:%M")
                     if inquiry.created_at else "—"
                 ),
-                "assigned_at": (
-                    inquiry.assigned_at.strftime("%d.%m.%Y %H:%M")
+                "assigned_at": ( inquiry.assigned_at.strftime("%d.%m.%Y %H:%M")
                     if inquiry.assigned_at else None
                 ),
-                "closed_at": (
-                    inquiry.closed_at.strftime("%d.%m.%Y %H:%M")
+                "closed_at": ( inquiry.closed_at.strftime("%d.%m.%Y %H:%M")
                     if inquiry.closed_at else None
                 ),
                 "messages_count": len(messages_list),
@@ -279,8 +265,7 @@ class AIInquiriesService:
             return {"success": False, "error": error}
 
         # Get inquiry
-        stmt = (
-            select(UserInquiry)
+        stmt = ( select(UserInquiry)
             .options(joinedload(UserInquiry.user))
             .where(UserInquiry.id == inquiry_id)
         )
@@ -288,22 +273,13 @@ class AIInquiriesService:
         inquiry = result.scalar_one_or_none()
 
         if not inquiry:
-            return {
-                "success": False,
-                "error": f"❌ Обращение ID {inquiry_id} не найдено"
-            }
-
+            return {"success": False, "error": f"❌ Обращение ID {inquiry_id} не найдено"}
         if inquiry.status == InquiryStatus.CLOSED:
-            return {
-                "success": False,
-                "error": "❌ Это обращение уже закрыто"
-            }
+            return {"success": False, "error": "❌ Это обращение уже закрыто"}
 
-        if inquiry.assigned_admin_id and inquiry.assigned_admin_id != admin.id:
-            return {
-                "success": False,
-                "error": "❌ Обращение уже назначено другому админу"
-            }
+        if (inquiry.assigned_admin_id and
+                inquiry.assigned_admin_id != admin.id):
+            return {"success": False, "error": "❌ Обращение уже назначено другому админу"}
 
         # Assign to admin
         inquiry.status = InquiryStatus.IN_PROGRESS
@@ -325,7 +301,6 @@ class AIInquiriesService:
             f"AI INQUIRIES: Admin {admin.telegram_id} (@{admin.username}) "
             f"took inquiry {inquiry_id} from {user_info}"
         )
-
         return {
             "success": True,
             "inquiry_id": inquiry_id,
@@ -356,19 +331,19 @@ class AIInquiriesService:
         admin, error = await self._verify_admin()
         if error:
             return {"success": False, "error": error}
-
         if not bot:
             return {"success": False, "error": "❌ Бот не инициализирован"}
 
         if not message or len(message) < 3:
             return {
                 "success": False,
-                "error": "❌ Сообщение должно содержать минимум 3 символа"
+                "error": (
+                    "❌ Сообщение должно содержать минимум 3 символа"
+                )
             }
 
         # Get inquiry
-        stmt = (
-            select(UserInquiry)
+        stmt = ( select(UserInquiry)
             .options(joinedload(UserInquiry.user))
             .where(UserInquiry.id == inquiry_id)
         )
@@ -376,15 +351,13 @@ class AIInquiriesService:
         inquiry = result.scalar_one_or_none()
 
         if not inquiry:
-            return {
-                "success": False,
-                "error": f"❌ Обращение ID {inquiry_id} не найдено"
-            }
-
+            return {"success": False, "error": f"❌ Обращение ID {inquiry_id} не найдено"}
         if inquiry.status == InquiryStatus.CLOSED:
             return {
                 "success": False,
-                "error": "❌ Нельзя ответить на закрытое обращение"
+                "error": (
+                    "❌ Нельзя ответить на закрытое обращение"
+                )
             }
 
         # Auto-assign if not assigned
@@ -399,8 +372,7 @@ class AIInquiriesService:
             sender_type="admin",
             sender_id=admin.id,
             message_text=f"[АРЬЯ] {message}",
-            created_at=datetime.now(UTC),
-        )
+            created_at=datetime.now(UTC), )
         self.session.add(new_message)
 
         await self.session.commit()
@@ -408,10 +380,8 @@ class AIInquiriesService:
         # Send message to user
         admin_name = f"@{admin.username}" if admin.username else "Администратор"
         formatted_message = (
-            f"📬 **Ответ на ваше обращение**\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"{message}\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📬 **Ответ на ваше обращение**\n" f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"{message}\n\n" f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"_От: {admin_name}_"
         )
 
@@ -423,10 +393,7 @@ class AIInquiriesService:
             )
         except Exception as e:
             logger.error(f"Failed to send reply to inquiry {inquiry_id}: {e}")
-            return {
-                "success": False,
-                "error": f"❌ Не удалось отправить: {str(e)}"
-            }
+            return {"success": False, "error": f"❌ Не удалось отправить: {str(e)}"}
 
         # Get user info
         user_info = "Неизвестен"
@@ -441,12 +408,12 @@ class AIInquiriesService:
             f"AI INQUIRIES: Admin {admin.telegram_id} replied to "
             f"inquiry {inquiry_id}: {message[:50]}..."
         )
-
         return {
             "success": True,
             "inquiry_id": inquiry_id,
             "user": user_info,
-            "message_sent": message[:100] + ("..." if len(message) > 100 else ""),
+            "message_sent": ( message[:100] + ("..." if len(message) > 100 else "")
+            ),
             "message": "✅ Ответ отправлен пользователю"
         }
 
@@ -471,8 +438,7 @@ class AIInquiriesService:
             return {"success": False, "error": error}
 
         # Get inquiry
-        stmt = (
-            select(UserInquiry)
+        stmt = ( select(UserInquiry)
             .options(joinedload(UserInquiry.user))
             .where(UserInquiry.id == inquiry_id)
         )
@@ -480,16 +446,9 @@ class AIInquiriesService:
         inquiry = result.scalar_one_or_none()
 
         if not inquiry:
-            return {
-                "success": False,
-                "error": f"❌ Обращение ID {inquiry_id} не найдено"
-            }
-
+            return {"success": False, "error": f"❌ Обращение ID {inquiry_id} не найдено"}
         if inquiry.status == InquiryStatus.CLOSED:
-            return {
-                "success": False,
-                "error": "❌ Обращение уже закрыто"
-            }
+            return {"success": False, "error": "❌ Обращение уже закрыто"}
 
         # Close inquiry
         inquiry.status = InquiryStatus.CLOSED
@@ -503,8 +462,7 @@ class AIInquiriesService:
                 sender_type="admin",
                 sender_id=admin.id,
                 message_text=f"[АРЬЯ] Обращение закрыто: {reason}",
-                created_at=datetime.now(UTC),
-            )
+                created_at=datetime.now(UTC), )
             self.session.add(new_message)
 
         await self.session.commit()
@@ -522,7 +480,6 @@ class AIInquiriesService:
             f"AI INQUIRIES: Admin {admin.telegram_id} closed "
             f"inquiry {inquiry_id}: {reason or 'no reason'}"
         )
-
         return {
             "success": True,
             "inquiry_id": inquiry_id,

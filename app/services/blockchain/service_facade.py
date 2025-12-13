@@ -14,10 +14,28 @@ Full Web3.py implementation for BSC blockchain operations
 (USDT transfers, monitoring) with Dual-Core engine (QuickNode + NodeReal).
 """
 
-import asyncio
 import warnings
-from decimal import Decimal
 from typing import Any
+
+from eth_utils import to_checksum_address
+from loguru import logger
+from web3 import Web3
+
+from app.config.settings import Settings
+from app.services.blockchain.async_executor import AsyncBlockchainExecutor
+from app.services.blockchain.balance_operations import BalanceManager
+from app.services.blockchain.block_operations import BlockOperations
+from app.services.blockchain.core_constants import USDT_ABI
+from app.services.blockchain.facade_helpers import BlockchainServiceMixin
+from app.services.blockchain.gas_operations import GasManager
+from app.services.blockchain.payment_verification import PaymentVerifier
+from app.services.blockchain.rpc_rate_limiter import RPCRateLimiter
+from app.services.blockchain.sync_provider_management import (
+    SyncProviderManager,
+)
+from app.services.blockchain.transaction_operations import TransactionManager
+from app.services.blockchain.wallet_operations import WalletManager
+from app.utils.security import mask_address
 
 
 # Suppress eth_utils network warnings about invalid ChainId
@@ -33,28 +51,8 @@ warnings.filterwarnings(
     category=UserWarning,
 )
 
-from eth_utils import to_checksum_address
-from loguru import logger
-from web3 import Web3
-from web3.exceptions import Web3Exception
 
-from app.config.settings import Settings
-
-# Import specialized managers from blockchain subdirectory
-from app.services.blockchain.async_executor import AsyncBlockchainExecutor
-from app.services.blockchain.balance_operations import BalanceManager
-from app.services.blockchain.block_operations import BlockOperations
-from app.services.blockchain.core_constants import USDT_ABI
-from app.services.blockchain.gas_operations import GasManager
-from app.services.blockchain.payment_verification import PaymentVerifier
-from app.services.blockchain.rpc_rate_limiter import RPCRateLimiter
-from app.services.blockchain.sync_provider_management import SyncProviderManager
-from app.services.blockchain.transaction_operations import TransactionManager
-from app.services.blockchain.wallet_operations import WalletManager
-from app.utils.security import mask_address
-
-
-class BlockchainService:
+class BlockchainService(BlockchainServiceMixin):
     """
     Blockchain service for BSC/USDT operations.
 
@@ -67,7 +65,8 @@ class BlockchainService:
     - Balance checking
     - Event monitoring
 
-    This class acts as a coordinator, delegating operations to specialized managers.
+    This class acts as a coordinator, delegating operations to
+    specialized managers.
     """
 
     def __init__(
@@ -85,14 +84,18 @@ class BlockchainService:
         self.settings = settings
         self.session_factory = session_factory
 
-        self.usdt_contract_address = to_checksum_address(settings.usdt_contract_address)
+        self.usdt_contract_address = to_checksum_address(
+            settings.usdt_contract_address
+        )
         self.system_wallet_address = settings.system_wallet_address
 
         # Initialize RPC rate limiter
         self.rpc_limiter = RPCRateLimiter(max_concurrent=10, max_rps=25)
 
         # Initialize Provider Manager
-        self.provider_manager = SyncProviderManager(settings, session_factory)
+        self.provider_manager = SyncProviderManager(
+            settings, session_factory
+        )
 
         # Initialize Async Executor
         self.async_executor = AsyncBlockchainExecutor(
@@ -123,13 +126,14 @@ class BlockchainService:
         )
 
         # Initialize Payment Verifier
-        # NOTE: Using system_wallet_address for USDT deposits (not auth_system_wallet_address)
+        # NOTE: Using system_wallet_address for USDT deposits
+        # (not auth_system_wallet_address)
         # auth_system_wallet_address is for PLEX authentication payments
-        # system_wallet_address is the address shown to users for USDT deposits
+        # system_wallet_address is the address shown to users for USDT
         self.payment_verifier = PaymentVerifier(
             self.usdt_contract_address,
             settings.auth_plex_token_address,
-            settings.system_wallet_address,  # Fixed: use deposit wallet, not auth wallet
+            settings.system_wallet_address,  # Fixed: use deposit wallet
         )
 
         # Initialize Block Operations
@@ -140,22 +144,34 @@ class BlockchainService:
         )
 
         # Log wallet configuration for diagnostics
-        if settings.system_wallet_address != settings.auth_system_wallet_address:
+        if (settings.system_wallet_address !=
+                settings.auth_system_wallet_address):
             logger.warning(
                 f"⚠️ Different wallet addresses configured:\n"
-                f"  USDT Deposits (system_wallet): {settings.system_wallet_address}\n"
-                f"  PLEX Auth (auth_system_wallet): {settings.auth_system_wallet_address}\n"
-                f"  Make sure users are sending USDT to: {settings.system_wallet_address}"
+                f"  USDT Deposits (system_wallet): "
+                f"{settings.system_wallet_address}\n"
+                f"  PLEX Auth (auth_system_wallet): "
+                f"{settings.auth_system_wallet_address}\n"
+                f"  Make sure users are sending USDT to: "
+                f"{settings.system_wallet_address}"
             )
+
+        wallet_display = (
+            mask_address(self.wallet_address)
+            if self.wallet_address
+            else 'Not configured'
+        )
 
         logger.success(
             f"BlockchainService initialized successfully\n"
-            f"  Active Provider: {self.provider_manager.active_provider_name}\n"
-            f"  Providers: {list(self.provider_manager.providers.keys())}\n"
+            f"  Active Provider: "
+            f"{self.provider_manager.active_provider_name}\n"
+            f"  Providers: "
+            f"{list(self.provider_manager.providers.keys())}\n"
             f"  USDT Contract: {self.usdt_contract_address}\n"
             f"  USDT Deposit Wallet: {settings.system_wallet_address}\n"
             f"  PLEX Auth Wallet: {settings.auth_system_wallet_address}\n"
-            f"  Payout Wallet: {mask_address(self.wallet_address) if self.wallet_address else 'Not configured'}"
+            f"  Payout Wallet: {wallet_display}"
         )
 
     # ========== Properties for backward compatibility ==========
@@ -204,7 +220,9 @@ class BlockchainService:
     def usdt_contract(self) -> Any:
         """Get USDT contract on active provider."""
         w3 = self.get_active_web3()
-        return w3.eth.contract(address=self.usdt_contract_address, abi=USDT_ABI)
+        return w3.eth.contract(
+            address=self.usdt_contract_address, abi=USDT_ABI
+        )
 
     # ========== Core Methods ==========
 
@@ -237,329 +255,6 @@ class BlockchainService:
     def get_rpc_stats(self) -> dict[str, Any]:
         """Get RPC rate limiter statistics."""
         return self.rpc_limiter.get_stats()
-
-    # ========== Wallet Methods ==========
-
-    async def validate_wallet_address(self, address: str) -> bool:
-        """
-        Validate wallet address format.
-
-        Args:
-            address: Wallet address to validate
-
-        Returns:
-            True if address is valid
-        """
-        return await self.wallet_manager.validate_wallet_address(address)
-
-    # ========== Balance Methods ==========
-
-    async def get_usdt_balance(self, address: str) -> Decimal | None:
-        """
-        Get USDT balance for address.
-
-        Args:
-            address: Wallet address
-
-        Returns:
-            USDT balance or None on error
-        """
-        try:
-            def _get_bal(w3: Web3):
-                return self.balance_manager.get_usdt_balance(w3, address)
-
-            return await self.async_executor.run_with_failover(_get_bal)
-        except Exception as e:
-            logger.error(f"Get USDT balance failed: {e}")
-            return None
-
-    async def get_plex_balance(self, address: str) -> Decimal | None:
-        """
-        Get PLEX token balance for address.
-
-        Args:
-            address: Wallet address
-
-        Returns:
-            PLEX balance or None on error
-        """
-        try:
-            def _get_bal(w3: Web3):
-                return self.balance_manager.get_plex_balance(w3, address)
-
-            return await self.async_executor.run_with_failover(_get_bal)
-        except Exception as e:
-            logger.error(f"Get PLEX balance failed: {e}")
-            return None
-
-    async def get_native_balance(self, address: str) -> Decimal | None:
-        """
-        Get Native Token (BNB) balance.
-
-        Args:
-            address: Wallet address
-
-        Returns:
-            BNB balance or None on error
-        """
-        try:
-            def _get_bal(w3: Web3):
-                return self.balance_manager.get_native_balance(w3, address)
-
-            return await self.async_executor.run_with_failover(_get_bal)
-        except Exception as e:
-            logger.error(f"Get BNB balance failed: {e}")
-            return None
-
-    # ========== Gas Methods ==========
-
-    async def estimate_gas_fee(self, to_address: str, amount: Decimal) -> Decimal | None:
-        """
-        Estimate gas fee for USDT transfer.
-
-        Args:
-            to_address: Recipient wallet address
-            amount: Amount in USDT (Decimal)
-
-        Returns:
-            Estimated gas fee in BNB or None
-        """
-        try:
-            def _est_gas(w3: Web3):
-                return self.gas_manager.estimate_gas_fee(
-                    w3, to_address, amount, self.wallet_address
-                )
-
-            return await self.async_executor.run_with_failover(_est_gas)
-        except Exception:
-            return None
-
-    # ========== Transaction Methods ==========
-
-    async def send_payment(self, to_address: str, amount: Decimal) -> dict[str, Any]:
-        """
-        Send USDT payment.
-
-        Args:
-            to_address: Recipient wallet address
-            amount: Amount in USDT (Decimal for precision)
-
-        Returns:
-            Dict with success, tx_hash, error
-        """
-        if not await self.validate_wallet_address(to_address):
-            return {"success": False, "error": f"Invalid address: {to_address}"}
-
-        def _send(w3: Web3):
-            return asyncio.run(
-                self.transaction_manager.send_usdt_payment(
-                    w3, to_address, amount, self.async_executor._executor
-                )
-            )
-
-        try:
-            return await self.async_executor.run_with_failover(_send)
-        except Exception as e:
-            logger.error(f"Failed to send payment: {e}")
-            return {"success": False, "error": str(e)}
-
-    async def send_native_token(self, to_address: str, amount: Decimal) -> dict[str, Any]:
-        """
-        Send native token (BNB) to address.
-
-        Args:
-            to_address: Recipient wallet address
-            amount: Amount in BNB (Decimal for precision)
-
-        Returns:
-            Dict with success, tx_hash, error
-        """
-        if not await self.validate_wallet_address(to_address):
-            return {"success": False, "error": f"Invalid address: {to_address}"}
-
-        def _send(w3: Web3):
-            return asyncio.run(
-                self.transaction_manager.send_native_token(
-                    w3, to_address, amount, self.async_executor._executor
-                )
-            )
-
-        try:
-            return await self.async_executor.run_with_failover(_send)
-        except Exception as e:
-            logger.error(f"Failed to send BNB: {e}")
-            return {"success": False, "error": str(e)}
-
-    async def check_transaction_status(self, tx_hash: str) -> dict[str, Any]:
-        """
-        Check transaction status.
-
-        Args:
-            tx_hash: Transaction hash
-
-        Returns:
-            Dict with status, confirmations, block_number
-        """
-        try:
-            def _check(w3: Web3):
-                return self.transaction_manager.check_transaction_status_sync(w3, tx_hash)
-
-            return await self.async_executor.run_with_failover(_check)
-        except (TimeoutError, Web3Exception) as e:
-            logger.warning(f"Failed to check transaction status: {e}")
-            return {"status": "unknown", "confirmations": 0}
-
-    async def get_transaction_details(self, tx_hash: str) -> dict[str, Any] | None:
-        """
-        Get transaction details.
-
-        Args:
-            tx_hash: Transaction hash
-
-        Returns:
-            Dict with transaction details or None on error
-        """
-        try:
-            def _fetch(w3: Web3):
-                return self.transaction_manager.get_transaction_details_sync(w3, tx_hash)
-
-            return await self.async_executor.run_with_failover(_fetch)
-        except (TimeoutError, Web3Exception) as e:
-            logger.warning(f"Failed to get transaction details: {e}")
-            return None
-
-    # ========== Payment Verification Methods ==========
-
-    async def verify_plex_payment(
-        self,
-        sender_address: str,
-        amount_plex: float | Decimal | None = None,
-        lookback_blocks: int = 200,  # ~10 minutes on BSC (3 sec/block)
-    ) -> dict[str, Any]:
-        """
-        Verify if user paid PLEX tokens to system wallet.
-
-        Args:
-            sender_address: User's wallet address
-            amount_plex: Required PLEX amount (float or Decimal, uses default from settings if None)
-            lookback_blocks: Number of blocks to scan back
-
-        Returns:
-            Dict with success, tx_hash, amount, block, or error
-        """
-        target_amount = amount_plex if amount_plex is not None else self.settings.auth_price_plex
-
-        def _verify(w3: Web3):
-            return self.payment_verifier.verify_plex_payment_sync(
-                w3, sender_address, target_amount, lookback_blocks
-            )
-
-        try:
-            return await self.async_executor.run_with_failover(_verify)
-        except Exception as e:
-            logger.error(f"[PLEX Verify] Error: {e}")
-            return {"success": False, "error": str(e)}
-
-    async def get_user_usdt_deposits(
-        self,
-        user_wallet: str,
-        max_blocks: int = 100000,
-    ) -> dict:
-        """
-        Scan all USDT Transfer events from user wallet to system wallet.
-
-        Used to detect user's total deposit amount from blockchain history.
-
-        Args:
-            user_wallet: User's wallet address
-            max_blocks: Maximum number of blocks to scan back
-
-        Returns:
-            Dict with total_amount, tx_count, transactions, success, error
-        """
-        def _scan(w3: Web3):
-            return self.payment_verifier.scan_usdt_deposits_sync(
-                w3, user_wallet, max_blocks
-            )
-
-        try:
-            return await self.async_executor.run_with_failover(_scan)
-        except Exception as e:
-            logger.error(f"Deposit scan failed: {e}")
-            return {
-                'success': False,
-                'error': str(e),
-                'total_amount': Decimal("0"),
-                'tx_count': 0,
-                'transactions': [],
-            }
-
-    async def verify_plex_transfer(
-        self,
-        from_address: str,
-        amount: Decimal,
-        lookback_blocks: int = 200,
-    ) -> dict[str, Any]:
-        """
-        Verify PLEX token transfer from address to system wallet.
-
-        Args:
-            from_address: Sender's wallet address
-            amount: Required PLEX amount (Decimal)
-            lookback_blocks: Number of blocks to scan back
-
-        Returns:
-            Dict with success, tx_hash, amount, block, timestamp, or error
-        """
-        def _verify(w3: Web3):
-            return self.payment_verifier.verify_plex_transfer(
-                w3, from_address, amount, lookback_blocks
-            )
-
-        try:
-            return await self.async_executor.run_with_failover(_verify)
-        except Exception as e:
-            logger.error(f"[PLEX Transfer Verify] Error: {e}")
-            return {"success": False, "error": str(e)}
-
-    async def scan_plex_payments(
-        self,
-        from_address: str,
-        since_block: int | None = None,
-        max_blocks: int = 100000,
-    ) -> list[dict[str, Any]]:
-        """
-        Scan all PLEX Transfer events from user wallet to system wallet.
-
-        Args:
-            from_address: User's wallet address
-            since_block: Starting block number (if None, scan from max_blocks ago)
-            max_blocks: Maximum number of blocks to scan back (if since_block is None)
-
-        Returns:
-            List of payment dictionaries with tx_hash, amount, block, timestamp
-        """
-        def _scan(w3: Web3):
-            return self.payment_verifier.scan_plex_payments(
-                w3, from_address, since_block, max_blocks
-            )
-
-        try:
-            return await self.async_executor.run_with_failover(_scan)
-        except Exception as e:
-            logger.error(f"[PLEX Scan] Error: {e}")
-            return []
-
-    # ========== Block Operations ==========
-
-    async def get_block_number(self) -> int:
-        """
-        Get current block number.
-
-        Returns:
-            Current block number
-        """
-        return await self.block_operations.get_block_number()
 
     # ========== Cleanup Methods ==========
 

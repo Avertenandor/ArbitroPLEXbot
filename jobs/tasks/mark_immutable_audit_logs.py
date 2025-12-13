@@ -5,6 +5,7 @@ Runs periodically to mark admin actions older than N days as immutable,
 preventing future modifications.
 """
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 
 import dramatiq

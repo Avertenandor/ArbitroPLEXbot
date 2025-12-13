@@ -257,8 +257,9 @@ async def handle_admin_role_selection(
         logger.error(
             f"Failed to send master key to new admin {new_admin.id}: {e}"
         )
-        # Still log the master key for manual sending
-        logger.info(
-            f"Master key for new admin {new_admin.id} "
-            f"(telegram_id={telegram_id}): {master_key}"
+        # Notify creating admin about delivery failure
+        await message.answer(
+            "⚠️ **Внимание:** Не удалось отправить мастер-ключ "
+            "новому админу. Передайте ключ лично.",
+            parse_mode="Markdown",
         )

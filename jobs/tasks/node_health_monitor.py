@@ -5,6 +5,8 @@ Monitors blockchain node health and activates maintenance mode if needed.
 Runs every 30 seconds.
 """
 
+import asyncio
+
 import dramatiq
 from aiogram import Bot
 from loguru import logger
