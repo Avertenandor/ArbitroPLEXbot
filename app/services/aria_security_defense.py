@@ -603,7 +603,7 @@ class ToolRateLimiter:
 
         return True, ""
 
-    def record_usage(self, admin_id: int, tool_name: str, count: int = 1):
+    def record_usage(self, admin_id: int, tool_name: str, count: int = 1) -> None:
         """Record tool usage."""
         now = datetime.now(UTC)
 

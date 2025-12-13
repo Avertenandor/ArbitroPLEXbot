@@ -108,7 +108,7 @@ class ReportService:
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    def _apply_header_style(self, ws):
+    def _apply_header_style(self, ws) -> None:
         """Apply professional style to the header row."""
         header_font = Font(bold=True, color="FFFFFF", name="Calibri", size=11)
         header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
@@ -119,7 +119,7 @@ class ReportService:
             cell.fill = header_fill
             cell.alignment = alignment
 
-    def _adjust_column_widths(self, ws):
+    def _adjust_column_widths(self, ws) -> None:
         """Auto-adjust column widths."""
         for col in ws.columns:
             max_length = 0
@@ -134,7 +134,7 @@ class ReportService:
             # Cap width at 50 chars to avoid super wide columns
             ws.column_dimensions[column].width = min(adjusted_width, 50)
 
-    def _apply_zebra_striping(self, ws):
+    def _apply_zebra_striping(self, ws) -> None:
         """Apply alternating row colors for readability."""
         fill_even = PatternFill(start_color="E9EFF7", end_color="E9EFF7", fill_type="solid")
         thin_border = Side(border_style="thin", color="D4D4D4")
@@ -146,7 +146,7 @@ class ReportService:
                 if row[0].row % 2 == 0:
                     cell.fill = fill_even
 
-    def _create_general_sheet(self, wb, user: User, deposits: list[Deposit], earnings: list):
+    def _create_general_sheet(self, wb, user: User, deposits: list[Deposit], earnings: list) -> None:
         ws = wb.active
         ws.title = "Общая информация"
 
@@ -191,7 +191,7 @@ class ReportService:
         ws.column_dimensions['A'].width = 30
         ws.column_dimensions['B'].width = 40
 
-    def _create_transactions_sheet(self, wb, transactions: list[Transaction]):
+    def _create_transactions_sheet(self, wb, transactions: list[Transaction]) -> None:
         ws = wb.create_sheet("История транзакций")
 
         headers = ["ID", "Дата", "Тип", "Сумма (USDT)", "Статус", "Описание", "TX Hash", "Баланс до", "Баланс после"]
@@ -214,7 +214,7 @@ class ReportService:
         self._apply_zebra_striping(ws)
         self._adjust_column_widths(ws)
 
-    def _create_deposits_sheet(self, wb, deposits: list[Deposit]):
+    def _create_deposits_sheet(self, wb, deposits: list[Deposit]) -> None:
         ws = wb.create_sheet("Депозиты")
 
         headers = ["ID", "Дата", "Уровень", "Сумма (USDT)", "Статус", "ROI Cap", "Выплачено", "Завершено", "Процент дохода", "TX Hash"]
@@ -242,7 +242,7 @@ class ReportService:
         self._apply_zebra_striping(ws)
         self._adjust_column_widths(ws)
 
-    def _create_referrals_sheet(self, wb, referrals: list[Referral]):
+    def _create_referrals_sheet(self, wb, referrals: list[Referral]) -> None:
         ws = wb.create_sheet("Рефералы")
 
         headers = ["ID", "Дата регистрации", "Уровень", "Пользователь (Username)", "Пользователь (ID)", "Заработано с него (USDT)"]
@@ -269,7 +269,7 @@ class ReportService:
         self._apply_zebra_striping(ws)
         self._adjust_column_widths(ws)
 
-    def _create_wallet_history_sheet(self, wb, history: list):
+    def _create_wallet_history_sheet(self, wb, history: list) -> None:
         ws = wb.create_sheet("История смены кошелька")
 
         headers = ["Дата изменения", "Старый кошелек", "Новый кошелек"]
