@@ -1,6 +1,6 @@
 # Core Framework
 aiogram==3.4.1  # CRITICAL: Do not update without testing - major API changes in newer versions
-aiohttp==3.11.9
+aiohttp~=3.9.0  # Must match aiogram 3.4.1 requirements
 
 # Database
 sqlalchemy[asyncio]==2.0.36  # CRITICAL: Core database ORM
