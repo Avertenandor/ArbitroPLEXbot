@@ -6,7 +6,7 @@ Tracks individual referral earnings for payment.
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     Boolean,
@@ -85,7 +85,7 @@ class ReferralEarning(Base):
     referral: Mapped["Referral"] = relationship(
         "Referral", lazy="joined"
     )
-    source_transaction: Mapped["Transaction" | None] = relationship(
+    source_transaction: Mapped[Optional["Transaction"]] = relationship(
         "Transaction", lazy="joined"
     )
 

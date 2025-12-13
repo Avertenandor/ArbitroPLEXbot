@@ -6,7 +6,7 @@ Represents a registered Telegram user in the system.
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import bcrypt
 from sqlalchemy import (
@@ -230,7 +230,7 @@ class User(Base):
     )
 
     # Relationships
-    referrer: Mapped["User" | None] = relationship(
+    referrer: Mapped[Optional["User"]] = relationship(
         "User",
         remote_side=[id],
         back_populates="referrals",

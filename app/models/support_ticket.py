@@ -5,7 +5,7 @@ Represents user support tickets with admin assignment.
 """
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -97,8 +97,8 @@ class SupportTicket(Base):
     )
 
     # Relationships
-    user: Mapped["User" | None] = relationship("User", lazy="joined")
-    assigned_admin: Mapped["Admin" | None] = relationship(
+    user: Mapped[Optional["User"]] = relationship("User", lazy="joined")
+    assigned_admin: Mapped[Optional["Admin"]] = relationship(
         "Admin", lazy="joined"
     )
     messages: Mapped[list["SupportMessage"]] = relationship(

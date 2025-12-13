@@ -5,7 +5,7 @@ Audit logging for user actions with auto-cleanup after 7 days.
 """
 
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.postgresql import INET
@@ -67,7 +67,7 @@ class UserAction(Base):
     )
 
     # Relationships
-    user: Mapped["User" | None] = relationship(
+    user: Mapped[Optional["User"]] = relationship(
         "User", lazy="joined"
     )
 

@@ -7,7 +7,7 @@ This is separate from technical support - for general questions and help.
 
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from sqlalchemy import (
     BigInteger,
@@ -110,7 +110,7 @@ class UserInquiry(Base):
 
     # Relationships
     user: Mapped["User"] = relationship("User", lazy="joined")
-    assigned_admin: Mapped["Admin" | None] = relationship(
+    assigned_admin: Mapped[Optional["Admin"]] = relationship(
         "Admin", lazy="joined"
     )
     messages: Mapped[list["InquiryMessage"]] = relationship(
