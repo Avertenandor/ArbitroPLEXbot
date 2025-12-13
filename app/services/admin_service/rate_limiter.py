@@ -9,7 +9,10 @@ This module handles:
 
 from typing import Any
 
+from aiogram.exceptions import TelegramAPIError
 from loguru import logger
+from redis.exceptions import RedisError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.admin_repository import AdminRepository
@@ -78,11 +81,18 @@ class RateLimiter:
                 # Block the Telegram ID
                 await self._block_telegram_id(telegram_id)
 
-        except Exception as e:
+        except (RedisError, ConnectionError, TimeoutError) as e:
             # R11-2: Redis failed, continue without rate limiting
             logger.warning(
-                f"R11-2: Redis error tracking failed login for {telegram_id}: {e}. "
-                "Continuing without rate limiting (degraded mode)."
+                f"R11-2: Redis error tracking failed login for telegram_id={telegram_id}: {type(e).__name__}: {e}. "
+                "Continuing without rate limiting (degraded mode).",
+                exc_info=True
+            )
+        except ValueError as e:
+            # Handle invalid count conversion
+            logger.error(
+                f"Invalid data in Redis for admin_login_attempts:{telegram_id}: {e}",
+                exc_info=True
             )
 
     async def clear_failed_login_attempts(self, telegram_id: int) -> None:
@@ -98,11 +108,12 @@ class RateLimiter:
         try:
             key = f"admin_login_attempts:{telegram_id}"
             await self.redis_client.delete(key)
-        except Exception as e:
+        except (RedisError, ConnectionError, TimeoutError) as e:
             # R11-2: Redis failed, continue without clearing
             logger.warning(
-                f"R11-2: Redis error clearing failed login attempts for {telegram_id}: {e}. "
-                "Continuing without clearing (degraded mode)."
+                f"R11-2: Redis error clearing failed login attempts for telegram_id={telegram_id}: {type(e).__name__}: {e}. "
+                "Continuing without clearing (degraded mode).",
+                exc_info=True
             )
 
     async def _block_telegram_id(self, telegram_id: int) -> None:
@@ -160,11 +171,23 @@ class RateLimiter:
                 priority="critical",
             )
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(
-                f"Error blocking Telegram ID for failed logins: {e}"
+                f"Database error blocking telegram_id={telegram_id} for failed logins: {type(e).__name__}: {e}",
+                exc_info=True
             )
             await self.session.rollback()
+        except (ImportError, AttributeError) as e:
+            logger.error(
+                f"Module/attribute error while blocking telegram_id={telegram_id}: {type(e).__name__}: {e}",
+                exc_info=True
+            )
+            await self.session.rollback()
+        except TelegramAPIError as e:
+            logger.error(
+                f"Telegram API error while notifying about blocking telegram_id={telegram_id}: {type(e).__name__}: {e}",
+                exc_info=True
+            )
 
     async def _notify_super_admins_of_block(
         self, telegram_id: int
@@ -209,13 +232,27 @@ class RateLimiter:
                             text=notification_text,
                             parse_mode="Markdown",
                         )
-                    except Exception as e:
+                    except TelegramAPIError as e:
                         logger.error(
-                            f"Failed to notify super_admin "
-                            f"{super_admin.id}: {e}"
+                            f"Telegram API error notifying super_admin {super_admin.id} "
+                            f"(telegram_id={super_admin.telegram_id}): {type(e).__name__}: {e}",
+                            exc_info=True
                         )
             finally:
                 await bot.session.close()
 
-        except Exception as e:
-            logger.error(f"Error notifying super_admins: {e}")
+        except SQLAlchemyError as e:
+            logger.error(
+                f"Database error fetching super_admins for notification: {type(e).__name__}: {e}",
+                exc_info=True
+            )
+        except (ImportError, AttributeError) as e:
+            logger.error(
+                f"Module/attribute error initializing bot or settings: {type(e).__name__}: {e}",
+                exc_info=True
+            )
+        except TelegramAPIError as e:
+            logger.error(
+                f"Telegram API error in super_admin notification: {type(e).__name__}: {e}",
+                exc_info=True
+            )

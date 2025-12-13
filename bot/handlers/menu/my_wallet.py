@@ -21,7 +21,8 @@ from app.models.user import User
 from app.services.wallet_info_service import WalletInfoService
 from bot.keyboards.inline import InlineKeyboardBuilder
 from bot.keyboards.reply import main_menu_reply_keyboard
-from bot.utils.user_loader import UserLoader
+from bot.utils.formatters import format_wallet_short
+from bot.utils.user_context import get_user_from_context
 
 
 router = Router()
@@ -75,7 +76,7 @@ def format_wallet_message(
         Formatted message text
     """
     # Header
-    wallet_short = f"{user.wallet_address[:8]}...{user.wallet_address[-6:]}"
+    wallet_short = format_wallet_short(user.wallet_address)
 
     if not balance_data:
         return (
@@ -122,7 +123,7 @@ def format_transactions_message(
     emoji_map = {"PLEX": "💎", "USDT": "💵", "BNB": "🔶"}
     emoji = emoji_map.get(token, "💰")
 
-    wallet_short = f"{wallet_address[:8]}...{wallet_address[-6:]}"
+    wallet_short = format_wallet_short(wallet_address)
 
     if not transactions:
         return (
@@ -133,7 +134,11 @@ def format_transactions_message(
             "_перевода на этот кошелек._"
         )
 
-    text = f"{emoji} *Транзакции {token}*\n📍 `{wallet_short}`\n━━━━━━━━━━━━━━━━━━━━\n\n"
+    text = (
+        f"{emoji} *Транзакции {token}*\n"
+        f"📍 `{wallet_short}`\n"
+        f"━━━━━━━━━━━━━━━━━━━━\n\n"
+    )
 
     for i, tx in enumerate(transactions[:20], 1):
         # Format date
@@ -150,7 +155,11 @@ def format_transactions_message(
         # Format value
         value_str = tx.formatted_value
 
-        text += f"{i}. {direction} {sign}{value_str} {token}\n   `{tx.short_hash}`\n   📅 {date_str}\n\n"
+        text += (
+            f"{i}. {direction} {sign}{value_str} {token}\n"
+            f"   `{tx.short_hash}`\n"
+            f"   📅 {date_str}\n\n"
+        )
 
     text += (
         "━━━━━━━━━━━━━━━━━━━━\n"
@@ -179,12 +188,13 @@ async def show_my_wallet(
     telegram_id = message.from_user.id if message.from_user else None
     logger.info(f"[WALLET] Wallet info requested by user {telegram_id}")
 
-    user: User | None = data.get("user")
-    if not user and telegram_id:
-        user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
-
+    user = await get_user_from_context(message, session, data)
     if not user:
-        await message.answer("⚠️ Ошибка: не удалось загрузить данные пользователя. Попробуйте отправить /start")
+        await message.answer(
+            "⚠️ Ошибка: не удалось загрузить "
+            "данные пользователя. "
+            "Попробуйте отправить /start"
+        )
         return
 
     # Check if user has wallet
@@ -192,7 +202,8 @@ async def show_my_wallet(
         await message.answer(
             "❌ *Кошелек не привязан*\n\n"
             "У вас не указан BSC кошелек.\n"
-            "Пожалуйста, пройдите авторизацию заново через /start",
+            "Пожалуйста, пройдите авторизацию заново "
+            "через /start",
             parse_mode="Markdown",
             reply_markup=main_menu_reply_keyboard(user=user),
         )
@@ -227,7 +238,9 @@ async def show_my_wallet(
         logger.error(f"[WALLET] Failed to show wallet for user {telegram_id}: {e}")
         await status_msg.delete()
         await message.answer(
-            "❌ Произошла ошибка при загрузке данных кошелька.\nПопробуйте позже.",
+            "❌ Произошла ошибка при загрузке "
+            "данных кошелька.\n"
+            "Попробуйте позже.",
             reply_markup=main_menu_reply_keyboard(user=user),
         )
 
@@ -242,12 +255,7 @@ async def refresh_wallet(
     """Refresh wallet balances."""
     await callback.answer("🔄 Обновляю...")
 
-    user: User | None = data.get("user")
-    telegram_id = callback.from_user.id if callback.from_user else None
-
-    if not user and telegram_id:
-        user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
-
+    user = await get_user_from_context(callback, session, data)
     if not user or not user.wallet_address:
         await callback.answer("❌ Кошелек не найден", show_alert=True)
         return
@@ -268,14 +276,20 @@ async def refresh_wallet(
                     reply_markup=wallet_menu_inline_keyboard(),
                 )
             except Exception as edit_error:
-                logger.warning(f"[WALLET] edit_text failed on refresh, sending new message: {edit_error}")
+                logger.warning(
+                    f"[WALLET] edit_text failed on refresh, "
+                    f"sending new message: {edit_error}"
+                )
                 await callback.message.answer(
                     text,
                     parse_mode="Markdown",
                     reply_markup=wallet_menu_inline_keyboard(),
                 )
         else:
-            await callback.answer("❌ Не удалось обновить: сообщение не найдено", show_alert=True)
+            await callback.answer(
+                "❌ Не удалось обновить: сообщение не найдено",
+                show_alert=True
+            )
             return
 
     except Exception as e:
@@ -293,12 +307,7 @@ async def back_to_wallet(
     """Return to wallet overview."""
     await callback.answer()
 
-    user: User | None = data.get("user")
-    telegram_id = callback.from_user.id if callback.from_user else None
-
-    if not user and telegram_id:
-        user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
-
+    user = await get_user_from_context(callback, session, data)
     if not user or not user.wallet_address:
         await callback.answer("❌ Кошелек не найден", show_alert=True)
         return
@@ -317,14 +326,20 @@ async def back_to_wallet(
                     reply_markup=wallet_menu_inline_keyboard(),
                 )
             except Exception as edit_error:
-                logger.warning(f"[WALLET] edit_text failed on back, sending new message: {edit_error}")
+                logger.warning(
+                    f"[WALLET] edit_text failed on back, "
+                    f"sending new message: {edit_error}"
+                )
                 await callback.message.answer(
                     text,
                     parse_mode="Markdown",
                     reply_markup=wallet_menu_inline_keyboard(),
                 )
         else:
-            await callback.answer("❌ Не удалось открыть кошелек", show_alert=True)
+            await callback.answer(
+                "❌ Не удалось открыть кошелек",
+                show_alert=True
+            )
             return
 
         await state.set_state(WalletStates.viewing_balances)
@@ -344,12 +359,7 @@ async def show_plex_transactions(
     """Show PLEX transaction history."""
     await callback.answer("💎 Загружаю PLEX транзакции...")
 
-    user: User | None = data.get("user")
-    telegram_id = callback.from_user.id if callback.from_user else None
-
-    if not user and telegram_id:
-        user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
-
+    user = await get_user_from_context(callback, session, data)
     if not user or not user.wallet_address:
         await callback.answer("❌ Кошелек не найден", show_alert=True)
         return
@@ -368,14 +378,20 @@ async def show_plex_transactions(
                     reply_markup=transactions_inline_keyboard("plex"),
                 )
             except Exception as edit_error:
-                logger.warning(f"[WALLET] edit_text failed on plex txs, sending new message: {edit_error}")
+                logger.warning(
+                    f"[WALLET] edit_text failed on plex txs, "
+                    f"sending new message: {edit_error}"
+                )
                 await callback.message.answer(
                     text,
                     parse_mode="Markdown",
                     reply_markup=transactions_inline_keyboard("plex"),
                 )
         else:
-            await callback.answer("❌ Не удалось показать транзакции", show_alert=True)
+            await callback.answer(
+                "❌ Не удалось показать транзакции",
+                show_alert=True
+            )
             return
 
         await state.set_state(WalletStates.viewing_plex_txs)
@@ -395,12 +411,7 @@ async def show_usdt_transactions(
     """Show USDT transaction history."""
     await callback.answer("💵 Загружаю USDT транзакции...")
 
-    user: User | None = data.get("user")
-    telegram_id = callback.from_user.id if callback.from_user else None
-
-    if not user and telegram_id:
-        user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
-
+    user = await get_user_from_context(callback, session, data)
     if not user or not user.wallet_address:
         await callback.answer("❌ Кошелек не найден", show_alert=True)
         return
@@ -419,14 +430,20 @@ async def show_usdt_transactions(
                     reply_markup=transactions_inline_keyboard("usdt"),
                 )
             except Exception as edit_error:
-                logger.warning(f"[WALLET] edit_text failed on usdt txs, sending new message: {edit_error}")
+                logger.warning(
+                    f"[WALLET] edit_text failed on usdt txs, "
+                    f"sending new message: {edit_error}"
+                )
                 await callback.message.answer(
                     text,
                     parse_mode="Markdown",
                     reply_markup=transactions_inline_keyboard("usdt"),
                 )
         else:
-            await callback.answer("❌ Не удалось показать транзакции", show_alert=True)
+            await callback.answer(
+                "❌ Не удалось показать транзакции",
+                show_alert=True
+            )
             return
 
         await state.set_state(WalletStates.viewing_usdt_txs)
@@ -446,12 +463,7 @@ async def show_bnb_transactions(
     """Show BNB transaction history."""
     await callback.answer("🔶 Загружаю BNB транзакции...")
 
-    user: User | None = data.get("user")
-    telegram_id = callback.from_user.id if callback.from_user else None
-
-    if not user and telegram_id:
-        user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
-
+    user = await get_user_from_context(callback, session, data)
     if not user or not user.wallet_address:
         await callback.answer("❌ Кошелек не найден", show_alert=True)
         return
@@ -470,14 +482,20 @@ async def show_bnb_transactions(
                     reply_markup=transactions_inline_keyboard("bnb"),
                 )
             except Exception as edit_error:
-                logger.warning(f"[WALLET] edit_text failed on bnb txs, sending new message: {edit_error}")
+                logger.warning(
+                    f"[WALLET] edit_text failed on bnb txs, "
+                    f"sending new message: {edit_error}"
+                )
                 await callback.message.answer(
                     text,
                     parse_mode="Markdown",
                     reply_markup=transactions_inline_keyboard("bnb"),
                 )
         else:
-            await callback.answer("❌ Не удалось показать транзакции", show_alert=True)
+            await callback.answer(
+                "❌ Не удалось показать транзакции",
+                show_alert=True
+            )
             return
 
         await state.set_state(WalletStates.viewing_bnb_txs)

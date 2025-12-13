@@ -24,6 +24,7 @@ from app.repositories.deposit_level_config_repository import (
 )
 from app.services.admin_log_service import AdminLogService
 from bot.keyboards.reply import admin_deposit_management_keyboard
+from bot.utils.formatters import format_balance
 
 
 router = Router()
@@ -87,8 +88,8 @@ async def show_level_settings(
     text = (
         f"{emoji} **{level_config.name}** {status_icon}\n\n"
         f"**Коридор сумм:**\n"
-        f"Мин: ${level_config.min_amount:,.2f}\n"
-        f"Макс: ${level_config.max_amount:,.2f}\n\n"
+        f"Мин: ${format_balance(level_config.min_amount, decimals=2)}\n"
+        f"Макс: ${format_balance(level_config.max_amount, decimals=2)}\n\n"
         f"**ROI настройки:**\n"
         f"Процент: {level_config.roi_percent}%/день\n"
         f"Кап: {level_config.roi_cap_percent}%\n\n"

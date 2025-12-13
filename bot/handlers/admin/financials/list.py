@@ -17,7 +17,7 @@ from app.services.financial_report_service import FinancialReportService
 from bot.handlers.admin.financials.states import AdminFinancialStates
 from bot.keyboards.reply import admin_financial_list_keyboard
 from bot.utils.admin_utils import clear_state_preserve_admin_token
-from bot.utils.formatters import escape_md
+from bot.utils.formatters import escape_md, format_balance
 from bot.utils.pagination import PaginationBuilder
 
 
@@ -62,26 +62,53 @@ async def show_financial_list(
     def fmt(val):
         return f"{float(val):,.2f}".replace(",", " ")
 
+    total_users_line = (
+        f"👥 Пользователей: `{platform_stats.total_users}` "
+        f"\\(✅ {platform_stats.verified_users} верифиц\\.\\)\n"
+    )
+
+    total_deps_line = (
+        f"📥 Всего: `{platform_stats.total_deposits_count}` "
+        f"на `{fmt(platform_stats.total_deposited_amount)}` USDT\n"
+    )
+
+    active_deps_line = (
+        f"🔄 Активных: `{platform_stats.active_deposits_count}` "
+        f"на `{fmt(platform_stats.active_deposits_amount)}` USDT\n\n"
+    )
+
+    total_withdrawals_line = (
+        f"📤 Выведено: `{platform_stats.total_withdrawals_count}` "
+        f"на `{fmt(platform_stats.total_withdrawn_amount)}` USDT\n"
+    )
+
+    pending_withdrawals_line = (
+        f"⏳ Ожидают: `{platform_stats.pending_withdrawals_count}` "
+        f"на `{fmt(platform_stats.pending_withdrawals_amount)}` USDT\n\n"
+    )
+
     text = (
         "💰 **Финансовая отчетность**\n\n"
         "📊 **Общая статистика платформы:**\n"
-        f"👥 Пользователей: `{platform_stats.total_users}` \\(✅ {platform_stats.verified_users} верифиц\\.\\)\n"
+        f"{total_users_line}"
         f"👛 С депозитами: `{platform_stats.users_with_deposits}`\n\n"
 
         "💵 **Депозиты:**\n"
-        f"📥 Всего: `{platform_stats.total_deposits_count}` на `{fmt(platform_stats.total_deposited_amount)}` USDT\n"
-        f"🔄 Активных: `{platform_stats.active_deposits_count}` на `{fmt(platform_stats.active_deposits_amount)}` USDT\n\n"
+        f"{total_deps_line}"
+        f"{active_deps_line}"
 
         "💸 **Выводы:**\n"
-        f"📤 Выведено: `{platform_stats.total_withdrawals_count}` на `{fmt(platform_stats.total_withdrawn_amount)}` USDT\n"
-        f"⏳ Ожидают: `{platform_stats.pending_withdrawals_count}` на `{fmt(platform_stats.pending_withdrawals_amount)}` USDT\n\n"
+        f"{total_withdrawals_line}"
+        f"{pending_withdrawals_line}"
 
         "📈 **Начисления:**\n"
         f"💎 ROI выплачено: `{fmt(platform_stats.total_roi_paid)}` USDT\n"
-        f"💰 Балансы польз\\.: `{fmt(platform_stats.total_pending_balance)}` USDT\n\n"
+        f"💰 Балансы польз\\.: "
+        f"`{fmt(platform_stats.total_pending_balance)}` USDT\n\n"
 
         "━━━━━━━━━━━━━━━━━━━━\n"
-        f"📋 Пользователей: `{total_count}` \\| Стр\\. `{page}/{total_pages}`\n"
+        f"📋 Пользователей: `{total_count}` "
+        f"\\| Стр\\. `{page}/{total_pages}`\n"
         "Выберите пользователя для детальной информации:"
     )
 
@@ -92,7 +119,10 @@ async def show_financial_list(
     )
 
 
-@router.message(AdminFinancialStates.viewing_list, F.text.in_({"⬅ Предыдущая", "Следующая ➡"}))
+@router.message(
+    AdminFinancialStates.viewing_list,
+    F.text.in_({"⬅ Предыдущая", "Следующая ➡"})
+)
 async def handle_pagination(
     message: Message,
     session: AsyncSession,
@@ -126,7 +156,8 @@ async def handle_pagination(
         "💰 **Финансовая отчетность**\n\n"
         f"Всего пользователей: `{total_count}`\n"
         f"Страница: `{current_page}/{total_pages}`\n"
-        "Выберите пользователя для просмотра детальной информации:"
+        "Выберите пользователя для просмотра "
+        "детальной информации:"
     )
 
     await message.answer(
@@ -165,10 +196,26 @@ async def handle_user_selection(
     escape_md(f"{details.user.telegram_id}")  # Use ID if name not available easily here
 
     reg_date = details.user.created_at.strftime('%d\\.%m\\.%Y')
-    last_active = details.user.last_active.strftime('%d\\.%m\\.%Y %H:%M') if details.user.last_active else "Неизвестно"
+    if details.user.last_active:
+        last_active = details.user.last_active.strftime(
+            '%d\\.%m\\.%Y %H:%M'
+        )
+    else:
+        last_active = "Неизвестно"
 
-    last_dep = details.last_deposit_date.strftime('%d\\.%m\\.%Y %H:%M') if details.last_deposit_date else "Нет"
-    last_with = details.last_withdrawal_date.strftime('%d\\.%m\\.%Y %H:%M') if details.last_withdrawal_date else "Нет"
+    if details.last_deposit_date:
+        last_dep = details.last_deposit_date.strftime(
+            '%d\\.%m\\.%Y %H:%M'
+        )
+    else:
+        last_dep = "Нет"
+
+    if details.last_withdrawal_date:
+        last_with = details.last_withdrawal_date.strftime(
+            '%d\\.%m\\.%Y %H:%M'
+        )
+    else:
+        last_with = "Нет"
 
     text = (
         f"📂 **Личное дело пользователя**\n"
@@ -180,9 +227,9 @@ async def handle_user_selection(
         f"🕒 Активность: {last_active}\n\n"
 
         f"💰 **Финансы**:\n"
-        f"📥 Всего внесено: `{details.total_deposited:.2f}` USDT\n"
-        f"📤 Всего выведено: `{details.total_withdrawn:.2f}` USDT\n"
-        f"📈 Начислено ROI: `{details.total_earned:.2f}` USDT\n"
+        f"📥 Всего внесено: `{format_balance(details.total_deposited, decimals=2)}` USDT\n"
+        f"📤 Всего выведено: `{format_balance(details.total_withdrawn, decimals=2)}` USDT\n"
+        f"📈 Начислено ROI: `{format_balance(details.total_earned, decimals=2)}` USDT\n"
         f"📊 Активных депозитов: `{details.active_deposits_count}`\n\n"
 
         f"Последний депозит: {last_dep}\n"

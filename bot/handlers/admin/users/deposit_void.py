@@ -32,6 +32,7 @@ from app.services.user_service import UserService
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
 from bot.keyboards.reply import cancel_keyboard
 from bot.states.admin_states import AdminStates
+from bot.utils.formatters import format_balance
 
 
 router = Router(name="admin_users_deposit_void")
@@ -74,14 +75,25 @@ async def _start_void_deposit_flow(
         tx_short = f"…{d.tx_hash[-8:]}" if d.tx_hash else "N/A"
         created = d.created_at.strftime("%d.%m.%Y %H:%M")
         roi_paid = getattr(d, "roi_paid_amount", None) or 0
-        lines.append(
-            f"- ID `{d.id}`: `{float(d.amount):.2f} USDT` | ROI выплачено: `{float(roi_paid):.2f}` | {created} | tx {tx_short}"
+        deposit_line = (
+            f"- ID `{d.id}`: `{format_balance(d.amount, decimals=2)} USDT` | "
+            f"ROI выплачено: `{format_balance(roi_paid, decimals=2)}` | "
+            f"{created} | tx {tx_short}"
         )
+        lines.append(deposit_line)
 
-    lines.append("\nВведите **ID** депозита (например: `123`) или нажмите ❌ Отмена.")
+    prompt_text = (
+        "\nВведите **ID** депозита (например: `123`) "
+        "или нажмите ❌ Отмена."
+    )
+    lines.append(prompt_text)
 
     await state.set_state(AdminStates.selecting_deposit_to_void)
-    await message.answer("\n".join(lines), parse_mode="Markdown", reply_markup=cancel_keyboard())
+    await message.answer(
+        "\n".join(lines),
+        parse_mode="Markdown",
+        reply_markup=cancel_keyboard()
+    )
 
 
 @router.callback_query(F.data == "admin:deposit_void")
@@ -140,24 +152,39 @@ async def handle_void_deposit_select(
         return
 
     # Lock row to avoid race conditions
-    stmt = select(Deposit).where(Deposit.id == deposit_id).where(Deposit.user_id == user_id).with_for_update()
+    stmt = (
+        select(Deposit)
+        .where(Deposit.id == deposit_id)
+        .where(Deposit.user_id == user_id)
+        .with_for_update()
+    )
     result = await session.execute(stmt)
     deposit = result.scalar_one_or_none()
 
     if not deposit:
-        await message.reply("❌ Депозит не найден для выбранного пользователя.")
+        error_msg = "❌ Депозит не найден для выбранного пользователя."
+        await message.reply(error_msg)
         return
 
     if deposit.status != TransactionStatus.CONFIRMED.value:
-        await message.reply("❌ Можно аннулировать только подтверждённые депозиты.")
+        error_msg = (
+            "❌ Можно аннулировать только подтверждённые депозиты."
+        )
+        await message.reply(error_msg)
         return
 
     await state.update_data(void_deposit_id=deposit.id)
     await state.set_state(AdminStates.confirming_deposit_void)
-    await message.answer(
+
+    confirmation_text = (
         "🚫 **Аннулирование депозита**\n\n"
-        f"Депозит: ID `{deposit.id}` на сумму `{float(deposit.amount):.2f} USDT`\n\n"
-        "Укажите причину аннулирования (минимум 5 символов) или нажмите ❌ Отмена.",
+        f"Депозит: ID `{deposit.id}` "
+        f"на сумму `{format_balance(deposit.amount, decimals=2)} USDT`\n\n"
+        "Укажите причину аннулирования (минимум 5 символов) "
+        "или нажмите ❌ Отмена."
+    )
+    await message.answer(
+        confirmation_text,
         parse_mode="Markdown",
         reply_markup=cancel_keyboard(),
     )
@@ -189,7 +216,11 @@ async def handle_void_deposit_confirm(
 
     reason = (message.text or "").strip()
     if len(reason) < 5:
-        await message.reply("❌ Укажите причину (минимум 5 символов) или нажмите ❌ Отмена.")
+        error_msg = (
+            "❌ Укажите причину (минимум 5 символов) "
+            "или нажмите ❌ Отмена."
+        )
+        await message.reply(error_msg)
         return
 
     state_data = await state.get_data()
@@ -197,17 +228,29 @@ async def handle_void_deposit_confirm(
     deposit_id = state_data.get("void_deposit_id")
 
     if not user_id or not deposit_id:
-        await message.answer("❌ Контекст операции потерян. Откройте профиль пользователя заново.")
+        error_msg = (
+            "❌ Контекст операции потерян. "
+            "Откройте профиль пользователя заново."
+        )
+        await message.answer(error_msg)
         return
 
     # Use the same logic as ARIA tools to keep aggregates consistent
-    service = AIDepositsService(session, admin_data={"ID": admin.telegram_id, "username": admin.username})
-    result = await service.cancel_deposit(deposit_id=int(deposit_id), reason=reason)
+    admin_data = {"ID": admin.telegram_id, "username": admin.username}
+    service = AIDepositsService(session, admin_data=admin_data)
+    result = await service.cancel_deposit(
+        deposit_id=int(deposit_id),
+        reason=reason
+    )
     if not result.get("success"):
         await message.answer(str(result.get("error", "❌ Ошибка")))
         return
 
-    logger.warning(f"Admin {admin.telegram_id} cancelled deposit {deposit_id} via profile flow. Reason: {reason}")
+    log_msg = (
+        f"Admin {admin.telegram_id} cancelled deposit {deposit_id} "
+        f"via profile flow. Reason: {reason}"
+    )
+    logger.warning(log_msg)
     await message.answer(str(result.get("message", "✅ Депозит отменён")))
 
     # Show updated profile

@@ -17,6 +17,7 @@ from app.services.ai_assistant_service import AI_NAME, get_ai_service
 from app.services.monitoring_service import MonitoringService
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
 from bot.keyboards.reply import get_admin_keyboard_from_data
+from bot.utils.formatters import format_balance
 from bot.utils.text_utils import escape_markdown, sanitize_markdown
 
 from .utils import (
@@ -176,14 +177,14 @@ async def show_stats(
     text += "**Финансы:**\n"
     text += (
         f"• Депозитов: "
-        f"**${fin.get('total_active_deposits', 0):,.2f}**\n"
+        f"**${format_balance(fin.get('total_active_deposits', 0), decimals=2)}**\n"
     )
     text += (
         f"• Ожидают вывода: "
         f"**{fin.get('pending_withdrawals_count', 0)}** "
     )
     text += (
-        f"(${fin.get('pending_withdrawals_amount', 0):,.2f})\n\n"
+        f"(${format_balance(fin.get('pending_withdrawals_amount', 0), decimals=2)})\n\n"
     )
     text += "**Администраторы:**\n"
     text += (

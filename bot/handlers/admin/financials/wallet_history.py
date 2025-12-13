@@ -18,12 +18,16 @@ from bot.keyboards.reply import (
     admin_user_financial_detail_keyboard,
     admin_wallet_history_keyboard,
 )
+from bot.utils.formatters import format_wallet_short
 
 
 router = Router()
 
 
-@router.message(AdminFinancialStates.viewing_user_detail, F.text == "💳 История кошельков")
+@router.message(
+    AdminFinancialStates.viewing_user_detail,
+    F.text == "💳 История кошельков"
+)
 async def show_wallet_history(
     message: Message,
     session: AsyncSession,
@@ -51,8 +55,8 @@ async def show_wallet_history(
 
     for i, wh in enumerate(dto.wallet_history, 1):
         date_str = wh.changed_at.strftime("%Y-%m-%d %H:%M")
-        old_short = f"{wh.old_wallet[:10]}...{wh.old_wallet[-8:]}"
-        new_short = f"{wh.new_wallet[:10]}...{wh.new_wallet[-8:]}"
+        old_short = format_wallet_short(wh.old_wallet)
+        new_short = format_wallet_short(wh.new_wallet)
 
         text += (
             f"{i}. **{date_str}**\n"

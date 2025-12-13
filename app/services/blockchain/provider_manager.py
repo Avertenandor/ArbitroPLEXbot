@@ -275,7 +275,7 @@ class ProviderManager:
                     operation_name="Node health check"
                 )
                 return True
-        except (BlockchainTimeoutError, Exception):
-            pass
+        except (BlockchainTimeoutError, ConnectionError, TimeoutError) as e:
+            logger.debug(f"Node health check failed: {e}")
 
         return False

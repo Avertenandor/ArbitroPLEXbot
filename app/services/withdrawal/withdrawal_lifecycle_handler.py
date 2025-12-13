@@ -10,6 +10,7 @@ from typing import Any
 
 from loguru import logger
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config.settings import settings
@@ -91,9 +92,17 @@ class WithdrawalLifecycleHandler:
 
             return True, None
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             await self.session.rollback()
-            logger.error(f"Failed to cancel withdrawal: {e}")
+            logger.error(
+                "Failed to cancel withdrawal",
+                extra={
+                    "transaction_id": transaction_id,
+                    "user_id": user_id,
+                    "error": str(e),
+                },
+                exc_info=True,
+            )
             return False, "Ошибка отмены заявки"
 
     async def approve_withdrawal(
@@ -156,9 +165,18 @@ class WithdrawalLifecycleHandler:
 
             return True, None
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             await self.session.rollback()
-            logger.error(f"Failed to approve withdrawal: {e}")
+            logger.error(
+                "Failed to approve withdrawal",
+                extra={
+                    "transaction_id": transaction_id,
+                    "tx_hash": tx_hash,
+                    "admin_id": admin_id,
+                    "error": str(e),
+                },
+                exc_info=True,
+            )
             return False, "Ошибка подтверждения заявки"
 
     async def approve_withdrawal_via_escrow(
@@ -241,9 +259,17 @@ class WithdrawalLifecycleHandler:
 
             return True, None, tx_hash
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             await self.session.rollback()
-            logger.error(f"Failed to approve withdrawal via escrow: {e}")
+            logger.error(
+                "Failed to approve withdrawal via escrow",
+                extra={
+                    "escrow_id": escrow_id,
+                    "approver_admin_id": approver_admin_id,
+                    "error": str(e),
+                },
+                exc_info=True,
+            )
             return False, f"Ошибка при одобрении через escrow: {str(e)}", None
 
     async def reject_withdrawal(
@@ -296,9 +322,17 @@ class WithdrawalLifecycleHandler:
 
             return True, None
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             await self.session.rollback()
-            logger.error(f"Failed to reject withdrawal: {e}")
+            logger.error(
+                "Failed to reject withdrawal",
+                extra={
+                    "transaction_id": transaction_id,
+                    "reason": reason,
+                    "error": str(e),
+                },
+                exc_info=True,
+            )
             return False, "Ошибка отклонения заявки"
 
     async def get_withdrawal_by_id(

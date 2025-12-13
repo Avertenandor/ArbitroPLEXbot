@@ -58,8 +58,8 @@ class BlockchainServiceMixin:
                 return self.balance_manager.get_usdt_balance(w3, address)
 
             return await self.async_executor.run_with_failover(_get_bal)
-        except Exception as e:
-            logger.error(f"Get USDT balance failed: {e}")
+        except (Web3Exception, ValueError, TimeoutError, ConnectionError, OSError) as error:
+            logger.error(f"Get USDT balance failed for {address}: {error}")
             return None
 
     async def get_plex_balance(self, address: str) -> Decimal | None:
@@ -77,8 +77,8 @@ class BlockchainServiceMixin:
                 return self.balance_manager.get_plex_balance(w3, address)
 
             return await self.async_executor.run_with_failover(_get_bal)
-        except Exception as e:
-            logger.error(f"Get PLEX balance failed: {e}")
+        except (Web3Exception, ValueError, TimeoutError, ConnectionError, OSError) as error:
+            logger.error(f"Get PLEX balance failed for {address}: {error}")
             return None
 
     async def get_native_balance(self, address: str) -> Decimal | None:
@@ -96,8 +96,8 @@ class BlockchainServiceMixin:
                 return self.balance_manager.get_native_balance(w3, address)
 
             return await self.async_executor.run_with_failover(_get_bal)
-        except Exception as e:
-            logger.error(f"Get BNB balance failed: {e}")
+        except (Web3Exception, ValueError, TimeoutError, ConnectionError, OSError) as error:
+            logger.error(f"Get BNB balance failed for {address}: {error}")
             return None
 
     # ========== Gas Methods ==========
@@ -124,7 +124,8 @@ class BlockchainServiceMixin:
                 )
 
             return await self.async_executor.run_with_failover(_est_gas)
-        except Exception:
+        except (Web3Exception, ValueError, TimeoutError, ConnectionError, OSError) as error:
+            logger.error(f"Estimate gas fee failed for {to_address} amount {amount}: {error}")
             return None
 
     # ========== Transaction Methods ==========
@@ -159,9 +160,9 @@ class BlockchainServiceMixin:
 
         try:
             return await self.async_executor.run_with_failover(_send)
-        except Exception as e:
-            logger.error(f"Failed to send payment: {e}")
-            return {"success": False, "error": str(e)}
+        except (Web3Exception, ValueError, TimeoutError, ConnectionError, OSError) as error:
+            logger.error(f"Failed to send payment to {to_address} amount {amount}: {error}")
+            return {"success": False, "error": str(error)}
 
     async def send_native_token(
         self,
@@ -193,9 +194,9 @@ class BlockchainServiceMixin:
 
         try:
             return await self.async_executor.run_with_failover(_send)
-        except Exception as e:
-            logger.error(f"Failed to send BNB: {e}")
-            return {"success": False, "error": str(e)}
+        except (Web3Exception, ValueError, TimeoutError, ConnectionError, OSError) as error:
+            logger.error(f"Failed to send BNB to {to_address} amount {amount}: {error}")
+            return {"success": False, "error": str(error)}
 
     async def check_transaction_status(
         self,
@@ -217,8 +218,8 @@ class BlockchainServiceMixin:
                 )
 
             return await self.async_executor.run_with_failover(_check)
-        except (TimeoutError, Web3Exception) as e:
-            logger.warning(f"Failed to check transaction status: {e}")
+        except (TimeoutError, Web3Exception) as error:
+            logger.warning(f"Failed to check transaction status: {error}")
             return {"status": "unknown", "confirmations": 0}
 
     async def get_transaction_details(
@@ -241,8 +242,8 @@ class BlockchainServiceMixin:
                 )
 
             return await self.async_executor.run_with_failover(_fetch)
-        except (TimeoutError, Web3Exception) as e:
-            logger.warning(f"Failed to get transaction details: {e}")
+        except (TimeoutError, Web3Exception) as error:
+            logger.warning(f"Failed to get transaction details: {error}")
             return None
 
     # ========== Payment Verification Methods ==========
@@ -277,9 +278,9 @@ class BlockchainServiceMixin:
 
         try:
             return await self.async_executor.run_with_failover(_verify)
-        except Exception as e:
-            logger.error(f"[PLEX Verify] Error: {e}")
-            return {"success": False, "error": str(e)}
+        except (Web3Exception, ValueError, TimeoutError, ConnectionError, OSError) as error:
+            logger.error(f"[PLEX Verify] Failed for sender {sender_address} amount {target_amount}: {error}")
+            return {"success": False, "error": str(error)}
 
     async def get_user_usdt_deposits(
         self,
@@ -305,11 +306,11 @@ class BlockchainServiceMixin:
 
         try:
             return await self.async_executor.run_with_failover(_scan)
-        except Exception as e:
-            logger.error(f"Deposit scan failed: {e}")
+        except (Web3Exception, ValueError, TimeoutError, ConnectionError, OSError) as error:
+            logger.error(f"Deposit scan failed for wallet {user_wallet}: {error}")
             return {
                 'success': False,
-                'error': str(e),
+                'error': str(error),
                 'total_amount': Decimal("0"),
                 'tx_count': 0,
                 'transactions': [],
@@ -339,9 +340,9 @@ class BlockchainServiceMixin:
 
         try:
             return await self.async_executor.run_with_failover(_verify)
-        except Exception as e:
-            logger.error(f"[PLEX Transfer Verify] Error: {e}")
-            return {"success": False, "error": str(e)}
+        except (Web3Exception, ValueError, TimeoutError, ConnectionError, OSError) as error:
+            logger.error(f"[PLEX Transfer Verify] Failed for sender {from_address} amount {amount}: {error}")
+            return {"success": False, "error": str(error)}
 
     async def scan_plex_payments(
         self,
@@ -367,8 +368,8 @@ class BlockchainServiceMixin:
 
         try:
             return await self.async_executor.run_with_failover(_scan)
-        except Exception as e:
-            logger.error(f"[PLEX Scan] Error: {e}")
+        except (Web3Exception, ValueError, TimeoutError, ConnectionError, OSError) as error:
+            logger.error(f"[PLEX Scan] Failed for sender {from_address}: {error}")
             return []
 
     # ========== Block Operations ==========

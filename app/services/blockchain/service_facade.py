@@ -36,6 +36,7 @@ from app.services.blockchain.sync_provider_management import (
 from app.services.blockchain.transaction_operations import TransactionManager
 from app.services.blockchain.wallet_operations import WalletManager
 from app.utils.security import mask_address
+from app.config.constants import RPC_MAX_CONCURRENT, RPC_MAX_RPS
 
 
 # Suppress eth_utils network warnings about invalid ChainId
@@ -90,7 +91,7 @@ class BlockchainService(BlockchainServiceMixin):
         self.system_wallet_address = settings.system_wallet_address
 
         # Initialize RPC rate limiter
-        self.rpc_limiter = RPCRateLimiter(max_concurrent=10, max_rps=25)
+        self.rpc_limiter = RPCRateLimiter(max_concurrent=RPC_MAX_CONCURRENT, max_rps=RPC_MAX_RPS)
 
         # Initialize Provider Manager
         self.provider_manager = SyncProviderManager(

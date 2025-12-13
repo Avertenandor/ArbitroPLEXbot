@@ -230,8 +230,20 @@ class TransactionManager:
             )
             return {"success": True, "tx_hash": tx_hash_str, "error": None}
 
+        except ValueError as e:
+            logger.error(f"Invalid address or amount for USDT payment: {e}")
+            return {"success": False, "error": str(e)}
+        except ContractLogicError as e:
+            logger.error(f"Contract logic error during USDT payment: {e}")
+            return {"success": False, "error": str(e)}
+        except Web3Exception as e:
+            logger.error(f"Web3 error during USDT payment: {e}")
+            return {"success": False, "error": str(e)}
+        except asyncio.TimeoutError as e:
+            logger.error(f"Timeout acquiring nonce lock for USDT payment: {e}")
+            return {"success": False, "error": "Timeout acquiring transaction lock"}
         except Exception as e:
-            logger.error(f"Failed to send payment: {e}")
+            logger.error(f"Unexpected error sending USDT payment: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
 
     async def send_native_token(
@@ -306,8 +318,17 @@ class TransactionManager:
             )
             return {"success": True, "tx_hash": tx_hash_str, "error": None}
 
+        except ValueError as e:
+            logger.error(f"Invalid address or amount for BNB payment: {e}")
+            return {"success": False, "error": str(e)}
+        except Web3Exception as e:
+            logger.error(f"Web3 error during BNB payment: {e}")
+            return {"success": False, "error": str(e)}
+        except asyncio.TimeoutError as e:
+            logger.error(f"Timeout acquiring nonce lock for BNB payment: {e}")
+            return {"success": False, "error": "Timeout acquiring transaction lock"}
         except Exception as e:
-            logger.error(f"Failed to send BNB: {e}")
+            logger.error(f"Unexpected error sending BNB payment: {e}", exc_info=True)
             return {"success": False, "error": str(e)}
 
     def check_transaction_status_sync(self, w3: Web3, tx_hash: str) -> dict[str, Any]:

@@ -6,6 +6,8 @@ Contains security-related helper functions for handling sensitive data.
 
 import ctypes
 
+from loguru import logger
+
 
 def secure_zero_memory(secret: str) -> None:
     """
@@ -26,6 +28,12 @@ def secure_zero_memory(secret: str) -> None:
         secret_bytes = secret.encode() if isinstance(secret, str) else secret
         # Overwrite with zeros
         ctypes.memset(id(secret_bytes) + 32, 0, len(secret_bytes))
-    except Exception:
-        # Fail silently - this is best-effort security
-        pass
+    except (AttributeError, UnicodeEncodeError) as e:
+        # Encoding errors - log and continue
+        logger.debug(f"Failed to encode secret for memory clearing: {e}")
+    except (TypeError, ValueError, OverflowError) as e:
+        # Invalid arguments to ctypes.memset
+        logger.debug(f"Invalid arguments for memory clearing: {e}")
+    except OSError as e:
+        # Memory access errors
+        logger.debug(f"Memory access error during secure clearing: {e}")

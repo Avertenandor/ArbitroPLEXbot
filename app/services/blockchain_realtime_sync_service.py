@@ -246,7 +246,11 @@ class BlockchainRealtimeSyncService:
         state = await self.get_or_create_sync_state(token_type)
 
         current_block = self.w3.eth.block_number
-        from_block = state.last_synced_block + 1 if state.last_synced_block > 0 else current_block - 100
+        from_block = (
+            state.last_synced_block + 1
+            if state.last_synced_block > 0
+            else current_block - 100
+        )
         to_block = min(from_block + max_blocks, current_block)
 
         if from_block >= current_block:
@@ -262,20 +266,23 @@ class BlockchainRealtimeSyncService:
 
         decimals = USDT_DECIMALS if token_type == "USDT" else PLEX_DECIMALS
         cached_count = 0
+        system_wallet_checksum = Web3.to_checksum_address(
+            self.system_wallet
+        )
 
         try:
             # Get incoming transfers
             incoming_logs = contract.events.Transfer.get_logs(
                 fromBlock=from_block,
                 toBlock=to_block,
-                argument_filters={"to": Web3.to_checksum_address(self.system_wallet)}
+                argument_filters={"to": system_wallet_checksum}
             )
 
             # Get outgoing transfers
             outgoing_logs = contract.events.Transfer.get_logs(
                 fromBlock=from_block,
                 toBlock=to_block,
-                argument_filters={"from": Web3.to_checksum_address(self.system_wallet)}
+                argument_filters={"from": system_wallet_checksum}
             )
 
             # Process incoming

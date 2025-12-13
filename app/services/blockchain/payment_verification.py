@@ -42,7 +42,11 @@ class PaymentVerifier:
             system_wallet_address: System wallet address for receiving payments
         """
         self.usdt_contract_address = to_checksum_address(usdt_contract_address)
-        self.plex_token_address = to_checksum_address(plex_token_address) if plex_token_address else None
+        self.plex_token_address = (
+            to_checksum_address(plex_token_address)
+            if plex_token_address
+            else None
+        )
         self.system_wallet_address = to_checksum_address(system_wallet_address)
 
     def verify_plex_payment_sync(
@@ -139,8 +143,16 @@ class PaymentVerifier:
 
                 if value >= target_wei:
                     amount_found = Decimal(value) / Decimal(10**decimals)
-                    logger.success(f"[PLEX Verify] VERIFIED! TX={tx_hash}, amount={amount_found} PLEX")
-                    return {"success": True, "tx_hash": tx_hash, "amount": amount_found, "block": block_num}
+                    logger.success(
+                        f"[PLEX Verify] VERIFIED! TX={tx_hash}, "
+                        f"amount={amount_found} PLEX"
+                    )
+                    return {
+                        "success": True,
+                        "tx_hash": tx_hash,
+                        "amount": amount_found,
+                        "block": block_num,
+                    }
                 else:
                     logger.warning(f"[PLEX Verify] Amount insufficient: {value} < {target_wei}")
 
@@ -178,9 +190,12 @@ class PaymentVerifier:
         """
         try:
             # Validate wallet address before sending to blockchain
-            if not user_wallet or not validate_bsc_address(user_wallet, checksum=False):
+            if not user_wallet or not validate_bsc_address(
+                user_wallet, checksum=False
+            ):
                 error_msg = (
-                    f"Invalid wallet address format: {user_wallet[:30] if user_wallet else 'None'}..."
+                    f"Invalid wallet address format: "
+                    f"{user_wallet[:30] if user_wallet else 'None'}..."
                     if user_wallet
                     else "Wallet address is empty"
                 )
@@ -222,10 +237,15 @@ class PaymentVerifier:
 
                 try:
                     logs = contract.events.Transfer.get_logs(
-                        fromBlock=current_start, toBlock=current_end, argument_filters={"from": sender, "to": receiver}
+                        fromBlock=current_start,
+                        toBlock=current_end,
+                        argument_filters={"from": sender, "to": receiver},
                     )
 
-                    logger.debug(f"[USDT Scan] Chunk {current_start}-{current_end}: {len(logs)} logs")
+                    logger.debug(
+                        f"[USDT Scan] Chunk {current_start}-{current_end}: "
+                        f"{len(logs)} logs"
+                    )
 
                     for log in logs:
                         args = log.get("args", {})
@@ -241,7 +261,10 @@ class PaymentVerifier:
                         )
 
                 except Exception as chunk_error:
-                    logger.warning(f"[USDT Scan] Chunk {current_start}-{current_end} failed: {chunk_error}")
+                    logger.warning(
+                        f"[USDT Scan] Chunk {current_start}-{current_end} "
+                        f"failed: {chunk_error}"
+                    )
 
                 current_end = current_start
 
@@ -266,7 +289,10 @@ class PaymentVerifier:
                     f"  Block range scanned: {from_block} - {latest}"
                 )
                 for tx in transactions:
-                    logger.info(f"  -> TX: {tx['tx_hash'][:16]}..., Amount: {tx['amount']} USDT, Block: {tx['block']}")
+                    logger.info(
+                        f"  -> TX: {tx['tx_hash'][:16]}..., "
+                        f"Amount: {tx['amount']} USDT, Block: {tx['block']}"
+                    )
             else:
                 logger.warning(
                     f"[USDT Scan] No deposits found for {mask_address(user_wallet)}:\n"
@@ -323,7 +349,8 @@ class PaymentVerifier:
         target_wei = int(amount * Decimal(10**PLEX_DECIMALS))
 
         logger.info(
-            f"[PLEX Transfer Verify] from={mask_address(sender)}, to={mask_address(receiver)}, amount={amount} PLEX"
+            f"[PLEX Transfer Verify] from={mask_address(sender)}, "
+            f"to={mask_address(receiver)}, amount={amount} PLEX"
         )
 
         latest = w3.eth.block_number
@@ -334,7 +361,10 @@ class PaymentVerifier:
         total_blocks = lookback_blocks
         all_logs = []
 
-        logger.info(f"[PLEX Transfer Verify] Scanning {total_blocks} blocks in chunks of {chunk_size}")
+        logger.info(
+            f"[PLEX Transfer Verify] Scanning {total_blocks} blocks "
+            f"in chunks of {chunk_size}"
+        )
 
         for offset in range(0, total_blocks, chunk_size):
             from_blk = max(0, latest - offset - chunk_size)
@@ -345,13 +375,21 @@ class PaymentVerifier:
 
             try:
                 logs = contract.events.Transfer.get_logs(
-                    fromBlock=from_blk, toBlock=to_blk, argument_filters={"from": sender, "to": receiver}
+                    fromBlock=from_blk,
+                    toBlock=to_blk,
+                    argument_filters={"from": sender, "to": receiver},
                 )
                 chunk_logs = list(logs)
                 all_logs.extend(chunk_logs)
-                logger.debug(f"[PLEX Transfer Verify] Chunk {from_blk}-{to_blk}: {len(chunk_logs)} logs")
+                logger.debug(
+                    f"[PLEX Transfer Verify] Chunk {from_blk}-{to_blk}: "
+                    f"{len(chunk_logs)} logs"
+                )
             except Exception as chunk_err:
-                logger.warning(f"[PLEX Transfer Verify] Chunk {from_blk}-{to_blk} failed: {chunk_err}")
+                logger.warning(
+                    f"[PLEX Transfer Verify] Chunk {from_blk}-{to_blk} "
+                    f"failed: {chunk_err}"
+                )
                 continue
 
         logger.info(f"[PLEX Transfer Verify] Total found: {len(all_logs)} transfers")
@@ -377,7 +415,8 @@ class PaymentVerifier:
                     timestamp = 0
 
                 logger.success(
-                    f"[PLEX Transfer Verify] VERIFIED! TX={tx_hash}, amount={amount_found} PLEX, block={block_num}"
+                    f"[PLEX Transfer Verify] VERIFIED! TX={tx_hash}, "
+                    f"amount={amount_found} PLEX, block={block_num}"
                 )
                 return {
                     "success": True,
@@ -388,7 +427,8 @@ class PaymentVerifier:
                 }
 
         logger.warning(
-            f"[PLEX Transfer Verify] No transfer found from {mask_address(sender)} with amount >= {amount} PLEX"
+            f"[PLEX Transfer Verify] No transfer found from "
+            f"{mask_address(sender)} with amount >= {amount} PLEX"
         )
         return {"success": False, "error": "Transfer not found or amount insufficient"}
 
@@ -441,7 +481,9 @@ class PaymentVerifier:
 
             # Get all Transfer events from user to system wallet
             logs = contract.events.Transfer.get_logs(
-                fromBlock=from_block, toBlock="latest", argument_filters={"from": sender, "to": receiver}
+                fromBlock=from_block,
+                toBlock="latest",
+                argument_filters={"from": sender, "to": receiver},
             )
 
             payments = []
@@ -472,7 +514,10 @@ class PaymentVerifier:
             # Sort by block number (oldest first)
             payments.sort(key=lambda x: x["block"])
 
-            logger.info(f"[PLEX Scan] Found {len(payments)} PLEX payments from {mask_address(sender)}")
+            logger.info(
+                f"[PLEX Scan] Found {len(payments)} PLEX payments "
+                f"from {mask_address(sender)}"
+            )
 
             return payments
 

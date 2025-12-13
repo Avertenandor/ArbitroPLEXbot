@@ -4,10 +4,15 @@ Failover Module.
 Contains failover logic for the BlockchainService.
 """
 
+from __future__ import annotations
+
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    from ..provider_manager import ProviderManager
 
 
 class Failover:
@@ -20,7 +25,7 @@ class Failover:
     - Operation retry logic
     """
 
-    def __init__(self, provider_manager):
+    def __init__(self, provider_manager: ProviderManager) -> None:
         """
         Initialize failover.
 

@@ -217,6 +217,10 @@ class DepositService:
             Dict with deposit info and confirmation count
         """
         from app.models.enums import TransactionStatus
+        from app.services.blockchain.rpc_wrapper import (
+            BlockchainError,
+            BlockchainTimeoutError,
+        )
         from app.services.blockchain_service import get_blockchain_service
 
         deposit = await self.deposit_repo.find_by_id(deposit_id)
@@ -257,9 +261,30 @@ class DepositService:
                     estimated_minutes = estimated_seconds // 60
                     result["estimated_time"] = f"~{estimated_minutes} мин"
 
-            except Exception as e:
+            except BlockchainTimeoutError:
+                logger.warning(
+                    f"Blockchain timeout while checking confirmations for deposit {deposit_id}"
+                )
+                result["estimated_time"] = "2-5 минут"
+            except BlockchainError as e:
                 logger.error(
-                    f"Failed to check confirmations for deposit {deposit_id}: {e}"
+                    f"Blockchain error checking confirmations for deposit {deposit_id}: {e}"
+                )
+                result["estimated_time"] = "2-5 минут"
+            except (ConnectionError, TimeoutError) as e:
+                logger.warning(
+                    f"Network error checking confirmations for deposit {deposit_id}: {e}"
+                )
+                result["estimated_time"] = "2-5 минут"
+            except (KeyError, ValueError, AttributeError) as e:
+                logger.error(
+                    f"Data parsing error for deposit {deposit_id}: {e}",
+                    exc_info=True
+                )
+                result["estimated_time"] = "2-5 минут"
+            except RuntimeError as e:
+                logger.error(
+                    f"Runtime error checking deposit {deposit_id}: {e}"
                 )
                 result["estimated_time"] = "2-5 минут"
 

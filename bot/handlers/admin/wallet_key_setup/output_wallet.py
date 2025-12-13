@@ -33,14 +33,22 @@ async def start_output_wallet_setup(message: Message, state: FSMContext, **data:
     from bot.keyboards.reply import cancel_keyboard
 
     await state.set_state(WalletSetupStates.setting_output_key)
-    await message.answer(
+    setup_message = (
         "📤 **НАСТРОЙКА КОШЕЛЬКА ДЛЯ ВЫДАЧИ**\n\n"
         "⚠️ **ВНИМАНИЕ! КРИТИЧЕСКАЯ ОПЕРАЦИЯ**\n"
-        "Этот кошелек используется для автоматических выплат.\n"
-        "Системе требуется **Приватный ключ** или **Seed фраза**.\n\n"
-        "📝 **Отправьте Приватный ключ (hex) ИЛИ Seed фразу:**\n"
-        "• Сообщение будет удалено сразу после получения.\n"
-        "• Ключ сохраняется локально в зашифрованном виде.",
+        "Этот кошелек используется для "
+        "автоматических выплат.\n"
+        "Системе требуется **Приватный ключ** "
+        "или **Seed фраза**.\n\n"
+        "📝 **Отправьте Приватный ключ (hex) "
+        "ИЛИ Seed фразу:**\n"
+        "• Сообщение будет удалено сразу "
+        "после получения.\n"
+        "• Ключ сохраняется локально "
+        "в зашифрованном виде."
+    )
+    await message.answer(
+        setup_message,
         parse_mode="Markdown",
         reply_markup=cancel_keyboard(),
     )
@@ -92,11 +100,17 @@ async def process_output_key(message: Message, state: FSMContext):
             if mnemo.check(text):
                 # SECURITY: Encrypt seed phrase before storing in FSM state
                 encryption_service = get_encryption_service()
-                if not encryption_service or not encryption_service.enabled:
-                    await message.answer(
+                if (not encryption_service or
+                        not encryption_service.enabled):
+                    error_msg = (
                         "❌ **КРИТИЧЕСКАЯ ОШИБКА**\n"
-                        "Сервис шифрования недоступен. Невозможно безопасно сохранить seed-фразу.\n"
-                        "Обратитесь к администратору системы.",
+                        "Сервис шифрования недоступен. "
+                        "Невозможно безопасно сохранить "
+                        "seed-фразу.\n"
+                        "Обратитесь к администратору системы."
+                    )
+                    await message.answer(
+                        error_msg,
                         parse_mode="Markdown"
                     )
                     # SECURITY: Clear seed phrase from memory
@@ -105,10 +119,14 @@ async def process_output_key(message: Message, state: FSMContext):
 
                 encrypted_seed = encryption_service.encrypt(text)
                 if not encrypted_seed:
-                    await message.answer(
+                    error_msg = (
                         "❌ **КРИТИЧЕСКАЯ ОШИБКА**\n"
-                        "Не удалось зашифровать seed-фразу. Операция отменена.\n"
-                        "Обратитесь к администратору системы.",
+                        "Не удалось зашифровать seed-фразу. "
+                        "Операция отменена.\n"
+                        "Обратитесь к администратору системы."
+                    )
+                    await message.answer(
+                        error_msg,
                         parse_mode="Markdown"
                     )
                     # SECURITY: Clear seed phrase from memory
@@ -122,12 +140,18 @@ async def process_output_key(message: Message, state: FSMContext):
                 secure_zero_memory(text)
 
                 from bot.keyboards.reply import cancel_keyboard
-                await state.set_state(WalletSetupStates.setting_derivation_index)
-                await message.answer(
+                await state.set_state(
+                    WalletSetupStates.setting_derivation_index
+                )
+                seed_message = (
                     "🌱 **Обнаружена Seed-фраза**\n\n"
-                    "Для HD-кошельков (Trust Wallet, Metamask, Ledger) можно выбрать адрес.\n"
+                    "Для HD-кошельков (Trust Wallet, "
+                    "Metamask, Ledger) можно выбрать адрес.\n"
                     "Путь деривации: `m/44'/60'/0'/0/{index}`\n\n"
-                    "🔢 **Введите индекс адреса (обычно 0):**",
+                    "🔢 **Введите индекс адреса (обычно 0):**"
+                )
+                await message.answer(
+                    seed_message,
                     parse_mode="Markdown",
                     reply_markup=cancel_keyboard(),
                 )
@@ -148,10 +172,15 @@ async def process_output_key(message: Message, state: FSMContext):
     # SECURITY: Encrypt private key before storing in FSM state
     encryption_service = get_encryption_service()
     if not encryption_service or not encryption_service.enabled:
-        await message.answer(
+        error_msg = (
             "❌ **КРИТИЧЕСКАЯ ОШИБКА**\n"
-            "Сервис шифрования недоступен. Невозможно безопасно сохранить приватный ключ.\n"
-            "Обратитесь к администратору системы.",
+            "Сервис шифрования недоступен. "
+            "Невозможно безопасно сохранить "
+            "приватный ключ.\n"
+            "Обратитесь к администратору системы."
+        )
+        await message.answer(
+            error_msg,
             parse_mode="Markdown"
         )
         # SECURITY: Clear sensitive data
@@ -161,10 +190,14 @@ async def process_output_key(message: Message, state: FSMContext):
 
     encrypted_key = encryption_service.encrypt(private_key)
     if not encrypted_key:
-        await message.answer(
+        error_msg = (
             "❌ **КРИТИЧЕСКАЯ ОШИБКА**\n"
-            "Не удалось зашифровать приватный ключ. Операция отменена.\n"
-            "Обратитесь к администратору системы.",
+            "Не удалось зашифровать приватный ключ. "
+            "Операция отменена.\n"
+            "Обратитесь к администратору системы."
+        )
+        await message.answer(
+            error_msg,
             parse_mode="Markdown"
         )
         # SECURITY: Clear sensitive data
@@ -185,13 +218,18 @@ async def process_output_key(message: Message, state: FSMContext):
     from bot.keyboards.reply import confirmation_keyboard
 
     await state.set_state(WalletSetupStates.confirming_output)
-    await message.answer(
+    confirmation_msg = (
         f"📤 **Подтверждение ВЫХОДНОГО кошелька**\n\n"
         f"Адрес: `{wallet_address}`\n\n"
         "✅ Ключ валиден.\n"
-        "✅ Этот кошелек будет использоваться для выплат.\n"
-        "⚠️ Убедитесь, что на этом кошельке есть BNB для газа и USDT для выплат.\n\n"
-        "Подтвердить сохранение?",
+        "✅ Этот кошелек будет использоваться "
+        "для выплат.\n"
+        "⚠️ Убедитесь, что на этом кошельке "
+        "есть BNB для газа и USDT для выплат.\n\n"
+        "Подтвердить сохранение?"
+    )
+    await message.answer(
+        confirmation_msg,
         parse_mode="Markdown",
         reply_markup=confirmation_keyboard(),
     )
@@ -212,14 +250,19 @@ async def process_derivation_index(message: Message, state: FSMContext):
         if index < 0:
             raise ValueError
     except ValueError:
-        await message.answer("❌ Введите положительное число (например, 0):")
+        await message.answer(
+            "❌ Введите положительное число (например, 0):"
+        )
         return
 
     data = await state.get_data()
     encrypted_seed = data.get("temp_seed_phrase_encrypted")
 
     if not encrypted_seed:
-        await message.answer("❌ Ошибка: Seed-фраза потеряна. Начните заново.")
+        await message.answer(
+            "❌ Ошибка: Seed-фраза потеряна. "
+            "Начните заново."
+        )
         from .menu import handle_wallet_menu
         await handle_wallet_menu(message, state)
         return
@@ -227,10 +270,14 @@ async def process_derivation_index(message: Message, state: FSMContext):
     # SECURITY: Decrypt seed phrase only for derivation
     encryption_service = get_encryption_service()
     if not encryption_service or not encryption_service.enabled:
-        await message.answer(
+        error_msg = (
             "❌ **КРИТИЧЕСКАЯ ОШИБКА**\n"
-            "Сервис шифрования недоступен. Невозможно продолжить.\n"
-            "Обратитесь к администратору системы.",
+            "Сервис шифрования недоступен. "
+            "Невозможно продолжить.\n"
+            "Обратитесь к администратору системы."
+        )
+        await message.answer(
+            error_msg,
             parse_mode="Markdown"
         )
         await state.update_data(temp_seed_phrase_encrypted=None)
@@ -240,7 +287,10 @@ async def process_derivation_index(message: Message, state: FSMContext):
 
     seed_phrase = encryption_service.decrypt(encrypted_seed)
     if not seed_phrase:
-        await message.answer("❌ Ошибка: Не удалось расшифровать seed-фразу. Начните заново.")
+        await message.answer(
+            "❌ Ошибка: Не удалось расшифровать "
+            "seed-фразу. Начните заново."
+        )
         await state.update_data(temp_seed_phrase_encrypted=None)
         from .menu import handle_wallet_menu
         await handle_wallet_menu(message, state)
@@ -266,9 +316,13 @@ async def process_derivation_index(message: Message, state: FSMContext):
 
         # SECURITY: Encrypt private key before storing in FSM state
         if not encryption_service or not encryption_service.enabled:
-            await message.answer(
+            error_msg = (
                 "❌ **КРИТИЧЕСКАЯ ОШИБКА**\n"
-                "Сервис шифрования недоступен. Невозможно безопасно сохранить ключ.",
+                "Сервис шифрования недоступен. "
+                "Невозможно безопасно сохранить ключ."
+            )
+            await message.answer(
+                error_msg,
                 parse_mode="Markdown"
             )
             from .menu import handle_wallet_menu
@@ -277,7 +331,10 @@ async def process_derivation_index(message: Message, state: FSMContext):
 
         encrypted_key = encryption_service.encrypt(private_key)
         if not encrypted_key:
-            await message.answer("❌ Ошибка шифрования ключа. Начните заново.")
+            await message.answer(
+                "❌ Ошибка шифрования ключа. "
+                "Начните заново."
+            )
             from .menu import handle_wallet_menu
             await handle_wallet_menu(message, state)
             return
@@ -292,20 +349,27 @@ async def process_derivation_index(message: Message, state: FSMContext):
         from bot.keyboards.reply import confirmation_keyboard
 
         await state.set_state(WalletSetupStates.confirming_output)
-        await message.answer(
+        confirmation_msg = (
             f"📤 **Подтверждение ВЫХОДНОГО кошелька**\n\n"
             f"🌱 Seed-фраза (Index: {index})\n"
             f"Адрес: `{wallet_address}`\n\n"
             "✅ Ключ успешно деривирован.\n"
-            "✅ Этот кошелек будет использоваться для выплат.\n\n"
-            "Подтвердить сохранение?",
+            "✅ Этот кошелек будет использоваться "
+            "для выплат.\n\n"
+            "Подтвердить сохранение?"
+        )
+        await message.answer(
+            confirmation_msg,
             parse_mode="Markdown",
             reply_markup=confirmation_keyboard(),
         )
 
     except Exception as e:
         logger.error(f"Error deriving wallet: {e}", exc_info=True)
-        await message.answer("❌ Ошибка деривации кошелька. Попробуйте позже.")
+        await message.answer(
+            "❌ Ошибка деривации кошелька. "
+            "Попробуйте позже."
+        )
         # SECURITY: Clear encrypted seed from state on error
         await state.update_data(temp_seed_phrase_encrypted=None)
         from .menu import handle_wallet_menu
@@ -354,10 +418,14 @@ async def confirm_output_wallet(message: Message, state: FSMContext):
     # SECURITY: Decrypt key only for saving to .env
     encryption_service = get_encryption_service()
     if not encryption_service or not encryption_service.enabled:
-        await message.answer(
+        error_msg = (
             "❌ **КРИТИЧЕСКАЯ ОШИБКА**\n"
-            "Сервис шифрования недоступен. Невозможно сохранить ключ.\n"
-            "Обратитесь к администратору системы.",
+            "Сервис шифрования недоступен. "
+            "Невозможно сохранить ключ.\n"
+            "Обратитесь к администратору системы."
+        )
+        await message.answer(
+            error_msg,
             parse_mode="Markdown"
         )
         await state.update_data(
@@ -395,9 +463,13 @@ async def confirm_output_wallet(message: Message, state: FSMContext):
         )
 
         # Force restart via exit
-        await message.answer(
+        success_msg = (
             "✅ **Кошелек для выдачи сохранен!**\n\n"
-            "🔄 Бот перезапускается для применения нового ключа...",
+            "🔄 Бот перезапускается для "
+            "применения нового ключа..."
+        )
+        await message.answer(
+            success_msg,
             parse_mode="Markdown",
         )
         await clear_state_preserve_admin_token(state)
@@ -411,7 +483,10 @@ async def confirm_output_wallet(message: Message, state: FSMContext):
             new_private_key_encrypted=None,
             new_output_address=None
         )
-        await message.answer("❌ Ошибка при сохранении кошелька. Попробуйте позже.")
+        await message.answer(
+            "❌ Ошибка при сохранении кошелька. "
+            "Попробуйте позже."
+        )
         from .menu import handle_wallet_menu
         await handle_wallet_menu(message, state)
     finally:

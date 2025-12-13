@@ -11,6 +11,7 @@ from typing import Any
 from loguru import logger
 from web3 import AsyncWeb3
 from web3.contract import AsyncContract
+from web3.exceptions import ContractLogicError, Web3Exception
 
 from app.config.constants import BLOCKCHAIN_TIMEOUT
 
@@ -104,6 +105,39 @@ class GasEstimator:
                 "total_cost_bnb": float(total_cost_bnb),
             }
 
+        except ValueError as e:
+            logger.error(
+                f"Invalid address or amount for gas estimation: {e}",
+                extra={
+                    "to_address": to_address,
+                    "amount_usdt": str(amount_usdt),
+                },
+            )
+            return None
+        except ContractLogicError as e:
+            logger.error(
+                f"Contract logic error during gas estimation: {e}",
+                extra={
+                    "to_address": to_address,
+                    "amount_usdt": str(amount_usdt),
+                },
+            )
+            return None
+        except Web3Exception as e:
+            logger.error(
+                f"Web3 error during gas estimation: {e}",
+                extra={
+                    "to_address": to_address,
+                    "amount_usdt": str(amount_usdt),
+                },
+            )
+            return None
         except Exception as e:
-            logger.error(f"Error estimating gas: {e}")
+            logger.exception(
+                f"Unexpected error during gas estimation: {e}",
+                extra={
+                    "to_address": to_address,
+                    "amount_usdt": str(amount_usdt),
+                },
+            )
             return None

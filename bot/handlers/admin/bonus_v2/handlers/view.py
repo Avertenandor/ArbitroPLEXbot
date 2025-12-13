@@ -16,14 +16,24 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.bonus_service import BonusService
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
-from bot.utils.formatters import format_usdt
+from bot.utils.formatters import format_balance, format_usdt
 from bot.utils.text_utils import escape_markdown
 
 from ..states import BonusStates
 from ..keyboards import bonus_details_keyboard
-from ..helpers import get_bonus_status, get_bonus_status_emoji, format_user_display, truncate_reason
+from ..helpers import (
+    get_bonus_status,
+    get_bonus_status_emoji,
+    format_user_display,
+    truncate_reason,
+)
 from ..messages import BonusMessages
-from ..constants import BONUS_HISTORY_LIMIT, BONUS_STATS_LIMIT, BONUS_FETCH_LIMIT, BONUS_DISPLAY_LIMIT
+from ..constants import (
+    BONUS_HISTORY_LIMIT,
+    BONUS_STATS_LIMIT,
+    BONUS_FETCH_LIMIT,
+    BONUS_DISPLAY_LIMIT,
+)
 
 
 router = Router(name="bonus_view")
@@ -58,13 +68,13 @@ async def show_detailed_stats(
         f"📊 **Детальная статистика бонусов**\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"💰 **Общие суммы:**\n"
-        f"├ Всего начислено: **{format_usdt(stats.get('total_granted', 0))}** USDT\n"
-        f"├ За последние 24ч: **{format_usdt(stats.get('last_24h', 0))}** USDT\n"
+        f"├ Всего начислено: **{format_balance(stats.get('total_granted', 0), decimals=2)}** USDT\n"
+        f"├ За последние 24ч: **{format_balance(stats.get('last_24h', 0), decimals=2)}** USDT\n"
         f"└ Всего записей: **{stats.get('total_count', 0)}**\n\n"
         f"📈 **По статусам (последние {BONUS_STATS_LIMIT}):**\n"
-        f"├ 🟢 Активные: **{format_usdt(active_sum)}** USDT\n"
-        f"├ ✅ Завершённые: **{format_usdt(completed_sum)}** USDT\n"
-        f"└ ❌ Отменённые: **{format_usdt(cancelled_sum)}** USDT\n\n"
+        f"├ 🟢 Активные: **{format_balance(active_sum, decimals=2)}** USDT\n"
+        f"├ ✅ Завершённые: **{format_balance(completed_sum, decimals=2)}** USDT\n"
+        f"└ ❌ Отменённые: **{format_balance(cancelled_sum, decimals=2)}** USDT\n\n"
         f"ℹ️ _Бонус считается завершённым когда выплачен весь ROI Cap (500%)_"
     )
 
@@ -109,7 +119,9 @@ async def show_bonus_history(
 
         # ROI прогресс для активных
         progress = ""
-        if get_bonus_status(b) == "active" and hasattr(b, "roi_progress_percent"):
+        is_active = get_bonus_status(b) == "active"
+        has_progress = hasattr(b, "roi_progress_percent")
+        if is_active and has_progress:
             progress = f" ({b.roi_progress_percent:.0f}%)"
 
         reason_short = (b.reason or "")[:25]
@@ -161,7 +173,7 @@ async def show_my_bonuses(
     text = (
         f"📑 **Ваши начисления**\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"📊 Всего: **{len(my_bonuses)}** бонусов на **{format_usdt(total)}** USDT\n"
+        f"📊 Всего: **{len(my_bonuses)}** бонусов на **{format_balance(total, decimals=2)}** USDT\n"
         f"🟢 Активных: **{len(active)}**\n\n"
     )
 
@@ -216,9 +228,23 @@ async def view_bonus_details(
     safe_user = escape_markdown(user_name)
     safe_admin = escape_markdown(admin_name)
 
-    progress = bonus.roi_progress_percent if hasattr(bonus, "roi_progress_percent") else 0
-    remaining = bonus.roi_remaining if hasattr(bonus, "roi_remaining") else bonus.roi_cap_amount
+    progress = (
+        bonus.roi_progress_percent
+        if hasattr(bonus, "roi_progress_percent")
+        else 0
+    )
+    remaining = (
+        bonus.roi_remaining
+        if hasattr(bonus, "roi_remaining")
+        else bonus.roi_cap_amount
+    )
 
+    safe_reason = escape_markdown(bonus.reason or 'не указана')
+    date_str = (
+        bonus.created_at.strftime('%d.%m.%Y %H:%M')
+        if bonus.created_at
+        else 'н/д'
+    )
     text = (
         f"🎁 **Бонус #{bonus.id}**\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -226,11 +252,13 @@ async def view_bonus_details(
         f"👤 **Получатель:** @{safe_user}\n"
         f"💰 **Сумма:** {format_usdt(bonus.amount)} USDT\n"
         f"🎯 **ROI Cap:** {format_usdt(bonus.roi_cap_amount)} USDT\n"
-        f"📈 **ROI выплачено:** {format_usdt(bonus.roi_paid_amount)} USDT ({progress:.1f}%)\n"
+        f"📈 **ROI выплачено:** "
+        f"{format_usdt(bonus.roi_paid_amount)} USDT "
+        f"({progress:.1f}%)\n"
         f"💵 **Осталось:** {format_usdt(remaining)} USDT\n\n"
-        f"📝 **Причина:** _{escape_markdown(bonus.reason or 'не указана')}_\n"
+        f"📝 **Причина:** _{safe_reason}_\n"
         f"👤 **Начислил:** @{safe_admin}\n"
-        f"📅 **Дата:** {bonus.created_at.strftime('%d.%m.%Y %H:%M') if bonus.created_at else 'н/д'}"
+        f"📅 **Дата:** {date_str}"
     )
 
     # Кнопка отмены только для супер-админа и активных бонусов

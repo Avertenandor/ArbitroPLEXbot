@@ -20,7 +20,7 @@ from app.models.user import User
 from app.services.referral_service import ReferralService
 from bot.keyboards.reply import referral_keyboard, referral_list_keyboard
 from bot.utils.constants import REFERRAL_RATES
-from bot.utils.formatters import format_usdt
+from bot.utils.formatters import format_balance
 
 
 router = Router(name="referral_list")
@@ -91,7 +91,7 @@ async def _show_referral_list(
             text += (
                 f"*{idx + (page - 1) * 10}.* @{username}\n"
                 f"📅 Дата регистрации: {date_str}\n"
-                f"💰 Заработано: *{format_usdt(earned)} USDT*\n\n"
+                f"💰 Заработано: *{format_balance(earned, 2)} USDT*\n\n"
             )
 
         if total_pages > 1:

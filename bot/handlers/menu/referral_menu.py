@@ -19,7 +19,7 @@ from app.services.referral_service import ReferralService
 from app.services.user_service import UserService
 from bot.keyboards.reply import referral_keyboard
 from bot.utils.formatters import format_usdt
-from bot.utils.user_loader import UserLoader
+from bot.utils.user_context import get_user_from_context
 
 
 router = Router()
@@ -33,10 +33,7 @@ async def show_referral_menu(
     **data: Any,
 ) -> None:
     """Show referral menu with quick stats and link."""
-    telegram_id = message.from_user.id if message.from_user else None
-    user: User | None = data.get("user")
-    if not user and telegram_id:
-        user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
+    user = await get_user_from_context(message, session, data)
     if not user:
         await message.answer(
             "⚠️ Ошибка: не удалось загрузить данные пользователя. "

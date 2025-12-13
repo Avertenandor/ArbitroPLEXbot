@@ -19,8 +19,8 @@ class SearchMixin:
         Returns:
             List of entries matching the query
         """
-        q = query.lower()
-        return [e for e in self.entries if q in str(e).lower()]
+        query_lower = query.lower()
+        return [e for e in self.entries if query_lower in str(e).lower()]
 
     def get_categories(self) -> list[str]:
         """Get all unique categories in the knowledge base.

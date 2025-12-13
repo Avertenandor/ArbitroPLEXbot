@@ -131,11 +131,15 @@ async def handle_response_text(
 
     # Send to user
     try:
-        await bot.send_message(
-            inquiry.telegram_id,
+        user_response = (
             f"💬 **Ответ на ваше обращение #{inquiry_id}**\n\n"
             f"{message.text}\n\n"
-            "Вы можете продолжить диалог, нажав «❓ Задать вопрос».",
+            "Вы можете продолжить диалог, нажав "
+            "«❓ Задать вопрос»."
+        )
+        await bot.send_message(
+            inquiry.telegram_id,
+            user_response,
             parse_mode="Markdown",
         )
         await message.answer(
@@ -144,8 +148,12 @@ async def handle_response_text(
         )
     except Exception as e:
         logger.error(f"Failed to send response to user: {e}")
+        error_msg = (
+            "⚠️ Ответ сохранён, но не удалось доставить "
+            f"пользователю: {e}"
+        )
         await message.answer(
-            f"⚠️ Ответ сохранён, но не удалось доставить пользователю: {e}",
+            error_msg,
             reply_markup=admin_inquiry_detail_keyboard(is_assigned=True),
         )
 
@@ -204,7 +212,11 @@ async def handle_admin_response_photo(
         )
     except Exception as e:
         logger.error(f"Failed to send photo to user: {e}", exc_info=True)
-        await message.answer("⚠️ Ошибка отправки фото. Пользователь мог заблокировать бота.")
+        error_msg = (
+            "⚠️ Ошибка отправки фото. "
+            "Пользователь мог заблокировать бота."
+        )
+        await message.answer(error_msg)
 
     await state.set_state(AdminInquiryStates.viewing_inquiry)
 
@@ -261,6 +273,10 @@ async def handle_admin_response_document(
         )
     except Exception as e:
         logger.error(f"Failed to send document to user: {e}", exc_info=True)
-        await message.answer("⚠️ Ошибка отправки документа. Пользователь мог заблокировать бота.")
+        error_msg = (
+            "⚠️ Ошибка отправки документа. "
+            "Пользователь мог заблокировать бота."
+        )
+        await message.answer(error_msg)
 
     await state.set_state(AdminInquiryStates.viewing_inquiry)

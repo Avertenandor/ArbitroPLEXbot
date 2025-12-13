@@ -20,9 +20,10 @@ from app.models.user import User
 from app.repositories.bonus_credit_repository import BonusCreditRepository
 from app.services.daily_payment_check_service import DailyPaymentCheckService
 from app.services.deposit import DepositService
+from app.services.user_service import UserService
 from bot.keyboards.user import finances_submenu_keyboard
-from bot.utils.formatters import format_usdt
-from bot.utils.user_loader import UserLoader
+from bot.utils.formatters import format_usdt, format_wallet_short
+from bot.utils.user_context import get_user_from_context
 
 
 router = Router()
@@ -47,9 +48,7 @@ async def show_finances_submenu(
     telegram_id = message.from_user.id if message.from_user else None
     logger.info(f"[SUBMENU] Finances submenu requested by user {telegram_id}")
 
-    user: User | None = data.get("user")
-    if not user and telegram_id:
-        user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
+    user = await get_user_from_context(message, session, data)
     if not user:
         await message.answer("⚠️ Ошибка: не удалось загрузить данные пользователя. Попробуйте отправить /start")
         return
@@ -118,7 +117,7 @@ async def show_finances_submenu(
                 if wallet and len(wallet) > 16:
                     plex_status_section = (
                         f"⚡ PLEX: ❌ НЕ оплачено ({required_plex:,}/день)\n"
-                        f"  └ Кошелёк: `{wallet[:10]}...{wallet[-6:]}`\n"
+                        f"  └ Кошелёк: `{format_wallet_short(wallet)}`\n"
                     )
                 else:
                     plex_status_section = f"⚡ PLEX: ❌ НЕ оплачено ({required_plex:,}/день)\n"
@@ -154,9 +153,7 @@ async def show_funds_overview(
     telegram_id = message.from_user.id if message.from_user else None
     logger.info(f"[FUNDS] Funds overview requested by user {telegram_id}")
 
-    user: User | None = data.get("user")
-    if not user and telegram_id:
-        user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
+    user = await get_user_from_context(message, session, data)
     if not user:
         await message.answer("⚠️ Ошибка: не удалось загрузить данные пользователя. Попробуйте отправить /start")
         return
@@ -280,11 +277,7 @@ async def back_to_main_from_finances(
     # Import to avoid circular dependency
     from bot.handlers.menu.core import show_main_menu
 
-    user: User | None = data.get("user")
-
-    if not user and telegram_id:
-        user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
-
+    user = await get_user_from_context(message, session, data)
     if not user:
         await message.answer("⚠️ Ошибка: не удалось загрузить данные пользователя. Попробуйте отправить /start")
         return

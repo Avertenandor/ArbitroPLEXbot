@@ -31,11 +31,11 @@ async def check_database() -> dict[str, Any]:
             "status": "healthy",
             "message": "Database connection successful",
         }
-    except Exception as e:
-        logger.error(f"Database health check failed: {e}")
+    except Exception as error:
+        logger.error(f"Database health check failed: {error}")
         return {
             "status": "unhealthy",
-            "message": f"Database connection failed: {str(e)}",
+            "message": f"Database connection failed: {str(error)}",
         }
 
 
@@ -69,11 +69,11 @@ async def check_redis() -> dict[str, Any]:
             "status": "unknown",
             "message": "Redis client not available",
         }
-    except Exception as e:
-        logger.error(f"Redis health check failed: {e}")
+    except Exception as error:
+        logger.error(f"Redis health check failed: {error}")
         return {
             "status": "unhealthy",
-            "message": f"Redis connection failed: {str(e)}",
+            "message": f"Redis connection failed: {str(error)}",
         }
 
 
@@ -105,18 +105,18 @@ async def check_blockchain() -> dict[str, Any]:
             "chain_id": chain_id,
             "rpc_stats": rpc_stats,
         }
-    except RuntimeError as e:
-        if "not initialized" in str(e):
+    except RuntimeError as error:
+        if "not initialized" in str(error):
             return {
                 "status": "unhealthy",
                 "message": "BlockchainService not initialized",
             }
         raise
-    except Exception as e:
-        logger.error(f"Blockchain health check failed: {e}")
+    except Exception as error:
+        logger.error(f"Blockchain health check failed: {error}")
         return {
             "status": "unhealthy",
-            "message": f"Blockchain connection failed: {str(e)}",
+            "message": f"Blockchain connection failed: {str(error)}",
         }
 
 
@@ -161,9 +161,9 @@ def get_health_status_sync() -> dict[str, Any]:
             loop.close()
 
         return result
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
+    except Exception as error:
+        logger.error(f"Health check failed: {error}")
         return {
             "status": "unhealthy",
-            "error": str(e),
+            "error": str(error),
         }

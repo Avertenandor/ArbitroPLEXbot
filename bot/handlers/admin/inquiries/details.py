@@ -43,7 +43,8 @@ async def handle_select_inquiry(
         text = message.text
         inquiry_id = int(text.split("#")[1].split()[0])
     except (ValueError, IndexError):
-        await message.answer("❌ Не удалось определить номер обращения")
+        error_msg = "❌ Не удалось определить номер обращения"
+        await message.answer(error_msg)
         return
 
     inquiry_service = InquiryService(session)

@@ -5,6 +5,7 @@ from typing import Any
 
 from loguru import logger
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -27,7 +28,8 @@ class SystemHealthService:
             db_ok = True
             try:
                 await self.session.execute(text("SELECT 1"))
-            except Exception:
+            except (OperationalError, SQLAlchemyError) as e:
+                logger.warning(f"Database health check failed: {e}")
                 db_ok = False
 
             # Get some basic metrics

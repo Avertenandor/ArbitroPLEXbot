@@ -65,16 +65,27 @@ class AIBlacklistService:
 
         # Any verified admin can view blacklist
         if not self._is_trusted_admin():
-            return {"success": False, "error": "❌ Недостаточно прав для просмотра чёрного списка"}
+            error_msg = "❌ Недостаточно прав для просмотра чёрного списка"
+            return {"success": False, "error": error_msg}
 
         # Get active entries
-        stmt = select(Blacklist).where(Blacklist.is_active == True).order_by(Blacklist.created_at.desc()).limit(limit)
+        stmt = (
+            select(Blacklist)
+            .where(Blacklist.is_active == True)
+            .order_by(Blacklist.created_at.desc())
+            .limit(limit)
+        )
 
         result = await self.session.execute(stmt)
         entries = list(result.scalars().all())
 
         if not entries:
-            return {"success": True, "count": 0, "entries": [], "message": "✅ Чёрный список пуст"}
+            return {
+                "success": True,
+                "count": 0,
+                "entries": [],
+                "message": "✅ Чёрный список пуст",
+            }
 
         entries_list = []
         for e in entries:
@@ -92,6 +103,16 @@ class AIBlacklistService:
             elif e.wallet_address:
                 identifier = f"Wallet: {e.wallet_address[:10]}..."
 
+            action_type_value = (
+                e.action_type.value if e.action_type else 'unknown'
+            )
+            action_type_str = f"{action_emoji} {action_type_value}"
+            created_str = (
+                e.created_at.strftime("%d.%m.%Y %H:%M")
+                if e.created_at
+                else None
+            )
+
             entries_list.append(
                 {
                     "id": e.id,
@@ -99,14 +120,17 @@ class AIBlacklistService:
                     "telegram_id": e.telegram_id,
                     "username": e.username,
                     "wallet_address": e.wallet_address,
-                    "action_type": f"{action_emoji} {e.action_type.value if e.action_type else 'unknown'}",
+                    "action_type": action_type_str,
                     "reason": e.reason,
-                    "created": e.created_at.strftime("%d.%m.%Y %H:%M") if e.created_at else None,
+                    "created": created_str,
                 }
             )
 
         # Count total
-        count_stmt = select(func.count(Blacklist.id)).where(Blacklist.is_active == True)
+        count_stmt = (
+            select(func.count(Blacklist.id))
+            .where(Blacklist.is_active == True)
+        )
         count_result = await self.session.execute(count_stmt)
         total = count_result.scalar() or 0
 
@@ -131,7 +155,8 @@ class AIBlacklistService:
 
         # Any verified admin can check blacklist
         if not self._is_trusted_admin():
-            return {"success": False, "error": "❌ Недостаточно прав для проверки чёрного списка"}
+            error_msg = "❌ Недостаточно прав для проверки чёрного списка"
+            return {"success": False, "error": error_msg}
 
         identifier = identifier.strip()
 
@@ -147,25 +172,35 @@ class AIBlacklistService:
         elif identifier.startswith("0x") and len(identifier) == 42:
             stmt = stmt.where(Blacklist.wallet_address == identifier)
         else:
-            return {"success": False, "error": "❌ Укажите @username, telegram_id или wallet"}
+            error_msg = "❌ Укажите @username, telegram_id или wallet"
+            return {"success": False, "error": error_msg}
 
         result = await self.session.execute(stmt)
         entry = result.scalar_one_or_none()
 
         if entry:
+            action_type_val = (
+                entry.action_type.value if entry.action_type else None
+            )
+            created_val = (
+                entry.created_at.strftime("%d.%m.%Y %H:%M")
+                if entry.created_at
+                else None
+            )
             return {
                 "success": True,
                 "is_blacklisted": True,
                 "entry": {
                     "id": entry.id,
                     "reason": entry.reason,
-                    "action_type": entry.action_type.value if entry.action_type else None,
-                    "created": entry.created_at.strftime("%d.%m.%Y %H:%M") if entry.created_at else None,
+                    "action_type": action_type_val,
+                    "created": created_val,
                 },
                 "message": f"🚫 {identifier} В ЧЁРНОМ СПИСКЕ",
             }
 
-        return {"success": True, "is_blacklisted": False, "message": f"✅ {identifier} НЕ в чёрном списке"}
+        message = f"✅ {identifier} НЕ в чёрном списке"
+        return {"success": True, "is_blacklisted": False, "message": message}
 
     async def add_to_blacklist(
         self,
@@ -188,15 +223,19 @@ class AIBlacklistService:
             return {"success": False, "error": error}
 
         if not self._is_trusted_admin():
-            logger.warning(
-                f"AI BLACKLIST SECURITY: Untrusted admin {self.admin_telegram_id} attempted to add to blacklist"
+            log_msg = (
+                f"AI BLACKLIST SECURITY: Untrusted admin "
+                f"{self.admin_telegram_id} attempted to add to blacklist"
             )
-            return {"success": False, "error": "❌ Нет прав на добавление в чёрный список"}
+            logger.warning(log_msg)
+            error_msg = "❌ Нет прав на добавление в чёрный список"
+            return {"success": False, "error": error_msg}
 
         identifier = identifier.strip()
 
         if not reason or len(reason) < 5:
-            return {"success": False, "error": "❌ Укажите причину (минимум 5 символов)"}
+            error_msg = "❌ Укажите причину (минимум 5 символов)"
+            return {"success": False, "error": error_msg}
 
         # Validate action type
         action_map = {
@@ -205,7 +244,9 @@ class AIBlacklistService:
             "terminated": BlacklistActionType.TERMINATED,
         }
         if action_type not in action_map:
-            return {"success": False, "error": f"❌ Неверный action_type. Допустимые: {', '.join(action_map.keys())}"}
+            allowed_types = ', '.join(action_map.keys())
+            error_msg = f"❌ Неверный action_type. Допустимые: {allowed_types}"
+            return {"success": False, "error": error_msg}
 
         # Determine identifier type
         telegram_id = None
@@ -219,12 +260,14 @@ class AIBlacklistService:
         elif identifier.startswith("0x") and len(identifier) == 42:
             wallet_address = identifier
         else:
-            return {"success": False, "error": "❌ Укажите @username, telegram_id или wallet"}
+            error_msg = "❌ Укажите @username, telegram_id или wallet"
+            return {"success": False, "error": error_msg}
 
         # Check if already blacklisted
         check_result = await self.check_blacklist(identifier)
         if check_result.get("is_blacklisted"):
-            return {"success": False, "error": f"❌ {identifier} уже в чёрном списке"}
+            error_msg = f"❌ {identifier} уже в чёрном списке"
+            return {"success": False, "error": error_msg}
 
         # Create entry
         entry = Blacklist(
@@ -239,10 +282,12 @@ class AIBlacklistService:
         self.session.add(entry)
         await self.session.commit()
 
-        logger.warning(
-            f"AI BLACKLIST: Admin {self.admin_telegram_id} added {identifier} to blacklist. "
+        log_msg = (
+            f"AI BLACKLIST: Admin {self.admin_telegram_id} added "
+            f"{identifier} to blacklist. "
             f"Reason: {reason}, Action: {action_type}"
         )
+        logger.warning(log_msg)
 
         return {
             "success": True,
@@ -272,15 +317,19 @@ class AIBlacklistService:
             return {"success": False, "error": error}
 
         if not self._is_trusted_admin():
-            logger.warning(
-                f"AI BLACKLIST SECURITY: Untrusted admin {self.admin_telegram_id} attempted to remove from blacklist"
+            log_msg = (
+                f"AI BLACKLIST SECURITY: Untrusted admin "
+                f"{self.admin_telegram_id} attempted to remove from blacklist"
             )
-            return {"success": False, "error": "❌ Нет прав на удаление из чёрного списка"}
+            logger.warning(log_msg)
+            error_msg = "❌ Нет прав на удаление из чёрного списка"
+            return {"success": False, "error": error_msg}
 
         identifier = identifier.strip()
 
         if not reason or len(reason) < 5:
-            return {"success": False, "error": "❌ Укажите причину (минимум 5 символов)"}
+            error_msg = "❌ Укажите причину (минимум 5 символов)"
+            return {"success": False, "error": error_msg}
 
         # Find entry
         stmt = select(Blacklist).where(Blacklist.is_active == True)
@@ -294,21 +343,25 @@ class AIBlacklistService:
         elif identifier.startswith("0x") and len(identifier) == 42:
             stmt = stmt.where(Blacklist.wallet_address == identifier)
         else:
-            return {"success": False, "error": "❌ Укажите @username, telegram_id или wallet"}
+            error_msg = "❌ Укажите @username, telegram_id или wallet"
+            return {"success": False, "error": error_msg}
 
         result = await self.session.execute(stmt)
         entry = result.scalar_one_or_none()
 
         if not entry:
-            return {"success": False, "error": f"❌ {identifier} не найден в чёрном списке"}
+            error_msg = f"❌ {identifier} не найден в чёрном списке"
+            return {"success": False, "error": error_msg}
 
         # Deactivate
         entry.is_active = False
         await self.session.commit()
 
-        logger.info(
-            f"AI BLACKLIST: Admin {self.admin_telegram_id} removed {identifier} from blacklist. Reason: {reason}"
+        log_msg = (
+            f"AI BLACKLIST: Admin {self.admin_telegram_id} removed "
+            f"{identifier} from blacklist. Reason: {reason}"
         )
+        logger.info(log_msg)
 
         return {
             "success": True,

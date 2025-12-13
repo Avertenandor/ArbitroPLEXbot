@@ -88,10 +88,14 @@ async def start_cancel_bonus(
             f"   ROI: {progress:.0f}% | _{(b.reason or '')[:20]}..._\n\n"
         )
 
+        button_text = (
+            f"❌ Отменить #{b.id} ({format_usdt(b.amount)})"
+        )
         buttons.append(
             [
                 InlineKeyboardButton(
-                    text=f"❌ Отменить #{b.id} ({format_usdt(b.amount)})", callback_data=f"bonus_do_cancel:{b.id}"
+                    text=button_text,
+                    callback_data=f"bonus_do_cancel:{b.id}"
                 )
             ]
         )
@@ -140,12 +144,13 @@ async def confirm_cancel_bonus(
     user_name = bonus.user.username if bonus.user else f"ID:{bonus.user_id}"
     safe_user = escape_markdown(user_name)
 
+    safe_reason = escape_markdown(bonus.reason or 'не указана')
     await callback.message.edit_text(
         f"⚠️ **Отмена бонуса #{bonus_id}**\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"👤 Получатель: @{safe_user}\n"
         f"💰 Сумма: **{format_usdt(bonus.amount)} USDT**\n"
-        f"📝 Причина начисления: _{escape_markdown(bonus.reason or 'не указана')}_\n\n"
+        f"📝 Причина начисления: _{safe_reason}_\n\n"
         f"⚠️ **Введите причину отмены:**",
         parse_mode="Markdown",
     )
@@ -201,15 +206,21 @@ async def execute_cancel_bonus(
     await session.commit()
 
     await state.set_state(BonusStates.menu)
+    admin_name = escape_markdown(
+        admin.username or str(admin.telegram_id)
+    )
     await message.answer(
         f"✅ **Бонус #{bonus_id} успешно отменён!**\n\n"
         f"📝 Причина: {cancel_reason}\n"
-        f"👤 Отменил: @{escape_markdown(admin.username or str(admin.telegram_id))}",
+        f"👤 Отменил: @{admin_name}",
         parse_mode="Markdown",
         reply_markup=bonus_main_menu_keyboard(admin.role),
     )
 
-    logger.info(f"Super admin {admin.telegram_id} cancelled bonus {bonus_id}: {cancel_reason}")
+    logger.info(
+        f"Super admin {admin.telegram_id} "
+        f"cancelled bonus {bonus_id}: {cancel_reason}"
+    )
 
 
 @router.message(BonusStates.cancel_reason, F.text == "❌ Отмена")

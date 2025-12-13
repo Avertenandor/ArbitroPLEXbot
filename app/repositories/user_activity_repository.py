@@ -223,12 +223,44 @@ class UserActivityRepository(BaseRepository[UserActivity]):
         """
         since = datetime.now(UTC) - timedelta(hours=hours)
 
+        # Combine all 4 queries into a single query with CASE statements
+        query = (
+            select(
+                UserActivity.activity_type,
+                func.count(func.distinct(UserActivity.telegram_id)).label("unique_users"),
+            )
+            .where(UserActivity.created_at >= since)
+            .where(
+                UserActivity.activity_type.in_([
+                    ActivityType.START,
+                    ActivityType.WALLET_ENTERED,
+                    ActivityType.PLEX_PAID,
+                    ActivityType.DEPOSIT_CONFIRMED,
+                ])
+            )
+            .group_by(UserActivity.activity_type)
+        )
+
+        result = await self.session.execute(query)
+        rows = result.all()
+
+        # Build result dict from query results
         funnel = {
-            "starts": await self.count_unique_users_by_type(ActivityType.START, since),
-            "wallets_entered": await self.count_unique_users_by_type(ActivityType.WALLET_ENTERED, since),
-            "plex_paid": await self.count_unique_users_by_type(ActivityType.PLEX_PAID, since),
-            "first_deposits": await self.count_unique_users_by_type(ActivityType.DEPOSIT_CONFIRMED, since),
+            "starts": 0,
+            "wallets_entered": 0,
+            "plex_paid": 0,
+            "first_deposits": 0,
         }
+
+        for row in rows:
+            if row.activity_type == ActivityType.START:
+                funnel["starts"] = row.unique_users
+            elif row.activity_type == ActivityType.WALLET_ENTERED:
+                funnel["wallets_entered"] = row.unique_users
+            elif row.activity_type == ActivityType.PLEX_PAID:
+                funnel["plex_paid"] = row.unique_users
+            elif row.activity_type == ActivityType.DEPOSIT_CONFIRMED:
+                funnel["first_deposits"] = row.unique_users
 
         return funnel
 

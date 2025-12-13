@@ -12,7 +12,7 @@ from eth_account import Account
 from loguru import logger
 from web3 import AsyncWeb3
 from web3.contract import AsyncContract
-from web3.exceptions import ContractLogicError
+from web3.exceptions import ContractLogicError, Web3Exception
 
 from app.config.constants import BLOCKCHAIN_TIMEOUT
 from app.config.operational_constants import LOCK_TIMEOUT_MEDIUM, TX_CONFIRMATION_TIMEOUT
@@ -144,7 +144,8 @@ class TransactionSender:
         # Validate and checksum address
         try:
             to_address_checksum = self.web3.to_checksum_address(to_address)
-        except Exception as e:
+        except ValueError as e:
+            logger.error(f"Invalid address format for {to_address}: {e}")
             return {
                 "success": False,
                 "tx_hash": None,
@@ -217,8 +218,11 @@ class TransactionSender:
                     )
                     await asyncio.sleep(delay)
 
-            except Exception as e:
-                logger.error(f"Payment attempt {attempt + 1} error: {e}")
+            except (Web3Exception, ValueError, TimeoutError, ConnectionError) as e:
+                logger.error(
+                    f"Payment attempt {attempt + 1} failed with "
+                    f"{type(e).__name__}: {e}"
+                )
 
                 if attempt < max_retries - 1:
                     delay = RETRY_DELAY_BASE ** (attempt + 1)
@@ -412,10 +416,12 @@ class TransactionSender:
                         "status": "pending",  # Mark as pending, not failed!
                     }
 
-            except Exception as e:
-                logger.error(f"Error sending transaction: {e}")
+            except (Web3Exception, ValueError, TimeoutError, ConnectionError) as e:
+                logger.error(
+                    f"Transaction sending failed with {type(e).__name__}: {e}"
+                )
                 return {
                     "success": False,
                     "tx_hash": None,
-                    "error": str(e),
+                    "error": f"{type(e).__name__}: {str(e)}",
                 }

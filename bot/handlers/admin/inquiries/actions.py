@@ -55,8 +55,13 @@ async def handle_take_inquiry(
     inquiry = await inquiry_service.assign_to_admin(inquiry_id, admin.id)
 
     if not inquiry:
+        error_msg = (
+            "❌ Не удалось взять обращение. "
+            "Возможно, оно уже взято другим "
+            "администратором."
+        )
         await message.answer(
-            "❌ Не удалось взять обращение. Возможно, оно уже взято другим администратором.",
+            error_msg,
             reply_markup=admin_inquiry_menu_keyboard(),
         )
         from bot.utils.admin_utils import clear_state_preserve_admin_token
@@ -66,15 +71,23 @@ async def handle_take_inquiry(
 
     # Notify user
     try:
+        user_msg = (
+            f"✅ Ваше обращение #{inquiry_id} принято в работу!\n\n"
+            "Администратор скоро ответит вам."
+        )
         await bot.send_message(
             inquiry.telegram_id,
-            f"✅ Ваше обращение #{inquiry_id} принято в работу!\n\nАдминистратор скоро ответит вам.",
+            user_msg,
         )
     except Exception as e:
         logger.warning(f"Failed to notify user: {e}")
 
+    admin_msg = (
+        f"✅ Обращение #{inquiry_id} взято в работу!\n\n"
+        "Теперь вы можете ответить пользователю."
+    )
     await message.answer(
-        f"✅ Обращение #{inquiry_id} взято в работу!\n\nТеперь вы можете ответить пользователю.",
+        admin_msg,
         reply_markup=admin_inquiry_detail_keyboard(is_assigned=True),
     )
 
@@ -111,10 +124,15 @@ async def handle_admin_close_inquiry(
 
         # Notify user
         try:
+            close_msg = (
+                f"✅ Ваше обращение #{inquiry_id} закрыто "
+                "администратором.\n\n"
+                "Если у вас остались вопросы, создайте новое "
+                "обращение."
+            )
             await bot.send_message(
                 inquiry.telegram_id,
-                f"✅ Ваше обращение #{inquiry_id} закрыто администратором.\n\n"
-                "Если у вас остались вопросы, создайте новое обращение.",
+                close_msg,
             )
         except Exception as e:
             logger.warning(f"Failed to notify user: {e}")

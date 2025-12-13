@@ -168,10 +168,12 @@ class AdminSecurityService:
                 expected = admin_info["username"].lower()
                 actual = username.lower()
                 if actual != expected:
-                    result["warnings"].append(
-                        f"⚠️ Username изменён! Ожидался @{admin_info['username']}, "
+                    warning_msg = (
+                        f"⚠️ Username изменён! "
+                        f"Ожидался @{admin_info['username']}, "
                         f"получен @{username}"
                     )
+                    result["warnings"].append(warning_msg)
                     logger.warning(
                         f"ADMIN SECURITY: Admin {telegram_id} username mismatch! "
                         f"Expected: {admin_info['username']}, Got: {username}"
@@ -223,14 +225,18 @@ class AdminSecurityService:
                 result["similarity"] = similarity
 
                 if similarity >= 0.9:
+                    similarity_pct = f"{similarity * 100:.0f}%"
                     result["warning"] = (
-                        f"🚨 КРИТИЧНО: Username @{username} почти идентичен "
-                        f"админу @{admin_username} (сходство: {similarity * 100:.0f}%)"
+                        f"🚨 КРИТИЧНО: Username @{username} "
+                        f"почти идентичен админу @{admin_username} "
+                        f"(сходство: {similarity_pct})"
                     )
                 else:
+                    similarity_pct = f"{similarity * 100:.0f}%"
                     result["warning"] = (
-                        f"⚠️ ПОДОЗРЕНИЕ: Username @{username} похож на "
-                        f"админа @{admin_username} (сходство: {similarity * 100:.0f}%)"
+                        f"⚠️ ПОДОЗРЕНИЕ: Username @{username} "
+                        f"похож на админа @{admin_username} "
+                        f"(сходство: {similarity_pct})"
                     )
                 break
 

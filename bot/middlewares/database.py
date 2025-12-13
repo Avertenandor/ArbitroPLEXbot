@@ -94,8 +94,8 @@ class DatabaseMiddleware(BaseMiddleware):
                     user_language = DEFAULT_LANGUAGE
                     _ = get_translator(user_language)
                     await event.answer(_("errors.database_unavailable"))
-                except Exception as e:
-                    logger.error(f"Failed to send database_unavailable message: {e}")
+                except Exception as error:
+                    logger.error(f"Failed to send database_unavailable message: {error}")
                     pass
             return None
 
@@ -113,14 +113,14 @@ class DatabaseMiddleware(BaseMiddleware):
                     # R11-1: Record success
                     circuit_breaker.record_success()
                     return result
-                except (OperationalError, InterfaceError, DatabaseError) as e:
+                except (OperationalError, InterfaceError, DatabaseError) as error:
                     # R11-1: Handle database failures gracefully
                     await session.rollback()
                     # R11-1: Record failure in circuit breaker
                     circuit_breaker.record_failure()
                     logger.error(
-                        f"Database error in handler: {e}",
-                        extra={"error_type": type(e).__name__},
+                        f"Database error in handler: {error}",
+                        extra={"error_type": type(error).__name__},
                     )
 
                     # FIXED: Don't try to create new DB session when DB is failing
@@ -137,11 +137,11 @@ class DatabaseMiddleware(BaseMiddleware):
                             _ = get_translator(user_language)
 
                             # R11-1: More specific error messages based on error type
-                            if isinstance(e, OperationalError):
+                            if isinstance(error, OperationalError):
                                 error_message = _("errors.database_operational_error")
-                            elif isinstance(e, InterfaceError):
+                            elif isinstance(error, InterfaceError):
                                 error_message = _("errors.database_interface_error")
-                            elif isinstance(e, DatabaseError):
+                            elif isinstance(error, DatabaseError):
                                 error_message = _("errors.database_general_error")
                             else:
                                 error_message = _("errors.database_unavailable")
@@ -155,25 +155,25 @@ class DatabaseMiddleware(BaseMiddleware):
 
                     # Don't re-raise - graceful degradation
                     return None
-                except Exception as e:
+                except Exception as error:
                     await session.rollback()
                     # R11-1: Record non-database exceptions as failures too
                     circuit_breaker.record_failure()
                     # Escape curly braces in error message to prevent loguru parsing
-                    error_msg = str(e).replace("{", "{{").replace("}", "}}")
+                    error_msg = str(error).replace("{", "{{").replace("}", "}}")
                     logger.error(
                         f"Unexpected error in handler: {error_msg}",
-                        extra={"error_type": type(e).__name__},
+                        extra={"error_type": type(error).__name__},
                     )
                     raise
-        except (OperationalError, InterfaceError, DatabaseError) as e:
+        except (OperationalError, InterfaceError, DatabaseError) as error:
             # R11-1: Database connection failure at middleware level
             # R11-1: Record failure in circuit breaker
             circuit_breaker.record_failure()
-            error_msg = str(e).replace("{", "{{").replace("}", "}}")
+            error_msg = str(error).replace("{", "{{").replace("}", "}}")
             logger.critical(
                 f"Database connection failure in middleware: {error_msg}",
-                extra={"error_type": type(e).__name__},
+                extra={"error_type": type(error).__name__},
             )
 
             # FIXED: Don't try to create new DB session when DB is failing
@@ -190,11 +190,11 @@ class DatabaseMiddleware(BaseMiddleware):
                     _ = get_translator(user_language)
 
                     # R11-1: More specific error messages based on error type
-                    if isinstance(e, OperationalError):
+                    if isinstance(error, OperationalError):
                         error_message = _("errors.database_operational_error")
-                    elif isinstance(e, InterfaceError):
+                    elif isinstance(error, InterfaceError):
                         error_message = _("errors.database_interface_error")
-                    elif isinstance(e, DatabaseError):
+                    elif isinstance(error, DatabaseError):
                         error_message = _("errors.database_general_error")
                     else:
                         error_message = _("errors.database_connection_failed")

@@ -6,7 +6,7 @@ Data access layer for Deposit model.
 
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -116,14 +116,14 @@ class DepositRepository(BaseRepository[Deposit]):
         Returns:
             Total deposited amount
         """
-        deposits = await self.find_by(
-            user_id=user_id,
-            status=TransactionStatus.CONFIRMED.value,
+        stmt = (
+            select(func.sum(Deposit.amount))
+            .where(Deposit.user_id == user_id)
+            .where(Deposit.status == TransactionStatus.CONFIRMED.value)
         )
-        if not deposits:
-            return Decimal("0")
-
-        return sum((d.amount for d in deposits), Decimal("0"))
+        result = await self.session.execute(stmt)
+        total = result.scalar()
+        return total or Decimal("0")
 
     async def get_with_user(self, deposit_id: int) -> Deposit | None:
         """

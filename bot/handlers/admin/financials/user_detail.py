@@ -37,7 +37,8 @@ async def show_user_financial_detail(
     if not admin:
         return
 
-    # Парсим ID пользователя из текста кнопки: "👤 123. username | +100 | -50"
+    # Парсим ID пользователя из текста кнопки:
+    # "👤 123. username | +100 | -50"
     try:
         text_parts = message.text.split(".")
         user_id = int(text_parts[0].replace("👤", "").strip())
@@ -86,16 +87,17 @@ async def show_user_withdrawals(
     withdrawals = await service.get_user_withdrawals(user_id, limit=10)
 
     if not withdrawals:
-        await message.answer("💸 У пользователя нет подтвержденных выводов.")
+        msg = "💸 У пользователя нет подтвержденных выводов."
+        await message.answer(msg)
         return
 
-    from bot.utils.formatters import escape_md
+    from bot.utils.formatters import escape_md, format_balance
 
     text = "💸 **История выводов (последние 10):**\n\n"
 
     for tx in withdrawals:
         date_str = tx.created_at.strftime('%d\\.%m\\.%Y %H:%M')
-        amount = f"{tx.amount:.2f}"
+        amount = format_balance(tx.amount, decimals=2)
         tx_hash = escape_md(tx.tx_hash) if tx.tx_hash else "Нет хеша"
 
         text += (
@@ -114,7 +116,10 @@ async def show_user_withdrawals(
     )
 
 
-@router.message(AdminFinancialStates.viewing_user, F.text == "📜 История начислений")
+@router.message(
+    AdminFinancialStates.viewing_user,
+    F.text == "📜 История начислений"
+)
 async def show_user_accruals_stub(
     message: Message,
     state: FSMContext,
@@ -123,4 +128,8 @@ async def show_user_accruals_stub(
     # For now, just show a message, as detailed accrual logs might be huge
     # Could reuse the Transaction model if we log accruals there, but currently
     # they are in DepositReward which is separate.
-    await message.answer("ℹ️ Детальный лог начислений доступен в базе данных. (Функция в разработке)")
+    msg = (
+        "ℹ️ Детальный лог начислений доступен "
+        "в базе данных. (Функция в разработке)"
+    )
+    await message.answer(msg)

@@ -21,6 +21,11 @@ from sqlalchemy.orm import selectinload
 from app.models.referral import Referral
 from app.models.user import User
 from app.services.base_service import BaseService
+from app.config.constants import (
+    BALANCE_NOTIF_MIN_OPERATIONS,
+    BALANCE_NOTIF_MAX_OPERATIONS,
+    BALANCE_NOTIF_OPERATIONS_MEAN_SHIFT,
+)
 
 
 if TYPE_CHECKING:
@@ -41,9 +46,9 @@ class BalanceNotificationService(BaseService):
     """
 
     # Arbitrage operations corridor (per hour)
-    MIN_OPERATIONS = 181  # Avoid round 180
-    MAX_OPERATIONS = 299  # Avoid round 300
-    OPERATIONS_MEAN_SHIFT = 0.7  # Shift towards 300 (0.5 = center, 1.0 = max)
+    MIN_OPERATIONS = BALANCE_NOTIF_MIN_OPERATIONS
+    MAX_OPERATIONS = BALANCE_NOTIF_MAX_OPERATIONS
+    OPERATIONS_MEAN_SHIFT = BALANCE_NOTIF_OPERATIONS_MEAN_SHIFT
 
     def __init__(self, session: AsyncSession) -> None:
         """Initialize balance notification service."""
@@ -68,7 +73,8 @@ class BalanceNotificationService(BaseService):
         raw = self._secure_random.betavariate(5, 2)  # Right-skewed distribution
 
         # Map to our range
-        operations = int(self.MIN_OPERATIONS + raw * (self.MAX_OPERATIONS - self.MIN_OPERATIONS))
+        range_size = self.MAX_OPERATIONS - self.MIN_OPERATIONS
+        operations = int(self.MIN_OPERATIONS + raw * range_size)
 
         # Ensure we're in range and avoid common round numbers
         operations = max(self.MIN_OPERATIONS, min(self.MAX_OPERATIONS, operations))
@@ -206,7 +212,10 @@ class BalanceNotificationService(BaseService):
         # Calculate total earnings of partners
         partners_earnings = Decimal("0")
         if referral_ids:
-            partners_stmt = select(func.coalesce(func.sum(User.total_earned), Decimal("0"))).where(
+            total_earned_sum = func.coalesce(
+                func.sum(User.total_earned), Decimal("0")
+            )
+            partners_stmt = select(total_earned_sum).where(
                 User.id.in_(referral_ids)
             )
             partners_result = await self.session.execute(partners_stmt)
@@ -329,7 +338,11 @@ class BalanceNotificationService(BaseService):
                 except Exception as update_error:
                     logger.error(f"Failed to mark user as bot_blocked: {update_error}")
             else:
-                logger.error(f"Failed to send balance notification to user {user.telegram_id}: {e}")
+                error_text = (
+                    f"Failed to send balance notification "
+                    f"to user {user.telegram_id}: {e}"
+                )
+                logger.error(error_text)
 
             return False
 
@@ -371,7 +384,11 @@ class BalanceNotificationService(BaseService):
             users = await self.get_eligible_users()
             stats["total"] = len(users)
 
-            logger.info(f"Starting balance notifications for {len(users)} users with rate limiting")
+            info_msg = (
+                f"Starting balance notifications for {len(users)} users "
+                f"with rate limiting"
+            )
+            logger.info(info_msg)
 
             # Process in batches to respect rate limits
             for i, user in enumerate(users):
@@ -388,7 +405,11 @@ class BalanceNotificationService(BaseService):
 
                     # Rate limiting: pause after each batch
                     if (i + 1) % BATCH_SIZE == 0:
-                        logger.debug(f"Rate limit pause after {i + 1} messages, sleeping {BATCH_DELAY}s")
+                        debug_msg = (
+                            f"Rate limit pause after {i + 1} messages, "
+                            f"sleeping {BATCH_DELAY}s"
+                        )
+                        logger.debug(debug_msg)
                         await asyncio.sleep(BATCH_DELAY)
 
                 except Exception as e:

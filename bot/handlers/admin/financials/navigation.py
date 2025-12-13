@@ -52,7 +52,11 @@ async def handle_back(
                     "Выберите действие:"
                 )
                 await state.set_state(AdminFinancialStates.viewing_user)
-                await message.answer(text, parse_mode="MarkdownV2", reply_markup=admin_user_financial_keyboard())
+                await message.answer(
+                    text,
+                    parse_mode="MarkdownV2",
+                    reply_markup=admin_user_financial_keyboard()
+                )
                 return
 
     # Default: Back to List
@@ -83,7 +87,8 @@ async def back_to_admin_panel(
     **data: Any,
 ) -> None:
     """Return to main admin panel from any financials state."""
-    # Сохраняем admin_session_token и возвращаемся в общий хендлер панели
+    # Сохраняем admin_session_token и возвращаемся
+    # в общий хендлер панели
     await clear_state_preserve_admin_token(state)
     from bot.handlers.admin.panel import handle_admin_panel_button
 

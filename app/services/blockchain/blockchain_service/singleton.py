@@ -4,14 +4,21 @@ Singleton Module.
 Contains singleton pattern implementation for the BlockchainService.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from loguru import logger
+
+if TYPE_CHECKING:
+    from .service import BlockchainService
 
 
 # Module-level singleton instance
-_blockchain_service = None
+_blockchain_service: BlockchainService | None = None
 
 
-def get_blockchain_service():
+def get_blockchain_service() -> BlockchainService:
     """
     Get blockchain service singleton.
 
@@ -42,7 +49,7 @@ def init_blockchain_service(
     chain_id: int = 56,
     confirmation_blocks: int = 12,
     poll_interval: int = 3,
-):
+) -> BlockchainService:
     """
     Initialize blockchain service singleton.
 

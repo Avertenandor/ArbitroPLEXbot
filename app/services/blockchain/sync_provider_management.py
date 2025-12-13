@@ -16,6 +16,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+import aiohttp
 from loguru import logger
 from web3 import Web3
 from web3.middleware import geth_poa_middleware
@@ -62,8 +63,10 @@ class SyncProviderManager:
 
     def _init_providers(self) -> None:
         """Initialize Web3 providers based on settings."""
+        from app.config.constants import BLOCKCHAIN_RPC_TIMEOUT
+
         # RPC timeout in seconds
-        rpc_timeout = 30
+        rpc_timeout = BLOCKCHAIN_RPC_TIMEOUT
 
         # 1. QuickNode
         qn_url = self.settings.rpc_quicknode_http or self.settings.rpc_url
@@ -79,8 +82,10 @@ class SyncProviderManager:
                     logger.info("✅ QuickNode provider connected (timeout=30s)")
                 else:
                     logger.warning("❌ QuickNode provider failed to connect")
-            except Exception as e:
-                logger.error(f"Failed to init QuickNode: {e}")
+            except (ConnectionError, TimeoutError, aiohttp.ClientError) as e:
+                logger.error(f"Failed to init QuickNode (network error): {e}")
+            except (ValueError, KeyError, TypeError) as e:
+                logger.error(f"Failed to init QuickNode (data error): {e}")
 
         # 2. NodeReal
         nr_url = self.settings.rpc_nodereal_http
@@ -96,8 +101,10 @@ class SyncProviderManager:
                     logger.info("✅ NodeReal provider connected (timeout=30s)")
                 else:
                     logger.warning("❌ NodeReal provider failed to connect")
-            except Exception as e:
-                logger.error(f"Failed to init NodeReal: {e}")
+            except (ConnectionError, TimeoutError, aiohttp.ClientError) as e:
+                logger.error(f"Failed to init NodeReal (network error): {e}")
+            except (ValueError, KeyError, TypeError) as e:
+                logger.error(f"Failed to init NodeReal (data error): {e}")
 
         # 3. NodeReal2 (Backup node - switch only by super admin)
         nr2_url = self.settings.rpc_nodereal2_http
@@ -113,8 +120,10 @@ class SyncProviderManager:
                     logger.info("✅ NodeReal2 (backup) provider connected (timeout=30s)")
                 else:
                     logger.warning("❌ NodeReal2 (backup) provider failed to connect")
-            except Exception as e:
-                logger.error(f"Failed to init NodeReal2: {e}")
+            except (ConnectionError, TimeoutError, aiohttp.ClientError) as e:
+                logger.error(f"Failed to init NodeReal2 (network error): {e}")
+            except (ValueError, KeyError, TypeError) as e:
+                logger.error(f"Failed to init NodeReal2 (data error): {e}")
 
         if not self.providers:
             logger.error("🔥 NO BLOCKCHAIN PROVIDERS AVAILABLE! Service will fail.")
@@ -187,12 +196,18 @@ class SyncProviderManager:
         try:
             w3 = self.get_active_web3()
             return func(w3)
-        except Exception as e:
+        except (ConnectionError, TimeoutError, aiohttp.ClientError, ValueError, KeyError, TypeError) as e:
             if not is_auto_switch:
                 raise e
 
+            # Determine error type for logging
+            if isinstance(e, (ConnectionError, TimeoutError, aiohttp.ClientError)):
+                error_type = "network error"
+            else:
+                error_type = "data error"
+
             logger.warning(
-                f"Provider '{current_name}' failed: {e}. Attempting failover..."
+                f"Provider '{current_name}' failed ({error_type}): {e}. Attempting failover..."
             )
 
             # Find backup provider
@@ -218,8 +233,11 @@ class SyncProviderManager:
                     asyncio.create_task(self._safe_persist_provider_switch(backup_name))
 
                 return result
-            except Exception as e2:
-                logger.error(f"Backup provider '{backup_name}' also failed: {e2}")
+            except (ConnectionError, TimeoutError, aiohttp.ClientError) as e2:
+                logger.error(f"Backup provider '{backup_name}' also failed (network error): {e2}")
+                raise e2
+            except (ValueError, KeyError, TypeError) as e2:
+                logger.error(f"Backup provider '{backup_name}' also failed (data error): {e2}")
                 raise e2
 
     async def _safe_persist_provider_switch(self, new_provider: str) -> None:
@@ -291,12 +309,22 @@ class SyncProviderManager:
                             "error": "Timeout",
                             "active": is_active
                         }
-                except Exception as e:
+                except (ConnectionError, aiohttp.ClientError) as e:
+                    logger.warning(f"Network error checking provider '{name}' status: {e}")
                     with self._provider_lock:
                         is_active = name == self.active_provider_name
                     status[name] = {
                         "connected": False,
-                        "error": str(e),
+                        "error": f"Network error: {str(e)}",
+                        "active": is_active
+                    }
+                except (ValueError, KeyError, TypeError) as e:
+                    logger.warning(f"Data error checking provider '{name}' status: {e}")
+                    with self._provider_lock:
+                        is_active = name == self.active_provider_name
+                    status[name] = {
+                        "connected": False,
+                        "error": f"Data error: {str(e)}",
                         "active": is_active
                     }
         return status

@@ -74,14 +74,35 @@ class AIWithdrawalsService:
         withdrawals = list(result.scalars().all())
 
         if not withdrawals:
-            return {"success": True, "count": 0, "withdrawals": [], "message": "✅ Нет ожидающих заявок на вывод"}
+            return {
+                "success": True,
+                "count": 0,
+                "withdrawals": [],
+                "message": "✅ Нет ожидающих заявок на вывод",
+            }
 
         withdrawals_list = []
         for w in withdrawals:
             user_stmt = select(User).where(User.id == w.user_id)
             user_result = await self.session.execute(user_stmt)
             user = user_result.scalar_one_or_none()
-            user_info = f"@{user.username}" if user and user.username else f"ID:{w.user_id}"
+            user_info = (
+                f"@{user.username}"
+                if user and user.username
+                else f"ID:{w.user_id}"
+            )
+
+            # Format address
+            to_address = None
+            if w.to_address:
+                to_address = (
+                    w.to_address[:10] + "..." + w.to_address[-8:]
+                )
+
+            # Format created date
+            created = None
+            if w.created_at:
+                created = w.created_at.strftime("%d.%m.%Y %H:%M")
 
             withdrawals_list.append(
                 {
@@ -89,8 +110,8 @@ class AIWithdrawalsService:
                     "user": user_info,
                     "user_id": w.user_id,
                     "amount": float(w.amount),
-                    "to_address": w.to_address[:10] + "..." + w.to_address[-8:] if w.to_address else None,
-                    "created": w.created_at.strftime("%d.%m.%Y %H:%M") if w.created_at else None,
+                    "to_address": to_address,
+                    "created": created,
                 }
             )
 
@@ -144,17 +165,31 @@ class AIWithdrawalsService:
         if masked_address and len(masked_address) > 20:
             masked_address = masked_address[:10] + "..." + masked_address[-8:]
 
+        # Format user info
+        user_info = (
+            f"@{user.username}"
+            if user and user.username
+            else f"ID:{withdrawal.user_id}"
+        )
+
+        # Format created date
+        created = None
+        if withdrawal.created_at:
+            created = withdrawal.created_at.strftime("%d.%m.%Y %H:%M")
+
         return {
             "success": True,
             "withdrawal": {
                 "id": withdrawal.id,
-                "user": f"@{user.username}" if user and user.username else f"ID:{withdrawal.user_id}",
+                "user": user_info,
                 "user_id": withdrawal.user_id,
                 "user_balance": float(user.balance) if user else 0,
                 "amount": float(withdrawal.amount),
                 "to_address": masked_address,  # MASKED for security
-                "status": status_emoji.get(withdrawal.status, withdrawal.status),
-                "created": withdrawal.created_at.strftime("%d.%m.%Y %H:%M") if withdrawal.created_at else None,
+                "status": status_emoji.get(
+                    withdrawal.status, withdrawal.status
+                ),
+                "created": created,
                 "description": withdrawal.description,
             },
             "message": f"📋 Заявка на вывод #{withdrawal_id}",
@@ -184,10 +219,15 @@ class AIWithdrawalsService:
         # Security check
         if not self._is_trusted_admin():
             logger.warning(
-                f"AI WITHDRAWALS SECURITY: Untrusted admin {self.admin_telegram_id} "
-                f"attempted to approve withdrawal {withdrawal_id}"
+                f"AI WITHDRAWALS SECURITY: Untrusted admin "
+                f"{self.admin_telegram_id} attempted to approve "
+                f"withdrawal {withdrawal_id}"
             )
-            return {"success": False, "error": "❌ У вас нет прав на одобрение выводов. Обратитесь к владельцу."}
+            error_msg = (
+                "❌ У вас нет прав на одобрение выводов. "
+                "Обратитесь к владельцу."
+            )
+            return {"success": False, "error": error_msg}
 
         # Get withdrawal
         stmt = select(Transaction).where(
@@ -198,17 +238,27 @@ class AIWithdrawalsService:
         withdrawal = result.scalar_one_or_none()
 
         if not withdrawal:
-            return {"success": False, "error": f"❌ Заявка #{withdrawal_id} не найдена"}
+            return {
+                "success": False,
+                "error": f"❌ Заявка #{withdrawal_id} не найдена",
+            }
 
         if withdrawal.status != TransactionStatus.PENDING.value:
-            return {"success": False, "error": f"❌ Заявка уже обработана (статус: {withdrawal.status})"}
+            error_msg = (
+                f"❌ Заявка уже обработана "
+                f"(статус: {withdrawal.status})"
+            )
+            return {"success": False, "error": error_msg}
 
         # Approve
         withdrawal.status = TransactionStatus.CONFIRMED.value
         # Note: processed_at, processed_by_admin_id are not in Transaction model
         if tx_hash:
             withdrawal.tx_hash = tx_hash
-        withdrawal.description = (withdrawal.description or "") + f" [АРЬЯ: Одобрено @{admin.username}]"
+        approval_note = f" [АРЬЯ: Одобрено @{admin.username}]"
+        withdrawal.description = (
+            (withdrawal.description or "") + approval_note
+        )
 
         await self.session.commit()
 
@@ -218,13 +268,21 @@ class AIWithdrawalsService:
         user = user_result.scalar_one_or_none()
 
         logger.info(
-            f"AI WITHDRAWALS: Admin {admin.telegram_id} approved withdrawal {withdrawal_id} ({withdrawal.amount} USDT)"
+            f"AI WITHDRAWALS: Admin {admin.telegram_id} "
+            f"approved withdrawal {withdrawal_id} "
+            f"({withdrawal.amount} USDT)"
+        )
+
+        user_info = (
+            f"@{user.username}"
+            if user and user.username
+            else f"ID:{withdrawal.user_id}"
         )
 
         return {
             "success": True,
             "withdrawal_id": withdrawal_id,
-            "user": f"@{user.username}" if user and user.username else f"ID:{withdrawal.user_id}",
+            "user": user_info,
             "amount": float(withdrawal.amount),
             "tx_hash": tx_hash,
             "admin": f"@{admin.username}",
@@ -255,10 +313,12 @@ class AIWithdrawalsService:
         # Security check
         if not self._is_trusted_admin():
             logger.warning(
-                f"AI WITHDRAWALS SECURITY: Untrusted admin {self.admin_telegram_id} "
-                f"attempted to reject withdrawal {withdrawal_id}"
+                f"AI WITHDRAWALS SECURITY: Untrusted admin "
+                f"{self.admin_telegram_id} attempted to reject "
+                f"withdrawal {withdrawal_id}"
             )
-            return {"success": False, "error": "❌ У вас нет прав на отклонение выводов."}
+            error_msg = "❌ У вас нет прав на отклонение выводов."
+            return {"success": False, "error": error_msg}
 
         if not reason or len(reason) < 5:
             return {"success": False, "error": "❌ Укажите причину отклонения"}
@@ -272,10 +332,17 @@ class AIWithdrawalsService:
         withdrawal = result.scalar_one_or_none()
 
         if not withdrawal:
-            return {"success": False, "error": f"❌ Заявка #{withdrawal_id} не найдена"}
+            return {
+                "success": False,
+                "error": f"❌ Заявка #{withdrawal_id} не найдена",
+            }
 
         if withdrawal.status != TransactionStatus.PENDING.value:
-            return {"success": False, "error": f"❌ Заявка уже обработана (статус: {withdrawal.status})"}
+            error_msg = (
+                f"❌ Заявка уже обработана "
+                f"(статус: {withdrawal.status})"
+            )
+            return {"success": False, "error": error_msg}
 
         # Get user to refund balance
         user_stmt = select(User).where(User.id == withdrawal.user_id)
@@ -289,21 +356,40 @@ class AIWithdrawalsService:
         # Reject
         withdrawal.status = TransactionStatus.FAILED.value
         # Note: processed_at, processed_by_admin_id are not in Transaction model
-        withdrawal.description = (withdrawal.description or "") + f" [АРЬЯ: Отклонено @{admin.username}: {reason}]"
+        rejection_note = (
+            f" [АРЬЯ: Отклонено @{admin.username}: {reason}]"
+        )
+        withdrawal.description = (
+            (withdrawal.description or "") + rejection_note
+        )
 
         await self.session.commit()
 
-        logger.info(f"AI WITHDRAWALS: Admin {admin.telegram_id} rejected withdrawal {withdrawal_id}: {reason}")
+        logger.info(
+            f"AI WITHDRAWALS: Admin {admin.telegram_id} "
+            f"rejected withdrawal {withdrawal_id}: {reason}"
+        )
+
+        user_info = (
+            f"@{user.username}"
+            if user and user.username
+            else f"ID:{withdrawal.user_id}"
+        )
+
+        message = (
+            f"❌ Вывод #{withdrawal_id} отклонён, "
+            "средства возвращены на баланс"
+        )
 
         return {
             "success": True,
             "withdrawal_id": withdrawal_id,
-            "user": f"@{user.username}" if user and user.username else f"ID:{withdrawal.user_id}",
+            "user": user_info,
             "amount": float(withdrawal.amount),
             "reason": reason,
             "refunded": True,
             "admin": f"@{admin.username}",
-            "message": f"❌ Вывод #{withdrawal_id} отклонён, средства возвращены на баланс",
+            "message": message,
         }
 
     async def get_statistics(self) -> dict[str, Any]:
@@ -337,12 +423,23 @@ class AIWithdrawalsService:
             }
 
         total_count = int(sum(s["count"] for s in status_stats.values()))
-        total_amount = float(sum(s["total"] for s in status_stats.values()))
+        total_amount = float(
+            sum(s["total"] for s in status_stats.values())
+        )
 
-        pending = status_stats.get(TransactionStatus.PENDING.value, {"count": 0.0, "total": 0.0})
-        processing = status_stats.get(TransactionStatus.PROCESSING.value, {"count": 0.0, "total": 0.0})
-        confirmed = status_stats.get(TransactionStatus.CONFIRMED.value, {"count": 0.0, "total": 0.0})
-        failed = status_stats.get(TransactionStatus.FAILED.value, {"count": 0.0, "total": 0.0})
+        default_stats = {"count": 0.0, "total": 0.0}
+        pending = status_stats.get(
+            TransactionStatus.PENDING.value, default_stats
+        )
+        processing = status_stats.get(
+            TransactionStatus.PROCESSING.value, default_stats
+        )
+        confirmed = status_stats.get(
+            TransactionStatus.CONFIRMED.value, default_stats
+        )
+        failed = status_stats.get(
+            TransactionStatus.FAILED.value, default_stats
+        )
 
         avg_stmt = (
             select(func.avg(Transaction.amount))

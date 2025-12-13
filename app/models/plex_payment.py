@@ -60,15 +60,25 @@ class PlexPaymentRequirement(Base):
 
     __tablename__ = "plex_payment_requirements"
     __table_args__ = (
-        CheckConstraint("daily_plex_required > 0", name="check_plex_daily_required_positive"),
-        CheckConstraint("deposit_id IS NOT NULL OR bonus_credit_id IS NOT NULL", name="check_deposit_or_bonus"),
+        CheckConstraint(
+            "daily_plex_required > 0",
+            name="check_plex_daily_required_positive"
+        ),
+        CheckConstraint(
+            "deposit_id IS NOT NULL OR bonus_credit_id IS NOT NULL",
+            name="check_deposit_or_bonus"
+        ),
     )
 
     # Primary key
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # User reference
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
 
     # Deposit reference (nullable - can be None if bonus_credit_id is set)
     deposit_id: Mapped[int | None] = mapped_column(
@@ -86,20 +96,29 @@ class PlexPaymentRequirement(Base):
 
     # Requirements
     daily_plex_required: Mapped[Decimal] = mapped_column(
-        DECIMAL(18, 8), nullable=False, comment="Daily PLEX payment required (deposit_amount * 10)"
+        DECIMAL(18, 8),
+        nullable=False,
+        comment="Daily PLEX payment required (deposit_amount * 10)"
     )
 
     # Deadlines (calculated from deposit creation)
     next_payment_due: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, index=True, comment="Next payment due (deposit_created_at + 24h)"
+        DateTime(timezone=True),
+        nullable=False,
+        index=True,
+        comment="Next payment due (deposit_created_at + 24h)"
     )
 
     warning_due: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, comment="Warning will be sent at this time (deposit_created_at + 25h)"
+        DateTime(timezone=True),
+        nullable=False,
+        comment="Warning will be sent at this time (deposit_created_at + 25h)"
     )
 
     block_due: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, comment="Block at this time if not paid (deposit_created_at + 49h)"
+        DateTime(timezone=True),
+        nullable=False,
+        comment="Block at this time if not paid (deposit_created_at + 49h)"
     )
 
     # Status
@@ -113,7 +132,9 @@ class PlexPaymentRequirement(Base):
 
     # Payment tracking
     last_payment_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True, comment="Last successful PLEX payment timestamp"
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Last successful PLEX payment timestamp"
     )
 
     last_payment_tx_hash: Mapped[str | None] = mapped_column(
@@ -121,11 +142,16 @@ class PlexPaymentRequirement(Base):
     )
 
     last_check_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True, comment="Когда последний раз проверяли платёж"
+        DateTime(timezone=True),
+        nullable=True,
+        comment="Когда последний раз проверяли платёж"
     )
 
     total_plex_paid: Mapped[Decimal] = mapped_column(
-        DECIMAL(18, 8), nullable=False, default=Decimal("0"), comment="Всего PLEX оплачено за всё время"
+        DECIMAL(18, 8),
+        nullable=False,
+        default=Decimal("0"),
+        comment="Всего PLEX оплачено за всё время"
     )
 
     days_paid: Mapped[int] = mapped_column(
@@ -133,7 +159,10 @@ class PlexPaymentRequirement(Base):
     )
 
     consecutive_days_paid: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, comment="Сколько дней подряд оплачено"
+        Integer,
+        nullable=False,
+        default=0,
+        comment="Сколько дней подряд оплачено"
     )
 
     # Warning tracking
@@ -141,15 +170,25 @@ class PlexPaymentRequirement(Base):
         DateTime(timezone=True), nullable=True, comment="When warning was sent"
     )
 
-    warning_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="Number of warnings sent")
+    warning_count: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        comment="Number of warnings sent"
+    )
 
     # Work activation tracking (pay first, work after)
     is_work_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, comment="True if PLEX payment received, deposit can work"
+        Boolean,
+        nullable=False,
+        default=False,
+        comment="True if PLEX payment received, deposit can work"
     )
 
     first_payment_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True, comment="When first PLEX payment was received (starts work)"
+        DateTime(timezone=True),
+        nullable=True,
+        comment="When first PLEX payment was received (starts work)"
     )
 
     # Timestamps
@@ -158,13 +197,24 @@ class PlexPaymentRequirement(Base):
     )
 
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC), nullable=False
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+        nullable=False
     )
 
     # Relationships
-    user: Mapped["User"] = relationship("User", back_populates="plex_payments", lazy="selectin")
+    user: Mapped["User"] = relationship(
+        "User",
+        back_populates="plex_payments",
+        lazy="selectin"
+    )
 
-    deposit: Mapped["Deposit | None"] = relationship("Deposit", back_populates="plex_payment", lazy="selectin")
+    deposit: Mapped["Deposit | None"] = relationship(
+        "Deposit",
+        back_populates="plex_payment",
+        lazy="selectin"
+    )
 
     bonus_credit: Mapped["BonusCredit | None"] = relationship(
         "BonusCredit", back_populates="plex_payment", lazy="selectin"
@@ -172,7 +222,10 @@ class PlexPaymentRequirement(Base):
 
     def __repr__(self) -> str:
         """String representation."""
-        source = f"deposit_id={self.deposit_id}" if self.deposit_id else f"bonus_credit_id={self.bonus_credit_id}"
+        if self.deposit_id:
+            source = f"deposit_id={self.deposit_id}"
+        else:
+            source = f"bonus_credit_id={self.bonus_credit_id}"
         return (
             f"<PlexPaymentRequirement("
             f"id={self.id}, "
@@ -252,7 +305,10 @@ class PlexPaymentRequirement(Base):
             else:
                 return f"⏰ Ожидание платежа ({hours_since_due:.1f}ч)"
         elif self.status == PlexPaymentStatus.WARNING:
-            return f"⚠️ Предупреждение (просрочка {hours_since_due:.1f}ч)"
+            warning_msg = (
+                f"⚠️ Предупреждение (просрочка {hours_since_due:.1f}ч)"
+            )
+            return warning_msg
         elif self.status == PlexPaymentStatus.OVERDUE:
             return f"❌ Просрочен (просрочка {hours_since_due:.1f}ч)"
         elif self.status == PlexPaymentStatus.BLOCKED:
@@ -317,7 +373,11 @@ class PlexPaymentRequirement(Base):
             True если прошло 25+ часов без оплаты
         """
         now = datetime.now(UTC)
-        return now >= self.warning_due and self.status in (PlexPaymentStatus.PENDING, PlexPaymentStatus.ACTIVE)
+        pending_or_active = (
+            PlexPaymentStatus.PENDING,
+            PlexPaymentStatus.ACTIVE
+        )
+        return now >= self.warning_due and self.status in pending_or_active
 
     def is_block_due(self) -> bool:
         """

@@ -18,7 +18,12 @@ from bot.keyboards.reply import admin_blacklist_keyboard
 router = Router()
 
 
-@router.message(F.text.in_({"🚫 Управление черным списком", "🚫 Управление blacklist"}))
+@router.message(
+    F.text.in_({
+        "🚫 Управление черным списком",
+        "🚫 Управление blacklist"
+    })
+)
 async def show_blacklist(
     message: Message,
     session: AsyncSession,
@@ -45,7 +50,9 @@ async def show_blacklist(
             from app.models.blacklist import BlacklistActionType
 
             action_type_text = {
-                BlacklistActionType.REGISTRATION_DENIED: "🚫 Отказ в регистрации",
+                BlacklistActionType.REGISTRATION_DENIED: (
+                    "🚫 Отказ в регистрации"
+                ),
                 BlacklistActionType.TERMINATED: "❌ Терминация",
                 BlacklistActionType.BLOCKED: "⚠️ Блокировка",
             }.get(entry.action_type, entry.action_type)
@@ -58,18 +65,22 @@ async def show_blacklist(
             if entry.reason and len(entry.reason) > 60:
                 reason_preview += "..."
 
+            separator = "─" * 30
             text += (
                 f"{status_emoji} **#{entry.id}** - {status_text}\n"
                 f"👤 Telegram: {entry.telegram_id or 'N/A'}\n"
                 f"📋 Тип: {action_type_text}\n"
                 f"📝 Причина: {reason_preview}\n"
                 f"📅 Создано: {created_date}\n"
-                f"─────────────────────────────\n\n"
+                f"{separator}\n\n"
             )
 
         text += "\n**Действия:**\n"
         text += "• `Просмотр #ID` - детали записи\n"
-        text += "• `Разблокировать #ID` - удалить из черного списка"
+        text += (
+            "• `Разблокировать #ID` - "
+            "удалить из черного списка"
+        )
 
     await message.answer(
         text,

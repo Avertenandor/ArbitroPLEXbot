@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.admin_action_repository import AdminActionRepository
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
 from bot.keyboards.reply import get_admin_keyboard_from_data
+from bot.utils.formatters import format_wallet_short
 from bot.utils.text_utils import escape_markdown
 
 
@@ -101,9 +102,7 @@ def format_action_details(action_type: str, details: dict | None) -> str:
         result.append(f"ID: {details['telegram_id']}")
 
     if "wallet_address" in details:
-        wallet = details["wallet_address"]
-        if len(wallet) > 20:
-            wallet = wallet[:10] + "..." + wallet[-8:]
+        wallet = format_wallet_short(details["wallet_address"])
         result.append(f"💼 {wallet}")
 
     return "\n   " + "\n   ".join(result) if result else ""

@@ -155,11 +155,14 @@ async def start_cancel_bonus(
             f"   📝 _{reason_short}_\n\n"
         )
 
+    cancel_info = (
+        "_При отмене бонус становится неактивным, "
+        "ROI начисления прекращаются._"
+    )
     text += (
         "━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         "⚠️ **Введите ID бонуса для отмены:**\n\n"
-        "_При отмене бонус становится неактивным, "
-        "ROI начисления прекращаются._"
+        f"{cancel_info}"
     )
 
     from bot.handlers.admin.users.bonus import UserBonusStates
@@ -444,6 +447,6 @@ async def process_cancel_confirm(
 
     logger.info(
         f"Admin {admin.telegram_id} (@{admin.username}) "
-        f"cancelled bonus {bonus_id} "
-        f"({bonus_amount} USDT) for user {user_id}: {reason}"
+        f"cancelled bonus {bonus_id} ({bonus_amount} USDT) "
+        f"for user {user_id}: {reason}"
     )

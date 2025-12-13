@@ -4,8 +4,13 @@ Payment Operations Module.
 Contains all payment-related functionality for the BlockchainService.
 """
 
+from __future__ import annotations
+
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from ..payment_sender import PaymentSender
 
 
 class PaymentOperations:
@@ -17,7 +22,7 @@ class PaymentOperations:
     - Gas cost estimation
     """
 
-    def __init__(self, payment_sender):
+    def __init__(self, payment_sender: PaymentSender) -> None:
         """
         Initialize payment operations.
 

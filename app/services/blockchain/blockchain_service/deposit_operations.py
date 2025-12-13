@@ -4,8 +4,10 @@ Deposit Operations Module.
 Contains all deposit-related functionality for the BlockchainService.
 """
 
+from __future__ import annotations
+
 from decimal import ROUND_DOWN, Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -13,6 +15,10 @@ from app.config.constants import BLOCKCHAIN_LONG_TIMEOUT, BLOCKCHAIN_TIMEOUT
 
 from ..constants import USDT_ABI, USDT_DECIMALS
 from ..rpc_wrapper import with_timeout
+
+if TYPE_CHECKING:
+    from ..deposit_processor import DepositProcessor
+    from ..provider_manager import ProviderManager
 
 
 class DepositOperations:
@@ -27,11 +33,11 @@ class DepositOperations:
 
     def __init__(
         self,
-        provider_manager,
-        deposit_processor,
+        provider_manager: ProviderManager,
+        deposit_processor: DepositProcessor,
         system_wallet_address: str,
         usdt_contract_address: str,
-    ):
+    ) -> None:
         """
         Initialize deposit operations.
 

@@ -67,8 +67,8 @@ class GasManager:
                 )
 
             return int(final_gas)
-        except Exception as e:
-            logger.warning(f"Failed to get gas price, using MIN: {e}")
+        except Web3Exception as e:
+            logger.warning(f"Failed to get gas price from RPC, using MIN: {e}")
             return int(MIN_GAS_PRICE_WEI)
 
     def estimate_gas_fee(
@@ -114,7 +114,8 @@ class GasManager:
             price = self.get_optimal_gas_price(w3)
             total_wei = func_gas * price
             return Decimal(total_wei) / Decimal(10 ** 18)
-        except Exception:
+        except (ValueError, Web3Exception) as e:
+            logger.error(f"Failed to estimate gas fee: {e}")
             return None
 
     def estimate_transaction_gas(

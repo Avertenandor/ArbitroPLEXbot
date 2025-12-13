@@ -9,6 +9,7 @@ from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.referral_service import ReferralService
+from bot.utils.formatters import format_balance
 
 
 router = Router(name="admin_users_referrals")
@@ -34,7 +35,7 @@ async def handle_profile_referrals(
         f"Level 1: **{stats['level_1_count']}** партнёров\n"
         f"Level 2: **{stats['level_2_count']}** партнёров\n"
         f"Level 3: **{stats['level_3_count']}** партнёров\n\n"
-        f"💰 Всего заработано: **{stats['total_earned']:.2f} USDT**"
+        f"💰 Всего заработано: **{format_balance(stats['total_earned'], decimals=2)} USDT**"
     )
 
     await message.answer(text, parse_mode="Markdown")

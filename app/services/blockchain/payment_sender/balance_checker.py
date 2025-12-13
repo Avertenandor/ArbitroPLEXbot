@@ -72,8 +72,17 @@ class BalanceChecker:
 
             return balance_usdt
 
-        except Exception as e:
-            logger.error(f"Error getting USDT balance: {e}")
+        except ValueError as e:
+            logger.error(
+                f"Invalid address for USDT balance check: "
+                f"{mask_address(address)} - {e}"
+            )
+            return None
+        except (ConnectionError, OSError) as e:
+            logger.error(
+                f"Connection error getting USDT balance for "
+                f"{mask_address(address)}: {type(e).__name__}: {e}"
+            )
             return None
 
     async def get_bnb_balance(
@@ -112,6 +121,15 @@ class BalanceChecker:
 
             return balance_bnb
 
-        except Exception as e:
-            logger.error(f"Error getting BNB balance: {e}")
+        except ValueError as e:
+            logger.error(
+                f"Invalid address for BNB balance check: "
+                f"{mask_address(address)} - {e}"
+            )
+            return None
+        except (ConnectionError, OSError) as e:
+            logger.error(
+                f"Connection error getting BNB balance for "
+                f"{mask_address(address)}: {type(e).__name__}: {e}"
+            )
             return None

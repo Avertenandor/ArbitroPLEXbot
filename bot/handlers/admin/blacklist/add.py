@@ -151,8 +151,12 @@ async def process_blacklist_reason(
     reason = message.text.strip()
 
     if len(reason) < 5:
+        error_msg = (
+            "❌ Причина слишком короткая! "
+            "Минимум 5 символов."
+        )
         await message.answer(
-            "❌ Причина слишком короткая! Минимум 5 символов.",
+            error_msg,
             reply_markup=cancel_keyboard(),
         )
         return

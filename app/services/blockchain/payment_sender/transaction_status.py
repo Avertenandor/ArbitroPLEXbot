@@ -9,6 +9,7 @@ from typing import Any
 
 from loguru import logger
 from web3 import AsyncWeb3
+from web3.exceptions import Web3Exception
 
 from app.config.constants import BLOCKCHAIN_TIMEOUT
 
@@ -94,6 +95,21 @@ class TransactionStatusChecker:
 
             return None
 
+        except ValueError as e:
+            logger.error(
+                f"Invalid transaction hash format {tx_hash}: {e}",
+                exc_info=True,
+            )
+            return None
+        except (Web3Exception, ConnectionError, OSError) as e:
+            logger.error(
+                f"Blockchain communication error checking transaction {tx_hash}: {e}",
+                exc_info=True,
+            )
+            return None
         except Exception as e:
-            logger.warning(f"Could not check transaction {tx_hash}: {e}")
+            logger.error(
+                f"Unexpected error checking transaction {tx_hash}: {e}",
+                exc_info=True,
+            )
             return None

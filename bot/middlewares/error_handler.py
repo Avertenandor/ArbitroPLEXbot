@@ -62,31 +62,31 @@ class ErrorHandlerMiddleware(BaseMiddleware):
             try:
                 return await handler(event, data)
 
-            except TelegramNetworkError as e:
+            except TelegramNetworkError as error:
                 # Network errors (SSL, timeout) - retry with backoff
                 if attempt < self.MAX_RETRIES - 1:
                     delay = self.RETRY_DELAYS[attempt]
                     logger.warning(
-                        f"Network error (attempt {attempt + 1}/{self.MAX_RETRIES}), retrying in {delay}s: {e}"
+                        f"Network error (attempt {attempt + 1}/{self.MAX_RETRIES}), retrying in {delay}s: {error}"
                     )
                     await asyncio.sleep(delay)
                     continue
                 else:
-                    logger.error(f"Network error after {self.MAX_RETRIES} attempts: {e}")
+                    logger.error(f"Network error after {self.MAX_RETRIES} attempts: {error}")
                     # Don't notify admin for transient network errors
                     return None
 
-            except TelegramRetryAfter as e:
+            except TelegramRetryAfter as error:
                 # Flood control - wait and retry
-                wait_time = min(e.retry_after, 60)  # Max 60 seconds
+                wait_time = min(error.retry_after, 60)  # Max 60 seconds
                 logger.warning(f"Rate limited, waiting {wait_time}s")
                 await asyncio.sleep(wait_time)
                 continue
 
-            except TelegramBadRequest as e:
+            except TelegramBadRequest as error:
                 # Handle Markdown parse errors gracefully - don't notify admin
-                if "can't parse entities" in str(e):
-                    logger.warning(f"Markdown parse error (handled): {e}")
+                if "can't parse entities" in str(error):
+                    logger.warning(f"Markdown parse error (handled): {error}")
                     bot: Bot | None = data.get("bot")
                     user = self._get_user(event)
                     if bot and user:
@@ -101,9 +101,9 @@ class ErrorHandlerMiddleware(BaseMiddleware):
                 # Other TelegramBadRequest errors - handle normally
                 raise
 
-            except Exception as e:
+            except Exception as error:
                 # Log error
-                logger.exception(f"Unhandled exception: {e}")
+                logger.exception(f"Unhandled exception: {error}")
 
                 bot: Bot | None = data.get("bot")
                 user = self._get_user(event)
@@ -137,11 +137,11 @@ class ErrorHandlerMiddleware(BaseMiddleware):
                         if user:
                             user_info = f"@{user.username}" if user.username else f"ID: {user.id}"
 
-                        error_msg = str(e)[:200].replace("<", "&lt;").replace(">", "&gt;")
+                        error_msg = str(error)[:200].replace("<", "&lt;").replace(">", "&gt;")
                         text = (
                             f"🚨 <b>CRITICAL ERROR</b>\n\n"
                             f"👤 User: {user_info}\n"
-                            f"❌ Exception: <code>{type(e).__name__}</code>\n"
+                            f"❌ Exception: <code>{type(error).__name__}</code>\n"
                             f"📝 Message: <code>{error_msg}</code>\n\n"
                             f"<pre>{error_trace_escaped}</pre>"
                         )

@@ -181,7 +181,10 @@ def format_daily_payment_message(status: dict, language: str = "ru") -> str:
             "✅ **Текущие сутки оплачены!**\n"
         )
         if hours_since_payment is not None:
-            message += f"⏱ Последний платёж: {hours_since_payment:.1f} ч. назад\n"
+            message += (
+                f"⏱ Последний платёж: "
+                f"{hours_since_payment:.1f} ч. назад\n"
+            )
         if plex_balance is not None:
             message += f"💼 Ваш баланс PLEX: **{int(plex_balance):,}** PLEX"
     else:
@@ -205,7 +208,8 @@ def format_daily_payment_message(status: dict, language: str = "ru") -> str:
             "📱 **Для оплаты отправьте PLEX на кошелёк:**\n\n"
             f"`{wallet_address}`\n\n"
             f"💳 **Сумма к оплате:** **{int(required_plex):,}** PLEX\n\n"
-            "⚠️ Без оплаты работа депозитов приостановлена!"
+            "⚠️ Без оплаты работа депозитов "
+            "приостановлена!"
         )
 
     return message

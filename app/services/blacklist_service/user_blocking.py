@@ -11,6 +11,7 @@ from typing import Any
 from loguru import logger
 
 from app.models.blacklist import BlacklistActionType
+from app.config.constants import DISTRIBUTED_LOCK_TIMEOUT, DISTRIBUTED_LOCK_BLOCKING_TIMEOUT
 
 
 class UserBlockingManager:
@@ -55,7 +56,7 @@ class UserBlockingManager:
         )
         lock_key = f"user:{user_id}:block_operation"
 
-        async with lock.lock(lock_key, timeout=30, blocking=True, blocking_timeout=5.0) as acquired:
+        async with lock.lock(lock_key, timeout=DISTRIBUTED_LOCK_TIMEOUT, blocking=True, blocking_timeout=DISTRIBUTED_LOCK_BLOCKING_TIMEOUT) as acquired:
             if not acquired:
                 logger.warning(
                     f"Could not acquire lock for blocking user {user_id}, "

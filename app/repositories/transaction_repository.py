@@ -6,7 +6,7 @@ Data access layer for Transaction model.
 
 from decimal import Decimal
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import TransactionStatus, TransactionType
@@ -107,7 +107,7 @@ class TransactionRepository(BaseRepository[Transaction]):
             Total amount
         """
         stmt = (
-            select(Transaction)
+            select(func.sum(Transaction.amount))
             .where(Transaction.user_id == user_id)
             .where(Transaction.type == TransactionType.WITHDRAWAL.value)
             .where(
@@ -119,12 +119,15 @@ class TransactionRepository(BaseRepository[Transaction]):
             )
         )
         result = await self.session.execute(stmt)
-        transactions = result.scalars().all()
+        total = result.scalar()
 
-        if not transactions:
+        if total is None:
             return Decimal("0")
 
-        return sum((t.amount for t in transactions), Decimal("0"))
+        # Ensure we return Decimal type
+        if isinstance(total, Decimal):
+            return total
+        return Decimal(str(total))
 
     async def get_total_withdrawn_today(self) -> Decimal:
         """
@@ -144,7 +147,7 @@ class TransactionRepository(BaseRepository[Transaction]):
         today_start_naive = today_start.replace(tzinfo=None)
 
         stmt = (
-            select(Transaction)
+            select(func.sum(Transaction.amount))
             .where(Transaction.type == TransactionType.WITHDRAWAL.value)
             .where(Transaction.created_at >= today_start_naive)
             .where(
@@ -156,9 +159,12 @@ class TransactionRepository(BaseRepository[Transaction]):
             )
         )
         result = await self.session.execute(stmt)
-        transactions = result.scalars().all()
+        total = result.scalar()
 
-        if not transactions:
+        if total is None:
             return Decimal("0")
 
-        return sum((t.amount for t in transactions), Decimal("0"))
+        # Ensure we return Decimal type
+        if isinstance(total, Decimal):
+            return total
+        return Decimal(str(total))
