@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.user_repository import UserRepository
 from app.services.ai_assistant_service import UserRole
 from app.services.monitoring_service import MonitoringService
+from bot.utils.formatters import format_balance
 
 
 async def clear_state_keep_session(state: FSMContext) -> None:
@@ -128,7 +129,7 @@ def aria_deposits_pick_keyboard(
     kb = InlineKeyboardBuilder()
     for deposit_id, amount in deposit_rows[:8]:
         kb.button(
-            text=f"#{deposit_id} · {amount:.2f} USDT",
+            text=f"#{deposit_id} · {format_balance(amount, decimals=2)} USDT",
             callback_data=f"aria:deposit:{deposit_id}",
         )
     kb.button(text="❌ Отмена", callback_data="aria:act:cancel")

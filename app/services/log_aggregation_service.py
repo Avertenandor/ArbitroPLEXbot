@@ -10,19 +10,26 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.config.constants import (
+    LOG_ERROR_FREQUENCY_WARNING,
+    LOG_ERROR_FREQUENCY_CRITICAL,
+    LOG_USER_ERROR_THRESHOLD,
+    LOG_MAX_ERROR_KEYS,
+    LOG_MAX_USER_ERROR_KEYS,
+)
 
 
 if TYPE_CHECKING:
     from aiogram import Bot
 
 # Error frequency thresholds
-ERROR_FREQUENCY_WARNING = 10  # errors per minute
-ERROR_FREQUENCY_CRITICAL = 50  # errors per minute
-USER_ERROR_THRESHOLD = 20  # errors per user per hour
+ERROR_FREQUENCY_WARNING = LOG_ERROR_FREQUENCY_WARNING
+ERROR_FREQUENCY_CRITICAL = LOG_ERROR_FREQUENCY_CRITICAL
+USER_ERROR_THRESHOLD = LOG_USER_ERROR_THRESHOLD
 
 # Memory leak prevention
-MAX_ERROR_KEYS = 10000  # Maximum number of unique error keys to track
-MAX_USER_ERROR_KEYS = 5000  # Maximum number of users to track errors for
+MAX_ERROR_KEYS = LOG_MAX_ERROR_KEYS
+MAX_USER_ERROR_KEYS = LOG_MAX_USER_ERROR_KEYS
 
 
 class LogAggregationService:

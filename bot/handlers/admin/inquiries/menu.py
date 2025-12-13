@@ -26,7 +26,10 @@ router = Router(name="admin_inquiry_menu")
 # ============================================================================
 
 
-@router.message(StateFilter("*"), F.text == "📨 Обращения от пользователей")
+@router.message(
+    StateFilter("*"),
+    F.text == "📨 Обращения от пользователей"
+)
 async def handle_admin_inquiries_menu(
     message: Message,
     state: FSMContext,
@@ -41,7 +44,8 @@ async def handle_admin_inquiries_menu(
         return
 
     # Сбрасываем состояние, но сохраняем admin_session_token,
-    # чтобы не требовать повторную аутентификацию при навигации.
+    # чтобы не требовать повторную аутентификацию
+    # при навигации.
     await clear_state_preserve_admin_token(state)
 
     # Get counts

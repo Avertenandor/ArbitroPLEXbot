@@ -38,7 +38,11 @@ async def handle_view_blacklist_entry(
 
     match = re.match(r'^Просмотр #(\d+)$', message.text, re.UNICODE)
     if not match:
-        await message.answer("❌ Неверный формат. Используйте: `Просмотр #ID`")
+        error_msg = (
+            "❌ Неверный формат. "
+            "Используйте: `Просмотр #ID`"
+        )
+        await message.answer(error_msg)
         return
 
     entry_id = int(match.group(1))
@@ -116,7 +120,11 @@ async def handle_unban_user(
 
     match = re.match(r'^Разблокировать #(\d+)$', message.text, re.UNICODE)
     if not match:
-        await message.answer("❌ Неверный формат. Используйте: `Разблокировать #ID`")
+        error_msg = (
+            "❌ Неверный формат. "
+            "Используйте: `Разблокировать #ID`"
+        )
+        await message.answer(error_msg)
         return
 
     entry_id = int(match.group(1))
@@ -216,9 +224,13 @@ async def handle_unban_confirm(
             bot: Bot = data.get("bot")
             if bot:
                 try:
+                    unban_msg = (
+                        "✅ Ваш аккаунт разблокирован. "
+                        "Вы снова можете использовать бота."
+                    )
                     await bot.send_message(
                         chat_id=entry.telegram_id,
-                        text="✅ Ваш аккаунт разблокирован. Вы снова можете использовать бота.",
+                        text=unban_msg,
                     )
                 except Exception as e:
                     logger.warning(f"Failed to notify user about unban: {e}")

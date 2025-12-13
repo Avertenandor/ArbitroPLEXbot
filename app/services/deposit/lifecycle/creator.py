@@ -18,6 +18,7 @@ from app.repositories.deposit_level_version_repository import (
 )
 from app.repositories.deposit_repository import DepositRepository
 from app.repositories.global_settings_repository import GlobalSettingsRepository
+from app.config.constants import DISTRIBUTED_LOCK_TIMEOUT, DISTRIBUTED_LOCK_BLOCKING_TIMEOUT
 
 
 class DepositCreator:
@@ -63,7 +64,7 @@ class DepositCreator:
         lock_key = f"user:{user_id}:create_deposit"
 
         async with lock.lock(
-            lock_key, timeout=30, blocking=True, blocking_timeout=5.0
+            lock_key, timeout=DISTRIBUTED_LOCK_TIMEOUT, blocking=True, blocking_timeout=DISTRIBUTED_LOCK_BLOCKING_TIMEOUT
         ) as acquired:
             if not acquired:
                 logger.warning(

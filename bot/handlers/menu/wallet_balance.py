@@ -23,28 +23,10 @@ from app.config.business_constants import MINIMUM_PLEX_BALANCE, get_available_pl
 from bot.i18n.loader import get_translator, get_user_language
 from bot.utils.text_utils import safe_answer
 from bot.utils.user_loader import UserLoader
+from bot.utils.formatters import format_balance, format_wallet_short, format_wallet_for_copy
 
 
 router = Router()
-
-
-def format_balance(value: Decimal | None, decimals: int = 4) -> str:
-    """Format balance with specified decimals."""
-    if value is None:
-        return "—"
-    return f"{float(value):,.{decimals}f}"
-
-
-def format_wallet_for_copy(address: str) -> str:
-    """Format wallet address for display with full address for copying."""
-    return f"`{address}`"
-
-
-def format_wallet_short(address: str) -> str:
-    """Format wallet address shortened for display."""
-    if len(address) > 20:
-        return f"{address[:10]}...{address[-8:]}"
-    return address
 
 
 @router.message(StateFilter('*'), F.text == "💰 Баланс кошелька")

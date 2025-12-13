@@ -11,12 +11,13 @@ from app.models.user_message_log import UserMessageLog
 from app.repositories.user_message_log_repository import (
     UserMessageLogRepository,
 )
+from app.config.constants import USER_MESSAGE_LOG_MAX_MESSAGES
 
 
 class UserMessageLogService:
     """Service for user message logging."""
 
-    MAX_MESSAGES_PER_USER = 500
+    MAX_MESSAGES_PER_USER = USER_MESSAGE_LOG_MAX_MESSAGES
 
     def __init__(self, session: AsyncSession) -> None:
         """

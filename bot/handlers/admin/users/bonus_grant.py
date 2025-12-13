@@ -24,7 +24,7 @@ from bot.keyboards.admin import (
     admin_bonus_keyboard,
     admin_cancel_keyboard,
 )
-from bot.utils.formatters import format_usdt
+from bot.utils.formatters import format_balance, format_usdt
 from bot.utils.text_utils import escape_markdown
 
 if TYPE_CHECKING:
@@ -77,12 +77,13 @@ async def show_bonus_menu(
         f"👤 Пользователь: `{safe_username}`\n"
         f"🆔 ID: `{user.id}`\n\n"
         f"💰 **Текущий баланс:** "
-        f"`{format_usdt(stats['total_bonus_balance'])} USDT`\n"
+        f"`{format_balance(stats['total_bonus_balance'], decimals=2)} USDT`\n"
         f"✅ **Активных бонусов:** {stats['active_bonuses_count']}\n\n"
         f"💵 **Введите сумму бонуса в USDT:**\n\n"
         f"Например: `100` или `50.5`\n\n"
         f"ℹ️ Бонус будет участвовать в начислении ROI "
-        f"с теми же ставками, что и обычные депозиты (до 500%)."
+        f"с теми же ставками,\n"
+        f"что и обычные депозиты (до 500%)."
     )
 
     # Import state class to set state
@@ -126,7 +127,8 @@ async def start_grant_bonus(
         "Введите сумму бонуса в USDT:\n\n"
         "Например: `100` или `50.5`\n\n"
         "ℹ️ Бонус будет участвовать в начислении ROI "
-        "с теми же ставками, что и обычные депозиты (до 500%).",
+        "с теми же ставками,\n"
+        "что и обычные депозиты (до 500%).",
         parse_mode="Markdown",
         reply_markup=admin_cancel_keyboard(),
     )
@@ -170,11 +172,14 @@ async def process_bonus_amount(
 
     await state.set_state(UserBonusStates.waiting_reason)
 
+    reason_example = (
+        "Например: `Компенсация за технические работы` или "
+        "`Бонус за привлечение рефералов`"
+    )
     await message.answer(
         f"💰 Сумма: **{format_usdt(amount)} USDT**\n\n"
         f"📝 Теперь введите причину начисления бонуса:\n\n"
-        f"Например: `Компенсация за технические работы` или "
-        f"`Бонус за привлечение рефералов`",
+        f"{reason_example}",
         parse_mode="Markdown",
         reply_markup=admin_cancel_keyboard(),
     )
@@ -249,14 +254,17 @@ async def process_bonus_reason(
         if user and user.username
         else str(user_id)
     )
+    bonus_info = (
+        f"ℹ️ Бонус начнёт участвовать в начислениях "
+        f"со следующего периода."
+    )
     await message.answer(
         f"✅ **Бонус успешно начислен!**\n\n"
         f"👤 Пользователь: `{safe_username}`\n"
         f"💰 Сумма: `{format_usdt(amount)} USDT`\n"
         f"🎯 ROI Cap: `{format_usdt(roi_cap)} USDT` (500%)\n"
         f"📝 Причина: {reason}\n\n"
-        f"ℹ️ Бонус начнёт участвовать в начислениях "
-        f"со следующего периода.",
+        f"{bonus_info}",
         parse_mode="Markdown",
         reply_markup=admin_bonus_keyboard(),
     )

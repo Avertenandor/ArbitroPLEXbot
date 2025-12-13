@@ -23,6 +23,19 @@ from bot.utils.admin_utils import clear_state_preserve_admin_token
 router = Router()
 
 
+# Default notification texts
+DEFAULT_BLOCK_TEXT = (
+    "⚠️ Ваш аккаунт временно заблокирован "
+    "в нашем сообществе. "
+    "Вы можете подать апелляцию в течение 3 рабочих дней."
+)
+
+DEFAULT_TERMINATE_TEXT = (
+    "❌ Ваш аккаунт терминирован в нашем сообществе "
+    "без возможности восстановления."
+)
+
+
 @router.message(F.text == "📝 Редактировать тексты")
 async def handle_edit_notification_texts(
     message: Message,
@@ -41,17 +54,13 @@ async def handle_edit_notification_texts(
     setting_repo = SystemSettingRepository(session)
 
     # Get current texts or use defaults
-    default_block_text = (
-        "⚠️ Ваш аккаунт временно заблокирован в нашем сообществе. "
-        "Вы можете подать апелляцию в течение 3 рабочих дней."
-    )
     block_text = await setting_repo.get_value(
         "blacklist_block_notification_text",
-        default=default_block_text
+        default=DEFAULT_BLOCK_TEXT
     )
     terminate_text = await setting_repo.get_value(
         "blacklist_terminate_notification_text",
-        default="❌ Ваш аккаунт терминирован в нашем сообществе без возможности восстановления."
+        default=DEFAULT_TERMINATE_TEXT
     )
 
     text = (
@@ -87,13 +96,9 @@ async def handle_start_edit_block_text(
     )
 
     setting_repo = SystemSettingRepository(session)
-    default_block_text = (
-        "⚠️ Ваш аккаунт временно заблокирован в нашем сообществе. "
-        "Вы можете подать апелляцию в течение 3 рабочих дней."
-    )
     current_text = await setting_repo.get_value(
         "blacklist_block_notification_text",
-        default=default_block_text
+        default=DEFAULT_BLOCK_TEXT
     )
 
     await state.set_state(AdminStates.awaiting_block_notification_text)
@@ -130,7 +135,11 @@ async def handle_save_block_text(
 
     new_text = message.text.strip()
     if len(new_text) < 10:
-        await message.answer("❌ Текст слишком короткий. Минимум 10 символов.")
+        error_msg = (
+            "❌ Текст слишком короткий. "
+            "Минимум 10 символов."
+        )
+        await message.answer(error_msg)
         return
 
     from app.repositories.system_setting_repository import (
@@ -169,7 +178,7 @@ async def handle_start_edit_terminate_text(
     setting_repo = SystemSettingRepository(session)
     current_text = await setting_repo.get_value(
         "blacklist_terminate_notification_text",
-        default="❌ Ваш аккаунт терминирован в нашем сообществе без возможности восстановления."
+        default=DEFAULT_TERMINATE_TEXT
     )
 
     await state.set_state(AdminStates.awaiting_terminate_notification_text)
@@ -206,7 +215,11 @@ async def handle_save_terminate_text(
 
     new_text = message.text.strip()
     if len(new_text) < 10:
-        await message.answer("❌ Текст слишком короткий. Минимум 10 символов.")
+        error_msg = (
+            "❌ Текст слишком короткий. "
+            "Минимум 10 символов."
+        )
+        await message.answer(error_msg)
         return
 
     from app.repositories.system_setting_repository import (

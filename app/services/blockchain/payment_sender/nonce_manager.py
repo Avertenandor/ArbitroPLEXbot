@@ -9,6 +9,7 @@ from typing import Any
 
 from loguru import logger
 from web3 import AsyncWeb3
+from web3.exceptions import Web3Exception
 
 from app.config.operational_constants import BLOCKING_TIMEOUT_LONG, LOCK_TIMEOUT_SHORT
 
@@ -41,11 +42,30 @@ class NonceManager:
 
         Returns:
             Safe nonce to use
+
+        Raises:
+            ValueError: If address is invalid
+            Web3Exception: If Web3 provider call fails
         """
-        # Get pending nonce (includes pending transactions)
-        pending_nonce = await self.web3.eth.get_transaction_count(address, 'pending')
-        # Get confirmed nonce (only confirmed transactions)
-        confirmed_nonce = await self.web3.eth.get_transaction_count(address, 'latest')
+        try:
+            # Get pending nonce (includes pending transactions)
+            pending_nonce = await self.web3.eth.get_transaction_count(address, 'pending')
+        except ValueError as e:
+            logger.error(f"Invalid address format for nonce lookup: {address}", exc_info=e)
+            raise
+        except Web3Exception as e:
+            logger.error(f"Web3 error getting pending nonce for {address}: {e}", exc_info=e)
+            raise
+
+        try:
+            # Get confirmed nonce (only confirmed transactions)
+            confirmed_nonce = await self.web3.eth.get_transaction_count(address, 'latest')
+        except ValueError as e:
+            logger.error(f"Invalid address format for nonce lookup: {address}", exc_info=e)
+            raise
+        except Web3Exception as e:
+            logger.error(f"Web3 error getting confirmed nonce for {address}: {e}", exc_info=e)
+            raise
 
         # If there are too many stuck transactions (pending > confirmed + threshold)
         stuck_threshold = 5
@@ -75,26 +95,60 @@ class NonceManager:
 
         Returns:
             Safe nonce to use
+
+        Raises:
+            ImportError: If distributed lock module cannot be imported
+            ValueError: If address is invalid
+            Web3Exception: If Web3 provider call fails
+            TimeoutError: If lock acquisition times out
+            RuntimeError: If lock operations fail
         """
-        from app.utils.distributed_lock import get_distributed_lock
+        try:
+            from app.utils.distributed_lock import get_distributed_lock
+        except ImportError as e:
+            logger.error(f"Failed to import distributed_lock module: {e}", exc_info=e)
+            raise
 
         # Create lock key specific to this address
         lock_key = f"nonce_lock:{address}"
 
         # Try to get distributed lock with Redis/PostgreSQL
         if session_factory:
-            async with session_factory() as session:
-                distributed_lock = get_distributed_lock(session=session)
+            try:
+                async with session_factory() as session:
+                    distributed_lock = get_distributed_lock(session=session)
 
-                # Acquire distributed lock with timeout
-                async with distributed_lock.lock(
-                    key=lock_key,
-                    timeout=LOCK_TIMEOUT_SHORT,
-                    blocking=True,
-                    blocking_timeout=BLOCKING_TIMEOUT_LONG
-                ):
-                    # Get nonce inside the distributed lock
-                    return await self.get_safe_nonce(address)
+                    # Acquire distributed lock with timeout
+                    try:
+                        async with distributed_lock.lock(
+                            key=lock_key,
+                            timeout=LOCK_TIMEOUT_SHORT,
+                            blocking=True,
+                            blocking_timeout=BLOCKING_TIMEOUT_LONG
+                        ):
+                            # Get nonce inside the distributed lock
+                            return await self.get_safe_nonce(address)
+                    except TimeoutError as e:
+                        logger.error(
+                            f"Timeout acquiring distributed lock for address {address}: {e}",
+                            exc_info=e
+                        )
+                        raise
+                    except RuntimeError as e:
+                        logger.error(
+                            f"Runtime error with distributed lock for address {address}: {e}",
+                            exc_info=e
+                        )
+                        raise
+            except (ValueError, Web3Exception):
+                # Re-raise Web3/validation exceptions from get_safe_nonce
+                raise
+            except Exception as e:
+                logger.error(
+                    f"Unexpected error in distributed lock session for address {address}: {e}",
+                    exc_info=e
+                )
+                raise RuntimeError(f"Distributed lock session error: {e}") from e
         else:
             # Fallback to no distributed lock if no session factory
             logger.debug("No session factory available, using local lock only")

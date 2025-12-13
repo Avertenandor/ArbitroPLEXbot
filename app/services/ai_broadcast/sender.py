@@ -4,6 +4,12 @@ import asyncio
 from typing import Any
 
 from aiogram import Bot
+from aiogram.exceptions import (
+    TelegramAPIError,
+    TelegramBadRequest,
+    TelegramForbiddenError,
+    TelegramRetryAfter,
+)
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -74,8 +80,45 @@ class MessageSender:
                 "message": "Сообщение успешно отправлено",
             }
 
+        except TelegramForbiddenError:
+            logger.warning(
+                f"User {user_identifier} blocked the bot or "
+                f"bot lacks permission"
+            )
+            return {
+                "success": False,
+                "error": "Пользователь заблокировал бота",
+            }
+        except TelegramBadRequest as e:
+            logger.error(
+                f"Invalid request when sending to {user_identifier}: {e}"
+            )
+            return {
+                "success": False,
+                "error": "Ошибка отправки сообщения (неверный запрос)",
+            }
+        except TelegramRetryAfter as e:
+            logger.warning(
+                f"Rate limit hit when sending to {user_identifier}, "
+                f"retry after {e.retry_after}s"
+            )
+            return {
+                "success": False,
+                "error": "Превышен лимит запросов, повторите позже",
+            }
+        except TelegramAPIError as e:
+            logger.error(
+                f"Telegram API error when sending to {user_identifier}: {e}"
+            )
+            return {
+                "success": False,
+                "error": "Ошибка Telegram API",
+            }
         except Exception as e:
-            logger.error(f"Failed to send message: {e}")
+            logger.error(
+                f"Unexpected error sending message to {user_identifier}: {e}",
+                exc_info=True,
+            )
             return {
                 "success": False,
                 "error": "Ошибка отправки сообщения",
@@ -134,8 +177,25 @@ class MessageSender:
                     success += 1
                     # Rate limit: 20 msg/sec to avoid Telegram limits
                     await asyncio.sleep(0.05)
+                except TelegramForbiddenError:
+                    failed += 1
+                    logger.debug(f"User {user_id} blocked the bot")
+                    failed_users.append(
+                        {"user_id": user_id, "error": "User blocked bot"}
+                    )
+                except (TelegramBadRequest, TelegramAPIError) as e:
+                    failed += 1
+                    logger.warning(
+                        f"Failed to send to user {user_id}: {e}"
+                    )
+                    failed_users.append(
+                        {"user_id": user_id, "error": str(e)}
+                    )
                 except Exception as e:
                     failed += 1
+                    logger.error(
+                        f"Unexpected error sending to user {user_id}: {e}"
+                    )
                     failed_users.append(
                         {"user_id": user_id, "error": str(e)}
                     )
@@ -160,8 +220,17 @@ class MessageSender:
                 ),
             }
 
+        except TelegramAPIError as e:
+            logger.error(f"Telegram API error during broadcast: {e}")
+            return {
+                "success": False,
+                "error": f"Ошибка Telegram API: {str(e)}",
+            }
         except Exception as e:
-            logger.error(f"Broadcast error: {e}")
+            logger.error(
+                f"Unexpected error during broadcast to '{group}': {e}",
+                exc_info=True,
+            )
             return {
                 "success": False,
                 "error": str(e),
@@ -271,8 +340,23 @@ class MessageSender:
                     )
                     success += 1
                     await asyncio.sleep(0.05)
-                except Exception:
+                except TelegramForbiddenError:
                     failed += 1
+                    logger.debug(
+                        f"User {user_data['telegram_id']} blocked the bot"
+                    )
+                except (TelegramBadRequest, TelegramAPIError) as e:
+                    failed += 1
+                    logger.warning(
+                        f"Failed to send invitation to "
+                        f"{user_data['telegram_id']}: {e}"
+                    )
+                except Exception as e:
+                    failed += 1
+                    logger.error(
+                        f"Unexpected error sending invitation to "
+                        f"{user_data['telegram_id']}: {e}"
+                    )
 
             logger.info(
                 f"ARIA mass invite to '{group}': "
@@ -291,8 +375,17 @@ class MessageSender:
                 ),
             }
 
+        except TelegramAPIError as e:
+            logger.error(f"Telegram API error during mass invite: {e}")
+            return {
+                "success": False,
+                "error": f"Ошибка Telegram API: {str(e)}",
+            }
         except Exception as e:
-            logger.error(f"Mass invite error: {e}")
+            logger.error(
+                f"Unexpected error during mass invite to '{group}': {e}",
+                exc_info=True,
+            )
             return {
                 "success": False,
                 "error": str(e),
@@ -358,8 +451,39 @@ class MessageSender:
                 "message": f"Запрос отправлен @{admin.username}",
             }
 
+        except TelegramForbiddenError:
+            logger.warning(
+                f"Admin {admin_identifier} blocked the bot or "
+                f"bot lacks permission"
+            )
+            return {
+                "success": False,
+                "error": "Админ заблокировал бота",
+            }
+        except TelegramBadRequest as e:
+            logger.error(
+                f"Invalid request when sending feedback to "
+                f"{admin_identifier}: {e}"
+            )
+            return {
+                "success": False,
+                "error": "Ошибка отправки (неверный запрос)",
+            }
+        except TelegramAPIError as e:
+            logger.error(
+                f"Telegram API error sending feedback request to "
+                f"{admin_identifier}: {e}"
+            )
+            return {
+                "success": False,
+                "error": f"Ошибка Telegram API: {str(e)}",
+            }
         except Exception as e:
-            logger.error(f"Failed to send feedback request: {e}")
+            logger.error(
+                f"Unexpected error sending feedback request to "
+                f"{admin_identifier}: {e}",
+                exc_info=True,
+            )
             return {
                 "success": False,
                 "error": f"Ошибка отправки: {str(e)}",
@@ -418,9 +542,19 @@ class MessageSender:
                     sent_count += 1
                     sent_to.append(f"@{admin.username}")
                     await asyncio.sleep(0.1)  # Rate limiting
-                except Exception as e:
+                except TelegramForbiddenError:
                     logger.warning(
-                        f"Failed to send to admin "
+                        f"Admin {admin.telegram_id} blocked the bot"
+                    )
+                    failed_count += 1
+                except (TelegramBadRequest, TelegramAPIError) as e:
+                    logger.warning(
+                        f"Failed to send to admin {admin.telegram_id}: {e}"
+                    )
+                    failed_count += 1
+                except Exception as e:
+                    logger.error(
+                        f"Unexpected error sending to admin "
                         f"{admin.telegram_id}: {e}"
                     )
                     failed_count += 1
@@ -438,8 +572,17 @@ class MessageSender:
                 "message": f"Отправлено {sent_count} админам",
             }
 
+        except TelegramAPIError as e:
+            logger.error(f"Telegram API error during admin broadcast: {e}")
+            return {
+                "success": False,
+                "error": f"Ошибка Telegram API: {str(e)}",
+            }
         except Exception as e:
-            logger.error(f"Failed to broadcast to admins: {e}")
+            logger.error(
+                f"Unexpected error during admin broadcast: {e}",
+                exc_info=True,
+            )
             return {
                 "success": False,
                 "error": f"Ошибка рассылки: {str(e)}",

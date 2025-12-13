@@ -34,18 +34,18 @@ async def handle_language_menu(
 
     # Get current language
     current_lang = await get_user_language(session, user.id)
-    t = get_translator(current_lang)
+    translator = get_translator(current_lang)
 
     # Create language selection keyboard
     keyboard = ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="🇷🇺 Русский"), KeyboardButton(text="🇬🇧 English")],
-            [KeyboardButton(text=t("common.back"))],
+            [KeyboardButton(text=translator("common.back"))],
         ],
         resize_keyboard=True,
     )
 
-    text = t("language.title")
+    text = translator("language.title")
     await message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
 
 
@@ -76,10 +76,10 @@ async def handle_language_selection(
 
     if success:
         # Get translator for new language
-        t = get_translator(selected_lang)
+        translator = get_translator(selected_lang)
         language_name = SUPPORTED_LANGUAGES[selected_lang]
 
-        text = t("language.changed", language=language_name)
+        text = translator("language.changed", language=language_name)
         await message.answer(
             text,
             reply_markup=settings_keyboard(),
@@ -89,9 +89,9 @@ async def handle_language_selection(
     else:
         # Get current language for error message
         current_lang = await get_user_language(session, user.id)
-        t = get_translator(current_lang)
+        translator = get_translator(current_lang)
 
-        text = t("language.error")
+        text = translator("language.error")
         await message.answer(
             text,
             reply_markup=settings_keyboard(),

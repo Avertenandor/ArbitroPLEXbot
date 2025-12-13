@@ -10,6 +10,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.repositories.user_repository import UserRepository
+from app.config.constants import FINPASS_MAX_ATTEMPTS, FINPASS_LOCKOUT_MINUTES
 
 
 class UserAuthenticationMixin:
@@ -42,8 +43,8 @@ class UserAuthenticationMixin:
             return False, "Пользователь не найден"
 
         # Rate limiting: check if user is locked out
-        MAX_ATTEMPTS = 5
-        LOCKOUT_MINUTES = 15
+        MAX_ATTEMPTS = FINPASS_MAX_ATTEMPTS
+        LOCKOUT_MINUTES = FINPASS_LOCKOUT_MINUTES
 
         if user.finpass_attempts >= MAX_ATTEMPTS:
             if user.finpass_locked_until and user.finpass_locked_until > datetime.now(UTC):

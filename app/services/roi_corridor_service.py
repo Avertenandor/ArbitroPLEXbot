@@ -97,10 +97,15 @@ class RoiCorridorService:
             if roi_min >= roi_max:
                 return False, "Минимум должен быть меньше максимума"
             if roi_min < 0 or roi_max < 0:
-                return False, "Проценты не могут быть отрицательными"
+                error_msg = "Проценты не могут быть отрицательными"
+                return False, error_msg
         elif mode == "equal":
             if roi_fixed is None:
-                return False, "Для режима Поровну требуется фиксированный процент"
+                error_msg = (
+                    "Для режима Поровну требуется "
+                    "фиксированный процент"
+                )
+                return False, error_msg
             if roi_fixed < 0:
                 return False, "Процент не может быть отрицательным"
         else:
@@ -344,13 +349,26 @@ class RoiCorridorService:
         warnings = []
 
         if roi_min < Decimal("0.5"):
-            warnings.append(f"⚠️ Очень низкий минимум: {roi_min}% (рекомендуется >= 0.5%)")
+            warning_msg = (
+                f"⚠️ Очень низкий минимум: {roi_min}% "
+                f"(рекомендуется >= 0.5%)"
+            )
+            warnings.append(warning_msg)
 
         if roi_max > Decimal("20"):
-            warnings.append(f"⚠️ Очень высокий максимум: {roi_max}% (рекомендуется <= 20%)")
+            warning_msg = (
+                f"⚠️ Очень высокий максимум: {roi_max}% "
+                f"(рекомендуется <= 20%)"
+            )
+            warnings.append(warning_msg)
 
         if roi_max - roi_min < Decimal("1"):
-            warnings.append(f"⚠️ Узкий коридор: {roi_max - roi_min}% (рекомендуется >= 1%)")
+            corridor_width = roi_max - roi_min
+            warning_msg = (
+                f"⚠️ Узкий коридор: {corridor_width}% "
+                f"(рекомендуется >= 1%)"
+            )
+            warnings.append(warning_msg)
 
         if warnings:
             return True, "\n".join(warnings)

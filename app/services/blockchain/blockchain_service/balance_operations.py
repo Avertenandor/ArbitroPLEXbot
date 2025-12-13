@@ -4,7 +4,13 @@ Balance Operations Module.
 Contains all balance query functionality for the BlockchainService.
 """
 
+from __future__ import annotations
+
 from decimal import Decimal
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..payment_sender import PaymentSender
 
 
 class BalanceOperations:
@@ -16,7 +22,7 @@ class BalanceOperations:
     - BNB balance queries
     """
 
-    def __init__(self, payment_sender):
+    def __init__(self, payment_sender: PaymentSender) -> None:
         """
         Initialize balance operations.
 

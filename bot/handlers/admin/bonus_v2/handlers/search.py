@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.bonus_service import BonusService
 from app.services.user_service import UserService
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
-from bot.utils.formatters import format_usdt
+from bot.utils.formatters import format_balance, format_usdt
 from bot.utils.text_utils import escape_markdown
 
 from ..helpers import format_user_display
@@ -94,9 +94,12 @@ async def process_search_user(
 
     if not user:
         # IMPROVEMENT: Added logging for user not found
-        logger.warning(f"User search failed for admin {admin.username}: '{user_input}' not found")
+        logger.warning(
+            f"User search failed for admin {admin.username}: "
+            f"'{user_input}' not found"
+        )
 
-        # IMPROVEMENT: Using consistent error message format (same as grant flow)
+        # IMPROVEMENT: Using consistent error message format
         await message.answer(
             f"❌ **Пользователь не найден**\n\n"
             f"Не удалось найти: `{escape_markdown(user_input)}`\n\n"
@@ -111,13 +114,19 @@ async def process_search_user(
     bonus_service = BonusService(session)
     user_stats = await bonus_service.get_user_bonus_stats(user.id)
 
-    safe_username = escape_markdown(user.username) if user.username else str(user.telegram_id)
+    safe_username = (
+        escape_markdown(user.username)
+        if user.username
+        else str(user.telegram_id)
+    )
 
+    bonus_balance = format_balance(user_stats['total_bonus_balance'], decimals=2)
+    roi_earned = format_balance(user_stats['total_bonus_roi_earned'], decimals=2)
     text = (
         f"👤 **Бонусы пользователя @{safe_username}**\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"💰 Бонусный баланс: **{format_usdt(user_stats['total_bonus_balance'])} USDT**\n"
-        f"📈 Заработано ROI: **{format_usdt(user_stats['total_bonus_roi_earned'])} USDT**\n"
+        f"💰 Бонусный баланс: **{bonus_balance} USDT**\n"
+        f"📈 Заработано ROI: **{roi_earned} USDT**\n"
         f"🟢 Активных: **{user_stats['active_bonuses_count']}**\n"
         f"📋 Всего: **{user_stats['total_bonuses_count']}**\n\n"
     )
@@ -125,8 +134,16 @@ async def process_search_user(
     if user_stats.get("active_bonuses"):
         text += "**Активные бонусы:**\n"
         for bonus in user_stats["active_bonuses"][:5]:
-            progress = bonus.roi_progress_percent if hasattr(bonus, "roi_progress_percent") else 0
-            text += f"• ID `{bonus.id}`: {format_usdt(bonus.amount)} USDT (ROI: {progress:.0f}%)\n"
+            progress = (
+                bonus.roi_progress_percent
+                if hasattr(bonus, "roi_progress_percent")
+                else 0
+            )
+            bonus_line = (
+                f"• ID `{bonus.id}`: {format_usdt(bonus.amount)} USDT "
+                f"(ROI: {progress:.0f}%)\n"
+            )
+            text += bonus_line
 
     await state.set_state(BonusStates.menu)
     await message.answer(

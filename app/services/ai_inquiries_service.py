@@ -75,10 +75,13 @@ class AIInquiriesService:
         if status:
             valid_statuses = ["new", "in_progress", "closed"]
             if status.lower() not in valid_statuses:
+                error_msg = (
+                    f"❌ Неверный статус. "
+                    f"Допустимые: {', '.join(valid_statuses)}"
+                )
                 return {
                     "success": False,
-                    "error": (
-                        f"❌ Неверный статус. " f"Допустимые: {', '.join(valid_statuses)}" )
+                    "error": error_msg
                 }
             stmt = stmt.where(UserInquiry.status == status.lower())
 
@@ -183,7 +186,8 @@ class AIInquiriesService:
         inquiry = result.scalar_one_or_none()
 
         if not inquiry:
-            return {"success": False, "error": f"❌ Обращение ID {inquiry_id} не найдено"}
+            error_msg = f"❌ Обращение ID {inquiry_id} не найдено"
+            return {"success": False, "error": error_msg}
 
         # Get user info
         user_info = "Неизвестен"
@@ -217,10 +221,19 @@ class AIInquiriesService:
                 if msg.sender_type == "user"
                 else "👨‍💼 Админ"
             )
+            text_preview = (
+                msg.message_text[:200] +
+                ("..." if len(msg.message_text) > 200 else "")
+            )
+            time_str = (
+                msg.created_at.strftime("%d.%m %H:%M")
+                if msg.created_at else "—"
+            )
             messages_list.append({
                 "sender": sender,
-                "text": msg.message_text[:200] + ("..." if len(msg.message_text) > 200 else ""),
-                "time": msg.created_at.strftime("%d.%m %H:%M") if msg.created_at else "—", })
+                "text": text_preview,
+                "time": time_str,
+            })
         return {
             "success": True,
             "inquiry": {
@@ -273,13 +286,18 @@ class AIInquiriesService:
         inquiry = result.scalar_one_or_none()
 
         if not inquiry:
-            return {"success": False, "error": f"❌ Обращение ID {inquiry_id} не найдено"}
+            error_msg = f"❌ Обращение ID {inquiry_id} не найдено"
+            return {"success": False, "error": error_msg}
         if inquiry.status == InquiryStatus.CLOSED:
-            return {"success": False, "error": "❌ Это обращение уже закрыто"}
+            error_msg = "❌ Это обращение уже закрыто"
+            return {"success": False, "error": error_msg}
 
         if (inquiry.assigned_admin_id and
                 inquiry.assigned_admin_id != admin.id):
-            return {"success": False, "error": "❌ Обращение уже назначено другому админу"}
+            error_msg = (
+                "❌ Обращение уже назначено другому админу"
+            )
+            return {"success": False, "error": error_msg}
 
         # Assign to admin
         inquiry.status = InquiryStatus.IN_PROGRESS
@@ -297,16 +315,22 @@ class AIInquiriesService:
                 else f"ID:{inquiry.user.telegram_id}"
             )
 
-        logger.info(
-            f"AI INQUIRIES: Admin {admin.telegram_id} (@{admin.username}) "
-            f"took inquiry {inquiry_id} from {user_info}"
+        log_msg = (
+            f"AI INQUIRIES: Admin {admin.telegram_id} "
+            f"(@{admin.username}) took inquiry {inquiry_id} "
+            f"from {user_info}"
         )
+        logger.info(log_msg)
         return {
             "success": True,
             "inquiry_id": inquiry_id,
             "user": user_info,
             "question": inquiry.initial_question[:100] + "...",
-            "admin": f"@{admin.username}" if admin.username else str(admin.telegram_id),
+            "admin": (
+                f"@{admin.username}"
+                if admin.username
+                else str(admin.telegram_id)
+            ),
             "message": f"✅ Обращение #{inquiry_id} взято в работу"
         }
 
@@ -335,11 +359,13 @@ class AIInquiriesService:
             return {"success": False, "error": "❌ Бот не инициализирован"}
 
         if not message or len(message) < 3:
+            error_msg = (
+                "❌ Сообщение должно содержать "
+                "минимум 3 символа"
+            )
             return {
                 "success": False,
-                "error": (
-                    "❌ Сообщение должно содержать минимум 3 символа"
-                )
+                "error": error_msg
             }
 
         # Get inquiry
@@ -351,14 +377,11 @@ class AIInquiriesService:
         inquiry = result.scalar_one_or_none()
 
         if not inquiry:
-            return {"success": False, "error": f"❌ Обращение ID {inquiry_id} не найдено"}
+            error_msg = f"❌ Обращение ID {inquiry_id} не найдено"
+            return {"success": False, "error": error_msg}
         if inquiry.status == InquiryStatus.CLOSED:
-            return {
-                "success": False,
-                "error": (
-                    "❌ Нельзя ответить на закрытое обращение"
-                )
-            }
+            error_msg = "❌ Нельзя ответить на закрытое обращение"
+            return {"success": False, "error": error_msg}
 
         # Auto-assign if not assigned
         if not inquiry.assigned_admin_id:
@@ -378,10 +401,16 @@ class AIInquiriesService:
         await self.session.commit()
 
         # Send message to user
-        admin_name = f"@{admin.username}" if admin.username else "Администратор"
+        admin_name = (
+            f"@{admin.username}"
+            if admin.username
+            else "Администратор"
+        )
         formatted_message = (
-            f"📬 **Ответ на ваше обращение**\n" f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"{message}\n\n" f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            f"📬 **Ответ на ваше обращение**\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+            f"{message}\n\n"
+            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
             f"_От: {admin_name}_"
         )
 
@@ -392,8 +421,10 @@ class AIInquiriesService:
                 parse_mode="Markdown",
             )
         except Exception as e:
-            logger.error(f"Failed to send reply to inquiry {inquiry_id}: {e}")
-            return {"success": False, "error": f"❌ Не удалось отправить: {str(e)}"}
+            error_log = f"Failed to send reply to inquiry {inquiry_id}: {e}"
+            logger.error(error_log)
+            error_msg = f"❌ Не удалось отправить: {str(e)}"
+            return {"success": False, "error": error_msg}
 
         # Get user info
         user_info = "Неизвестен"
@@ -404,15 +435,17 @@ class AIInquiriesService:
                 else f"ID:{inquiry.user.telegram_id}"
             )
 
-        logger.info(
-            f"AI INQUIRIES: Admin {admin.telegram_id} replied to "
-            f"inquiry {inquiry_id}: {message[:50]}..."
+        log_msg = (
+            f"AI INQUIRIES: Admin {admin.telegram_id} "
+            f"replied to inquiry {inquiry_id}: {message[:50]}..."
         )
+        logger.info(log_msg)
         return {
             "success": True,
             "inquiry_id": inquiry_id,
             "user": user_info,
-            "message_sent": ( message[:100] + ("..." if len(message) > 100 else "")
+            "message_sent": (
+                message[:100] + ("..." if len(message) > 100 else "")
             ),
             "message": "✅ Ответ отправлен пользователю"
         }
@@ -446,7 +479,8 @@ class AIInquiriesService:
         inquiry = result.scalar_one_or_none()
 
         if not inquiry:
-            return {"success": False, "error": f"❌ Обращение ID {inquiry_id} не найдено"}
+            error_msg = f"❌ Обращение ID {inquiry_id} не найдено"
+            return {"success": False, "error": error_msg}
         if inquiry.status == InquiryStatus.CLOSED:
             return {"success": False, "error": "❌ Обращение уже закрыто"}
 
@@ -476,15 +510,20 @@ class AIInquiriesService:
                 else f"ID:{inquiry.user.telegram_id}"
             )
 
-        logger.info(
-            f"AI INQUIRIES: Admin {admin.telegram_id} closed "
-            f"inquiry {inquiry_id}: {reason or 'no reason'}"
+        log_msg = (
+            f"AI INQUIRIES: Admin {admin.telegram_id} "
+            f"closed inquiry {inquiry_id}: {reason or 'no reason'}"
         )
+        logger.info(log_msg)
         return {
             "success": True,
             "inquiry_id": inquiry_id,
             "user": user_info,
             "reason": reason,
-            "admin": f"@{admin.username}" if admin.username else str(admin.telegram_id),
+            "admin": (
+                f"@{admin.username}"
+                if admin.username
+                else str(admin.telegram_id)
+            ),
             "message": f"✅ Обращение #{inquiry_id} закрыто"
         }

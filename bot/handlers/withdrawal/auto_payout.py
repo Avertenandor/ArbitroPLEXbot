@@ -15,6 +15,7 @@ from sqlalchemy import select
 from app.models.enums import TransactionStatus
 from app.models.transaction import Transaction
 from app.utils.security import mask_address
+from bot.utils.formatters import format_balance, format_wallet_short
 
 
 async def _safe_process_auto_payout(
@@ -78,8 +79,8 @@ async def process_auto_payout(
                     chat_id=telegram_id,
                     text=(
                         f"✅ *Выплата отправлена!*\n\n"
-                        f"💰 Получено: `{amount} USDT`\n"
-                        f"💳 Кошелек: `{to_address[:6]}...{to_address[-4:]}`\n"
+                        f"💰 Получено: `{format_balance(amount, decimals=2)} USDT`\n"
+                        f"💳 Кошелек: `{format_wallet_short(to_address)}`\n"
                         f"🔗 TX: [Посмотреть транзакцию](https://bscscan.com/tx/{result['tx_hash']})\n\n"
                         f"🤝 Спасибо за ваше доверие к ArbitroPLEXbot!"
                     ),

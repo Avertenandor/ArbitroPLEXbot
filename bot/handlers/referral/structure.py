@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.services.referral_service import ReferralService
 from bot.keyboards.reply import referral_keyboard
-from bot.utils.formatters import format_usdt
+from bot.utils.formatters import format_balance
 
 
 router = Router(name="referral_structure")
@@ -60,7 +60,7 @@ async def handle_who_invited_me(
             text += (
                 f"*Уровень {level}:* @{username}\n"
                 f"   └ {level_desc}\n"
-                f"   └ Вы принесли им: *{format_usdt(earned)} USDT*\n\n"
+                f"   └ Вы принесли им: *{format_balance(earned, 2)} USDT*\n\n"
             )
 
         text += (
@@ -120,7 +120,7 @@ async def handle_my_structure(
             is_last = (i == len(result["referrals"]) - 1) and l1_count <= 5
             prefix = "│   └──" if is_last else "│   ├──"
             status = "🟢" if earned > 0 else "⚪"
-            text += f"{prefix} {status} @{ref_name} (+{format_usdt(earned)})\n"
+            text += f"{prefix} {status} @{ref_name} (+{format_balance(earned, 2)})\n"
 
         if l1_count > 5:
             text += f"│   └── _...и ещё {l1_count - 5} чел._\n"
@@ -177,7 +177,7 @@ async def handle_my_structure(
     total = l1_count + l2_count + l3_count
     text += "\n━━━━━━━━━━━━━━━━━━━━━━\n"
     text += f"📊 *Итого:* {total} партнёров\n"
-    text += f"💰 *Заработано:* {format_usdt(stats['total_earned'])} USDT\n"
+    text += f"💰 *Заработано:* {format_balance(stats['total_earned'], 2)} USDT\n"
     text += "\n🟢 = активный (есть доход)  ⚪ = новый"
 
     await message.answer(

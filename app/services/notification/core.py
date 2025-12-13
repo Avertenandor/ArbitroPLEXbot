@@ -60,10 +60,11 @@ class NotificationService:
             try:
                 await redis_client.ping()
                 redis_available = True
-            except Exception:
+            except (ConnectionError, TimeoutError, OSError) as error:
                 redis_available = False
                 logger.warning(
-                    "R11-3: Redis unavailable, will use PostgreSQL fallback"
+                    f"R11-3: Redis unavailable ({type(error).__name__}: {error}), "
+                    f"will use PostgreSQL fallback"
                 )
 
         # R11-3: If Redis is unavailable, write to PostgreSQL fallback
@@ -101,6 +102,11 @@ class NotificationService:
                         f"R11-3: Cannot queue notification for unknown user "
                         f"{user_telegram_id}"
                     )
+            except (ConnectionError, TimeoutError) as fallback_error:
+                logger.error(
+                    f"R11-3: Database connection error while writing to PostgreSQL fallback: "
+                    f"{fallback_error}"
+                )
             except Exception as fallback_error:
                 logger.error(
                     f"R11-3: Failed to write to PostgreSQL fallback: {fallback_error}",
@@ -127,12 +133,20 @@ class NotificationService:
                     logger.info(
                         f"User {user_telegram_id} unblocked the bot, flag reset"
                     )
+            except (ConnectionError, TimeoutError) as reset_error:
+                # Don't fail notification if database operation fails
+                logger.warning(
+                    f"Failed to reset bot_blocked flag due to connection error: {reset_error}"
+                )
             except Exception as reset_error:
-                # Don't fail notification if flag reset fails
-                logger.warning(f"Failed to reset bot_blocked flag: {reset_error}")
+                # Don't fail notification if flag reset fails for other reasons
+                logger.warning(
+                    f"Failed to reset bot_blocked flag: {reset_error}",
+                    exc_info=True
+                )
 
             return True
-        except Exception as e:
+        except Exception as error:
             # R8-2: Improved 403 error handling with specific TelegramAPIError check
             from datetime import UTC, datetime
 
@@ -140,15 +154,15 @@ class NotificationService:
 
             # Check for specific "bot was blocked by the user" error
             is_bot_blocked = False
-            if isinstance(e, TelegramAPIError):
+            if isinstance(error, TelegramAPIError):
                 # Check error code and message
-                if e.error_code == 403:
-                    error_message = str(e).lower()
+                if error.error_code == 403:
+                    error_message = str(error).lower()
                     if "bot was blocked by the user" in error_message or "blocked" in error_message:
                         is_bot_blocked = True
             else:
                 # Fallback for non-TelegramAPIError exceptions
-                error_str = str(e).lower()
+                error_str = str(error).lower()
                 if "403" in error_str or "forbidden" in error_str:
                     if "blocked" in error_str or "bot was blocked" in error_str:
                         is_bot_blocked = True
@@ -175,9 +189,14 @@ class NotificationService:
                         logger.info(
                             f"Marked user {user_telegram_id} as bot_blocked"
                         )
+                except (ConnectionError, TimeoutError) as update_error:
+                    logger.error(
+                        f"Failed to mark user as bot_blocked due to connection error: {update_error}"
+                    )
                 except Exception as update_error:
                     logger.error(
-                        f"Failed to mark user as bot_blocked: {update_error}"
+                        f"Failed to mark user as bot_blocked: {update_error}",
+                        exc_info=True
                     )
 
                 # Don't save to failed notifications for blocked users
@@ -185,7 +204,7 @@ class NotificationService:
                 return False
 
             logger.error(
-                f"Failed to send notification: {e}",
+                f"Failed to send notification: {error}",
                 extra={"user_id": user_telegram_id},
             )
 
@@ -194,7 +213,7 @@ class NotificationService:
                 user_telegram_id,
                 "text_message",
                 message,
-                str(e),
+                str(error),
                 critical,
             )
             return False
@@ -238,12 +257,16 @@ class NotificationService:
                 metadata={"file_id": file_id},
             )
             return False
-        except Exception as e:
+        except Exception as error:
+            logger.error(
+                f"Failed to send photo to {user_telegram_id}: {error}",
+                exc_info=True
+            )
             await self._save_failed_notification(
                 user_telegram_id,
                 "photo",
                 caption or "",
-                str(e),
+                str(error),
                 metadata={"file_id": file_id},
             )
             return False
@@ -310,8 +333,14 @@ class NotificationService:
                         default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN),
                     )
                     should_close = True
-                except Exception as e:
-                    logger.error(f"Failed to create fallback bot instance: {e}")
+                except (ValueError, TypeError) as error:
+                    logger.error(f"Invalid bot configuration: {error}")
+                    return False
+                except Exception as error:
+                    logger.error(
+                        f"Failed to create fallback bot instance: {error}",
+                        exc_info=True
+                    )
                     return False
 
             try:
@@ -322,6 +351,14 @@ class NotificationService:
                 if should_close and bot:
                     await bot.session.close()
 
-        except Exception as e:
-            logger.error(f"Error in notify_user: {e}", exc_info=True)
+        except (ConnectionError, TimeoutError) as error:
+            logger.error(
+                f"Connection error in notify_user for user {user_id}: {error}"
+            )
+            return False
+        except Exception as error:
+            logger.error(
+                f"Unexpected error in notify_user for user {user_id}: {error}",
+                exc_info=True
+            )
             return False

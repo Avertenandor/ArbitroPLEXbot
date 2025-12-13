@@ -30,8 +30,9 @@ from bot.utils.text_utils import safe_answer
 router = Router(name="admin_wallet_management")
 
 
-# NOTE: Handler "🔐 Управление кошельком" is in navigation.py with require_super check
-# This function is called from there after permission validation
+# NOTE: Handler "🔐 Управление кошельком" is in navigation.py
+# with require_super check. This function is called from there
+# after permission validation
 async def show_wallet_dashboard(
     message: Message,
     session: AsyncSession,
@@ -108,12 +109,13 @@ async def _show_dashboard(message: Message, state: FSMContext) -> None:
             f"💎 PLEX: {fmt_plex(hot_plex_bal)}\n"
         )
     else:
-        text += (
+        hot_wallet_setup_msg = (
             "🔥 HOT WALLET (выплатной)\n"
             "❌ Не настроен\n"
             "Для настройки нажмите:\n"
             "📤 Настроить кошелек для выдачи\n"
         )
+        text += hot_wallet_setup_msg
 
     # Cold/Input Wallet section
     if has_cold:
@@ -129,7 +131,11 @@ async def _show_dashboard(message: Message, state: FSMContext) -> None:
     text += "\n👇 Выберите действие:"
 
     # Use keyboard without Send button if hot wallet not configured
-    keyboard = wallet_dashboard_keyboard() if hot_configured else wallet_dashboard_no_hot_keyboard()
+    keyboard = (
+        wallet_dashboard_keyboard()
+        if hot_configured
+        else wallet_dashboard_no_hot_keyboard()
+    )
     await safe_answer(message, text, parse_mode=None, reply_markup=keyboard)
 
 
@@ -157,9 +163,17 @@ async def show_receive_info(message: Message):
 
     # Hot Wallet section
     if hot_address:
-        text += f"🔥 Hot Wallet (для пополнения газа):\n{hot_address}\n\n"
+        hot_receive_msg = (
+            f"🔥 Hot Wallet (для пополнения газа):\n"
+            f"{hot_address}\n\n"
+        )
+        text += hot_receive_msg
     else:
-        text += "🔥 Hot Wallet (для пополнения газа):\n❌ Не настроен\n\n"
+        hot_not_configured = (
+            "🔥 Hot Wallet (для пополнения газа):\n"
+            "❌ Не настроен\n\n"
+        )
+        text += hot_not_configured
 
     # Input Wallet section (show if different from hot or if hot not configured)
     show_cold = False
@@ -183,8 +197,13 @@ async def go_to_settings(message: Message, state: FSMContext, **data: Any):
     await handle_wallet_menu(message, state, **data)
 
 
-@router.message(F.text == "📥 Настроить кошелек для входа", WalletManagementStates.menu)
-async def dashboard_input_wallet_setup(message: Message, state: FSMContext, **data: Any):
+@router.message(
+    F.text == "📥 Настроить кошелек для входа",
+    WalletManagementStates.menu,
+)
+async def dashboard_input_wallet_setup(
+    message: Message, state: FSMContext, **data: Any
+):
     """Start input wallet setup from dashboard."""
     from bot.handlers.admin.wallet_key_setup import start_input_wallet_setup
 
@@ -193,8 +212,13 @@ async def dashboard_input_wallet_setup(message: Message, state: FSMContext, **da
     await start_input_wallet_setup(message, state, **data)
 
 
-@router.message(F.text == "📤 Настроить кошелек для выдачи", WalletManagementStates.menu)
-async def dashboard_output_wallet_setup(message: Message, state: FSMContext, **data: Any):
+@router.message(
+    F.text == "📤 Настроить кошелек для выдачи",
+    WalletManagementStates.menu,
+)
+async def dashboard_output_wallet_setup(
+    message: Message, state: FSMContext, **data: Any
+):
     """Start output wallet setup from dashboard."""
     from bot.handlers.admin.wallet_key_setup import start_output_wallet_setup
 
@@ -212,16 +236,22 @@ async def start_send_flow(message: Message, state: FSMContext):
     # Safety check - ensure hot wallet is configured
     bs = get_blockchain_service()
     if not bs or not bs.wallet_address:
-        await message.answer(
+        hot_wallet_error = (
             "❌ Hot wallet не настроен.\n"
-            "Нажмите '📤 Настроить кошелек для выдачи' для настройки.",
+            "Нажмите '📤 Настроить кошелек для выдачи' "
+            "для настройки."
         )
+        await message.answer(hot_wallet_error)
         return
 
     await state.set_state(WalletManagementStates.selecting_currency_to_send)
+    send_flow_msg = (
+        "📤 Отправка средств (Hot Wallet)\n\n"
+        "Выберите валюту для отправки:"
+    )
     await safe_answer(
         message,
-        "📤 Отправка средств (Hot Wallet)\n\nВыберите валюту для отправки:",
+        send_flow_msg,
         parse_mode=None,
         reply_markup=wallet_currency_selection_keyboard(),
     )
@@ -241,9 +271,13 @@ async def select_currency(message: Message, state: FSMContext):
     await state.update_data(send_currency=currency)
     await state.set_state(WalletManagementStates.input_address_to_send)
 
+    address_input_msg = (
+        f"📤 Отправка {currency}\n\n"
+        f"Введите адрес получателя (BSC/BEP-20):"
+    )
     await safe_answer(
         message,
-        f"📤 Отправка {currency}\n\nВведите адрес получателя (BSC/BEP-20):",
+        address_input_msg,
         parse_mode=None,
         reply_markup=wallet_back_keyboard(),
     )
@@ -259,11 +293,17 @@ async def input_address(message: Message, state: FSMContext):
     address = message.text.strip()
     bs = get_blockchain_service()
     if not bs:
-        await message.answer("❌ Сервис блокчейна недоступен.", reply_markup=wallet_back_keyboard())
+        await message.answer(
+            "❌ Сервис блокчейна недоступен.",
+            reply_markup=wallet_back_keyboard(),
+        )
         return
 
     if not await bs.validate_wallet_address(address):
-        await message.answer("❌ Неверный формат адреса. Попробуйте еще раз:", reply_markup=wallet_back_keyboard())
+        await message.answer(
+            "❌ Неверный формат адреса. Попробуйте еще раз:",
+            reply_markup=wallet_back_keyboard(),
+        )
         return
 
     await state.update_data(send_address=address)
@@ -271,9 +311,14 @@ async def input_address(message: Message, state: FSMContext):
     currency = data["send_currency"]
 
     await state.set_state(WalletManagementStates.input_amount_to_send)
+    amount_input_msg = (
+        f"📤 Отправка {currency}\n"
+        f"Получатель: {address}\n\n"
+        f"Введите сумму или выберите %:"
+    )
     await safe_answer(
         message,
-        f"📤 Отправка {currency}\nПолучатель: {address}\n\nВведите сумму или выберите %:",
+        amount_input_msg,
         parse_mode=None,
         reply_markup=wallet_amount_keyboard(),
     )
@@ -323,7 +368,9 @@ async def process_amount_input(message: Message, state: FSMContext):
             if amount <= 0:
                 raise ValueError
         except ValueError:
-            await message.answer("❌ Неверный формат суммы. Введите число.")
+            await message.answer(
+                "❌ Неверный формат суммы. Введите число."
+            )
             return
 
     await state.update_data(send_amount=str(amount))
@@ -350,7 +397,10 @@ async def _show_confirmation(message: Message, state: FSMContext):
     await safe_answer(message, text, parse_mode=None, reply_markup=wallet_confirm_keyboard())
 
 
-@router.message(F.text == "✅ Подтвердить отправку", WalletManagementStates.confirm_transaction)
+@router.message(
+    F.text == "✅ Подтвердить отправку",
+    WalletManagementStates.confirm_transaction,
+)
 async def execute_transaction(message: Message, state: FSMContext):
     """Execute the transaction."""
     from decimal import Decimal
@@ -361,9 +411,11 @@ async def execute_transaction(message: Message, state: FSMContext):
     # Keep Decimal precision for blockchain transaction
     amount = Decimal(data["send_amount"])
 
-    await message.answer(
-        "⏳ Отправка транзакции...\nОжидайте подтверждения сети.",
+    transaction_wait_msg = (
+        "⏳ Отправка транзакции...\n"
+        "Ожидайте подтверждения сети."
     )
+    await message.answer(transaction_wait_msg)
 
     bs = get_blockchain_service()
 

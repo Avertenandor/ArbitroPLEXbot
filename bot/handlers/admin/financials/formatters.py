@@ -5,7 +5,11 @@ Contains helper functions to format financial data for display.
 """
 
 from app.services.financial_report_service import UserDetailedFinancialDTO
-from bot.utils.formatters import format_tx_hash_with_link
+from bot.utils.formatters import (
+    format_balance,
+    format_tx_hash_with_link,
+    format_wallet_short,
+)
 from bot.utils.pagination import PaginationBuilder
 
 
@@ -22,13 +26,13 @@ def format_user_financial_detail(dto: UserDetailedFinancialDTO) -> str:
         f"📂 **Детальная финансовая карточка**\n\n"
         f"👤 Пользователь: {username}\n"
         f"🆔 User ID: `{dto.user_id}`\n"
-        f"💳 Кошелек: `{dto.current_wallet[:10]}...{dto.current_wallet[-8:]}`\n\n"
+        f"💳 Кошелек: `{format_wallet_short(dto.current_wallet)}`\n\n"
         f"💰 **Финансовая сводка:**\n"
-        f"├ Депозиты: `{float(dto.total_deposited):.2f}` USDT\n"
-        f"├ Заработано: `{float(dto.total_earned):.2f}` USDT\n"
-        f"├ Выведено: `{float(dto.total_withdrawn):.2f}` USDT\n"
-        f"├ Баланс: `{float(dto.balance):.2f}` USDT\n"
-        f"└ Ожидает: `{float(dto.pending_earnings):.2f}` USDT\n\n"
+        f"├ Депозиты: `{format_balance(dto.total_deposited, decimals=2)}` USDT\n"
+        f"├ Заработано: `{format_balance(dto.total_earned, decimals=2)}` USDT\n"
+        f"├ Выведено: `{format_balance(dto.total_withdrawn, decimals=2)}` USDT\n"
+        f"├ Баланс: `{format_balance(dto.balance, decimals=2)}` USDT\n"
+        f"└ Ожидает: `{format_balance(dto.pending_earnings, decimals=2)}` USDT\n\n"
     )
 
     # Последние 5 депозитов
@@ -38,8 +42,8 @@ def format_user_financial_detail(dto: UserDetailedFinancialDTO) -> str:
             status_emoji = "✅" if dep.is_completed else "⏳"
             tx_link = format_tx_hash_with_link(dep.tx_hash) if dep.tx_hash else "—"
             text += (
-                f"{i}. {status_emoji} Lvl {dep.level}: `{float(dep.amount):.2f}` USDT\n"
-                f"   ROI: `{float(dep.roi_paid):.2f}`/`{float(dep.roi_cap):.2f}` | TX: {tx_link}\n"
+                f"{i}. {status_emoji} Lvl {dep.level}: `{format_balance(dep.amount, decimals=2)}` USDT\n"
+                f"   ROI: `{format_balance(dep.roi_paid, decimals=2)}`/`{format_balance(dep.roi_cap, decimals=2)}` | TX: {tx_link}\n"
             )
         text += f"\n_Всего депозитов: {len(dto.deposits)}_\n\n"
     else:
@@ -52,7 +56,7 @@ def format_user_financial_detail(dto: UserDetailedFinancialDTO) -> str:
             status_emoji = "✅" if wd.status == "confirmed" else "⏳"
             tx_link = format_tx_hash_with_link(wd.tx_hash) if wd.tx_hash else "—"
             text += (
-                f"{i}. {status_emoji} `{float(wd.amount):.2f}` USDT\n"
+                f"{i}. {status_emoji} `{format_balance(wd.amount, decimals=2)}` USDT\n"
                 f"   TX: {tx_link}\n"
             )
         text += f"\n_Всего выводов: {len(dto.withdrawals)}_\n\n"
@@ -61,7 +65,8 @@ def format_user_financial_detail(dto: UserDetailedFinancialDTO) -> str:
 
     # История смены кошельков
     if dto.wallet_history:
-        text += f"💳 **История кошельков:** {len(dto.wallet_history)} изменений\n\n"
+        wallet_count = len(dto.wallet_history)
+        text += f"💳 **История кошельков:** {wallet_count} изменений\n\n"
     else:
         text += "💳 Кошелек не менялся\n\n"
 
@@ -85,13 +90,13 @@ def format_deposits_page(
         date_str = dep.created_at.strftime("%Y-%m-%d %H:%M")
 
         text += (
-            f"{i}. {status_emoji} **Lvl {dep.level}** | `{float(dep.amount):.2f}` USDT\n"
+            f"{i}. {status_emoji} **Lvl {dep.level}** | `{format_balance(dep.amount, decimals=2)}` USDT\n"
             f"   Дата: {date_str}\n"
-            f"   ROI: `{float(dep.roi_paid):.2f}`/`{float(dep.roi_cap):.2f}` USDT"
+            f"   ROI: `{format_balance(dep.roi_paid, decimals=2)}`/`{format_balance(dep.roi_cap, decimals=2)}` USDT"
         )
 
         if dep.roi_percent:
-            text += f" ({float(dep.roi_percent):.1f}%)\n"
+            text += f" ({format_balance(dep.roi_percent, decimals=1)}%)\n"
         else:
             text += "\n"
 
@@ -115,7 +120,7 @@ def format_withdrawals_page(
         date_str = wd.created_at.strftime("%Y-%m-%d %H:%M")
 
         text += (
-            f"{i}. {status_emoji} `{float(wd.amount):.2f}` USDT\n"
+            f"{i}. {status_emoji} `{format_balance(wd.amount, decimals=2)}` USDT\n"
             f"   Дата: {date_str}\n"
             f"   Статус: {wd.status}\n"
             f"   TX: {tx_link}\n\n"

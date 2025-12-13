@@ -20,7 +20,7 @@ from bot.handlers.admin.utils.admin_checks import (
     get_admin_or_deny,
     get_admin_or_deny_callback,
 )
-from bot.utils.formatters import format_usdt
+from bot.utils.formatters import format_balance, format_usdt
 from bot.utils.text_utils import escape_markdown
 
 from ..constants import BONUS_REASON_TEMPLATES
@@ -143,8 +143,8 @@ async def process_grant_user(
         f"👤 Username: @{safe_username}\n"
         f"🆔 Telegram ID: `{user.telegram_id}`\n"
         f"📊 Внутренний ID: `{user.id}`\n\n"
-        f"💰 **Бонусный баланс:** {format_usdt(user_stats['total_bonus_balance'])} USDT\n"
-        f"📈 **Заработано ROI:** {format_usdt(user_stats['total_bonus_roi_earned'])} USDT\n"
+        f"💰 **Бонусный баланс:** {format_balance(user_stats['total_bonus_balance'], decimals=2)} USDT\n"
+        f"📈 **Заработано ROI:** {format_balance(user_stats['total_bonus_roi_earned'], decimals=2)} USDT\n"
         f"🟢 **Активных бонусов:** {user_stats['active_bonuses_count']}\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"**Шаг 2 из 4:** Выберите сумму бонуса"
@@ -298,18 +298,25 @@ async def show_grant_confirmation(target, state: FSMContext, admin) -> None:
 
     amount = Decimal(state_data["amount"])
     roi_cap = amount * 5
-    safe_username = escape_markdown(state_data.get("target_username", ""))
+    safe_username = escape_markdown(
+        state_data.get("target_username", "")
+    )
+    safe_reason = escape_markdown(state_data['reason'])
+    safe_admin = escape_markdown(
+        admin.username or str(admin.telegram_id)
+    )
 
     text = (
         f"🎁 **Подтверждение начисления**\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"**Шаг 4 из 4:** Проверьте данные\n\n"
         f"👤 **Получатель:** @{safe_username}\n"
-        f"🆔 **Telegram ID:** `{state_data['target_telegram_id']}`\n\n"
+        f"🆔 **Telegram ID:** "
+        f"`{state_data['target_telegram_id']}`\n\n"
         f"💰 **Сумма бонуса:** {format_usdt(amount)} USDT\n"
         f"🎯 **ROI Cap (500%):** {format_usdt(roi_cap)} USDT\n\n"
-        f"📝 **Причина:** _{escape_markdown(state_data['reason'])}_\n\n"
-        f"👤 **Админ:** @{escape_markdown(admin.username or str(admin.telegram_id))}\n\n"
+        f"📝 **Причина:** _{safe_reason}_\n\n"
+        f"👤 **Админ:** @{safe_admin}\n\n"
         f"⚠️ **Подтвердите начисление бонуса**"
     )
 
@@ -317,15 +324,32 @@ async def show_grant_confirmation(target, state: FSMContext, admin) -> None:
 
     # Check if target is a callback message that can be edited
     # For regular messages, always use answer()
+    keyboard = confirm_bonus_keyboard()
     if hasattr(target, "message") and target.message:
         # This is a CallbackQuery - edit the message
-        await target.message.edit_text(text, parse_mode="Markdown", reply_markup=confirm_bonus_keyboard())
-    elif hasattr(target, "edit_text") and target.from_user and target.from_user.is_bot:
+        await target.message.edit_text(
+            text,
+            parse_mode="Markdown",
+            reply_markup=keyboard
+        )
+    elif (
+        hasattr(target, "edit_text")
+        and target.from_user
+        and target.from_user.is_bot
+    ):
         # This is a bot message - can be edited
-        await target.edit_text(text, parse_mode="Markdown", reply_markup=confirm_bonus_keyboard())
+        await target.edit_text(
+            text,
+            parse_mode="Markdown",
+            reply_markup=keyboard
+        )
     else:
         # Regular user message - send new message
-        await target.answer(text, parse_mode="Markdown", reply_markup=confirm_bonus_keyboard())
+        await target.answer(
+            text,
+            parse_mode="Markdown",
+            reply_markup=keyboard
+        )
 
 
 @router.callback_query(BonusStates.grant_confirm, F.data == "bonus_do_grant")
@@ -356,8 +380,9 @@ async def execute_grant_bonus(
 
     if error:
         logger.error(
-            f"Failed to grant bonus: user_id={user_id}, amount={amount}, "
-            f"reason={reason}, admin_id={admin.id}, error={error}"
+            f"Failed to grant bonus: user_id={user_id}, "
+            f"amount={amount}, reason={reason}, "
+            f"admin_id={admin.id}, error={error}"
         )
         safe_error = escape_markdown(str(error))
         await callback.message.edit_text(
@@ -369,10 +394,16 @@ async def execute_grant_bonus(
 
     await session.commit()
 
-    safe_username = escape_markdown(state_data.get("target_username", ""))
+    safe_username = escape_markdown(
+        state_data.get("target_username", "")
+    )
     roi_cap = amount * 5
-
     safe_reason = escape_markdown(reason)
+
+    bonus_info = (
+        f"ℹ️ _Бонус начнёт участвовать в начислении ROI "
+        f"со следующего расчётного периода._"
+    )
     text = (
         f"✅ **Бонус успешно начислен!**\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -381,8 +412,7 @@ async def execute_grant_bonus(
         f"🎯 ROI Cap: **{format_usdt(roi_cap)} USDT**\n"
         f"📝 Причина: {safe_reason}\n\n"
         f"🆔 ID бонуса: `{bonus.id}`\n\n"
-        f"ℹ️ _Бонус начнёт участвовать в начислении ROI "
-        f"со следующего расчётного периода._"
+        f"{bonus_info}"
     )
 
     await state.set_state(BonusStates.menu)
@@ -393,7 +423,9 @@ async def execute_grant_bonus(
     )
 
     logger.info(
-        f"Admin {admin.telegram_id} (@{admin.username}) granted bonus {amount} USDT to user {user_id}: {reason}"
+        f"Admin {admin.telegram_id} (@{admin.username}) "
+        f"granted bonus {amount} USDT "
+        f"to user {user_id}: {reason}"
     )
 
     await callback.answer("✅ Бонус начислен!")
@@ -407,8 +439,13 @@ async def edit_grant_data(
 ) -> None:
     """Вернуться к редактированию."""
     await state.set_state(BonusStates.grant_user)
+    edit_msg = (
+        "✏️ **Редактирование**\n\n"
+        "Начните заново — введите @username или "
+        "Telegram ID пользователя:"
+    )
     await callback.message.edit_text(
-        "✏️ **Редактирование**\n\nНачните заново — введите @username или Telegram ID пользователя:",
+        edit_msg,
         parse_mode="Markdown",
     )
     await callback.message.answer(

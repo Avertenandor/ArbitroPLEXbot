@@ -5,6 +5,7 @@ Handles wallet address changes with verification and history tracking.
 """
 
 from loguru import logger
+from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 try:
@@ -107,7 +108,17 @@ class UserWalletMixin:
                 f"User {user_id} changed wallet from {old_wallet} to {new_wallet_address}"
             )
             return True, ""
-        except Exception as e:
+        except IntegrityError as e:
             await self.session.rollback()
-            logger.error(f"Failed to change wallet for user {user_id}: {e}")
-            return False, f"Database error: {e}"
+            logger.error(
+                f"Integrity constraint violation when changing wallet for user {user_id}: {e}",
+                exc_info=True
+            )
+            return False, "Wallet address is already in use or violates database constraints"
+        except SQLAlchemyError as e:
+            await self.session.rollback()
+            logger.error(
+                f"Database error when changing wallet for user {user_id}: {e}",
+                exc_info=True
+            )
+            return False, f"Database error: {str(e)}"

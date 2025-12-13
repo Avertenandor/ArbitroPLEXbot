@@ -95,8 +95,12 @@ async def handle_master_key_input(
     )
 
     if error or not session_obj or not admin_obj:
+        error_msg = (
+            f"❌ {error or 'Ошибка аутентификации'}\n\n"
+            "Попробуйте ввести мастер-ключ еще раз:"
+        )
         await message.answer(
-            f"❌ {error or 'Ошибка аутентификации'}\n\nПопробуйте ввести мастер-ключ еще раз:",
+            error_msg,
             parse_mode="Markdown",
         )
         return
@@ -112,45 +116,118 @@ async def handle_master_key_input(
     if previous_state:
         await state.set_state(previous_state)
         # Clean up
-        await state.update_data(auth_previous_state=None, auth_redirect_message=None)
+        await state.update_data(
+            auth_previous_state=None, auth_redirect_message=None
+        )
 
-        logger.info(f"Admin {telegram_id} authenticated successfully, restoring state {previous_state}")
+        logger.info(
+            f"Admin {telegram_id} authenticated successfully, "
+            f"restoring state {previous_state}"
+        )
 
+        success_msg = (
+            "✅ **Аутентификация успешна!**\n\n"
+            "Вы вернулись в предыдущее меню. "
+            "Пожалуйста, повторите ваше действие."
+        )
         await message.answer(
-            "✅ **Аутентификация успешна!**\n\nВы вернулись в предыдущее меню. Пожалуйста, повторите ваше действие.",
+            success_msg,
             parse_mode="Markdown",
         )
         return
 
     # Attempt to redirect based on button text if no state was restored
     if redirect_message_text:
-        logger.info(f"Attempting to redirect admin {telegram_id} to '{redirect_message_text}'")
+        logger.info(
+            f"Attempting to redirect admin {telegram_id} "
+            f"to '{redirect_message_text}'"
+        )
         # Clean up
         await state.update_data(auth_redirect_message=None)
 
         # Menu handlers mapping: button_text -> (handler_function, requires_state)
         # Using lazy imports to avoid circular dependencies
         menu_handlers = {
-            "🆘 Техподдержка": ("bot.handlers.admin.support", "handle_admin_support_menu", True),
-            "💰 Управление депозитами": ("bot.handlers.admin.deposit_management", "show_deposit_management_menu", False),
-            "⚙️ Настроить уровни депозитов": ("bot.handlers.admin.deposit_settings", "show_deposit_settings", False),
-            "👥 Управление админами": ("bot.handlers.admin.admins", "show_admin_management", False),
-            "🚫 Управление черным списком": ("bot.handlers.admin.blacklist", "show_blacklist", False),
-            "🔐 Управление кошельком": ("bot.handlers.admin.wallet_management", "show_wallet_dashboard", True),
-            "💸 Заявки на вывод": ("bot.handlers.admin.panel.navigation", "handle_admin_withdrawals", False),
-            "📢 Рассылка": ("bot.handlers.admin.broadcast", "handle_start_broadcast", True),
-            "👥 Управление пользователями": ("bot.handlers.admin.panel.navigation", "handle_admin_users_menu", False),
-            "📊 Статистика": ("bot.handlers.admin.panel.statistics", "handle_admin_stats", False),
-            "🔑 Восстановление пароля": ("bot.handlers.admin.finpass_recovery", "show_recovery_requests", True),
-            "📋 Логи действий": ("bot.handlers.admin.action_logs", "handle_action_logs", False),
-            "⏰ Расписание задач": ("bot.handlers.admin.schedule_management", "show_schedule_management", True),
-            "👑 Админ-панель": (None, None, None),  # Just continue to show admin panel below
+            "🆘 Техподдержка": (
+                "bot.handlers.admin.support",
+                "handle_admin_support_menu",
+                True,
+            ),
+            "💰 Управление депозитами": (
+                "bot.handlers.admin.deposit_management",
+                "show_deposit_management_menu",
+                False,
+            ),
+            "⚙️ Настроить уровни депозитов": (
+                "bot.handlers.admin.deposit_settings",
+                "show_deposit_settings",
+                False,
+            ),
+            "👥 Управление админами": (
+                "bot.handlers.admin.admins",
+                "show_admin_management",
+                False,
+            ),
+            "🚫 Управление черным списком": (
+                "bot.handlers.admin.blacklist",
+                "show_blacklist",
+                False,
+            ),
+            "🔐 Управление кошельком": (
+                "bot.handlers.admin.wallet_management",
+                "show_wallet_dashboard",
+                True,
+            ),
+            "💸 Заявки на вывод": (
+                "bot.handlers.admin.panel.navigation",
+                "handle_admin_withdrawals",
+                False,
+            ),
+            "📢 Рассылка": (
+                "bot.handlers.admin.broadcast",
+                "handle_start_broadcast",
+                True,
+            ),
+            "👥 Управление пользователями": (
+                "bot.handlers.admin.panel.navigation",
+                "handle_admin_users_menu",
+                False,
+            ),
+            "📊 Статистика": (
+                "bot.handlers.admin.panel.statistics",
+                "handle_admin_stats",
+                False,
+            ),
+            "🔑 Восстановление пароля": (
+                "bot.handlers.admin.finpass_recovery",
+                "show_recovery_requests",
+                True,
+            ),
+            "📋 Логи действий": (
+                "bot.handlers.admin.action_logs",
+                "handle_action_logs",
+                False,
+            ),
+            "⏰ Расписание задач": (
+                "bot.handlers.admin.schedule_management",
+                "show_schedule_management",
+                True,
+            ),
+            "👑 Админ-панель": (
+                None,
+                None,
+                None,
+            ),  # Just continue to show admin panel below
         }
 
         # Special case: check for "Финансовая" in text
         handler_info = None
         if "Финансовая" in redirect_message_text:
-            handler_info = ("bot.handlers.admin.financials", "show_financial_list", True)
+            handler_info = (
+                "bot.handlers.admin.financials",
+                "show_financial_list",
+                True,
+            )
         else:
             handler_info = menu_handlers.get(redirect_message_text)
 
@@ -173,7 +250,10 @@ async def handle_master_key_input(
 
     await state.set_state(None)  # Clear state
 
-    logger.info(f"Admin {telegram_id} authenticated successfully, session_id={session_obj.id}")
+    logger.info(
+        f"Admin {telegram_id} authenticated successfully, "
+        f"session_id={session_obj.id}"
+    )
 
     # Show admin panel
     text = """
@@ -188,10 +268,12 @@ async def handle_master_key_input(
     telegram_id = message.from_user.id if message.from_user else None
     admin, is_super_admin = await get_admin_and_super_status(session, telegram_id, data)
 
+    is_extended = admin.is_extended_admin if admin else False
     await message.answer(
         text,
         parse_mode="Markdown",
         reply_markup=admin_keyboard(
-            is_super_admin=is_super_admin, is_extended_admin=admin.is_extended_admin if admin else False
+            is_super_admin=is_super_admin,
+            is_extended_admin=is_extended,
         ),
     )

@@ -145,8 +145,8 @@ class DistributedLock:
 
                 return bool(acquired)
 
-        except Exception as e:
-            logger.error(f"Error acquiring PostgreSQL advisory lock {key}: {e}")
+        except Exception as error:
+            logger.error(f"Error acquiring PostgreSQL advisory lock {key}: {error}")
             return False
 
     async def _release_postgresql_lock(self, key: str) -> bool:
@@ -175,8 +175,8 @@ class DistributedLock:
                 logger.debug(f"PostgreSQL advisory lock released: {key} (id={advisory_id})")
             return bool(released)
 
-        except Exception as e:
-            logger.error(f"Error releasing PostgreSQL advisory lock {key}: {e}")
+        except Exception as error:
+            logger.error(f"Error releasing PostgreSQL advisory lock {key}: {error}")
             return False
 
     async def acquire(
@@ -206,9 +206,9 @@ class DistributedLock:
                 return await self._acquire_redis_lock(
                     key, timeout, blocking, blocking_timeout
                 )
-            except Exception as e:
+            except Exception as error:
                 logger.warning(
-                    f"Redis lock failed for {key}, falling back to PostgreSQL: {e}"
+                    f"Redis lock failed for {key}, falling back to PostgreSQL: {error}"
                 )
 
         # Fallback to PostgreSQL
@@ -293,8 +293,8 @@ class DistributedLock:
                 logger.debug(f"Distributed lock not available: {key}")
                 return False
 
-        except Exception as e:
-            logger.error(f"Error acquiring distributed lock {key}: {e}")
+        except Exception as error:
+            logger.error(f"Error acquiring distributed lock {key}: {error}")
             return False  # Fail open
 
     async def release(self, key: str) -> bool:
@@ -317,9 +317,9 @@ class DistributedLock:
                 if deleted:
                     logger.debug(f"Distributed lock released: {key}")
                     return deleted > 0
-            except Exception as e:
+            except Exception as error:
                 logger.warning(
-                    f"Redis lock release failed for {key}, trying PostgreSQL: {e}"
+                    f"Redis lock release failed for {key}, trying PostgreSQL: {error}"
                 )
 
         # Fallback to PostgreSQL
@@ -346,9 +346,9 @@ class DistributedLock:
                 lock_key = f"lock:{key}"
                 exists = await self.redis_client.exists(lock_key)
                 return exists == 1
-            except Exception as e:
+            except Exception as error:
                 logger.warning(
-                    f"Redis lock check failed for {key}, trying PostgreSQL: {e}"
+                    f"Redis lock check failed for {key}, trying PostgreSQL: {error}"
                 )
 
         # Fallback to PostgreSQL
@@ -366,8 +366,8 @@ class DistributedLock:
                     await self._release_postgresql_lock(key)
                     return False
                 return True  # Couldn't acquire, so it's locked
-            except Exception as e:
-                logger.error(f"Error checking PostgreSQL lock {key}: {e}")
+            except Exception as error:
+                logger.error(f"Error checking PostgreSQL lock {key}: {error}")
 
         return False
 

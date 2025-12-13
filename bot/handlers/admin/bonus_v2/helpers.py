@@ -44,7 +44,13 @@ def get_bonus_status(bonus: "BonusCredit") -> str:
 def get_bonus_status_emoji(bonus: "BonusCredit") -> str:
     """Get status emoji for bonus."""
     status = get_bonus_status(bonus)
-    return {"active": "🟢", "completed": "✅", "cancelled": "❌", "inactive": "⚪"}.get(status, "⚪")
+    status_map = {
+        "active": "🟢",
+        "completed": "✅",
+        "cancelled": "❌",
+        "inactive": "⚪"
+    }
+    return status_map.get(status, "⚪")
 
 
 # ============ ROLE HELPERS ============
@@ -57,10 +63,13 @@ def get_role_display(role: str) -> str:
 
 def get_role_permissions(role: str) -> dict:
     """Получить права роли."""
-    return ROLE_PERMISSIONS.get(
-        role,
-        {"can_grant": False, "can_view": False, "can_cancel_any": False, "can_cancel_own": False},
-    )
+    default_permissions = {
+        "can_grant": False,
+        "can_view": False,
+        "can_cancel_any": False,
+        "can_cancel_own": False
+    }
+    return ROLE_PERMISSIONS.get(role, default_permissions)
 
 
 # ============ VALIDATION FUNCTIONS ============

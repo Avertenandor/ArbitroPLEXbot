@@ -12,7 +12,8 @@ def extract_level_type_from_button(text: str) -> str | None:
     Extract level type from button text.
 
     Args:
-        text: Button text like "🎯 Тестовый ($30-$100)" or "✅ Тестовый ($30-$100) - Активен"
+        text: Button text like "🎯 Тестовый ($30-$100)" or
+              "✅ Тестовый ($30-$100) - Активен"
 
     Returns:
         Level type (test, level_1, etc.) or None if not recognized
@@ -74,9 +75,17 @@ def validate_amount_input(text: str) -> tuple[bool, Decimal | None, str | None]:
 
         # Check if too many decimal places (max 2)
         if amount.as_tuple().exponent < -8:
-            return False, None, "Слишком много знаков после запятой (максимум 8)"
+            error_msg = (
+                "Слишком много знаков после запятой "
+                "(максимум 8)"
+            )
+            return False, None, error_msg
 
         return True, amount, None
 
     except (ValueError, ArithmeticError):
-        return False, None, "Неверный формат суммы. Используйте формат: 100 или 100.50"
+        error_msg = (
+            "Неверный формат суммы. "
+            "Используйте формат: 100 или 100.50"
+        )
+        return False, None, error_msg

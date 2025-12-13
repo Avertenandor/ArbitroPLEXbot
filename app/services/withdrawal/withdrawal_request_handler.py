@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from loguru import logger
 from sqlalchemy import select
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import TransactionStatus, TransactionType
@@ -23,11 +23,16 @@ from app.services.withdrawal.withdrawal_balance_manager import (
     WithdrawalBalanceManager,
 )
 from app.services.withdrawal.withdrawal_validator import WithdrawalValidator
+from app.config.constants import (
+    WITHDRAWAL_MAX_RETRIES,
+    WITHDRAWAL_RETRY_DELAY_BASE,
+    WITHDRAWAL_HIGH_FEE_WARNING_THRESHOLD,
+)
 
 
 # R9-2: Maximum retries for race condition conflicts
-MAX_RETRIES = 3
-RETRY_DELAY_BASE = 1.0  # Base delay in seconds
+MAX_RETRIES = WITHDRAWAL_MAX_RETRIES
+RETRY_DELAY_BASE = WITHDRAWAL_RETRY_DELAY_BASE
 
 
 class WithdrawalRequestHandler:
@@ -119,7 +124,7 @@ class WithdrawalRequestHandler:
                     return None, "Комиссия превышает или равна сумме вывода", False
 
                 # Warning: High fee detection
-                if fee_amount > amount * Decimal("0.5"):
+                if fee_amount > amount * Decimal(str(WITHDRAWAL_HIGH_FEE_WARNING_THRESHOLD)):
                     logger.warning(f"High fee detected: {fee_amount} is more than 50% of {amount}")
 
                 # Deduct balance BEFORE creating transaction (Gross amount)
@@ -179,12 +184,28 @@ class WithdrawalRequestHandler:
                         ), False
                 else:
                     await self.session.rollback()
-                    logger.error(f"Database error in withdrawal: {e}")
+                    logger.error(
+                        "Database error in withdrawal",
+                        extra={
+                            "user_id": user_id,
+                            "amount": str(amount),
+                            "error": str(e),
+                        },
+                        exc_info=True,
+                    )
                     return None, "Ошибка базы данных. Попробуйте позже.", False
 
-            except Exception as e:
+            except SQLAlchemyError as e:
                 await self.session.rollback()
-                logger.error(f"Failed to create withdrawal: {e}", exc_info=True)
+                logger.error(
+                    "Failed to create withdrawal",
+                    extra={
+                        "user_id": user_id,
+                        "amount": str(amount),
+                        "error": str(e),
+                    },
+                    exc_info=True,
+                )
                 return None, "Ошибка создания заявки на вывод", False
 
     async def _freeze_pending_withdrawals(self, user_id: int) -> None:

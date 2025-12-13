@@ -18,9 +18,9 @@ from app.services.deposit import DepositService
 from app.services.report_service import ReportService
 from app.services.user_service import UserService
 from bot.keyboards.reply import profile_keyboard
-from bot.utils.formatters import format_usdt
+from bot.utils.formatters import format_usdt, format_wallet_short
 from bot.utils.text_utils import escape_markdown, safe_answer
-from bot.utils.user_loader import UserLoader
+from bot.utils.user_context import get_user_from_context
 
 
 router = Router()
@@ -33,10 +33,7 @@ async def show_my_profile(
     **data: Any,
 ) -> None:
     """Show detailed user profile."""
-    telegram_id = message.from_user.id if message.from_user else None
-    user: User | None = data.get("user")
-    if not user and telegram_id:
-        user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
+    user = await get_user_from_context(message, session, data)
     if not user:
         await message.answer(
             "⚠️ Ошибка: не удалось загрузить данные пользователя. "
@@ -95,11 +92,7 @@ async def show_my_profile(
         )
 
     # Format wallet address
-    wallet_display = user.wallet_address
-    if len(user.wallet_address) > 20:
-        wallet_display = (
-            f"{user.wallet_address[:10]}...{user.wallet_address[-8:]}"
-        )
+    wallet_display = format_wallet_short(user.wallet_address)
 
     # Prepare status strings
     verify_emoji = '✅' if user.is_verified else '❌'

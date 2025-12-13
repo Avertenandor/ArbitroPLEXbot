@@ -91,8 +91,8 @@ def validate_wallet_address(
     try:
         normalized = normalize_wallet_address(value)
         return True, normalized, None
-    except ValueError as e:
-        return False, None, str(e)
+    except ValueError as exception:
+        return False, None, str(exception)
 
 
 def validate_amount(
@@ -146,8 +146,8 @@ def validate_email(value: str) -> tuple[bool, str | None, str | None]:
     try:
         normalized = _normalize_email(value)
         return True, normalized, None
-    except ValueError as e:
-        return False, None, str(e)
+    except ValueError as exception:
+        return False, None, str(exception)
 
 
 def validate_phone(value: str) -> tuple[bool, str | None, str | None]:
@@ -176,5 +176,5 @@ def validate_phone(value: str) -> tuple[bool, str | None, str | None]:
     try:
         cleaned = _normalize_phone(value)
         return True, cleaned, None
-    except ValueError as e:
-        return False, None, str(e)
+    except ValueError as exception:
+        return False, None, str(exception)

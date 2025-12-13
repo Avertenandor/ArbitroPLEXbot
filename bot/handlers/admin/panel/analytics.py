@@ -20,6 +20,7 @@ from app.models.enums import DepositStatus, TransactionStatus, TransactionType
 from app.models.transaction import Transaction
 from app.models.user import User
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
+from bot.utils.formatters import format_balance
 
 
 router = Router(name="admin_panel_analytics")
@@ -56,7 +57,7 @@ async def cmd_retention(
         f"• Всего: *{metrics['total_users']}*\n\n"
         f"📊 *Stickiness (DAU/MAU):* `{metrics['stickiness']}%`\n\n"
         f"💰 *Депозиты:*\n"
-        f"• Средний чек: *{avg_deposit['avg_deposit']:.2f} USDT*\n"
+        f"• Средний чек: *{format_balance(avg_deposit['avg_deposit'], decimals=2)} USDT*\n"
         f"• Конверсия в депозит: *{avg_deposit['deposit_rate']}%*\n\n"
         f"📅 *Когорты (последние 7 дней):*\n"
     )
@@ -156,8 +157,8 @@ async def cmd_dashboard(
     text = (
         f"📊 *Дашборд (за 24ч)*\n\n"
         f"👥 Новых пользователей: *{new_users_24h}*\n"
-        f"💰 Депозитов: *{deposits_24h_count}* ({deposits_24h_amount:.2f} USDT)\n"
-        f"💸 Выводов: *{withdrawals_24h_count}* ({withdrawals_24h_amount:.2f} USDT)\n"
+        f"💰 Депозитов: *{deposits_24h_count}* ({format_balance(deposits_24h_amount, decimals=2)} USDT)\n"
+        f"💸 Выводов: *{withdrawals_24h_count}* ({format_balance(withdrawals_24h_amount, decimals=2)} USDT)\n"
         f"⏳ Ожидают одобрения: *{pending_withdrawals}*\n"
         f"🚨 Заблокировано: *{fraud_alerts}*\n"
         f"{chart}\n"

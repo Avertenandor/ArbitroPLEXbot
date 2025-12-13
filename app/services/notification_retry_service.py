@@ -21,11 +21,16 @@ from app.config.constants import (
 from app.repositories.failed_notification_repository import (
     FailedNotificationRepository,
 )
+from app.config.constants import (
+    NOTIFICATION_RETRY_MAX_ATTEMPTS,
+    NOTIFICATION_RETRY_DELAYS_MINUTES,
+    NOTIFICATION_RETRY_BATCH_LIMIT,
+)
 
 
 # Retry configuration: 1min, 5min, 15min, 1h, 2h
-RETRY_DELAYS_MINUTES = [1, 5, 15, 60, 120]
-MAX_RETRIES = 5
+RETRY_DELAYS_MINUTES = NOTIFICATION_RETRY_DELAYS_MINUTES
+MAX_RETRIES = NOTIFICATION_RETRY_MAX_ATTEMPTS
 
 
 class NotificationRetryService:
@@ -53,7 +58,7 @@ class NotificationRetryService:
 
         # Get pending notifications (not resolved, under max retries)
         pending = await self.failed_repo.get_pending_for_retry(
-            max_attempts=MAX_RETRIES, limit=100
+            max_attempts=MAX_RETRIES, limit=NOTIFICATION_RETRY_BATCH_LIMIT
         )
 
         if not pending:

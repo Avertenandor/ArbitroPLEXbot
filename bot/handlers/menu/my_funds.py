@@ -25,16 +25,10 @@ from app.services.user_service import UserService
 from bot.i18n.loader import get_translator, get_user_language
 from bot.keyboards.reply import main_menu_reply_keyboard
 from bot.utils.user_loader import UserLoader
+from bot.utils.formatters import format_balance
 
 
 router = Router()
-
-
-def format_balance(value: Decimal | None, decimals: int = 4) -> str:
-    """Format balance with specified decimals."""
-    if value is None:
-        return "—"
-    return f"{float(value):,.{decimals}f}"
 
 
 def calculate_days_remaining(plex_balance: Decimal | None, daily_plex: Decimal) -> str:

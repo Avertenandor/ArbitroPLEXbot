@@ -104,7 +104,11 @@ class AIWalletService:
             balance = await self.wallet_service.get_wallet_balances(wallet_address)
 
             if not balance:
-                return {"success": False, "error": "❌ Не удалось получить балансы кошелька. Попробуйте позже."}
+                error_msg = (
+                    "❌ Не удалось получить балансы кошелька. "
+                    "Попробуйте позже."
+                )
+                return {"success": False, "error": error_msg}
 
             # Get current PLEX rate
             plex_rate_info = await self.get_plex_rate()
@@ -129,7 +133,11 @@ class AIWalletService:
             # Check PLEX balance
             if plex_balance < RECOMMENDED_PLEX_MIN:
                 needed = RECOMMENDED_PLEX_MIN - int(plex_balance)
-                recommendations.append(f"💎 Рекомендуется докупить минимум {needed:,} PLEX для комфортной работы")
+                recommendation_msg = (
+                    f"💎 Рекомендуется докупить минимум {needed:,} PLEX "
+                    f"для комфортной работы"
+                )
+                recommendations.append(recommendation_msg)
 
             # Calculate potential earnings context
             daily_plex_per_100 = 100 * plex_per_dollar  # PLEX per $100 deposit per day
@@ -219,7 +227,8 @@ class AIWalletService:
                     "monthly_plex_per_100_usd": plex_per_dollar * 100 * 30,
                 },
                 "recommendation": (
-                    "💡 Курс PLEX сейчас выгодный! Рекомендуем накапливать токены, пока цена адекватная."
+                    "💡 Курс PLEX сейчас выгодный! "
+                    "Рекомендуем накапливать токены, пока цена адекватная."
                 ),
                 "message": (
                     f"💎 **Курс PLEX**\n\n"
@@ -288,7 +297,8 @@ class AIWalletService:
 
         if should_buy_more:
             end_message += (
-                "\n❓ **Уверены, что у вас достаточно PLEX?**\nМожет быть стоит докупить, пока курс ещё адекватный? 💎"
+                "\n❓ **Уверены, что у вас достаточно PLEX?**\n"
+                "Может быть стоит докупить, пока курс ещё адекватный? 💎"
             )
 
         return {

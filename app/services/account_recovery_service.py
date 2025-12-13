@@ -201,8 +201,14 @@ class AccountRecoveryService:
             except Exception as cache_error:
                 # Don't fail the operation if cache invalidation fails
                 logger.warning(
-                    f"Failed to invalidate cache for user {user.id} after account recovery: {cache_error}"
+                    f"Failed to invalidate cache for user {user.id} "
+                    f"after account recovery: {cache_error}"
                 )
+
+        has_deposits = (
+            len(user.deposits) > 0 if hasattr(user, 'deposits') else False
+        )
+        user_balance = user.balance if hasattr(user, 'balance') else 0
 
         logger.info(
             f"R16-3: Account recovery completed successfully: "
@@ -210,8 +216,8 @@ class AccountRecoveryService:
             f"old_telegram_id={old_telegram_id}, "
             f"new_telegram_id={new_telegram_id}, "
             f"wallet={wallet_address}, "
-            f"has_deposits={len(user.deposits) > 0 if hasattr(user, 'deposits') else False}, "
-            f"balance={user.balance if hasattr(user, 'balance') else 0}"
+            f"has_deposits={has_deposits}, "
+            f"balance={user_balance}"
         )
 
         # Return success, user, and new financial password
@@ -233,8 +239,11 @@ class AccountRecoveryService:
             return None
 
         # Return partial info for verification (not sensitive)
+        has_deposits = (
+            len(user.deposits) > 0 if hasattr(user, "deposits") else False
+        )
         return {
-            "has_deposits": len(user.deposits) > 0 if hasattr(user, "deposits") else False,
+            "has_deposits": has_deposits,
             "has_balance": user.balance > 0,
             "created_at": user.created_at.isoformat() if user.created_at else None,
             # Don't return sensitive info like email/phone directly

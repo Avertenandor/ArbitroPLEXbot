@@ -42,8 +42,8 @@ async def invalidate_deposit_level_cache(
                 keys_deleted += deleted
             if keys_deleted:
                 logger.info(f"Cache invalidated: {keys_deleted} deposit level(s)")
-    except Exception as e:
-        logger.error(f"Failed to invalidate deposit level cache: {e}")
+    except Exception as error:
+        logger.error(f"Failed to invalidate deposit level cache: {error}")
 
 
 async def invalidate_global_settings_cache(redis: AsyncRedis) -> None:
@@ -58,8 +58,8 @@ async def invalidate_global_settings_cache(redis: AsyncRedis) -> None:
         deleted = await redis.delete(key)
         if deleted:
             logger.info(f"Cache invalidated: {key}")
-    except Exception as e:
-        logger.error(f"Failed to invalidate global settings cache: {e}")
+    except Exception as error:
+        logger.error(f"Failed to invalidate global settings cache: {error}")
 
 
 async def invalidate_user_cache(
@@ -112,10 +112,10 @@ async def invalidate_user_cache(
                     "keys": keys_to_delete,
                 },
             )
-    except Exception as e:
+    except Exception as error:
         # Don't fail the operation if cache invalidation fails
         logger.warning(
-            f"Failed to invalidate user cache for user {user_id}: {e}",
+            f"Failed to invalidate user cache for user {user_id}: {error}",
             extra={"user_id": user_id, "telegram_id": telegram_id},
         )
 

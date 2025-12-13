@@ -86,7 +86,10 @@ class AIAdminManagementService:
                 "is_blocked": a.is_blocked,
                 "status": status_emoji,
                 "created": a.created_at.strftime("%d.%m.%Y") if a.created_at else None,
-                "last_active": a.last_active_at.strftime("%d.%m.%Y %H:%M") if a.last_active_at else None,
+                "last_active": (
+                    a.last_active_at.strftime("%d.%m.%Y %H:%M")
+                    if a.last_active_at else None
+                ),
             })
 
         return {
@@ -109,17 +112,28 @@ class AIAdminManagementService:
 
         # Any verified admin can view other admin details
         if not self._is_super_admin():
+            error_msg = (
+                "❌ Недостаточно прав для просмотра "
+                "деталей администраторов"
+            )
             return {
                 "success": False,
-                "error": "❌ Недостаточно прав для просмотра деталей администраторов"
+                "error": error_msg
             }
 
         admin_repo = AdminRepository(self.session)
 
         # Find target admin
         target = None
-        if isinstance(admin_identifier, int) or (isinstance(admin_identifier, str) and admin_identifier.isdigit()):
-            target = await admin_repo.get_by_telegram_id(int(admin_identifier))
+        is_numeric = (
+            isinstance(admin_identifier, int) or
+            (isinstance(admin_identifier, str) and
+             admin_identifier.isdigit())
+        )
+        if is_numeric:
+            target = await admin_repo.get_by_telegram_id(
+                int(admin_identifier)
+            )
         elif isinstance(admin_identifier, str) and admin_identifier.startswith("@"):
             username = admin_identifier[1:]
             stmt = select(Admin).where(Admin.username == username)
@@ -127,7 +141,8 @@ class AIAdminManagementService:
             target = result.scalar_one_or_none()
 
         if not target:
-            return {"success": False, "error": f"❌ Администратор '{admin_identifier}' не найден"}
+            error_msg = f"❌ Администратор '{admin_identifier}' не найден"
+            return {"success": False, "error": error_msg}
 
         role_desc = {
             "super_admin": "👑 Супер-администратор (полный доступ)",
@@ -140,12 +155,20 @@ class AIAdminManagementService:
             "admin": {
                 "id": target.id,
                 "telegram_id": target.telegram_id,
-                "username": f"@{target.username}" if target.username else None,
+                "username": (
+                    f"@{target.username}" if target.username else None
+                ),
                 "first_name": target.first_name,
                 "role": role_desc,
                 "is_blocked": target.is_blocked,
-                "created_at": target.created_at.strftime("%d.%m.%Y %H:%M") if target.created_at else None,
-                "last_active_at": target.last_active_at.strftime("%d.%m.%Y %H:%M") if target.last_active_at else None,
+                "created_at": (
+                    target.created_at.strftime("%d.%m.%Y %H:%M")
+                    if target.created_at else None
+                ),
+                "last_active_at": (
+                    target.last_active_at.strftime("%d.%m.%Y %H:%M")
+                    if target.last_active_at else None
+                ),
             },
             "message": "📋 Профиль администратора"
         }
@@ -170,20 +193,31 @@ class AIAdminManagementService:
 
         if not self._is_super_admin():
             logger.warning(
-                f"AI ADMIN SECURITY: Non-superadmin {self.admin_telegram_id} "
-                f"attempted to block admin"
+                f"AI ADMIN SECURITY: Non-superadmin "
+                f"{self.admin_telegram_id} attempted to block admin"
+            )
+            error_msg = (
+                "❌ ТОЛЬКО КОМАНДИР может блокировать "
+                "администраторов!"
             )
             return {
                 "success": False,
-                "error": "❌ ТОЛЬКО КОМАНДИР может блокировать администраторов!"
+                "error": error_msg
             }
 
         admin_repo = AdminRepository(self.session)
 
         # Find target admin
         target = None
-        if isinstance(admin_identifier, int) or (isinstance(admin_identifier, str) and admin_identifier.isdigit()):
-            target = await admin_repo.get_by_telegram_id(int(admin_identifier))
+        is_numeric = (
+            isinstance(admin_identifier, int) or
+            (isinstance(admin_identifier, str) and
+             admin_identifier.isdigit())
+        )
+        if is_numeric:
+            target = await admin_repo.get_by_telegram_id(
+                int(admin_identifier)
+            )
         elif isinstance(admin_identifier, str) and admin_identifier.startswith("@"):
             username = admin_identifier[1:]
             stmt = select(Admin).where(Admin.username == username)
@@ -191,10 +225,12 @@ class AIAdminManagementService:
             target = result.scalar_one_or_none()
 
         if not target:
-            return {"success": False, "error": f"❌ Администратор '{admin_identifier}' не найден"}
+            error_msg = f"❌ Администратор '{admin_identifier}' не найден"
+            return {"success": False, "error": error_msg}
 
         if target.is_blocked:
-            return {"success": False, "error": "❌ Администратор уже заблокирован"}
+            error_msg = "❌ Администратор уже заблокирован"
+            return {"success": False, "error": error_msg}
 
         target.is_blocked = True
         await self.session.commit()
@@ -204,9 +240,13 @@ class AIAdminManagementService:
             f"{target.telegram_id} (@{target.username}): {reason}"
         )
 
+        admin_display = (
+            f"@{target.username}" if target.username
+            else f"ID:{target.telegram_id}"
+        )
         return {
             "success": True,
-            "admin": f"@{target.username}" if target.username else f"ID:{target.telegram_id}",
+            "admin": admin_display,
             "reason": reason,
             "message": "🚫 Администратор заблокирован"
         }
@@ -222,17 +262,28 @@ class AIAdminManagementService:
             return {"success": False, "error": error}
 
         if not self._is_super_admin():
+            error_msg = (
+                "❌ ТОЛЬКО КОМАНДИР может разблокировать "
+                "администраторов!"
+            )
             return {
                 "success": False,
-                "error": "❌ ТОЛЬКО КОМАНДИР может разблокировать администраторов!"
+                "error": error_msg
             }
 
         admin_repo = AdminRepository(self.session)
 
         # Find target admin
         target = None
-        if isinstance(admin_identifier, int) or (isinstance(admin_identifier, str) and admin_identifier.isdigit()):
-            target = await admin_repo.get_by_telegram_id(int(admin_identifier))
+        is_numeric = (
+            isinstance(admin_identifier, int) or
+            (isinstance(admin_identifier, str) and
+             admin_identifier.isdigit())
+        )
+        if is_numeric:
+            target = await admin_repo.get_by_telegram_id(
+                int(admin_identifier)
+            )
         elif isinstance(admin_identifier, str) and admin_identifier.startswith("@"):
             username = admin_identifier[1:]
             stmt = select(Admin).where(Admin.username == username)
@@ -240,22 +291,29 @@ class AIAdminManagementService:
             target = result.scalar_one_or_none()
 
         if not target:
-            return {"success": False, "error": f"❌ Администратор '{admin_identifier}' не найден"}
+            error_msg = f"❌ Администратор '{admin_identifier}' не найден"
+            return {"success": False, "error": error_msg}
 
         if not target.is_blocked:
-            return {"success": False, "error": "❌ Администратор не заблокирован"}
+            error_msg = "❌ Администратор не заблокирован"
+            return {"success": False, "error": error_msg}
 
         target.is_blocked = False
         await self.session.commit()
 
         logger.info(
-            f"AI ADMIN: Super-admin {self.admin_telegram_id} unblocked admin "
-            f"{target.telegram_id} (@{target.username})"
+            f"AI ADMIN: Super-admin {self.admin_telegram_id} "
+            f"unblocked admin {target.telegram_id} "
+            f"(@{target.username})"
         )
 
+        admin_display = (
+            f"@{target.username}" if target.username
+            else f"ID:{target.telegram_id}"
+        )
         return {
             "success": True,
-            "admin": f"@{target.username}" if target.username else f"ID:{target.telegram_id}",
+            "admin": admin_display,
             "message": "✅ Администратор разблокирован"
         }
 
@@ -278,24 +336,39 @@ class AIAdminManagementService:
             return {"success": False, "error": error}
 
         if not self._is_super_admin():
+            error_msg = (
+                "❌ ТОЛЬКО КОМАНДИР может изменять роли "
+                "администраторов!"
+            )
             return {
                 "success": False,
-                "error": "❌ ТОЛЬКО КОМАНДИР может изменять роли администраторов!"
+                "error": error_msg
             }
 
         valid_roles = ["admin", "support"]
         if new_role.lower() not in valid_roles:
+            error_msg = (
+                f"❌ Неверная роль. Допустимые: "
+                f"{', '.join(valid_roles)}"
+            )
             return {
                 "success": False,
-                "error": f"❌ Неверная роль. Допустимые: {', '.join(valid_roles)}"
+                "error": error_msg
             }
 
         admin_repo = AdminRepository(self.session)
 
         # Find target admin
         target = None
-        if isinstance(admin_identifier, int) or (isinstance(admin_identifier, str) and admin_identifier.isdigit()):
-            target = await admin_repo.get_by_telegram_id(int(admin_identifier))
+        is_numeric = (
+            isinstance(admin_identifier, int) or
+            (isinstance(admin_identifier, str) and
+             admin_identifier.isdigit())
+        )
+        if is_numeric:
+            target = await admin_repo.get_by_telegram_id(
+                int(admin_identifier)
+            )
         elif isinstance(admin_identifier, str) and admin_identifier.startswith("@"):
             username = admin_identifier[1:]
             stmt = select(Admin).where(Admin.username == username)
@@ -303,24 +376,34 @@ class AIAdminManagementService:
             target = result.scalar_one_or_none()
 
         if not target:
-            return {"success": False, "error": f"❌ Администратор '{admin_identifier}' не найден"}
+            error_msg = f"❌ Администратор '{admin_identifier}' не найден"
+            return {"success": False, "error": error_msg}
 
         # Prevent changing super_admin role
         if target.role == "super_admin":
-            return {"success": False, "error": "❌ Нельзя изменить роль супер-администратора!"}
+            error_msg = (
+                "❌ Нельзя изменить роль "
+                "супер-администратора!"
+            )
+            return {"success": False, "error": error_msg}
 
         old_role = target.role
         target.role = new_role.lower()
         await self.session.commit()
 
         logger.info(
-            f"AI ADMIN: Super-admin {self.admin_telegram_id} changed role for "
-            f"{target.telegram_id} (@{target.username}): {old_role} → {new_role}"
+            f"AI ADMIN: Super-admin {self.admin_telegram_id} "
+            f"changed role for {target.telegram_id} "
+            f"(@{target.username}): {old_role} → {new_role}"
         )
 
+        admin_display = (
+            f"@{target.username}" if target.username
+            else f"ID:{target.telegram_id}"
+        )
         return {
             "success": True,
-            "admin": f"@{target.username}" if target.username else f"ID:{target.telegram_id}",
+            "admin": admin_display,
             "old_role": old_role,
             "new_role": new_role,
             "message": f"✅ Роль изменена: {old_role} → {new_role}"

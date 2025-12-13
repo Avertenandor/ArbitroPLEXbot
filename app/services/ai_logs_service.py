@@ -82,7 +82,10 @@ class AILogsService:
             if log.admin_id:
                 adm = await admin_repo.get_by_id(log.admin_id)
                 if adm:
-                    admin_info = f"@{adm.username}" if adm.username else f"ID:{adm.telegram_id}"
+                    admin_info = (
+                        f"@{adm.username}" if adm.username
+                        else f"ID:{adm.telegram_id}"
+                    )
 
             logs_list.append({
                 "id": log.id,
@@ -90,7 +93,10 @@ class AILogsService:
                 "action_type": log.action_type,
                 "target_user_id": log.target_user_id,
                 "details": log.details,
-                "created": log.created_at.strftime("%d.%m.%Y %H:%M") if log.created_at else None,
+                "created": (
+                    log.created_at.strftime("%d.%m.%Y %H:%M")
+                    if log.created_at else None
+                ),
             })
 
         return {
@@ -120,8 +126,12 @@ class AILogsService:
 
         # Find target admin
         target = None
-        if isinstance(admin_identifier, int) or (isinstance(admin_identifier, str) and admin_identifier.isdigit()):
-            target = await admin_repo.get_by_telegram_id(int(admin_identifier))
+        if (isinstance(admin_identifier, int) or
+                (isinstance(admin_identifier, str) and
+                 admin_identifier.isdigit())):
+            target = await admin_repo.get_by_telegram_id(
+                int(admin_identifier)
+            )
         elif isinstance(admin_identifier, str) and admin_identifier.startswith("@"):
             username = admin_identifier[1:]
             stmt = select(Admin).where(Admin.username == username)
@@ -129,7 +139,10 @@ class AILogsService:
             target = result.scalar_one_or_none()
 
         if not target:
-            return {"success": False, "error": f"❌ Администратор '{admin_identifier}' не найден"}
+            error_msg = (
+                f"❌ Администратор '{admin_identifier}' не найден"
+            )
+            return {"success": False, "error": error_msg}
 
         # Get logs for this admin
         stmt = select(AdminAction).where(
@@ -146,7 +159,10 @@ class AILogsService:
                 "action_type": log.action_type,
                 "target_user_id": log.target_user_id,
                 "details": log.details,
-                "created": log.created_at.strftime("%d.%m.%Y %H:%M") if log.created_at else None,
+                "created": (
+                    log.created_at.strftime("%d.%m.%Y %H:%M")
+                    if log.created_at else None
+                ),
             })
 
         # Count by action type
@@ -162,7 +178,10 @@ class AILogsService:
 
         return {
             "success": True,
-            "admin": f"@{target.username}" if target.username else f"ID:{target.telegram_id}",
+            "admin": (
+                f"@{target.username}" if target.username
+                else f"ID:{target.telegram_id}"
+            ),
             "total_actions": sum(action_counts.values()),
             "by_action_type": action_counts,
             "recent_logs": logs_list,
@@ -216,7 +235,10 @@ class AILogsService:
             if log.admin_id:
                 adm = await admin_repo.get_by_id(log.admin_id)
                 if adm:
-                    admin_info = f"@{adm.username}" if adm.username else f"ID:{adm.telegram_id}"
+                    admin_info = (
+                        f"@{adm.username}" if adm.username
+                        else f"ID:{adm.telegram_id}"
+                    )
 
             logs_list.append({
                 "id": log.id,
@@ -224,7 +246,10 @@ class AILogsService:
                 "action_type": log.action_type,
                 "target_user_id": log.target_user_id,
                 "details": log.details,
-                "created": log.created_at.strftime("%d.%m.%Y %H:%M") if log.created_at else None,
+                "created": (
+                    log.created_at.strftime("%d.%m.%Y %H:%M")
+                    if log.created_at else None
+                ),
             })
 
         return {

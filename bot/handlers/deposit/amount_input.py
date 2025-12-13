@@ -12,12 +12,23 @@ from aiogram.types import Message
 from loguru import logger
 
 from app.models.user import User
-from app.repositories.deposit_level_config_repository import DepositLevelConfigRepository
-from bot.keyboards.reply import cancel_keyboard, main_menu_reply_keyboard
-from bot.states.deposit import DepositStates, get_deposit_state_data, update_deposit_state_data
+from app.repositories.deposit_level_config_repository import (
+    DepositLevelConfigRepository,
+)
+from bot.keyboards.reply import (
+    cancel_keyboard,
+    main_menu_reply_keyboard,
+)
+from bot.states.deposit import (
+    DepositStates,
+    get_deposit_state_data,
+    update_deposit_state_data,
+)
+from bot.utils.formatters import format_balance, format_wallet_for_copy
 from bot.utils.menu_buttons import is_menu_button
+from bot.utils.user_context import get_user_from_context
 
-from .utils import format_amount, validate_amount_input
+from .utils import validate_amount_input
 
 
 router = Router()
@@ -45,7 +56,14 @@ async def process_deposit_amount(
         state: FSM state
         data: Additional data including session_factory and user
     """
-    user: User | None = data.get("user")
+    # Get session for user loading
+    session = data.get("session")
+    if not session:
+        await message.answer("❌ Системная ошибка.")
+        await state.clear()
+        return
+
+    user = await get_user_from_context(message, session, data)
     if not user:
         await message.answer("❌ Ошибка: пользователь не найден")
         await state.clear()
@@ -64,8 +82,13 @@ async def process_deposit_amount(
     # Validate amount input
     is_valid, amount, error_msg = validate_amount_input(message.text or "")
     if not is_valid or amount is None:
+        invalid_amount_msg = (
+            f"❌ **Неверная сумма**\n\n"
+            f"{error_msg}\n\n"
+            f"Попробуйте еще раз:"
+        )
         await message.answer(
-            f"❌ **Неверная сумма**\n\n{error_msg}\n\nПопробуйте еще раз:",
+            invalid_amount_msg,
             parse_mode="Markdown",
             reply_markup=cancel_keyboard(),
         )
@@ -87,14 +110,19 @@ async def process_deposit_amount(
 
     # Check if amount is in corridor
     if amount < state_data.min_amount or amount > state_data.max_amount:
-        min_str = format_amount(state_data.min_amount)
-        max_str = format_amount(state_data.max_amount)
-        await message.answer(
+        min_str = format_balance(state_data.min_amount, decimals=2)
+        max_str = format_balance(state_data.max_amount, decimals=2)
+        corridor_error_msg = (
             f"❌ **Сумма вне коридора**\n\n"
-            f"Сумма {format_amount(amount)} USDT не входит в допустимый коридор.\n\n"
-            f"Для уровня '{state_data.level_name}' допустимы суммы:\n"
+            f"Сумма {format_balance(amount, decimals=2)} USDT "
+            f"не входит в допустимый коридор.\n\n"
+            f"Для уровня '{state_data.level_name}' "
+            f"допустимы суммы:\n"
             f"**от {min_str} до {max_str} USDT**\n\n"
-            f"Введите корректную сумму:",
+            f"Введите корректную сумму:"
+        )
+        await message.answer(
+            corridor_error_msg,
             parse_mode="Markdown",
             reply_markup=cancel_keyboard(),
         )
@@ -111,16 +139,22 @@ async def process_deposit_amount(
             return
 
         config_repo = DepositLevelConfigRepository(session)
-        level_config = await config_repo.get_by_level_type(state_data.level_type)
+        level_config = await config_repo.get_by_level_type(
+            state_data.level_type
+        )
     else:
         # NEW pattern: short read transaction
         async with session_factory() as session:
             async with session.begin():
                 config_repo = DepositLevelConfigRepository(session)
-                level_config = await config_repo.get_by_level_type(state_data.level_type)
+                level_config = await config_repo.get_by_level_type(
+                    state_data.level_type
+                )
 
     if not level_config:
-        await message.answer("❌ Ошибка получения конфигурации уровня")
+        await message.answer(
+            "❌ Ошибка получения конфигурации уровня"
+        )
         await state.clear()
         return
 
@@ -140,19 +174,33 @@ async def process_deposit_amount(
     system_wallet = settings.system_wallet_address
 
     # Show payment details
+    wallet_info = (
+        f"• Используйте личный кошелек "
+        f"(MetaMask, Trust Wallet, SafePal, Ledger)\n"
+    )
+    exchange_warning = (
+        f"• 🚫 Не используйте внутренние переводы бирж "
+        f"(Internal Transfer)\n"
+    )
+    network_fee_info = (
+        f"• 💡 Комиссия сети уже включена "
+        f"в сумму депозита\n\n"
+    )
+
     text = (
         f"✅ **Параметры депозита подтверждены**\n\n"
         f"📦 Уровень: {state_data.level_name}\n"
-        f"💰 Сумма: {format_amount(amount)} USDT\n"
-        f"💎 Ежедневный PLEX: {format_amount(plex_daily)} PLEX\n\n"
+        f"💰 Сумма: {format_balance(amount, decimals=2)} USDT\n"
+        f"💎 Ежедневный PLEX: {format_balance(plex_daily, decimals=2)} PLEX\n\n"
         f"📝 **Следующий шаг:**\n"
-        f"Отправьте **ровно {format_amount(amount)} USDT** на адрес:\n\n"
-        f"`{system_wallet}`\n\n"
+        f"Отправьте **ровно {format_balance(amount, decimals=2)} USDT** "
+        f"на адрес:\n\n"
+        f"{format_wallet_for_copy(system_wallet)}\n\n"
         f"⚠️ **ВАЖНО:**\n"
         f"• Сеть: **BSC (BEP-20)**\n"
-        f"• Используйте личный кошелек (MetaMask, Trust Wallet, SafePal, Ledger)\n"
-        f"• 🚫 Не используйте внутренние переводы бирж (Internal Transfer)\n"
-        f"• 💡 Комиссия сети уже включена в сумму депозита\n\n"
+        f"{wallet_info}"
+        f"{exchange_warning}"
+        f"{network_fee_info}"
         f"После отправки введите hash транзакции:"
     )
 

@@ -19,6 +19,8 @@ from app.services.withdrawal_service import WithdrawalService
 from bot.i18n.loader import get_text, get_translator, get_user_language
 from bot.keyboards.reply import withdrawal_keyboard
 from bot.states.withdrawal import WithdrawalStates
+from bot.utils.formatters import format_balance, format_wallet_short
+from bot.utils.user_context import get_user_from_context
 
 from .eligibility import check_withdrawal_eligibility
 
@@ -72,14 +74,14 @@ async def withdraw_all(
     **data: Any,
 ) -> None:
     """Handle 'Withdraw All' button."""
-    user: User | None = data.get("user")
-    if not user:
-        await message.answer(get_text('errors.user_not_found'))
-        return
-
     session = data.get("session")
     if not session:
         await message.answer(get_text('errors.system_error'))
+        return
+
+    user = await get_user_from_context(message, session, data)
+    if not user:
+        await message.answer(get_text('errors.user_not_found'))
         return
 
     # R13-3: Get user language
@@ -102,8 +104,8 @@ async def withdraw_all(
     if amount < min_amount:
         await message.answer(
             f"❌ Недостаточно средств для вывода!\n\n"
-            f"Минимальная сумма: {min_amount} USDT\n"
-            f"Ваш баланс: {amount:.2f} USDT",
+            f"Минимальная сумма: {format_balance(min_amount, decimals=2)} USDT\n"
+            f"Ваш баланс: {format_balance(amount, decimals=2)} USDT",
             reply_markup=withdrawal_keyboard(),
         )
         return
@@ -114,8 +116,8 @@ async def withdraw_all(
 
     text = (
         f"⚠️ *Подтверждение вывода*\n\n"
-        f"💰 Сумма: *{amount:.2f} USDT*\n"
-        f"💳 Кошелёк: `{user.wallet_address[:10]}...{user.wallet_address[-6:]}`\n\n"
+        f"💰 Сумма: *{format_balance(amount, decimals=2)} USDT*\n"
+        f"💳 Кошелёк: `{format_wallet_short(user.wallet_address)}`\n\n"
         f"❗️ Убедитесь, что это ваш *ЛИЧНЫЙ* кошелёк (не биржевой)!\n\n"
         f"Для подтверждения напишите: *да* или *yes*\n"
         f"Для отмены: *нет* или *отмена*"
@@ -131,14 +133,14 @@ async def withdraw_amount(
     **data: Any,
 ) -> None:
     """Handle 'Withdraw Amount' button."""
-    user: User | None = data.get("user")
-    if not user:
-        await message.answer(get_text('errors.user_not_found'))
-        return
-
     session = data.get("session")
     if not session:
         await message.answer(get_text('errors.system_error'))
+        return
+
+    user = await get_user_from_context(message, session, data)
+    if not user:
+        await message.answer(get_text('errors.user_not_found'))
         return
 
     # R13-3: Get user language

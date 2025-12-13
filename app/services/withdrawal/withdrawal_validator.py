@@ -127,7 +127,11 @@ class WithdrawalValidator:
             Tuple of (is_valid, error_message)
         """
         # Check both static config flag and DB flag
-        if settings.emergency_stop_withdrawals or getattr(self.global_settings, "emergency_stop_withdrawals", False):
+        emergency_stop = (
+            settings.emergency_stop_withdrawals
+            or getattr(self.global_settings, "emergency_stop_withdrawals", False)
+        )
+        if emergency_stop:
             logger.warning("Withdrawal blocked by emergency stop")
             return False, (
                 "⚠️ Временная приостановка выводов из-за технических работ.\n\n"
@@ -157,12 +161,22 @@ class WithdrawalValidator:
         # Check if user is banned
         if user.is_banned:
             logger.warning(f"Withdrawal blocked: User {user_id} is banned")
-            return False, ("Ваш аккаунт заблокирован. Обратитесь в поддержку для выяснения причин.")
+            error_msg = (
+                "Ваш аккаунт заблокирован. "
+                "Обратитесь в поддержку для выяснения причин."
+            )
+            return False, error_msg
 
         # Check if withdrawals are blocked for this user
         if user.withdrawal_blocked:
-            logger.warning(f"Withdrawal blocked: User {user_id} has withdrawal_blocked=True")
-            return False, ("Вывод средств заблокирован. Обратитесь в поддержку для выяснения причин.")
+            logger.warning(
+                f"Withdrawal blocked: User {user_id} has withdrawal_blocked=True"
+            )
+            error_msg = (
+                "Вывод средств заблокирован. "
+                "Обратитесь в поддержку для выяснения причин."
+            )
+            return False, error_msg
 
         return True, None
 
@@ -183,7 +197,9 @@ class WithdrawalValidator:
 
         return True, None
 
-    async def check_balance(self, user_id: int, amount: Decimal, available_balance: Decimal) -> tuple[bool, str | None]:
+    async def check_balance(
+        self, user_id: int, amount: Decimal, available_balance: Decimal
+    ) -> tuple[bool, str | None]:
         """
         Check if user has sufficient balance.
 
@@ -197,7 +213,8 @@ class WithdrawalValidator:
         """
         if available_balance < amount:
             logger.warning(
-                f"Insufficient balance for user {user_id}: requested={amount}, available={available_balance}"
+                f"Insufficient balance for user {user_id}: "
+                f"requested={amount}, available={available_balance}"
             )
             return False, (f"Недостаточно средств. Доступно: {available_balance:.2f} USDT")
 
@@ -265,10 +282,14 @@ class WithdrawalValidator:
         fraud_check = await fraud_service.check_and_block_if_needed(user_id)
 
         if fraud_check.get("blocked"):
-            logger.warning(f"Withdrawal blocked: User {user_id} flagged by fraud detection")
-            return False, (
-                "Вывод средств временно заблокирован из-за подозрительной активности. Обратитесь в поддержку."
+            logger.warning(
+                f"Withdrawal blocked: User {user_id} flagged by fraud detection"
             )
+            error_msg = (
+                "Вывод средств временно заблокирован "
+                "из-за подозрительной активности. Обратитесь в поддержку."
+            )
+            return False, error_msg
 
         return True, None
 
@@ -311,8 +332,13 @@ class WithdrawalValidator:
 
                 # Format required PLEX amount safely
                 try:
-                    required_str = f"{required.normalize()}" if hasattr(required, "normalize") else str(required)
-                except Exception:  # pragma: no cover - defensive formatting
+                    required_str = (
+                        f"{required.normalize()}"
+                        if hasattr(required, "normalize")
+                        else str(required)
+                    )
+                except (AttributeError, ValueError, TypeError) as e:  # pragma: no cover - defensive formatting
+                    logger.debug(f"Failed to format required PLEX amount: {e}")
                     required_str = str(required)
 
                 logger.warning(
@@ -329,23 +355,46 @@ class WithdrawalValidator:
 
                 # Причину формируем вокруг факта долга; информацию о давности
                 # последнего платежа можно использовать только как вспомогательную.
-                reason_text = "— есть задолженность по ежедневным PLEX-платежам (за прошлые дни и/или текущие сутки);"
-
-                return False, (
-                    "🚫 Вывод USDT временно недоступен.\n\n"
-                    "По правилам системы, при активных депозитах необходимо ежедневно "
-                    "оплачивать 10 PLEX за каждый $ депозита.\n\n"
-                    f"Текущий суточный платёж за обслуживание ваших депозитов: {required_str} PLEX.\n\n"
-                    f"Причина блокировки:\n{reason_text}\n\n"
-                    "После полной оплаты задолженности и актуального суточного платежа вывод USDT будет разблокирован."
+                reason_text = (
+                    "— есть задолженность по ежедневным PLEX-платежам "
+                    "(за прошлые дни и/или текущие сутки);"
                 )
+
+                error_msg = (
+                    "🚫 Вывод USDT временно недоступен.\n\n"
+                    "По правилам системы, при активных депозитах "
+                    "необходимо ежедневно оплачивать 10 PLEX за каждый $ депозита.\n\n"
+                    f"Текущий суточный платёж за обслуживание ваших депозитов: "
+                    f"{required_str} PLEX.\n\n"
+                    f"Причина блокировки:\n{reason_text}\n\n"
+                    "После полной оплаты задолженности и актуального "
+                    "суточного платежа вывод USDT будет разблокирован."
+                )
+                return False, error_msg
 
             return True, None
 
+        except (ImportError, ModuleNotFoundError) as exc:  # pragma: no cover - defensive
+            # В случае ошибок импорта не блокируем вывод жёстко
+            logger.error(
+                f"PLEX payment service import failed for user {user_id}: {exc}",
+                exc_info=True
+            )
+            return True, None
+        except (AttributeError, KeyError, TypeError, ValueError) as exc:  # pragma: no cover - defensive
+            # В случае ошибок обработки данных не блокируем вывод жёстко
+            logger.error(
+                f"PLEX payment data processing failed for user {user_id}: {exc}",
+                exc_info=True
+            )
+            return True, None
         except Exception as exc:  # pragma: no cover - defensive
-            # В случае ошибок проверки PLEX не блокируем вывод жёстко,
+            # В случае прочих непредвиденных ошибок не блокируем вывод жёстко,
             # чтобы технический сбой не ставил систему на стоп.
-            logger.error(f"PLEX payment check failed for user {user_id}: {exc}")
+            logger.error(
+                f"Unexpected error in PLEX payment check for user {user_id}: {exc}",
+                exc_info=True
+            )
             return True, None
 
     async def check_plex_wallet_balance(self, user_id: int) -> tuple[bool, str | None]:
@@ -382,9 +431,11 @@ class WithdrawalValidator:
             plex_balance = await blockchain_service.get_plex_balance(user.wallet_address)
 
             if plex_balance is None:
-                # If we can't get balance due to blockchain issues, don't block withdrawal
+                # If we can't get balance due to blockchain issues,
+                # don't block withdrawal
                 logger.warning(
-                    f"Could not get PLEX balance for user {user_id}, wallet {mask_address(user.wallet_address)}"
+                    f"Could not get PLEX balance for user {user_id}, "
+                    f"wallet {mask_address(user.wallet_address)}"
                 )
                 return True, None
 
@@ -415,10 +466,27 @@ class WithdrawalValidator:
             )
             return True, None
 
+        except (ImportError, ModuleNotFoundError) as exc:  # pragma: no cover - defensive
+            # В случае ошибок импорта не блокируем вывод жёстко
+            logger.error(
+                f"Blockchain service import failed for user {user_id}: {exc}",
+                exc_info=True
+            )
+            return True, None
+        except (AttributeError, KeyError, TypeError, ValueError) as exc:  # pragma: no cover - defensive
+            # В случае ошибок обработки данных не блокируем вывод жёстко
+            logger.error(
+                f"PLEX wallet balance data processing failed for user {user_id}: {exc}",
+                exc_info=True
+            )
+            return True, None
         except Exception as exc:  # pragma: no cover - defensive
-            # В случае ошибок проверки не блокируем вывод жёстко,
+            # В случае прочих непредвиденных ошибок не блокируем вывод жёстко,
             # чтобы технический сбой не ставил систему на стоп.
-            logger.error(f"PLEX wallet balance check failed for user {user_id}: {exc}")
+            logger.error(
+                f"Unexpected error in PLEX wallet balance check for user {user_id}: {exc}",
+                exc_info=True
+            )
             return True, None
 
     async def check_auto_withdrawal_eligibility(self, user_id: int, amount: Decimal) -> bool:
@@ -461,7 +529,10 @@ class WithdrawalValidator:
             return False
 
         # 2. Check Global Daily Limit (Circuit Breaker)
-        if self.global_settings.is_daily_limit_enabled and self.global_settings.daily_withdrawal_limit:
+        if (
+            self.global_settings.is_daily_limit_enabled
+            and self.global_settings.daily_withdrawal_limit
+        ):
             today_total = await self.transaction_repo.get_total_withdrawn_today()
             if (today_total + amount) > self.global_settings.daily_withdrawal_limit:
                 logger.warning(

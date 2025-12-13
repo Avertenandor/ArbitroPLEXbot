@@ -152,7 +152,11 @@ async def show_request_details(
         wallet_change_info = ""
         if request.new_wallet_address:
             safe_new_wallet = escape_markdown(request.new_wallet_address)
-            old_wallet = escape_markdown(user.wallet_address) if user and user.wallet_address else "Не указан"
+            old_wallet = (
+                escape_markdown(user.wallet_address)
+                if user and user.wallet_address
+                else "Не указан"
+            )
             wallet_change_info = (
                 f"\n💼 *ЗАПРОШЕНА СМЕНА КОШЕЛЬКА:*\n"
                 f"Старый: `{old_wallet}`\n"
@@ -256,7 +260,8 @@ async def approve_request_action(
             user.wallet_address = request.new_wallet_address
             wallet_changed = True
             logger.info(
-                f"Wallet changed for user {user.id}: {old_wallet} -> {request.new_wallet_address}"
+                f"Wallet changed for user {user.id}: "
+                f"{old_wallet} -> {request.new_wallet_address}"
             )
 
         session.add(user)
@@ -314,7 +319,10 @@ async def approve_request_action(
         # Always show password to admin for backup
         wallet_info = ""
         if wallet_changed:
-            wallet_info = f"\n💼 Кошелёк изменён:\n`{old_wallet}` →\n`{request.new_wallet_address}`\n"
+            wallet_info = (
+                f"\n💼 Кошелёк изменён:\n"
+                f"`{old_wallet}` →\n`{request.new_wallet_address}`\n"
+            )
 
         if notification_sent:
             await message.answer(
@@ -328,11 +336,14 @@ async def approve_request_action(
             )
         else:
             await message.answer(
-                f"⚠️ Запрос #{request_id} одобрен, но НЕ удалось отправить пользователю!\n"
-                f"{wallet_info}\n"
-                f"📋 *Передайте пароль вручную:*\n"
-                f"Пароль: `{new_password}`\n"
-                f"Telegram ID: `{user.telegram_id}`",
+                (
+                    f"⚠️ Запрос #{request_id} одобрен, "
+                    f"но НЕ удалось отправить пользователю!\n"
+                    f"{wallet_info}\n"
+                    f"📋 *Передайте пароль вручную:*\n"
+                    f"Пароль: `{new_password}`\n"
+                    f"Telegram ID: `{user.telegram_id}`"
+                ),
                 parse_mode="Markdown",
                 reply_markup=get_admin_keyboard_from_data(data),
             )
@@ -468,5 +479,7 @@ async def handle_pagination(
     await message.answer(
         text,
         parse_mode="Markdown",
-        reply_markup=admin_finpass_request_list_keyboard(page_requests, current_page, total_pages),
+        reply_markup=admin_finpass_request_list_keyboard(
+            page_requests, current_page, total_pages
+        ),
     )

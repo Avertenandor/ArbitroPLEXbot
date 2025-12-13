@@ -20,7 +20,7 @@ from app.services.referral_service import ReferralService
 from app.services.user_service import UserService
 from bot.keyboards.reply import referral_keyboard
 from bot.utils.constants import REFERRAL_RATES
-from bot.utils.formatters import format_usdt
+from bot.utils.formatters import format_balance
 
 
 router = Router(name="referral_stats")
@@ -63,10 +63,10 @@ async def handle_my_earnings(
     text = (
         f"💰 *Мой заработок*\n\n"
         f"*Доходы:*\n"
-        f"💵 Всего заработано: *{format_usdt(stats['total_earned'])} USDT*\n"
+        f"💵 Всего заработано: *{format_balance(stats['total_earned'], 2)} USDT*\n"
         f"⏳ Ожидает выплаты: "
-        f"*{format_usdt(stats['pending_earnings'])} USDT*\n"
-        f"✅ Выплачено: *{format_usdt(stats['paid_earnings'])} USDT*\n\n"
+        f"*{format_balance(stats['pending_earnings'], 2)} USDT*\n"
+        f"✅ Выплачено: *{format_balance(stats['paid_earnings'], 2)} USDT*\n\n"
     )
 
     if earnings:
@@ -76,13 +76,13 @@ async def handle_my_earnings(
             emoji = "✅" if earning["paid"] else "⏳"
             status = 'Выплачено' if earning['paid'] else 'Ожидает'
             text += (
-                f"{emoji} {format_usdt(earning['amount'])} USDT\n"
+                f"{emoji} {format_balance(earning['amount'], 2)} USDT\n"
                 f"   Дата: {date}\n"
                 f"   Статус: {status}\n\n"
             )
 
         if total_amount > 0:
-            text += f"💰 Всего ожидает: *{format_usdt(total_amount)} USDT*\n"
+            text += f"💰 Всего ожидает: *{format_balance(total_amount, 2)} USDT*\n"
     else:
         text += "У вас пока нет ожидающих выплат."
 
@@ -139,11 +139,11 @@ async def handle_referral_stats(
         f"👥 Уровень 2: *{stats['level2_referrals']}*\n"
         f"👥 Уровень 3: *{stats['level3_referrals']}*\n\n"
         f"*Доходы:*\n"
-        f"🌟 *Сегодня: {format_usdt(today_earned)} USDT*\n"
-        f"💵 Всего заработано: *{format_usdt(stats['total_earned'])} USDT*\n"
+        f"🌟 *Сегодня: {format_balance(today_earned, 2)} USDT*\n"
+        f"💵 Всего заработано: *{format_balance(stats['total_earned'], 2)} USDT*\n"
         f"⏳ Ожидает выплаты: "
-        f"*{format_usdt(stats['pending_earnings'])} USDT*\n"
-        f"✅ Выплачено: *{format_usdt(stats['paid_earnings'])} USDT*\n\n"
+        f"*{format_balance(stats['pending_earnings'], 2)} USDT*\n"
+        f"✅ Выплачено: *{format_balance(stats['paid_earnings'], 2)} USDT*\n\n"
     )
 
     # Add leaderboard position if available
@@ -248,12 +248,12 @@ async def handle_referral_analytics(
                 bar_len = 0
             bar = "█" * bar_len + "░" * (8 - bar_len)
 
-            text += f"`{date_str}` {bar} *{format_usdt(amount)}* ({count})\n"
+            text += f"`{date_str}` {bar} *{format_balance(amount, 2)}* ({count})\n"
 
         text += (
-            f"\n💰 Итого за период: *{format_usdt(daily_stats['total_period'])} USDT*\n"
-            f"📅 Сегодня: *{format_usdt(daily_stats['today_earned'])} USDT*\n"
-            f"📊 В среднем/день: *{format_usdt(daily_stats['average_daily'])} USDT*\n"
+            f"\n💰 Итого за период: *{format_balance(daily_stats['total_period'], 2)} USDT*\n"
+            f"📅 Сегодня: *{format_balance(daily_stats['today_earned'], 2)} USDT*\n"
+            f"📊 В среднем/день: *{format_balance(daily_stats['average_daily'], 2)} USDT*\n"
         )
     else:
         text += "_Нет данных за этот период_\n"
@@ -268,8 +268,8 @@ async def handle_referral_analytics(
         f"({conversion_stats['conversion_rate']:.1f}%)\n"
     )
     if conversion_stats.get('deposit_count', 0) > 0:
-        total_dep = format_usdt(conversion_stats['total_deposits_amount'])
-        avg_dep = format_usdt(conversion_stats['average_deposit'])
+        total_dep = format_balance(conversion_stats['total_deposits_amount'], 2)
+        avg_dep = format_balance(conversion_stats['average_deposit'], 2)
         text += (
             f"💵 Общий объём депозитов: *{total_dep} USDT*\n"
             f"📊 Средний депозит: *{avg_dep} USDT*\n"

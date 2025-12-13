@@ -91,14 +91,20 @@ class DepositScanService:
             }
 
         if not is_valid_wallet_for_transactions(wallet):
-            logger.warning(f"[Deposit Scan] User {user_id} has invalid wallet address: {wallet[:20]}...")
+            logger.warning(
+                f"[Deposit Scan] User {user_id} has invalid wallet "
+                f"address: {wallet[:20]}..."
+            )
             return {
                 "success": False,
                 "error": "Некорректный формат адреса кошелька. "
                 "Адрес должен быть валидным BSC-адресом (0x + 40 hex символов).",
             }
 
-        logger.info(f"[Deposit Scan] Starting scan for user {user_id}, wallet: {mask_address(user.wallet_address)}")
+        logger.info(
+            f"[Deposit Scan] Starting scan for user {user_id}, "
+            f"wallet: {mask_address(user.wallet_address)}"
+        )
 
         # Try cache first
         try:
@@ -129,7 +135,8 @@ class DepositScanService:
                     await self._session.flush()
 
                     logger.info(
-                        f"[CACHE HIT] Deposit data for user {user_id}: total={total_amount} USDT, txs={tx_count}"
+                        f"[CACHE HIT] Deposit data for user {user_id}: "
+                        f"total={total_amount} USDT, txs={tx_count}"
                     )
 
                     return {
@@ -171,8 +178,12 @@ class DepositScanService:
         # Cache the transactions we found
         try:
             from app.config.settings import settings
-            from app.repositories.blockchain_tx_cache_repository import BlockchainTxCacheRepository
-            from app.services.blockchain_tx_cache_service import BlockchainTxCacheService
+            from app.repositories.blockchain_tx_cache_repository import (
+                BlockchainTxCacheRepository,
+            )
+            from app.services.blockchain_tx_cache_service import (
+                BlockchainTxCacheService,
+            )
 
             cache_repo = BlockchainTxCacheRepository(self._session)
 

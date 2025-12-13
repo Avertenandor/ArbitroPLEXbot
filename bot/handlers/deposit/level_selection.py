@@ -15,9 +15,11 @@ from app.models.user import User
 from app.repositories.deposit_level_config_repository import DepositLevelConfigRepository
 from bot.keyboards.reply import cancel_keyboard
 from bot.states.deposit import DepositStates, update_deposit_state_data
+from bot.utils.formatters import format_balance
 from bot.utils.menu_buttons import is_menu_button
+from bot.utils.user_context import get_user_from_context
 
-from .utils import extract_level_type_from_button, format_amount
+from .utils import extract_level_type_from_button
 
 
 router = Router()
@@ -29,13 +31,16 @@ router = Router()
 # - "💰 Уровень 1 ($100-$500)"
 # - "✅ Тестовый ($30-$100) - Активен"
 # - "🔒 Уровень 2 ($500-$1000)"
-# Note: Only match deposit level buttons, not other buttons like "🔐 Закрыть"
-@router.message(
-    F.text.regexp(
-        r"^(🎯 Тестовый|💰 Уровень 1|💎 Уровень 2|🏆 Уровень 3|👑 Уровень 4|🚀 Уровень 5|"
-        r"✅ (Тестовый|Уровень \d)|🔒 (Тестовый|Уровень \d)).*$"
-    )
+# Note: Only match deposit level buttons, not other buttons
+DEPOSIT_LEVEL_PATTERN = (
+    r"^(🎯 Тестовый|💰 Уровень 1|💎 Уровень 2|"
+    r"🏆 Уровень 3|👑 Уровень 4|🚀 Уровень 5|"
+    r"✅ (Тестовый|Уровень \d)|"
+    r"🔒 (Тестовый|Уровень \d)).*$"
 )
+
+
+@router.message(F.text.regexp(DEPOSIT_LEVEL_PATTERN))
 async def select_deposit_level(
     message: Message,
     state: FSMContext,
@@ -55,7 +60,13 @@ async def select_deposit_level(
         state: FSM state
         data: Additional data including session_factory and user
     """
-    user: User | None = data.get("user")
+    # Get session for user loading
+    session = data.get("session")
+    if not session:
+        await message.answer("❌ Системная ошибка.")
+        return
+
+    user = await get_user_from_context(message, session, data)
     if not user:
         await message.answer("❌ Ошибка: пользователь не найден")
         return
@@ -67,7 +78,9 @@ async def select_deposit_level(
     # Extract level type from button text
     level_type = extract_level_type_from_button(message.text or "")
     if not level_type:
-        await message.answer("❌ Не удалось определить уровень депозита")
+        await message.answer(
+            "❌ Не удалось определить уровень депозита"
+        )
         return
 
     logger.info(
@@ -83,11 +96,18 @@ async def select_deposit_level(
     # Check if level is already active (button text contains "Активен")
     is_active_level = "Активен" in (message.text or "")
     if is_active_level:
-        await message.answer(
+        active_level_msg = (
             "ℹ️ **Уровень уже активен**\n\n"
-            "У вас уже есть активный депозит этого уровня.\n"
-            "Повторная покупка того же уровня не разрешена.\n\n"
-            "Выберите другой уровень депозита или проверьте свои активные депозиты в разделе '📦 Мои депозиты'.",
+            "У вас уже есть активный депозит "
+            "этого уровня.\n"
+            "Повторная покупка того же уровня "
+            "не разрешена.\n\n"
+            "Выберите другой уровень депозита "
+            "или проверьте свои активные депозиты "
+            "в разделе '📦 Мои депозиты'."
+        )
+        await message.answer(
+            active_level_msg,
             parse_mode="Markdown",
         )
         return
@@ -95,10 +115,14 @@ async def select_deposit_level(
     # Check if level is locked (button text contains "🔒")
     is_locked_level = "🔒" in (message.text or "")
     if is_locked_level:
-        await message.answer(
+        locked_level_msg = (
             "❌ **Уровень недоступен**\n\n"
             "Этот уровень заблокирован.\n"
-            "Проверьте требования для разблокировки или выберите другой уровень.",
+            "Проверьте требования для разблокировки "
+            "или выберите другой уровень."
+        )
+        await message.answer(
+            locked_level_msg,
             parse_mode="Markdown",
         )
         return
@@ -109,7 +133,11 @@ async def select_deposit_level(
         # Fallback to old session
         session = data.get("session")
         if not session:
-            await message.answer("❌ Системная ошибка. Отправьте /start или обратитесь в поддержку.")
+            error_msg = (
+                "❌ Системная ошибка. "
+                "Отправьте /start или обратитесь в поддержку."
+            )
+            await message.answer(error_msg)
             return
 
         config_repo = DepositLevelConfigRepository(session)
@@ -130,10 +158,14 @@ async def select_deposit_level(
 
     # Check if level is active
     if not level_config.is_active:
-        await message.answer(
+        inactive_level_msg = (
             f"❌ **Уровень временно недоступен**\n\n"
-            f"Уровень '{level_config.name}' временно закрыт для новых депозитов.\n"
-            f"Выберите другой уровень или попробуйте позже.",
+            f"Уровень '{level_config.name}' временно закрыт "
+            f"для новых депозитов.\n"
+            f"Выберите другой уровень или попробуйте позже."
+        )
+        await message.answer(
+            inactive_level_msg,
             parse_mode="Markdown",
         )
         return
@@ -148,8 +180,8 @@ async def select_deposit_level(
     )
 
     # Format amounts for display
-    min_amt_str = format_amount(level_config.min_amount)
-    max_amt_str = format_amount(level_config.max_amount)
+    min_amt_str = format_balance(level_config.min_amount, decimals=2)
+    max_amt_str = format_balance(level_config.max_amount, decimals=2)
 
     # Show corridor and ask for amount
     text = (

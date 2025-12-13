@@ -146,7 +146,7 @@ class Deposit(Base):
         DateTime(timezone=True), nullable=True,
         comment="When this deposit was consolidated"
     )
-    consolidated_tx_hashes: Mapped[list | None] = mapped_column(
+    consolidated_tx_hashes: Mapped[list[str] | None] = mapped_column(
         JSONB, nullable=True,
         comment="Original tx hashes if consolidated from multiple transactions"
     )

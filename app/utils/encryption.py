@@ -1,9 +1,10 @@
 """Encryption utilities for PII data."""
 
 import base64
+import binascii
 import os
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from loguru import logger
 
 
@@ -27,9 +28,9 @@ class EncryptionService:
             try:
                 self.fernet = Fernet(encryption_key.encode())
                 self.enabled = True
-            except Exception as e:
+            except (ValueError, TypeError, binascii.Error):
                 # SECURITY: Do not log exception details - may contain key info
-                logger.warning("Encryption operation failed (details hidden for security)")
+                logger.warning("Encryption operation failed (details hidden for security)", exc_info=False)
                 self.fernet = None
                 self.enabled = False
                 if self.environment == "production":
@@ -76,9 +77,9 @@ class EncryptionService:
             encrypted = self.fernet.encrypt(plaintext.encode())
             return base64.b64encode(encrypted).decode()
 
-        except Exception as e:
+        except (AttributeError, TypeError, ValueError):
             # SECURITY: Do not log exception details - may contain sensitive data
-            logger.warning("Encryption operation failed (details hidden for security)")
+            logger.warning("Encryption operation failed (details hidden for security)", exc_info=False)
             return None
 
     def decrypt(self, ciphertext: str) -> str | None:
@@ -110,9 +111,9 @@ class EncryptionService:
             decrypted = self.fernet.decrypt(encrypted)
             return decrypted.decode()
 
-        except Exception:
+        except (InvalidToken, binascii.Error, ValueError, TypeError):
             # SECURITY: Do not log exception details - may contain sensitive data
-            logger.error("Decryption operation failed")
+            logger.error("Decryption operation failed", exc_info=False)
             from app.utils.exceptions import SecurityError
             raise SecurityError("Decryption failed: invalid ciphertext or key mismatch")
 

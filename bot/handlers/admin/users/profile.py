@@ -16,7 +16,7 @@ from app.services.user_service import UserService
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
 from bot.keyboards.reply import admin_user_profile_keyboard
 from bot.utils.admin_utils import clear_state_preserve_admin_token
-from bot.utils.formatters import escape_md
+from bot.utils.formatters import escape_md, format_balance
 
 
 router = Router(name="admin_users_profile")
@@ -127,10 +127,10 @@ async def show_user_profile(
         f"• Кошелек: {wallet}\n"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"💰 **Финансы:**\n"
-        f"• Баланс: `{balance_data['total_balance']:.2f} USDT`\n"
-        f"• Депозиты: `{balance_data['total_deposits']:.2f} USDT`\n"
-        f"• Выводы: `{balance_data['total_withdrawals']:.2f} USDT`\n"
-        f"• Заработано: `{balance_data['total_earnings']:.2f} USDT`\n"
+        f"• Баланс: `{format_balance(balance_data['total_balance'], decimals=2)} USDT`\n"
+        f"• Депозиты: `{format_balance(balance_data['total_deposits'], decimals=2)} USDT`\n"
+        f"• Выводы: `{format_balance(balance_data['total_withdrawals'], decimals=2)} USDT`\n"
+        f"• Заработано: `{format_balance(balance_data['total_earnings'], decimals=2)} USDT`\n"
     )
 
     # Add bonus info if user has bonuses
@@ -140,8 +140,8 @@ async def show_user_profile(
         text += (
             f"━━━━━━━━━━━━━━━━━━\n"
             f"🎁 **Бонусы:**\n"
-            f"• Бонусный баланс: `{float(bonus_balance):.2f} USDT`\n"
-            f"• ROI с бонусов: `{float(bonus_roi):.2f} USDT`\n"
+            f"• Бонусный баланс: `{format_balance(bonus_balance, decimals=2)} USDT`\n"
+            f"• ROI с бонусов: `{format_balance(bonus_roi, decimals=2)} USDT`\n"
         )
 
     # Calculate PLEX breakdown
@@ -152,7 +152,7 @@ async def show_user_profile(
     text += (
         f"━━━━━━━━━━━━━━━━━━\n"
         f"💎 **Депозит (из блокчейна):**\n"
-        f"• Всего внесено: `{user.total_deposited_usdt:.2f} USDT`\n"
+        f"• Всего внесено: `{format_balance(user.total_deposited_usdt, decimals=2)} USDT`\n"
         f"• Статус: {user.deposit_status_text}\n"
     )
 

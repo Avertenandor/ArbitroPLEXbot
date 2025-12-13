@@ -65,7 +65,10 @@ class AISystemService:
         if error:
             return {"success": False, "error": error}
         if not self._is_trusted_admin():
-            return {"success": False, "error": "❌ Нет доступа к системным настройкам"}
+            return {
+                "success": False,
+                "error": "❌ Нет доступа к системным настройкам"
+            }
 
         repo = GlobalSettingsRepository(self.session)
         settings = await repo.get_settings()
@@ -285,7 +288,10 @@ class AISystemService:
         if error:
             return {"success": False, "error": error}
         if not self._is_trusted_admin():
-            return {"success": False, "error": "❌ Нет доступа к системным настройкам"}
+            return {
+                "success": False,
+                "error": "❌ Нет доступа к системным настройкам"
+            }
 
         try:
             from app.services.blockchain_service import get_blockchain_service
@@ -337,16 +343,19 @@ class AISystemService:
         if error:
             return {"success": False, "error": error}
         if not self._is_trusted_admin():
-            return {"success": False, "error": "❌ Нет прав на переключение провайдера"}
+            return {
+                "success": False,
+                "error": "❌ Нет прав на переключение провайдера"
+            }
 
         provider = provider.lower().strip()
         valid_providers = ["quicknode", "nodereal", "nodereal2"]
 
         if provider not in valid_providers:
+            valid_list = ', '.join(valid_providers)
             return {
                 "success": False,
-                "error": (
-                    f"❌ Неверный провайдер. " f"Допустимые: {', '.join(valid_providers)}" )
+                "error": f"❌ Неверный провайдер. Допустимые: {valid_list}"
             }
         # NodeReal2 - only for super_admin
         if provider == "nodereal2" and not self._is_super_admin():
@@ -403,12 +412,11 @@ class AISystemService:
             logger.info(
                 f"AI SYSTEM: RPC auto-switch {status} by admin "
                 f"{self.admin_telegram_id} (@{self.admin_username})" )
+            status_text = 'ВКЛ' if enable else 'ВЫКЛ'
             return {
                 "success": True,
                 "auto_switch": enable,
-                "message": (
-                    f"✅ Авто-переключение провайдеров " f"{'ВКЛ' if enable else 'ВЫКЛ'}"
-                ),
+                "message": f"✅ Авто-переключение провайдеров {status_text}",
                 "admin": f"@{self.admin_username}"
             }
         except Exception as e:
@@ -431,6 +439,12 @@ class AISystemService:
 
         repo = GlobalSettingsRepository(self.session)
         settings = await repo.get_settings()
+        min_withdrawal = float(
+            getattr(settings, 'min_withdrawal_amount', 0.5)
+        )
+        max_withdrawal = float(
+            getattr(settings, 'max_withdrawal_amount', 10000)
+        )
         return {
             "success": True,
             "settings": {
@@ -439,10 +453,8 @@ class AISystemService:
                 "emergency_stop_roi": settings.emergency_stop_roi,
                 "active_rpc_provider": settings.active_rpc_provider,
                 "rpc_auto_switch": settings.rpc_auto_switch,
-                "min_withdrawal_amount": float( getattr(settings, 'min_withdrawal_amount', 0.5)
-                ),
-                "max_withdrawal_amount": float( getattr(settings, 'max_withdrawal_amount', 10000)
-                ),
+                "min_withdrawal_amount": min_withdrawal,
+                "max_withdrawal_amount": max_withdrawal,
             },
             "message": "⚙️ Глобальные настройки платформы"
         }

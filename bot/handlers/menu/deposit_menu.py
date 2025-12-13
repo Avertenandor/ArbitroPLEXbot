@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User
 from bot.keyboards.reply import deposit_keyboard
-from bot.utils.user_loader import UserLoader
+from bot.utils.user_context import get_user_from_context
 
 
 router = Router()
@@ -31,10 +31,9 @@ async def show_deposit_menu(
     """Show deposit menu."""
     telegram_id = message.from_user.id if message.from_user else None
     logger.info(f"[MENU] show_deposit_menu called for user {telegram_id}")
-    user: User | None = data.get("user")
-    logger.info(f"[MENU] User from data: {user.id if user else None}, data keys: {list(data.keys())}")
-    if not user and telegram_id:
-        user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
+
+    user = await get_user_from_context(message, session, data)
+    logger.info(f"[MENU] User from context: {user.id if user else None}, data keys: {list(data.keys())}")
     if not user:
         await message.answer(
             "⚠️ Ошибка: не удалось загрузить данные пользователя. "

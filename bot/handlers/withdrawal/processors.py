@@ -25,7 +25,9 @@ from bot.keyboards.reply import (
     withdrawal_keyboard,
 )
 from bot.states.withdrawal import WithdrawalStates
+from bot.utils.formatters import format_balance, format_wallet_short
 from bot.utils.menu_buttons import is_menu_button
+from bot.utils.user_context import get_user_from_context
 
 from .auto_payout import _safe_process_auto_payout
 from .eligibility import check_withdrawal_eligibility
@@ -42,7 +44,8 @@ async def confirm_withdrawal(
     **data: Any,
 ) -> None:
     """Handle withdrawal confirmation."""
-    user: User | None = data.get("user")
+    session = data.get("session")
+    user = await get_user_from_context(message, session, data)
     if not user:
         await message.answer("❌ Ошибка: пользователь не найден")
         await state.clear()
@@ -62,7 +65,7 @@ async def confirm_withdrawal(
 
         text = (
             f"💸 *Вывод средств*\n\n"
-            f"Сумма к выводу: *{amount} USDT*\n\n"
+            f"Сумма к выводу: *{format_balance(Decimal(amount), decimals=2)} USDT*\n\n"
             f"🔐 Введите ваш финансовый пароль:"
         )
 
@@ -90,15 +93,15 @@ async def process_withdrawal_amount(
     **data: Any,
 ) -> None:
     """Process withdrawal amount."""
-    user: User | None = data.get("user")
-    if not user:
-        await message.answer(get_text('errors.user_not_found'))
-        await state.clear()
-        return
-
     session = data.get("session")
     if not session:
         await message.answer(get_text('errors.system_error'))
+        await state.clear()
+        return
+
+    user = await get_user_from_context(message, session, data)
+    if not user:
+        await message.answer(get_text('errors.user_not_found'))
         await state.clear()
         return
 
@@ -154,7 +157,7 @@ async def process_withdrawal_amount(
     if not balance or Decimal(str(balance["available_balance"])) < amount:
         await message.answer(
             f"❌ Недостаточно средств!\n\n"
-            f"Доступно: {balance['available_balance']:.2f} USDT\n"
+            f"Доступно: {format_balance(balance['available_balance'], decimals=2)} USDT\n"
             f"Попробуйте меньшую сумму:"
         )
         return
@@ -164,7 +167,7 @@ async def process_withdrawal_amount(
 
     text = (
         f"💸 *Вывод средств*\n\n"
-        f"Сумма: *{amount} USDT*\n\n"
+        f"Сумма: *{format_balance(amount, decimals=2)} USDT*\n\n"
         f"🔐 Введите ваш финансовый пароль:"
     )
 
@@ -179,7 +182,8 @@ async def process_financial_password(
     **data: Any,
 ) -> None:
     """Process financial password and create withdrawal."""
-    user: User | None = data.get("user")
+    session = data.get("session")
+    user = await get_user_from_context(message, session, data)
     if not user:
         await message.answer("❌ Ошибка: пользователь не найден")
         await state.clear()
@@ -280,10 +284,10 @@ async def process_financial_password(
             if is_auto:
                 await message.answer(
                     f"✅ *Заявка #{transaction.id} принята!*\n\n"
-                    f"💰 Запрошено: *{transaction.amount} USDT*\n"
-                    f"💸 Комиссия: *{transaction.fee} USDT*\n"
-                    f"✨ К получению: *{net_amount} USDT*\n"
-                    f"💳 Кошелек: `{transaction.to_address[:10]}...{transaction.to_address[-6:]}`\n\n"
+                    f"💰 Запрошено: *{format_balance(transaction.amount, decimals=2)} USDT*\n"
+                    f"💸 Комиссия: *{format_balance(transaction.fee, decimals=2)} USDT*\n"
+                    f"✨ К получению: *{format_balance(net_amount, decimals=2)} USDT*\n"
+                    f"💳 Кошелек: `{format_wallet_short(transaction.to_address)}`\n\n"
                     f"⚡️ *Автоматическая выплата одобрена*\n"
                     f"Средства поступят в течение 1-5 минут.\n\n"
                     f"📊 Статус: '📜 История выводов'",
@@ -304,10 +308,10 @@ async def process_financial_password(
             else:
                 await message.answer(
                     f"✅ *Заявка #{transaction.id} создана!*\n\n"
-                    f"💰 Запрошено: *{transaction.amount} USDT*\n"
-                    f"💸 Комиссия: *{transaction.fee} USDT*\n"
-                    f"✨ К получению: *{net_amount} USDT*\n"
-                    f"💳 Кошелек: `{transaction.to_address[:10]}...{transaction.to_address[-6:]}`\n\n"
+                    f"💰 Запрошено: *{format_balance(transaction.amount, decimals=2)} USDT*\n"
+                    f"💸 Комиссия: *{format_balance(transaction.fee, decimals=2)} USDT*\n"
+                    f"✨ К получению: *{format_balance(net_amount, decimals=2)} USDT*\n"
+                    f"💳 Кошелек: `{format_wallet_short(transaction.to_address)}`\n\n"
                     f"⏱ *Время обработки:* до 24 часов\n"
                     f"📊 Статус можно проверить в '📜 История выводов'",
                     parse_mode="Markdown",
@@ -346,13 +350,13 @@ async def handle_smart_withdrawal_amount(
     Smart handler for numeric input in withdrawal menu context.
     Allows users to type amount directly without clicking button first.
     """
-    user: User | None = data.get("user")
-    if not user:
-        return
-
     session = data.get("session")
     if not session:
         await message.answer(get_text('errors.system_error'))
+        return
+
+    user = await get_user_from_context(message, session, data)
+    if not user:
         return
 
     # R13-3: Get user language
@@ -397,8 +401,8 @@ async def handle_smart_withdrawal_amount(
     if amount > available:
         await message.answer(
             f"❌ Недостаточно средств!\n\n"
-            f"Доступно: {available:.2f} USDT\n"
-            f"Запрошено: {amount:.2f} USDT",
+            f"Доступно: {format_balance(available, decimals=2)} USDT\n"
+            f"Запрошено: {format_balance(amount, decimals=2)} USDT",
             reply_markup=withdrawal_keyboard(),
         )
         return
@@ -412,7 +416,7 @@ async def handle_smart_withdrawal_amount(
 
     await message.answer(
         f"💸 *Вывод средств*\n\n"
-        f"Сумма: *{amount:.2f} USDT*\n\n"
+        f"Сумма: *{format_balance(amount, decimals=2)} USDT*\n\n"
         f"🔐 Введите ваш финансовый пароль:",
         parse_mode="Markdown",
         reply_markup=finpass_input_keyboard(),
@@ -426,7 +430,8 @@ async def back_to_main_from_withdrawal(
     **data: Any,
 ) -> None:
     """Handle 'Main Menu' button from withdrawal menu."""
-    user: User | None = data.get("user")
+    session = data.get("session")
+    user = await get_user_from_context(message, session, data)
     if not user:
         await message.answer(get_text('errors.user_not_found'))
         return

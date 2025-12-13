@@ -18,7 +18,7 @@ from bot.handlers.admin.utils.admin_checks import (
     get_admin_or_deny_callback,
 )
 from bot.keyboards.reply import get_admin_keyboard_from_data
-from bot.utils.formatters import format_usdt
+from bot.utils.formatters import format_balance, format_usdt
 
 from ..helpers import get_role_display, get_role_permissions
 from ..keyboards import bonus_main_menu_keyboard
@@ -62,15 +62,18 @@ async def open_bonus_menu(
     if permissions["can_view"]:
         perm_text.append("✅ просмотр")
 
+    total_granted = format_balance(stats.get('total_granted', 0), decimals=2)
+    last_24h = format_balance(stats.get('last_24h', 0), decimals=2)
     text = (
         f"🎁 **Управление бонусами**\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"👤 Вы: {role_display}\n"
         f"🔐 Права: {', '.join(perm_text)}\n\n"
         f"📊 **Общая статистика:**\n"
-        f"├ 💰 Всего начислено: **{format_usdt(stats.get('total_granted', 0))}** USDT\n"
-        f"├ 🟢 Активных: **{stats.get('active_count', 0)}** бонусов\n"
-        f"├ 📅 За 24 часа: **{format_usdt(stats.get('last_24h', 0))}** USDT\n"
+        f"├ 💰 Всего начислено: **{total_granted}** USDT\n"
+        f"├ 🟢 Активных: **{stats.get('active_count', 0)}** "
+        f"бонусов\n"
+        f"├ 📅 За 24 часа: **{last_24h}** USDT\n"
         f"└ 📋 Всего записей: **{stats.get('total_count', 0)}**\n\n"
         f"_Выберите действие:_"
     )

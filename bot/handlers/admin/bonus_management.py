@@ -25,7 +25,7 @@ from app.services.user_service import UserService
 from bot.handlers.admin.bonus_v2.helpers import get_bonus_status
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny, get_admin_or_deny_callback
 from bot.keyboards.reply import get_admin_keyboard_from_data
-from bot.utils.formatters import format_usdt
+from bot.utils.formatters import format_balance, format_usdt
 from bot.utils.text_utils import escape_markdown
 
 router = Router(name="admin_bonus_management")
@@ -106,10 +106,10 @@ async def open_bonus_menu(
         f"👤 Ваша роль: {role_name}\n\n"
         f"📊 **Статистика:**\n"
         f"• Всего начислено: "
-        f"{format_usdt(stats.get('total_granted', 0))} USDT\n"
+        f"{format_balance(stats.get('total_granted', 0), decimals=2)} USDT\n"
         f"• Активных бонусов: {stats.get('active_count', 0)}\n"
         f"• За последние 24ч: "
-        f"{format_usdt(stats.get('last_24h', 0))} USDT\n\n"
+        f"{format_balance(stats.get('last_24h', 0), decimals=2)} USDT\n\n"
         f"Выберите действие:"
     )
     await message.answer(
@@ -201,9 +201,9 @@ async def process_user_input(
         f"👤 Username: @{safe_username}\n"
         f"🆔 Telegram ID: `{user.telegram_id}`\n"
         f"💰 Текущий бонусный баланс: "
-        f"`{format_usdt(user_stats['total_bonus_balance'])} USDT`\n"
+        f"`{format_balance(user_stats['total_bonus_balance'], decimals=2)} USDT`\n"
         f"📊 Заработано с бонусов: "
-        f"`{format_usdt(user_stats['total_bonus_roi_earned'])} USDT`\n\n"
+        f"`{format_balance(user_stats['total_bonus_roi_earned'], decimals=2)} USDT`\n\n"
         f"💵 Введите сумму бонуса в USDT:"
     )
     await state.set_state(BonusMgmtStates.waiting_amount)

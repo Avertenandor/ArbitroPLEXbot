@@ -20,6 +20,7 @@ from app.repositories.referral_earning_repository import (
     ReferralEarningRepository,
 )
 from app.repositories.transaction_repository import TransactionRepository
+from app.config.constants import BSCSCAN_TX_URL
 
 
 @dataclass
@@ -187,7 +188,7 @@ class TransactionService:
                     description=f"Депозит уровня {deposit.level}",
                     tx_hash=tx_hash,
                     explorer_link=(
-                        f"https://bscscan.com/tx/{tx_hash}"
+                        f"{BSCSCAN_TX_URL}/{tx_hash}"
                         if tx_hash else None
                     ),
                     level=deposit.level,
@@ -242,7 +243,7 @@ class TransactionService:
                     description="Вывод средств",
                     tx_hash=tx_hash,
                     explorer_link=(
-                        f"https://bscscan.com/tx/{tx_hash}"
+                        f"{BSCSCAN_TX_URL}/{tx_hash}"
                         if tx_hash else None
                     ),
                 )

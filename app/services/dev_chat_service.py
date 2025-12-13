@@ -31,7 +31,10 @@ def _escape_markdown(text: str) -> str:
     """Escape Markdown special characters for safe display."""
     if not text:
         return text
-    escape_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    escape_chars = [
+        '_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+',
+        '-', '=', '|', '{', '}', '.', '!'
+    ]
     for char in escape_chars:
         text = text.replace(char, f'\\{char}')
     return text
@@ -85,7 +88,10 @@ class DevChatService:
         try:
             admin = await self._find_admin(admin_identifier)
             if not admin:
-                return {"success": False, "error": f"Admin {admin_identifier} not found"}
+                return {
+                    "success": False,
+                    "error": f"Admin {admin_identifier} not found"
+                }
 
             # Create message payload
             msg_data = {

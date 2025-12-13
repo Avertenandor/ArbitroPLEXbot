@@ -152,6 +152,13 @@ class ReferralService(BaseService):
         self, bot: "Bot", notifications: list
     ) -> None:
         """Send reward notifications to referrers."""
+        from aiogram.exceptions import (
+            TelegramAPIError,
+            TelegramBadRequest,
+            TelegramForbiddenError,
+            TelegramNetworkError,
+        )
+
         from app.services.referral.referral_notifications import (
             notify_referral_reward,
         )
@@ -167,8 +174,36 @@ class ReferralService(BaseService):
                     source_telegram_id=notif.source_telegram_id,
                     reward_type=notif.reward_type,
                 )
-            except Exception as e:
-                logger.warning(f"Failed to send reward notification: {e}")
+            except TelegramForbiddenError as e:
+                logger.warning(
+                    f"User {notif.referrer_telegram_id} blocked the bot, "
+                    f"cannot send reward notification: {e}"
+                )
+            except TelegramBadRequest as e:
+                logger.warning(
+                    f"Bad request sending reward notification to "
+                    f"{notif.referrer_telegram_id}: {e}"
+                )
+            except TelegramNetworkError as e:
+                logger.error(
+                    f"Network error sending reward notification to "
+                    f"{notif.referrer_telegram_id}: {e}"
+                )
+            except TelegramAPIError as e:
+                logger.error(
+                    f"Telegram API error sending reward notification to "
+                    f"{notif.referrer_telegram_id}: {e}"
+                )
+            except (AttributeError, TypeError) as e:
+                logger.error(
+                    f"Invalid notification object structure: {e}",
+                    extra={"notification": notif}
+                )
+            except OSError as e:
+                logger.error(
+                    f"OS/network error sending reward notification to "
+                    f"{notif.referrer_telegram_id}: {e}"
+                )
 
     async def get_referrals_by_level(
         self, user_id: int, level: int, page: int = 1, limit: int = 10

@@ -49,7 +49,12 @@ async def show_rabbit_partner(
 
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🐰 Перейти к покупке кролика", url="https://t.me/dexrabbit_bot?start=ref_9")],
+            [
+                InlineKeyboardButton(
+                    text="🐰 Перейти к покупке кролика",
+                    url="https://t.me/dexrabbit_bot?start=ref_9",
+                )
+            ],
         ]
     )
 
@@ -67,7 +72,11 @@ async def show_rabbit_partner(
     # Send back button
     await message.answer(
         "⬅️ Для возврата в меню нажмите кнопку ниже:",
-        reply_markup=main_menu_reply_keyboard(user=user, blacklist_entry=blacklist_entry, is_admin=is_admin),
+        reply_markup=main_menu_reply_keyboard(
+            user=user,
+            blacklist_entry=blacklist_entry,
+            is_admin=is_admin,
+        ),
     )
 
 
@@ -88,7 +97,12 @@ async def show_rules(
         ]
     )
 
-    await message.answer(RULES_BRIEF_VERSION, reply_markup=kb, parse_mode="Markdown", disable_web_page_preview=True)
+    await message.answer(
+        RULES_BRIEF_VERSION,
+        reply_markup=kb,
+        parse_mode="Markdown",
+        disable_web_page_preview=True,
+    )
 
     # Send back button with reply keyboard
     await message.answer(
@@ -108,12 +122,20 @@ async def show_full_rules(
     # Show full version with "Back to brief" button
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="⬅️ Вернуться к краткой версии", callback_data="rules:brief")],
+            [
+                InlineKeyboardButton(
+                    text="⬅️ Вернуться к краткой версии",
+                    callback_data="rules:brief",
+                )
+            ],
         ]
     )
 
     await callback.message.edit_text(
-        RULES_FULL_TEXT, reply_markup=kb, parse_mode="Markdown", disable_web_page_preview=True
+        RULES_FULL_TEXT,
+        reply_markup=kb,
+        parse_mode="Markdown",
+        disable_web_page_preview=True,
     )
 
 
@@ -132,11 +154,17 @@ async def show_brief_rules_callback(
     )
 
     await callback.message.edit_text(
-        RULES_BRIEF_VERSION, reply_markup=kb, parse_mode="Markdown", disable_web_page_preview=True
+        RULES_BRIEF_VERSION,
+        reply_markup=kb,
+        parse_mode="Markdown",
+        disable_web_page_preview=True,
     )
 
 
-@router.message(StateFilter("*"), F.text.in_({"🌐 Инструменты нашей экосистемы", "🌐 Экосистема"}))
+@router.message(
+    StateFilter("*"),
+    F.text.in_({"🌐 Инструменты нашей экосистемы", "🌐 Экосистема"}),
+)
 async def show_ecosystem_tools(
     message: Message,
     session: AsyncSession,
@@ -149,16 +177,50 @@ async def show_ecosystem_tools(
 
     await state.clear()
 
-    text = "🌐 **Экосистема PLEX**\n\nПроекты и сервисы на базе **PLEX**:\n\nВыберите интересующий проект:"
+    text = (
+        "🌐 **Экосистема PLEX**\n\n"
+        "Проекты и сервисы на базе **PLEX**:\n\n"
+        "Выберите интересующий проект:"
+    )
 
     kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🤖 ArbitroPLEXbot — Торговый бот", url="https://arbitrage-bot.com/")],
-            [InlineKeyboardButton(text="🐰 DEXRabbit — Ферма кроликов", url="https://xn--80apagbbfxgmuj4j.site/")],
-            [InlineKeyboardButton(text="👑 RoyalKeta — Premium сервис", url="https://royalketa.com/")],
-            [InlineKeyboardButton(text="🎬 FreeTube — Видео платформа", url="https://freetube.online/")],
-            [InlineKeyboardButton(text="🛒 BestTrade Store — Магазин ботов", url="https://best-trade.store/bots/")],
-            [InlineKeyboardButton(text="📊 DataPLEX — Аналитика", url="https://data-plex.net/")],
+            [
+                InlineKeyboardButton(
+                    text="🤖 ArbitroPLEXbot — Торговый бот",
+                    url="https://arbitrage-bot.com/",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🐰 DEXRabbit — Ферма кроликов",
+                    url="https://xn--80apagbbfxgmuj4j.site/",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="👑 RoyalKeta — Premium сервис",
+                    url="https://royalketa.com/",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🎬 FreeTube — Видео платформа",
+                    url="https://freetube.online/",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="🛒 BestTrade Store — Магазин ботов",
+                    url="https://best-trade.store/bots/",
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    text="📊 DataPLEX — Аналитика",
+                    url="https://data-plex.net/",
+                )
+            ],
         ]
     )
 
@@ -176,5 +238,9 @@ async def show_ecosystem_tools(
     # Send back button with reply keyboard
     await message.answer(
         "⬅️ Для возврата в главное меню:",
-        reply_markup=main_menu_reply_keyboard(user=user, blacklist_entry=blacklist_entry, is_admin=is_admin),
+        reply_markup=main_menu_reply_keyboard(
+            user=user,
+            blacklist_entry=blacklist_entry,
+            is_admin=is_admin,
+        ),
     )

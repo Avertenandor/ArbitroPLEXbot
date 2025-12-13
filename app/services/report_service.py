@@ -78,7 +78,11 @@ class ReportService:
         return result.scalar_one()
 
     async def _get_transactions(self, user_id: int) -> list[Transaction]:
-        stmt = select(Transaction).where(Transaction.user_id == user_id).order_by(Transaction.created_at.desc())
+        stmt = (
+            select(Transaction)
+            .where(Transaction.user_id == user_id)
+            .order_by(Transaction.created_at.desc())
+        )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
@@ -104,7 +108,11 @@ class ReportService:
 
     async def _get_wallet_history(self, user_id: int) -> list:
         from app.models.user_wallet_history import UserWalletHistory
-        stmt = select(UserWalletHistory).where(UserWalletHistory.user_id == user_id).order_by(UserWalletHistory.changed_at.desc())
+        stmt = (
+            select(UserWalletHistory)
+            .where(UserWalletHistory.user_id == user_id)
+            .order_by(UserWalletHistory.changed_at.desc())
+        )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
@@ -136,9 +144,16 @@ class ReportService:
 
     def _apply_zebra_striping(self, ws) -> None:
         """Apply alternating row colors for readability."""
-        fill_even = PatternFill(start_color="E9EFF7", end_color="E9EFF7", fill_type="solid")
+        fill_even = PatternFill(
+            start_color="E9EFF7", end_color="E9EFF7", fill_type="solid"
+        )
         thin_border = Side(border_style="thin", color="D4D4D4")
-        border = Border(left=thin_border, right=thin_border, top=thin_border, bottom=thin_border)
+        border = Border(
+            left=thin_border,
+            right=thin_border,
+            top=thin_border,
+            bottom=thin_border
+        )
 
         for row in ws.iter_rows(min_row=2):
             for cell in row:
@@ -146,7 +161,9 @@ class ReportService:
                 if row[0].row % 2 == 0:
                     cell.fill = fill_even
 
-    def _create_general_sheet(self, wb, user: User, deposits: list[Deposit], earnings: list) -> None:
+    def _create_general_sheet(
+        self, wb, user: User, deposits: list[Deposit], earnings: list
+    ) -> None:
         ws = wb.active
         ws.title = "Общая информация"
 
@@ -171,7 +188,14 @@ class ReportService:
             ("", ""),
             ("📊 Статистика депозитов", ""),
             ("Всего депозитов", len(deposits)),
-            ("Активных депозитов", len([d for d in deposits if d.status == TransactionStatus.CONFIRMED.value and not d.is_roi_completed])),
+            (
+                "Активных депозитов",
+                len([
+                    d for d in deposits
+                    if d.status == TransactionStatus.CONFIRMED.value
+                    and not d.is_roi_completed
+                ])
+            ),
             ("Общая сумма депозитов", float(sum(d.amount for d in deposits))),
             ("", ""),
             ("🎁 Реферальная статистика", ""),
@@ -194,7 +218,10 @@ class ReportService:
     def _create_transactions_sheet(self, wb, transactions: list[Transaction]) -> None:
         ws = wb.create_sheet("История транзакций")
 
-        headers = ["ID", "Дата", "Тип", "Сумма (USDT)", "Статус", "Описание", "TX Hash", "Баланс до", "Баланс после"]
+        headers = [
+            "ID", "Дата", "Тип", "Сумма (USDT)", "Статус",
+            "Описание", "TX Hash", "Баланс до", "Баланс после"
+        ]
         ws.append(headers)
 
         for tx in transactions:
@@ -217,7 +244,10 @@ class ReportService:
     def _create_deposits_sheet(self, wb, deposits: list[Deposit]) -> None:
         ws = wb.create_sheet("Депозиты")
 
-        headers = ["ID", "Дата", "Уровень", "Сумма (USDT)", "Статус", "ROI Cap", "Выплачено", "Завершено", "Процент дохода", "TX Hash"]
+        headers = [
+            "ID", "Дата", "Уровень", "Сумма (USDT)", "Статус",
+            "ROI Cap", "Выплачено", "Завершено", "Процент дохода", "TX Hash"
+        ]
         ws.append(headers)
 
         for dep in deposits:
@@ -245,7 +275,11 @@ class ReportService:
     def _create_referrals_sheet(self, wb, referrals: list[Referral]) -> None:
         ws = wb.create_sheet("Рефералы")
 
-        headers = ["ID", "Дата регистрации", "Уровень", "Пользователь (Username)", "Пользователь (ID)", "Заработано с него (USDT)"]
+        headers = [
+            "ID", "Дата регистрации", "Уровень",
+            "Пользователь (Username)", "Пользователь (ID)",
+            "Заработано с него (USDT)"
+        ]
         ws.append(headers)
 
         for ref in referrals:
@@ -253,7 +287,11 @@ class ReportService:
             telegram_id = "Неизвестно"
 
             if ref.referral:
-                username = f"@{ref.referral.username}" if ref.referral.username else "Не указан"
+                username = (
+                    f"@{ref.referral.username}"
+                    if ref.referral.username
+                    else "Не указан"
+                )
                 telegram_id = str(ref.referral.telegram_id)
 
             ws.append([

@@ -93,9 +93,13 @@ async def handle_my_inquiries(
     )
 
     if not inquiries:
-        await message.answer(
+        no_inquiries_msg = (
             "📋 У вас нет активных обращений в работе.\n\n"
-            "Возьмите новое обращение из списка «📬 Новые обращения».",
+            "Возьмите новое обращение из списка "
+            "«📬 Новые обращения»."
+        )
+        await message.answer(
+            no_inquiries_msg,
             reply_markup=admin_inquiry_menu_keyboard(),
         )
         return

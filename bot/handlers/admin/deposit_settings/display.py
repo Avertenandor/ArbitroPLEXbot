@@ -14,6 +14,7 @@ from app.repositories.deposit_level_config_repository import (
     DepositLevelConfigRepository,
 )
 from bot.keyboards.reply import admin_deposit_settings_keyboard
+from bot.utils.formatters import format_balance
 
 from .constants import LEVEL_EMOJI
 
@@ -137,14 +138,14 @@ async def show_deposit_statistics(
         emoji = LEVEL_EMOJI.get(level_config.level_type, "📊")
         stats_lines.append(
             f"{emoji} {level_config.name}: "
-            f"{active_count} активных, ${level_total:,.2f}"
+            f"{active_count} активных, ${format_balance(level_total, decimals=2)}"
         )
 
     text = (
         "📊 **Статистика депозитов по уровням**\n\n"
         + "\n".join(stats_lines)
         + f"\n\n**Итого:** {total_active} активных депозитов, "
-        f"${total_amount:,.2f}"
+        f"${format_balance(total_amount, decimals=2)}"
     )
 
     await message.answer(

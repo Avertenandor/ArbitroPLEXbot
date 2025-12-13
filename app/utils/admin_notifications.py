@@ -53,5 +53,5 @@ async def notify_security_event(
             f"Security notification sent: {event_type} (priority: {priority})"
         )
 
-    except Exception as e:
-        logger.error(f"Failed to send security notification: {e}")
+    except Exception as exception:
+        logger.error(f"Failed to send security notification: {exception}")

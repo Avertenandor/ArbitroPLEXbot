@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.services.referral_service import ReferralService
 from bot.keyboards.reply import referral_keyboard
-from bot.utils.formatters import format_usdt
+from bot.utils.formatters import format_balance
 
 
 router = Router(name="referral_leaderboard")
@@ -40,7 +40,7 @@ async def handle_top_partners(
     # Platform stats header
     total_earned = platform_stats.get('total_earnings', 0)
     total_refs = platform_stats.get('total_referrals', 0)
-    text += f"📊 _Всего заработано партнёрами: {format_usdt(total_earned)} USDT_\n"
+    text += f"📊 _Всего заработано партнёрами: {format_balance(total_earned, 2)} USDT_\n"
     text += f"👥 _Всего реферальных связей: {total_refs}_\n\n"
 
     # By referrals
@@ -60,7 +60,7 @@ async def handle_top_partners(
         username = entry["username"] or f"ID:{entry['telegram_id']}"
         username = username.replace("_", "\\_").replace("*", "\\*")[:15]
         earned = entry["total_earnings"]
-        text += f"{medal} @{username} — *{format_usdt(earned)}* USDT\n"
+        text += f"{medal} @{username} — *{format_balance(earned, 2)}* USDT\n"
 
     # User's position
     user_pos = await referral_service.get_user_leaderboard_position(user.id)

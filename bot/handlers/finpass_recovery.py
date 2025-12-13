@@ -134,8 +134,8 @@ async def process_recovery_type_choice(
             from app.repositories.blacklist_repository import BlacklistRepository
             blacklist_repo = BlacklistRepository(session)
             blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
-        except OperationalError as e:
-            logger.error(f"DB error checking blacklist: {e}")
+        except OperationalError as error:
+            logger.error(f"DB error checking blacklist: {error}")
         await message.answer(
             "❌ Восстановление отменено.",
             reply_markup=main_menu_reply_keyboard(
@@ -196,8 +196,8 @@ async def process_new_wallet_for_recovery(
             from app.repositories.blacklist_repository import BlacklistRepository
             blacklist_repo = BlacklistRepository(session)
             blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
-        except OperationalError as e:
-            logger.error(f"DB error checking blacklist: {e}")
+        except OperationalError as error:
+            logger.error(f"DB error checking blacklist: {error}")
         await message.answer(
             "❌ Восстановление отменено.",
             reply_markup=main_menu_reply_keyboard(
@@ -271,8 +271,8 @@ async def process_recovery_reason(
             from app.repositories.blacklist_repository import BlacklistRepository
             blacklist_repo = BlacklistRepository(session)
             blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
-        except OperationalError as e:
-            logger.error(f"DB error checking blacklist: {e}")
+        except OperationalError as error:
+            logger.error(f"DB error checking blacklist: {error}")
             # For cancel operation, we can fallback to None
             pass
         await message.answer(
@@ -347,8 +347,8 @@ async def process_recovery_confirmation(
             from app.repositories.blacklist_repository import BlacklistRepository
             blacklist_repo = BlacklistRepository(session)
             blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
-        except OperationalError as e:
-            logger.error(f"DB error checking blacklist: {e}")
+        except OperationalError as error:
+            logger.error(f"DB error checking blacklist: {error}")
             # For cancel operation, we can fallback to None
             pass
         await message.answer(
@@ -366,8 +366,8 @@ async def process_recovery_confirmation(
             from app.repositories.blacklist_repository import BlacklistRepository
             blacklist_repo = BlacklistRepository(session)
             blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
-        except OperationalError as e:
-            logger.error(f"DB error checking blacklist: {e}")
+        except OperationalError as error:
+            logger.error(f"DB error checking blacklist: {error}")
             # For menu navigation, we can fallback to None
             pass
         await message.answer(
@@ -413,8 +413,8 @@ async def process_recovery_confirmation(
             from app.repositories.blacklist_repository import BlacklistRepository
             blacklist_repo = BlacklistRepository(session)
             blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
-        except OperationalError as e:
-            logger.error(f"DB error checking blacklist: {e}")
+        except OperationalError as error:
+            logger.error(f"DB error checking blacklist: {error}")
         await message.answer(
             "✅ **Заявка на восстановление отправлена!**\n\n"
             f"🔢 Номер заявки: **#{request.id}**\n\n"
@@ -454,11 +454,11 @@ async def process_recovery_confirmation(
                     f"👉 Админ-панель → "
                     f"🔑 Восстановление пароля",
                 )
-            except Exception as e:
-                logger.error(f"Failed to notify admins: {e}")
-    except ValueError as e:
+            except Exception as error:
+                logger.error(f"Failed to notify admins: {error}")
+    except ValueError as error:
         await message.answer(
-            f"❌ Ошибка: {e}\n\n"
+            f"❌ Ошибка: {error}\n\n"
             "Попробуйте позже или обратитесь в поддержку.",
             reply_markup=main_menu_reply_keyboard(user=user, is_admin=is_admin),
         )

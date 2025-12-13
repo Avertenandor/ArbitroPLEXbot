@@ -29,10 +29,13 @@ def bonus_main_menu_keyboard(role: str) -> ReplyKeyboardMarkup:
     Супер-админ: полный доступ
     """
     buttons = []
-    permissions = ROLE_PERMISSIONS.get(
-        role,
-        {"can_grant": False, "can_view": False, "can_cancel_any": False, "can_cancel_own": False},
-    )
+    default_permissions = {
+        "can_grant": False,
+        "can_view": False,
+        "can_cancel_any": False,
+        "can_cancel_own": False
+    }
+    permissions = ROLE_PERMISSIONS.get(role, default_permissions)
 
     # Все роли могут видеть статистику и историю
     buttons.append(
@@ -105,14 +108,25 @@ def confirm_bonus_keyboard() -> InlineKeyboardMarkup:
     )
 
 
-def bonus_details_keyboard(bonus_id: int, can_cancel: bool) -> InlineKeyboardMarkup:
+def bonus_details_keyboard(
+    bonus_id: int,
+    can_cancel: bool
+) -> InlineKeyboardMarkup:
     """Клавиатура деталей бонуса."""
     buttons = []
 
     if can_cancel:
-        buttons.append([InlineKeyboardButton(text="⚠️ Отменить бонус", callback_data=f"bonus_cancel:{bonus_id}")])
+        cancel_button = InlineKeyboardButton(
+            text="⚠️ Отменить бонус",
+            callback_data=f"bonus_cancel:{bonus_id}"
+        )
+        buttons.append([cancel_button])
 
-    buttons.append([InlineKeyboardButton(text="◀️ Назад", callback_data="bonus_back_to_menu")])
+    back_button = InlineKeyboardButton(
+        text="◀️ Назад",
+        callback_data="bonus_back_to_menu"
+    )
+    buttons.append([back_button])
 
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 

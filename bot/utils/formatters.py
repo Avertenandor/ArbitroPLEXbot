@@ -79,6 +79,52 @@ def format_tx_hash_with_link(tx_hash: str | None) -> str:
     return f"`{tx_hash}`"
 
 
+def format_balance(value: Decimal | None, decimals: int = 4) -> str:
+    """
+    Format balance with specified decimals and thousands separator.
+
+    Args:
+        value: Balance value to format (Decimal or None)
+        decimals: Number of decimal places (default: 4)
+
+    Returns:
+        Formatted string (e.g., "1,234.5678") or "—" if None
+    """
+    if value is None:
+        return "—"
+    return f"{float(value):,.{decimals}f}"
+
+
+def format_wallet_short(address: str) -> str:
+    """
+    Format wallet address shortened for display.
+
+    Args:
+        address: Full wallet address
+
+    Returns:
+        Shortened address (e.g., "0x1234567890...12345678")
+    """
+    if len(address) > 20:
+        return f"{address[:10]}...{address[-8:]}"
+    return address
+
+
+def format_wallet_for_copy(address: str) -> str:
+    """
+    Format wallet address for display with full address for copying.
+
+    Uses markdown code formatting so Telegram users can tap to copy.
+
+    Args:
+        address: Full wallet address
+
+    Returns:
+        Address in code block format (e.g., "`0x123...`")
+    """
+    return f"`{address}`"
+
+
 def format_deposit_status(
     amount: Decimal | float,
     level: int,

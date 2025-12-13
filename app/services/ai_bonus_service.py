@@ -98,7 +98,8 @@ class AIBonusService:
 
         # Validate reason
         if not reason or len(reason) < 5:
-            return {"success": False, "error": "❌ Укажите причину начисления (минимум 5 символов)"}
+            error_msg = "❌ Укажите причину начисления (минимум 5 символов)"
+            return {"success": False, "error": error_msg}
 
         # Find user
         user, error = await self._find_user(user_identifier)
@@ -125,6 +126,12 @@ class AIBonusService:
             f"granted {amount} USDT to user {user.id} (@{user.username}): {reason}"
         )
 
+        user_mention = user.username or user.telegram_id
+        success_msg = (
+            f"✅ Бонус {amount} USDT успешно начислен "
+            f"пользователю @{user_mention}!"
+        )
+
         return {
             "success": True,
             "bonus_id": bonus.id,
@@ -132,8 +139,12 @@ class AIBonusService:
             "amount": f"{amount} USDT",
             "roi_cap": f"{amount * 5} USDT",
             "reason": reason,
-            "admin": f"@{admin.username}" if admin.username else str(admin.telegram_id),
-            "message": f"✅ Бонус {amount} USDT успешно начислен пользователю @{user.username or user.telegram_id}!"
+            "admin": (
+                f"@{admin.username}"
+                if admin.username
+                else str(admin.telegram_id)
+            ),
+            "message": success_msg
         }
 
     async def get_user_bonuses(
@@ -177,7 +188,12 @@ class AIBonusService:
         # Format bonuses
         bonuses_list = []
         for b in bonuses:
-            status = "🟢 Активен" if b.is_active else ("✅ Завершён" if b.is_roi_completed else "❌ Отменён")
+            if b.is_active:
+                status = "🟢 Активен"
+            elif b.is_roi_completed:
+                status = "✅ Завершён"
+            else:
+                status = "❌ Отменён"
             bonuses_list.append({
                 "id": b.id,
                 "amount": float(b.amount),
@@ -222,7 +238,8 @@ class AIBonusService:
 
         # Validate reason
         if not reason or len(reason) < 5:
-            return {"success": False, "error": "❌ Укажите причину отмены (минимум 5 символов)"}
+            error_msg = "❌ Укажите причину отмены (минимум 5 символов)"
+            return {"success": False, "error": error_msg}
 
         # Cancel bonus
         bonus_service = BonusService(self.session)

@@ -4,9 +4,16 @@ Health Check Module.
 Contains health check functionality for the BlockchainService.
 """
 
-from typing import Any
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    from ..event_monitor import EventMonitor
+    from ..provider_manager import ProviderManager
+    from .balance_operations import BalanceOperations
 
 
 class HealthCheck:
@@ -21,12 +28,12 @@ class HealthCheck:
 
     def __init__(
         self,
-        provider_manager,
-        balance_operations,
-        event_monitor,
+        provider_manager: ProviderManager,
+        balance_operations: BalanceOperations,
+        event_monitor: EventMonitor,
         system_wallet_address: str,
         payout_wallet_address: str,
-    ):
+    ) -> None:
         """
         Initialize health check.
 

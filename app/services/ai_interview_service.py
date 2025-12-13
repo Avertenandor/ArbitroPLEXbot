@@ -50,7 +50,8 @@ class AIInterviewService:
         interview = cls._active_interviews.get(target_admin_id)
         if interview and interview.status == "active":
             # Check timeout
-            if datetime.utcnow() - interview.last_activity > timedelta(minutes=cls.RESPONSE_TIMEOUT_MINUTES):
+            timeout = timedelta(minutes=cls.RESPONSE_TIMEOUT_MINUTES)
+            if datetime.utcnow() - interview.last_activity > timeout:
                 interview.status = "cancelled"
                 logger.info(f"Interview with {target_admin_id} timed out")
                 return None
@@ -111,9 +112,11 @@ class AIInterviewService:
         # Send first question
         await self._send_next_question(interview)
 
-        logger.info(
-            f"ARIA started interview with @{target_admin_username} on topic '{topic}', {len(questions)} questions"
+        log_msg = (
+            f"ARIA started interview with @{target_admin_username} "
+            f"on topic '{topic}', {len(questions)} questions"
         )
+        logger.info(log_msg)
 
         return {
             "success": True,
@@ -230,7 +233,10 @@ class AIInterviewService:
         """Notify the interviewer that interview is complete."""
         try:
             # Format answers for display
-            answers_text = "\n\n".join([f"**Q:** {qa['question']}\n**A:** {qa['answer']}" for qa in interview.answers])
+            answers_text = "\n\n".join([
+                f"**Q:** {qa['question']}\n**A:** {qa['answer']}"
+                for qa in interview.answers
+            ])
 
             message = (
                 f"📋 **Интервью завершено!**\n\n"

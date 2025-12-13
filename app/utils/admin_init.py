@@ -56,9 +56,9 @@ async def ensure_default_super_admin(
                 f"Fetched username for admin "
                 f"{DEFAULT_SUPER_ADMIN_TELEGRAM_ID}: {username}"
             )
-        except Exception as e:
+        except Exception as exception:
             logger.warning(
-                f"Could not fetch user info from Telegram API: {e}"
+                f"Could not fetch user info from Telegram API: {exception}"
             )
 
     if existing_admin:

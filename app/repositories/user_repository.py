@@ -7,7 +7,7 @@ Data access layer for User model.
 from typing import Any
 
 from loguru import logger
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -72,13 +72,16 @@ class UserRepository(BaseRepository[User]):
         """
         if not wallet_address:
             return None
-        # Try exact match first
+        # Single query with OR condition to check both cases
         normalized = wallet_address.lower()
-        result = await self.get_by(wallet_address=normalized)
-        if result:
-            return result
-        # Try original case
-        return await self.get_by(wallet_address=wallet_address)
+        stmt = select(User).where(
+            or_(
+                User.wallet_address == normalized,
+                User.wallet_address == wallet_address
+            )
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
 
     async def get_by_referral_code(
         self, referral_code: str
@@ -99,6 +102,10 @@ class UserRepository(BaseRepository[User]):
     ) -> User | None:
         """
         Get user by Telegram username (case-insensitive).
+
+        Note: Uses ILIKE which requires a full table scan. For better performance
+        with large datasets, consider adding a functional index:
+        CREATE INDEX idx_users_username_lower ON users (LOWER(username));
 
         Args:
             username: Telegram username (without @)
@@ -123,6 +130,9 @@ class UserRepository(BaseRepository[User]):
         """
         Get user with referrals loaded.
 
+        Eagerly loads both the referrer (who referred this user) and
+        referrals (users this user has referred).
+
         Args:
             user_id: User ID
 
@@ -133,8 +143,8 @@ class UserRepository(BaseRepository[User]):
             select(User)
             .where(User.id == user_id)
             .options(
-                selectinload(User.referrals_as_referrer),
-                selectinload(User.referred_users),
+                selectinload(User.referrer),
+                selectinload(User.referrals),
             )
         )
         result = await self.session.execute(stmt)
@@ -217,13 +227,83 @@ class UserRepository(BaseRepository[User]):
         Returns:
             Number of verified users
         """
-        from sqlalchemy import func
-
         stmt = select(func.count(User.id)).where(
-            User.is_banned == False  # noqa: E712
+            User.is_verified == True  # noqa: E712
         )
         result = await self.session.execute(stmt)
         return result.scalar() or 0
+
+    async def get_users_by_ids(
+        self, user_ids: list[int], load_referrals: bool = False
+    ) -> list[User]:
+        """
+        Get multiple users by IDs in a single query.
+
+        Prevents N+1 queries when loading multiple users.
+
+        Args:
+            user_ids: List of user IDs
+            load_referrals: Whether to eagerly load referral relationships
+
+        Returns:
+            List of users (may be fewer than requested if some IDs don't exist)
+        """
+        if not user_ids:
+            return []
+
+        stmt = select(User).where(User.id.in_(user_ids))
+
+        if load_referrals:
+            stmt = stmt.options(
+                selectinload(User.referrer),
+                selectinload(User.referrals),
+            )
+
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def get_users_by_telegram_ids(
+        self, telegram_ids: list[int], load_referrals: bool = False
+    ) -> list[User]:
+        """
+        Get multiple users by Telegram IDs in a single query.
+
+        Prevents N+1 queries when loading multiple users by Telegram ID.
+
+        Args:
+            telegram_ids: List of Telegram IDs
+            load_referrals: Whether to eagerly load referral relationships
+
+        Returns:
+            List of users (may be fewer than requested if some IDs don't exist)
+        """
+        if not telegram_ids:
+            return []
+
+        stmt = select(User).where(User.telegram_id.in_(telegram_ids))
+
+        if load_referrals:
+            stmt = stmt.options(
+                selectinload(User.referrer),
+                selectinload(User.referrals),
+            )
+
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def count_by_filters(self, **filters: Any) -> int:
+        """
+        Count users matching multiple filters using SQL aggregation.
+
+        More efficient than loading all users and counting in Python.
+
+        Args:
+            **filters: Column filters (e.g., is_verified=True, is_banned=False)
+
+        Returns:
+            Count of matching users
+        """
+        return await self.count(**filters)
 
     async def update(
         self,

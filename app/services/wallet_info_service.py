@@ -20,6 +20,7 @@ from app.config.settings import settings
 from app.services.blockchain.rpc_rate_limiter import RPCRateLimiter
 from app.services.blockchain_service import get_blockchain_service
 from app.utils.security import mask_address
+from app.config.constants import BSCSCAN_TX_URL, RPC_MAX_RPS
 
 
 # Transaction types for display
@@ -79,7 +80,7 @@ class TokenTransaction:
     @property
     def bscscan_url(self) -> str:
         """Get BSCScan URL for transaction."""
-        return f"https://bscscan.com/tx/{self.tx_hash}"
+        return f"{BSCSCAN_TX_URL}/{self.tx_hash}"
 
     @property
     def formatted_value(self) -> str:
@@ -113,7 +114,7 @@ class WalletInfoService:
         """Initialize wallet info service."""
         self.rpc_url = settings.rpc_url
         self._session: aiohttp.ClientSession | None = None
-        self._rate_limiter = RPCRateLimiter(max_rps=25)
+        self._rate_limiter = RPCRateLimiter(max_rps=RPC_MAX_RPS)
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session."""
@@ -198,7 +199,11 @@ class WalletInfoService:
             )
 
         except Exception as e:
-            logger.error(f"Failed to get wallet balances for {mask_address(wallet_address)}: {e}")
+            error_msg = (
+                f"Failed to get wallet balances for "
+                f"{mask_address(wallet_address)}: {e}"
+            )
+            logger.error(error_msg)
             return None
 
     async def _get_current_block(self) -> int:
@@ -254,7 +259,10 @@ class WalletInfoService:
         if incoming_logs:
             for log in incoming_logs[-limit:]:
                 try:
-                    tx = self._parse_transfer_log(log, token_symbol, token_name, decimals, TX_TYPE_TRANSFER_IN)
+                    tx = self._parse_transfer_log(
+                        log, token_symbol, token_name,
+                        decimals, TX_TYPE_TRANSFER_IN
+                    )
                     if tx:
                         transactions.append(tx)
                 except Exception as e:
@@ -271,7 +279,10 @@ class WalletInfoService:
         if outgoing_logs:
             for log in outgoing_logs[-limit:]:
                 try:
-                    tx = self._parse_transfer_log(log, token_symbol, token_name, decimals, TX_TYPE_TRANSFER_OUT)
+                    tx = self._parse_transfer_log(
+                        log, token_symbol, token_name,
+                        decimals, TX_TYPE_TRANSFER_OUT
+                    )
                     if tx:
                         transactions.append(tx)
                 except Exception as e:

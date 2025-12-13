@@ -18,8 +18,9 @@ from app.services.deposit import DepositService
 from bot.keyboards.inline import deposit_status_keyboard
 from bot.keyboards.reply import cancel_keyboard, main_menu_reply_keyboard
 from bot.states.deposit import DepositStates, get_deposit_state_data
-from bot.utils.formatters import format_deposit_status
+from bot.utils.formatters import format_balance, format_deposit_status
 from bot.utils.menu_buttons import is_menu_button
+from bot.utils.user_context import get_user_from_context
 
 
 router = Router()
@@ -47,7 +48,14 @@ async def process_tx_hash(
         state: FSM state
         data: Additional data including session_factory and user
     """
-    user: User | None = data.get("user")
+    # Get session for user loading
+    session = data.get("session")
+    if not session:
+        await message.answer("❌ Системная ошибка.")
+        await state.clear()
+        return
+
+    user = await get_user_from_context(message, session, data)
     if not user:
         await message.answer("❌ Ошибка: пользователь не найден")
         await state.clear()
@@ -166,8 +174,8 @@ async def process_tx_hash(
     confirmation_text = (
         f"✅ **Депозит создан!**\n\n"
         f"📦 Уровень: {state_data.level_name}\n"
-        f"💰 Сумма: {state_data.amount} USDT\n"
-        f"💎 Ежедневный PLEX: {state_data.plex_daily} PLEX\n"
+        f"💰 Сумма: {format_balance(state_data.amount, decimals=2)} USDT\n"
+        f"💎 Ежедневный PLEX: {format_balance(state_data.plex_daily, decimals=2)} PLEX\n"
         f"🆔 ID депозита: {deposit.id}\n"
         f"🔗 Hash транзакции: `{tx_hash}`\n\n"
     )
@@ -175,13 +183,21 @@ async def process_tx_hash(
     # Check ROI cap for level 1
     if level_number == 1:
         roi_cap = state_data.amount * Decimal("5.0")
-        confirmation_text += f"💰 ROI Cap: {roi_cap} USDT (максимум можно заработать)\n\n"
+        roi_cap_msg = (
+            f"💰 ROI Cap: {format_balance(roi_cap, decimals=2)} USDT "
+            f"(максимум можно заработать)\n\n"
+        )
+        confirmation_text += roi_cap_msg
 
+    activation_msg = (
+        "⏱ Депозит будет автоматически активирован "
+        "после подтверждения транзакции "
+        "(обычно 2-5 минут)."
+    )
     confirmation_text += (
         f"📊 **Проверить транзакцию:**\n"
         f"https://bscscan.com/tx/{tx_hash}\n\n"
-        f"⏱ Депозит будет автоматически активирован "
-        f"после подтверждения транзакции (обычно 2-5 минут)."
+        f"{activation_msg}"
     )
 
     is_admin = data.get("is_admin", False)
@@ -191,15 +207,24 @@ async def process_tx_hash(
     if user and session_factory:
         async with session_factory() as fresh_session:
             blacklist_repo = BlacklistRepository(fresh_session)
-            blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
+            blacklist_entry = await blacklist_repo.find_by_telegram_id(
+                user.telegram_id
+            )
     elif user and data.get("session"):
         blacklist_repo = BlacklistRepository(data.get("session"))
-        blacklist_entry = await blacklist_repo.find_by_telegram_id(user.telegram_id)
+        blacklist_entry = await blacklist_repo.find_by_telegram_id(
+            user.telegram_id
+        )
 
+    main_menu_kb = main_menu_reply_keyboard(
+        user=user,
+        blacklist_entry=blacklist_entry,
+        is_admin=is_admin,
+    )
     await message.answer(
         confirmation_text,
         parse_mode="Markdown",
-        reply_markup=main_menu_reply_keyboard(user=user, blacklist_entry=blacklist_entry, is_admin=is_admin),
+        reply_markup=main_menu_kb,
     )
 
     # Get deposit status with confirmations
@@ -207,13 +232,21 @@ async def process_tx_hash(
     if session_factory:
         async with session_factory() as fresh_session:
             async with fresh_session.begin():
-                deposit_service_for_status = DepositService(fresh_session)
-                status_info = await deposit_service_for_status.get_deposit_status_with_confirmations(deposit.id)
+                deposit_service_for_status = DepositService(
+                    fresh_session
+                )
+                status_info = (
+                    await deposit_service_for_status
+                    .get_deposit_status_with_confirmations(deposit.id)
+                )
     else:
         session = data.get("session")
         if session:
             deposit_service_for_status = DepositService(session)
-            status_info = await deposit_service_for_status.get_deposit_status_with_confirmations(deposit.id)
+            status_info = (
+                await deposit_service_for_status
+                .get_deposit_status_with_confirmations(deposit.id)
+            )
 
     # Show deposit status with progress bar
     if status_info and status_info.get("success"):

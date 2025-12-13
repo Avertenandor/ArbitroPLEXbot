@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.deposit_scan_service import DepositScanService
 from app.services.user_service import UserService
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
+from bot.utils.formatters import format_balance
 
 
 router = Router(name="admin_users_deposits")
@@ -67,7 +68,7 @@ async def handle_admin_scan_deposit(
         await message.answer(
             f"🔄 **Результаты сканирования:**\n\n"
             f"👤 Пользователь: `{user.username or user.telegram_id}`\n"
-            f"💰 Всего депозитов: `{total:.2f} USDT`\n"
+            f"💰 Всего депозитов: `{format_balance(total, decimals=2)} USDT`\n"
             f"📊 Транзакций: `{tx_count}`\n"
             f"{status_emoji} Статус: {'Активен' if is_active else 'Неактивен (< 30 USDT)'}\n"
             f"💎 PLEX в сутки: `{int(required_plex):,}`",

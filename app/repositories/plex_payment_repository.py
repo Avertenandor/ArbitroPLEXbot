@@ -279,8 +279,27 @@ class PlexPaymentRepository:
         Returns:
             Total daily PLEX required
         """
-        payments = await self.get_active_by_user_id(user_id)
-        total = sum(p.daily_plex_required for p in payments)
+        from sqlalchemy import func
+
+        result = await self._session.execute(
+            select(func.sum(PlexPaymentRequirement.daily_plex_required))
+            .where(PlexPaymentRequirement.user_id == user_id)
+            .where(
+                PlexPaymentRequirement.status.in_([
+                    PlexPaymentStatus.ACTIVE,
+                    PlexPaymentStatus.WARNING_SENT,
+                    PlexPaymentStatus.PAID,
+                ])
+            )
+        )
+        total = result.scalar()
+
+        if total is None:
+            return Decimal("0")
+
+        # Ensure we return Decimal type
+        if isinstance(total, Decimal):
+            return total
         return Decimal(str(total))
 
     async def delete_by_deposit_id(self, deposit_id: int) -> bool:

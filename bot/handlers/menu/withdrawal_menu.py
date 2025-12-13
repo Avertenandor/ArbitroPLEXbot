@@ -16,7 +16,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.services.user_service import UserService
 from bot.keyboards.reply import withdrawal_keyboard
-from bot.utils.user_loader import UserLoader
+from bot.utils.formatters import format_balance
+from bot.utils.user_context import get_user_from_context
 
 
 router = Router()
@@ -32,10 +33,9 @@ async def show_withdrawal_menu(
     """Show withdrawal menu."""
     telegram_id = message.from_user.id if message.from_user else None
     logger.info(f"[MENU] show_withdrawal_menu called for user {telegram_id}")
-    user: User | None = data.get("user")
-    logger.info(f"[MENU] User from data: {user.id if user else None}, data keys: {list(data.keys())}")
-    if not user and telegram_id:
-        user = await UserLoader.get_user_by_telegram_id(session, telegram_id)
+
+    user = await get_user_from_context(message, session, data)
+    logger.info(f"[MENU] User from context: {user.id if user else None}, data keys: {list(data.keys())}")
     if not user:
         await message.answer(
             "⚠️ Ошибка: не удалось загрузить данные пользователя. "
@@ -70,7 +70,7 @@ async def show_withdrawal_menu(
 
     text = (
         f"💸 *Вывод средств*\n\n"
-        f"Доступно для вывода: `{balance['available_balance']:.2f} USDT`\n"
+        f"Доступно для вывода: `{format_balance(balance['available_balance'], decimals=2)} USDT`\n"
         f"💰 *Минимальная сумма:* `{min_amount} USDT`\n\n"
         f"ℹ️ _Вывод возможен по накоплению {min_amount} USDT прибыли, "
         f"чтобы не нагружать выплатную систему и не переплачивать комиссии._\n\n"

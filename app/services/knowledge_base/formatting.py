@@ -29,13 +29,13 @@ class FormattingMixin:
         ]
         for cat in self.get_categories():
             lines.append(f"[{cat}]")
-            for e in self.entries:
-                if e.get("category") == cat:
-                    v = "+" if e.get("verified_by_boss") else "?"
-                    lines.append(f"{v} В: {e['question']}")
-                    lines.append(f"  О: {e['answer']}")
-                    if c := e.get("clarification"):
-                        lines.append(f"  ! {c}")
+            for entry in self.entries:
+                if entry.get("category") == cat:
+                    verification_mark = "+" if entry.get("verified_by_boss") else "?"
+                    lines.append(f"{verification_mark} В: {entry['question']}")
+                    lines.append(f"  О: {entry['answer']}")
+                    if clarification := entry.get("clarification"):
+                        lines.append(f"  ! {clarification}")
             lines.append("")
         return "\n".join(lines)
 
@@ -55,17 +55,17 @@ class FormattingMixin:
         ]
         for cat in critical_categories:
             entries_in_cat = [
-                e
-                for e in self.entries
-                if e.get("category") == cat
-                and e.get("verified_by_boss")
+                entry
+                for entry in self.entries
+                if entry.get("category") == cat
+                and entry.get("verified_by_boss")
             ]
             if entries_in_cat:
                 lines.append(f"[{cat}]")
-                for e in entries_in_cat[:3]:  # Max 3 per category
-                    answer_preview = e["answer"][:150]
+                for entry in entries_in_cat[:3]:  # Max 3 per category
+                    answer_preview = entry["answer"][:150]
                     lines.append(
-                        f"• {e['question']}: {answer_preview}..."
+                        f"• {entry['question']}: {answer_preview}..."
                     )
         lines.append("")
         lines.append("(Полная база доступна через search_knowledge_base)")

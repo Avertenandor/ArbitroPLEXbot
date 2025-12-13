@@ -9,6 +9,7 @@ from decimal import Decimal
 
 from loguru import logger
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import TransactionStatus, TransactionType
@@ -96,13 +97,14 @@ class WithdrawalBalanceManager:
 
             return True
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(
-                f"Failed to deduct balance: {e}",
+                "Failed to deduct balance",
                 extra={
                     "user_id": user_id,
                     "withdrawal_id": withdrawal_id,
                     "amount": str(amount),
+                    "error": str(e),
                 },
                 exc_info=True,
             )
@@ -159,13 +161,14 @@ class WithdrawalBalanceManager:
 
             return True
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(
-                f"Failed to restore balance: {e}",
+                "Failed to restore balance",
                 extra={
                     "user_id": user_id,
                     "withdrawal_id": withdrawal_id,
                     "amount": str(amount),
+                    "error": str(e),
                 },
                 exc_info=True,
             )
@@ -202,8 +205,15 @@ class WithdrawalBalanceManager:
 
             return fee_amount
 
-        except Exception as e:
-            logger.error(f"Failed to calculate fee: {e}", exc_info=True)
+        except SQLAlchemyError as e:
+            logger.error(
+                "Failed to calculate fee",
+                extra={
+                    "amount": str(amount),
+                    "error": str(e),
+                },
+                exc_info=True,
+            )
             # CRITICAL: Re-raise exception to prevent withdrawal without fee
             raise ValueError(f"Failed to calculate withdrawal fee: {e}") from e
 
@@ -241,10 +251,13 @@ class WithdrawalBalanceManager:
 
             return available_balance
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(
-                f"Failed to get available balance: {e}",
-                extra={"user_id": user_id},
+                "Failed to get available balance",
+                extra={
+                    "user_id": user_id,
+                    "error": str(e),
+                },
                 exc_info=True,
             )
             return Decimal("0.00")
@@ -285,10 +298,13 @@ class WithdrawalBalanceManager:
 
             return pending_total
 
-        except Exception as e:
+        except SQLAlchemyError as e:
             logger.error(
-                f"Failed to get pending withdrawals total: {e}",
-                extra={"user_id": user_id},
+                "Failed to get pending withdrawals total",
+                extra={
+                    "user_id": user_id,
+                    "error": str(e),
+                },
                 exc_info=True,
             )
             return Decimal("0.00")

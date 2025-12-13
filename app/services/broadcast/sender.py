@@ -131,9 +131,9 @@ class BroadcastService(BroadcastServiceCore):
                             parse_mode="Markdown",
                         )
                         last_update_count = total_sent
-                    except Exception as e:
+                    except Exception as error:
                         logger.warning(
-                            f"Failed to update progress message: {e}"
+                            f"Failed to update progress message: {error}"
                         )
 
                 # Pause between batches
@@ -150,19 +150,19 @@ class BroadcastService(BroadcastServiceCore):
                 parse_mode="Markdown",
             )
 
-        except Exception as e:
+        except Exception as error:
             logger.error(
-                f"Broadcast with progress failed: {e}", exc_info=True
+                f"Broadcast with progress failed: {error}", exc_info=True
             )
             try:
                 await progress_message.edit_text(
-                    f"❌ **Ошибка рассылки**: {e}",
+                    f"❌ **Ошибка рассылки**: {error}",
                     parse_mode="Markdown",
                 )
-            except Exception as e:
+            except Exception as update_error:
                 logger.error(
                     f"Failed to update progress message with error "
-                    f"status: {e}"
+                    f"status: {update_error}"
                 )
 
     async def _send_message_to_user(
@@ -294,8 +294,8 @@ class BroadcastService(BroadcastServiceCore):
         except TimeoutError:
             logger.warning(f"Timeout sending to {telegram_id}")
             return telegram_id, "failed"
-        except Exception as e:
-            logger.debug(f"Failed to send to {telegram_id}: {e}")
+        except Exception as error:
+            logger.debug(f"Failed to send to {telegram_id}: {error}")
             return telegram_id, "failed"
 
     async def _broadcast_task(
@@ -447,8 +447,8 @@ class BroadcastService(BroadcastServiceCore):
                     f"Timeout notifying admin {admin_telegram_id} "
                     f"about broadcast completion"
                 )
-            except Exception as e:
-                logger.error(f"Failed to notify admin: {e}")
+            except Exception as error:
+                logger.error(f"Failed to notify admin: {error}")
 
         except asyncio.CancelledError:
             logger.warning(
@@ -462,15 +462,15 @@ class BroadcastService(BroadcastServiceCore):
                         "cancelled"
                     ] = True
             raise  # Always re-raise CancelledError
-        except Exception as e:
+        except Exception as error:
             logger.error(
-                f"Broadcast {broadcast_id} failed: {e}", exc_info=True
+                f"Broadcast {broadcast_id} failed: {error}", exc_info=True
             )
             try:
                 await asyncio.wait_for(
                     self.bot.send_message(
                         admin_telegram_id,
-                        f"❌ **Ошибка рассылки {broadcast_id}**: {e}",
+                        f"❌ **Ошибка рассылки {broadcast_id}**: {error}",
                         parse_mode="Markdown",
                     ),
                     timeout=TELEGRAM_TIMEOUT,

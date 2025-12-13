@@ -101,16 +101,16 @@ async def _aria_list_confirmed_deposits_for_user(
     dep_repo = DepositRepository(session)
 
     if user_identifier.startswith("@"):
-        u = await user_repo.get_by_username(user_identifier[1:])
+        user = await user_repo.get_by_username(user_identifier[1:])
     else:
-        u = await user_repo.get_by_telegram_id(int(user_identifier))
+        user = await user_repo.get_by_telegram_id(int(user_identifier))
 
-    if not u:
+    if not user:
         await message.answer("❌ Пользователь не найден.")
         return
 
     deps = await dep_repo.find_by(
-        user_id=u.id,
+        user_id=user.id,
         status=TransactionStatus.CONFIRMED.value,
     )
     if not deps:
