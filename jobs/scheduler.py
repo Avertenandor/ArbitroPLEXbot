@@ -4,6 +4,7 @@ Task scheduler.
 APScheduler-based periodic task scheduling for background jobs.
 """
 
+import asyncio
 import sys
 import warnings
 from pathlib import Path
@@ -316,9 +317,12 @@ async def start_scheduler() -> None:
     logger.info("Task scheduler started")
 
 
-async def shutdown_with_timeout(scheduler: AsyncIOScheduler, timeout: int = 30) -> None:
+async def shutdown_with_timeout(
+    scheduler: AsyncIOScheduler,
+    timeout: int = 30
+) -> None:
     """
-    Graceful shutdown с таймаутом.
+    Graceful shutdown with timeout.
 
     Args:
         scheduler: Scheduler instance to shutdown
@@ -338,10 +342,13 @@ async def shutdown_with_timeout(scheduler: AsyncIOScheduler, timeout: int = 30) 
 
 
 if __name__ == "__main__":
-    import asyncio
     import signal
 
-    from jobs.health import set_scheduler, start_health_server, stop_health_server
+    from jobs.health import (
+        set_scheduler,
+        start_health_server,
+        stop_health_server,
+    )
 
     # Shutdown event for graceful termination
     shutdown_event = asyncio.Event()

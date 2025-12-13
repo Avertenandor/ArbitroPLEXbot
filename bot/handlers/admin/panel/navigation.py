@@ -103,7 +103,9 @@ async def handle_admin_deposit_settings(
     **data: Any,
 ) -> None:
     """Redirect to deposit settings management (legacy)."""
-    from bot.handlers.admin.deposit_settings import show_deposit_settings
+    from bot.handlers.admin.deposit_settings.display import (
+        show_deposit_settings,
+    )
 
     await show_deposit_settings(message, session, **data)
 

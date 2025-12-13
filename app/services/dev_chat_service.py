@@ -27,6 +27,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Admin
 
 
+def _escape_markdown(text: str) -> str:
+    """Escape Markdown special characters for safe display."""
+    if not text:
+        return text
+    escape_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    for char in escape_chars:
+        text = text.replace(char, f'\\{char}')
+    return text
+
+
 # Redis keys
 DEV_CHAT_OUTBOX = "dev_chat:outbox"  # Messages from Copilot to admins
 DEV_CHAT_INBOX = "dev_chat:inbox"  # Responses from admins
@@ -141,10 +151,16 @@ class DevChatService:
                     "normal": "💬",
                 }.get(msg_data.get("priority", "normal"), "💬")
 
+                safe_sender = _escape_markdown(
+                    msg_data.get('sender', 'Dev')
+                )
+                safe_message = _escape_markdown(msg_data['message'])
                 formatted_msg = (
-                    f"{priority_emoji} **Сообщение от разработчика ({msg_data.get('sender', 'Dev')})**\n\n"
-                    f"{msg_data['message']}\n\n"
-                    f"_Ответьте на это сообщение — ваш ответ будет передан разработчику._\n"
+                    f"{priority_emoji} **Сообщение от разработчика "
+                    f"({safe_sender})**\n\n"
+                    f"{safe_message}\n\n"
+                    f"_Ответьте на это сообщение — ваш ответ будет "
+                    f"передан разработчику._\n"
                     f"_Или используйте команду: /dev\\_reply <ваш ответ>_"
                 )
 

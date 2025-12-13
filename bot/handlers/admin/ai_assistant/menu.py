@@ -1,0 +1,279 @@
+"""
+AI Assistant menu handlers.
+
+Contains handlers for menu navigation and quick actions.
+"""
+
+from typing import Any
+
+from aiogram import F, Router
+from aiogram.filters import StateFilter
+from aiogram.fsm.context import FSMContext
+from aiogram.types import Message
+from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.services.ai_assistant_service import AI_NAME, get_ai_service
+from app.services.monitoring_service import MonitoringService
+from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
+from bot.keyboards.reply import get_admin_keyboard_from_data
+from bot.utils.text_utils import escape_markdown, sanitize_markdown
+
+from .utils import (
+    ai_assistant_keyboard,
+    clear_state_keep_session,
+    chat_keyboard,
+    get_monitoring_data,
+    get_user_role_from_admin,
+    AIAssistantStates,
+)
+
+
+router = Router(name="admin_ai_menu")
+
+
+@router.message(StateFilter("*"), F.text == "🤖 AI Помощник")
+async def handle_ai_assistant_menu(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Show AI assistant menu."""
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
+        return
+
+    await clear_state_keep_session(state)
+
+    ai_service = get_ai_service()
+    status = (
+        "🟢 Онлайн"
+        if ai_service.is_available()
+        else "🔴 Недоступен"
+    )
+    role = get_user_role_from_admin(admin)
+    from app.services.ai_assistant_service import UserRole
+
+    role_name = {
+        UserRole.SUPER_ADMIN: "👑 Владелец",
+        UserRole.EXTENDED_ADMIN: "⭐ Расширенный админ",
+        UserRole.ADMIN: "👤 Админ",
+        UserRole.MODERATOR: "📝 Модератор",
+    }.get(role, "👤 Админ")
+
+    await message.answer(
+        f"🤖 **{AI_NAME}** — AI Помощник\n\n"
+        f"Статус: {status}\n"
+        f"Ваш уровень: {role_name}\n\n"
+        f"Привет, {escape_markdown(admin.display_name)}! "
+        f"Я {AI_NAME} — твой интеллектуальный помощник.\n\n"
+        f"**Что я умею:**\n"
+        f"• Отвечать на вопросы о работе платформы\n"
+        f"• Помогать с админ-функциями\n"
+        f"• Давать советы и рекомендации\n"
+        f"• Объяснять сложные вещи простым языком\n\n"
+        f"Выбери действие или начни свободный диалог:",
+        parse_mode="Markdown",
+        reply_markup=ai_assistant_keyboard(),
+    )
+
+    logger.info(
+        f"Admin {admin.username} (role={role.value}) "
+        f"opened {AI_NAME}",
+    )
+
+
+@router.message(StateFilter("*"), F.text == "💬 Свободный диалог")
+async def start_free_chat(
+    message: Message,
+    session: AsyncSession,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Start free chat mode with AI."""
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
+        return
+
+    await state.set_state(AIAssistantStates.chatting)
+    await state.update_data(conversation_history=[])
+
+    await message.answer(
+        "💬 **Свободный диалог с AI**\n\n"
+        "Теперь можешь писать мне любые вопросы.\n"
+        "Я постараюсь помочь!\n\n"
+        "Напиши свой вопрос или нажми «Завершить диалог»:",
+        parse_mode="Markdown",
+        reply_markup=chat_keyboard(),
+    )
+
+
+@router.message(StateFilter("*"), F.text == "📊 Статус системы")
+async def show_system_status(
+    message: Message,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Show system status via AI."""
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
+        return
+
+    ai_service = get_ai_service()
+    role = get_user_role_from_admin(admin)
+    monitoring_data = await get_monitoring_data(session)
+
+    response = await ai_service.chat(
+        message=(
+            "Дай краткий отчёт о текущем статусе системы "
+            "на основе мониторинга."
+        ),
+        role=role,
+        monitoring_data=monitoring_data,
+    )
+
+    safe_response = sanitize_markdown(response)
+    await message.answer(
+        f"📊 **Статус системы**\n\n{safe_response}",
+        parse_mode="Markdown",
+        reply_markup=ai_assistant_keyboard(),
+    )
+
+
+@router.message(StateFilter("*"), F.text == "👥 Статистика")
+async def show_stats(
+    message: Message,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Show platform statistics."""
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
+        return
+
+    # Get comprehensive stats via monitoring service
+    monitoring = MonitoringService(session)
+    dashboard = await monitoring.get_full_dashboard()
+
+    users = dashboard.get("users", {})
+    fin = dashboard.get("financial", {})
+    admin_stats = dashboard.get("admin", {})
+
+    text = "👥 **Статистика платформы**\n\n"
+    text += "**Пользователи:**\n"
+    text += f"• Всего: **{users.get('total_users', 0)}**\n"
+    text += f"• Активных (24ч): **{users.get('active_24h', 0)}**\n"
+    text += f"• Активных (7д): **{users.get('active_7d', 0)}**\n"
+    text += (
+        f"• Новых за час: **{users.get('new_last_hour', 0)}**\n"
+    )
+    text += f"• Новых сегодня: **{users.get('new_today', 0)}**\n"
+    text += (
+        f"• Верифицированных: "
+        f"**{users.get('verified_users', 0)}**\n\n"
+    )
+    text += "**Финансы:**\n"
+    text += (
+        f"• Депозитов: "
+        f"**${fin.get('total_active_deposits', 0):,.2f}**\n"
+    )
+    text += (
+        f"• Ожидают вывода: "
+        f"**{fin.get('pending_withdrawals_count', 0)}** "
+    )
+    text += (
+        f"(${fin.get('pending_withdrawals_amount', 0):,.2f})\n\n"
+    )
+    text += "**Администраторы:**\n"
+    text += (
+        f"• Всего: **{admin_stats.get('total_admins', 0)}**\n"
+    )
+    text += (
+        f"• Активных (24ч): "
+        f"**{admin_stats.get('active_admins_last_hours', 0)}**\n"
+    )
+    text += (
+        f"• Действий (24ч): "
+        f"**{admin_stats.get('total_actions', 0)}**\n"
+    )
+
+    await message.answer(
+        text,
+        parse_mode="Markdown",
+        reply_markup=ai_assistant_keyboard(),
+    )
+
+
+@router.message(StateFilter("*"), F.text == "❓ Помощь по админке")
+async def show_admin_help(
+    message: Message,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Show admin panel help."""
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
+        return
+
+    ai_service = get_ai_service()
+    role = get_user_role_from_admin(admin)
+
+    response = await ai_service.chat(
+        message=(
+            "Объясни основные функции админ-панели "
+            "и где что найти."
+        ),
+        role=role,
+    )
+
+    safe_response = sanitize_markdown(response)
+    await message.answer(
+        f"❓ **Справка по админ-панели**\n\n{safe_response}",
+        parse_mode="Markdown",
+        reply_markup=ai_assistant_keyboard(),
+    )
+
+
+@router.message(StateFilter("*"), F.text == "📚 FAQ")
+async def show_faq(
+    message: Message,
+    session: AsyncSession,
+    **data: Any,
+) -> None:
+    """Show FAQ."""
+    admin = await get_admin_or_deny(message, session, **data)
+    if not admin:
+        return
+
+    ai_service = get_ai_service()
+    role = get_user_role_from_admin(admin)
+
+    response = await ai_service.chat(
+        message=(
+            "Дай топ-5 частых вопросов от пользователей "
+            "и краткие ответы."
+        ),
+        role=role,
+    )
+
+    safe_response = sanitize_markdown(response)
+    await message.answer(
+        f"📚 **Частые вопросы**\n\n{safe_response}",
+        parse_mode="Markdown",
+        reply_markup=ai_assistant_keyboard(),
+    )
+
+
+@router.message(StateFilter("*"), F.text == "◀️ Назад в админку")
+async def back_to_admin(
+    message: Message,
+    state: FSMContext,
+    **data: Any,
+) -> None:
+    """Return to admin panel."""
+    await clear_state_keep_session(state)
+    await message.answer(
+        "👑 Возвращаюсь в админ-панель...",
+        reply_markup=get_admin_keyboard_from_data(data),
+    )
