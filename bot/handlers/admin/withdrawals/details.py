@@ -90,7 +90,9 @@ async def handle_withdrawal_selection(
     if user_balance:
         total_dep = user_balance.get('total_deposits', 0)
         total_wd = user_balance.get('total_withdrawals', 0)
-        history_text = f"📊 История: депозиты {format_usdt(total_dep)}, выводы {format_usdt(total_wd)}\n"
+        dep_fmt = format_usdt(total_dep)
+        wd_fmt = format_usdt(total_wd)
+        history_text = f"📊 История: депозиты {dep_fmt}, выводы {wd_fmt}\n"
 
     date = withdrawal.created_at.strftime("%d.%m.%Y %H:%M")
     net_amount = withdrawal.amount - withdrawal.fee

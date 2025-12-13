@@ -28,13 +28,15 @@ def emergency_stops_keyboard(
 
     # Deposits control button
     deposits_text = (
-        "▶️ Запустить депозиты" if deposits_stopped else "⏸ Остановить депозиты"
+        "▶️ Запустить депозиты" if deposits_stopped
+        else "⏸ Остановить депозиты"
     )
     builder.row(KeyboardButton(text=deposits_text))
 
     # Withdrawals control button
     withdrawals_text = (
-        "▶️ Запустить выводы" if withdrawals_stopped else "⏸ Остановить выводы"
+        "▶️ Запустить выводы" if withdrawals_stopped
+        else "⏸ Остановить выводы"
     )
     builder.row(KeyboardButton(text=withdrawals_text))
 

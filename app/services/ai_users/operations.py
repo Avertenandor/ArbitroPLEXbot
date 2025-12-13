@@ -134,10 +134,15 @@ class OperationsMixin:
             f"user {user.telegram_id}: {operation} {amount} USDT. Reason: {reason}"
         )
 
+        operation_names = {
+            "add": "➕ Пополнение",
+            "subtract": "➖ Списание",
+            "set": "🎯 Установка"
+        }
         return {
             "success": True,
             "user": format_user_identifier(user),
-            "operation": {"add": "➕ Пополнение", "subtract": "➖ Списание", "set": "🎯 Установка"}.get(operation, operation),
+            "operation": operation_names.get(operation, operation),
             "amount": f"{amount} USDT",
             "old_balance": f"{float(old_balance):.2f} USDT",
             "new_balance": f"{float(user.balance):.2f} USDT",

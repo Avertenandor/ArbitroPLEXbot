@@ -35,7 +35,11 @@ async def show_withdrawal_menu(
     logger.info(f"[MENU] show_withdrawal_menu called for user {telegram_id}")
 
     user = await get_user_from_context(message, session, data)
-    logger.info(f"[MENU] User from context: {user.id if user else None}, data keys: {list(data.keys())}")
+    user_id_log = user.id if user else None
+    logger.info(
+        f"[MENU] User from context: {user_id_log}, "
+        f"data keys: {list(data.keys())}"
+    )
     if not user:
         await message.answer(
             "⚠️ Ошибка: не удалось загрузить данные пользователя. "

@@ -80,12 +80,18 @@ class Settings(BaseSettings):
     # DEPRECATED: Use PLEX_CONTRACT_ADDRESS from app.config.business_constants instead
     plex_contract_address: str = Field(
         default="0xdf179b6cadbc61ffd86a3d2e55f6d6e083ade6c1",
-        description="[DEPRECATED] PLEX token smart contract address on BSC. Use business_constants.PLEX_CONTRACT_ADDRESS"
+        description=(
+            "[DEPRECATED] PLEX token smart contract address on BSC. "
+            "Use business_constants.PLEX_CONTRACT_ADDRESS"
+        )
     )
     # DEPRECATED: Use PLEX_PER_DOLLAR_DAILY from app.config.business_constants instead
     plex_per_dollar_daily: int = Field(
         default=10,
-        description="[DEPRECATED] PLEX tokens required per $1 of deposit per day. Use business_constants.PLEX_PER_DOLLAR_DAILY"
+        description=(
+            "[DEPRECATED] PLEX tokens required per $1 of deposit per day. "
+            "Use business_constants.PLEX_PER_DOLLAR_DAILY"
+        )
     )
     plex_decimals: int = Field(
         default=9,

@@ -133,10 +133,16 @@ def admin_withdrawal_settings_keyboard(
     builder.row(KeyboardButton(text="🛡 Изм. Дневной Лимит"))
     builder.row(KeyboardButton(text="💸 Изм. Комиссию (%)"))
 
-    limit_text = "🔴 Выключить Лимит" if is_daily_limit_enabled else "🟢 Включить Лимит"
+    limit_text = (
+        "🔴 Выключить Лимит" if is_daily_limit_enabled
+        else "🟢 Включить Лимит"
+    )
     builder.row(KeyboardButton(text=limit_text))
 
-    auto_text = "🔴 Выключить Авто-вывод" if auto_withdrawal_enabled else "🟢 Включить Авто-вывод"
+    auto_text = (
+        "🔴 Выключить Авто-вывод" if auto_withdrawal_enabled
+        else "🟢 Включить Авто-вывод"
+    )
     builder.row(KeyboardButton(text=auto_text))
 
     builder.row(
@@ -173,7 +179,9 @@ def admin_withdrawal_history_pagination_keyboard(
     if page > 1:
         nav_buttons.append(KeyboardButton(text="⬅️ Пред. страница выводов"))
     if page < total_pages:
-        nav_buttons.append(KeyboardButton(text="Вперёд страница выводов ➡️"))
+        nav_buttons.append(
+            KeyboardButton(text="Вперёд страница выводов ➡️")
+        )
 
     if nav_buttons:
         builder.row(*nav_buttons)

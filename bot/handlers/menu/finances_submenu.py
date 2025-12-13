@@ -50,7 +50,10 @@ async def show_finances_submenu(
 
     user = await get_user_from_context(message, session, data)
     if not user:
-        await message.answer("⚠️ Ошибка: не удалось загрузить данные пользователя. Попробуйте отправить /start")
+        await message.answer(
+            "⚠️ Ошибка: не удалось загрузить данные пользователя. "
+            "Попробуйте отправить /start"
+        )
         return
 
     await state.clear()
@@ -155,7 +158,10 @@ async def show_funds_overview(
 
     user = await get_user_from_context(message, session, data)
     if not user:
-        await message.answer("⚠️ Ошибка: не удалось загрузить данные пользователя. Попробуйте отправить /start")
+        await message.answer(
+            "⚠️ Ошибка: не удалось загрузить данные пользователя. "
+            "Попробуйте отправить /start"
+        )
         return
 
     await state.clear()
@@ -165,7 +171,10 @@ async def show_funds_overview(
     balance_info = await user_service.get_user_balance(user.id)
 
     if not balance_info:
-        await message.answer("⚠️ Не удалось загрузить информацию о балансе.", reply_markup=finances_submenu_keyboard())
+        await message.answer(
+            "⚠️ Не удалось загрузить информацию о балансе.",
+            reply_markup=finances_submenu_keyboard()
+        )
         return
 
     # Extract balance components
@@ -279,7 +288,10 @@ async def back_to_main_from_finances(
 
     user = await get_user_from_context(message, session, data)
     if not user:
-        await message.answer("⚠️ Ошибка: не удалось загрузить данные пользователя. Попробуйте отправить /start")
+        await message.answer(
+            "⚠️ Ошибка: не удалось загрузить данные пользователя. "
+            "Попробуйте отправить /start"
+        )
         return
 
     # Create safe data copy and remove arguments that are passed positionally

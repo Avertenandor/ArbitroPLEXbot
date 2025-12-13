@@ -17,6 +17,7 @@ from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from bot.i18n.loader import get_user_language
 from bot.keyboards.reply import settings_keyboard
+from bot.messages.error_constants import ERROR_USER_NOT_FOUND
 
 
 router = Router()
@@ -40,7 +41,7 @@ async def show_language_settings(
     """
     user: User | None = data.get("user")
     if not user:
-        await message.answer("❌ Ошибка: пользователь не найден")
+        await message.answer(ERROR_USER_NOT_FOUND)
         return
 
     await state.clear()
@@ -82,7 +83,7 @@ async def process_language_selection(
     """
     user: User | None = data.get("user")
     if not user:
-        await message.answer("❌ Ошибка: пользователь не найден")
+        await message.answer(ERROR_USER_NOT_FOUND)
         return
 
     # Determine selected language

@@ -53,5 +53,6 @@ router.include_router(leaderboard.router)
 router.include_router(promo.router)
 
 # Export router for backward compatibility
-# This allows bot/main.py to continue using: from bot.handlers import referral; dp.include_router(referral.router)
+# This allows bot/main.py to continue using:
+# from bot.handlers import referral; dp.include_router(referral.router)
 __all__ = ["router"]

@@ -50,10 +50,16 @@ async def process_auto_payout(
 
     blockchain_service = get_blockchain_service()
     if not blockchain_service:
-        logger.error(f"Blockchain service not initialized for auto-payout tx {tx_id}")
+        logger.error(
+            f"Blockchain service not initialized for auto-payout tx {tx_id}"
+        )
         return
 
-    logger.info(f"Starting auto-payout for tx {tx_id}, amount {amount} to {mask_address(to_address)}")
+    masked_addr = mask_address(to_address)
+    logger.info(
+        f"Starting auto-payout for tx {tx_id}, "
+        f"amount {amount} to {masked_addr}"
+    )
 
     # Send payment (keep Decimal for precision)
     result = await blockchain_service.send_payment(to_address, amount)
@@ -74,14 +80,17 @@ async def process_auto_payout(
 
             # Notify user about success
             try:
-                # Show net amount that was actually sent (amount param is already net_amount)
+                # Show net amount sent (amount param is already net_amount)
+                amount_fmt = format_balance(amount, decimals=2)
+                wallet_fmt = format_wallet_short(to_address)
                 await bot.send_message(
                     chat_id=telegram_id,
                     text=(
                         f"✅ *Выплата отправлена!*\n\n"
-                        f"💰 Получено: `{format_balance(amount, decimals=2)} USDT`\n"
-                        f"💳 Кошелек: `{format_wallet_short(to_address)}`\n"
-                        f"🔗 TX: [Посмотреть транзакцию](https://bscscan.com/tx/{result['tx_hash']})\n\n"
+                        f"💰 Получено: `{amount_fmt} USDT`\n"
+                        f"💳 Кошелек: `{wallet_fmt}`\n"
+                        f"🔗 TX: [Посмотреть транзакцию]"
+                        f"(https://bscscan.com/tx/{result['tx_hash']})\n\n"
                         f"🤝 Спасибо за ваше доверие к ArbitroPLEXbot!"
                     ),
                     parse_mode="Markdown",

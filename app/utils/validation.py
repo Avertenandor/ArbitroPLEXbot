@@ -86,7 +86,9 @@ def validate_bsc_address(address: str, checksum: bool = True) -> bool:
     if checksum:
         try:
             return Web3.is_checksum_address(address)
-        except Exception:
+        except (ValueError, TypeError) as e:
+            from loguru import logger
+            logger.debug(f"Checksum validation failed for {address}: {e}")
             return False
 
     return True

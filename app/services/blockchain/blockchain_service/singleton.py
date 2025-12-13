@@ -4,8 +4,6 @@ Singleton Module.
 Contains singleton pattern implementation for the BlockchainService.
 """
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING
 
 from loguru import logger

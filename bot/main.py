@@ -144,13 +144,28 @@ async def main() -> None:  # noqa: C901
     try:
         from app.http_health_server import run_health_server
 
-        asyncio.create_task(
+        def _handle_health_server_error(task: asyncio.Task) -> None:
+            """Log errors from health server task."""
+            try:
+                if task.cancelled():
+                    return
+                exc = task.exception()
+                if exc:
+                    logger.error(f"Health server task failed: {exc}")
+            except asyncio.CancelledError:
+                pass
+
+        health_task = asyncio.create_task(
             run_health_server(
                 host="0.0.0.0",
                 port=settings.health_check_port or 8080,
             )
         )
-        logger.info(f"Health check server started on port {settings.health_check_port or 8080}")
+        health_task.add_done_callback(_handle_health_server_error)
+        logger.info(
+            f"Health check server started on port "
+            f"{settings.health_check_port or 8080}"
+        )
     except Exception as e:
         logger.warning(f"Failed to start health check server: {e}")
 

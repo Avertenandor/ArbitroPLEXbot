@@ -14,14 +14,22 @@ from .core_constants import (
     PLEX_DECIMALS,
     PLEX_PER_DOLLAR_DAILY,
 )
+from .payment_verification import PaymentVerifier
+from .plex_payment_scanner import PlexPaymentScanner
+from .plex_payment_verifier import PlexPaymentVerifier
 from .service_facade import BlockchainService
 from .singleton import get_blockchain_service, init_blockchain_service
+from .usdt_deposit_scanner import UsdtDepositScanner
 
 
 __all__ = [
     "BlockchainService",
     "get_blockchain_service",
     "init_blockchain_service",
+    "PaymentVerifier",
+    "PlexPaymentVerifier",
+    "PlexPaymentScanner",
+    "UsdtDepositScanner",
     "USDT_ABI",
     "USDT_DECIMALS",
     "PLEX_ABI",

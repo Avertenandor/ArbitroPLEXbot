@@ -15,6 +15,21 @@ from loguru import logger
 from app.config.constants import BLOCKCHAIN_EXECUTOR_TIMEOUT
 
 
+def _handle_task_exception(task: asyncio.Task) -> None:
+    """Handle exceptions from background tasks to prevent silent failures."""
+    try:
+        if task.cancelled():
+            return
+        exception = task.exception()
+        if exception:
+            logger.error(
+                f"Background task failed: {exception}",
+                exc_info=exception
+            )
+    except asyncio.CancelledError:
+        pass
+
+
 class AsyncBlockchainExecutor:
     """
     Async executor for blockchain operations.
@@ -69,7 +84,8 @@ class AsyncBlockchainExecutor:
             # Try primary provider
             try:
                 # Check primary provider exists
-                if current_name not in self.provider_manager.providers and self.provider_manager.providers:
+                if (current_name not in self.provider_manager.providers
+                    and self.provider_manager.providers):
                     current_name = next(iter(self.provider_manager.providers))
 
                 if current_name not in self.provider_manager.providers:
@@ -87,8 +103,13 @@ class AsyncBlockchainExecutor:
                             timeout=BLOCKCHAIN_EXECUTOR_TIMEOUT,
                         )
                     except TimeoutError:
-                        logger.error(f"Timeout in blockchain operation on provider '{current_name}'")
-                        raise TimeoutError(f"Blockchain operation timeout on {current_name}")
+                        logger.error(
+                            f"Timeout in blockchain operation "
+                            f"on provider '{current_name}'"
+                        )
+                        raise TimeoutError(
+                            f"Blockchain operation timeout on {current_name}"
+                        )
             except Exception as e:
                 if not self.provider_manager.is_auto_switch_enabled:
                     raise e
@@ -118,16 +139,23 @@ class AsyncBlockchainExecutor:
                             )
                         except TimeoutError:
                             logger.error(
-                                f"Timeout in blockchain operation on backup provider '{backup_name}'"
+                                f"Timeout in blockchain operation "
+                                f"on backup provider '{backup_name}'"
                             )
-                            raise TimeoutError(f"Blockchain operation timeout on backup {backup_name}")
+                            raise TimeoutError(
+                                f"Blockchain operation timeout on backup "
+                                f"{backup_name}"
+                            )
 
                     # If success, switch permanent
                     self.provider_manager.active_provider_name = backup_name
                     if self.provider_manager.session_factory:
-                        asyncio.create_task(
-                            self.provider_manager._safe_persist_provider_switch(backup_name)
+                        task = asyncio.create_task(
+                            self.provider_manager._safe_persist_provider_switch(
+                                backup_name
+                            )
                         )
+                        task.add_done_callback(_handle_task_exception)
 
                     return result
                 except Exception as e2:

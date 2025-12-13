@@ -36,7 +36,11 @@ async def show_balance(
     logger.info(f"[MENU] show_balance called for user {telegram_id}")
 
     user = await get_user_from_context(message, session, data)
-    logger.info(f"[MENU] User from context: {user.id if user else None}, data keys: {list(data.keys())}")
+    user_id_log = user.id if user else None
+    logger.info(
+        f"[MENU] User from context: {user_id_log}, "
+        f"data keys: {list(data.keys())}"
+    )
     if not user:
         # R13-3: Get default language for error message
         from bot.i18n.loader import get_text

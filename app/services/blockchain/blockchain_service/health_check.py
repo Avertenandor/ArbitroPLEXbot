@@ -4,8 +4,6 @@ Health Check Module.
 Contains health check functionality for the BlockchainService.
 """
 
-from __future__ import annotations
-
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger

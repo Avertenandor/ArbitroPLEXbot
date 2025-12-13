@@ -4,8 +4,6 @@ ROI Corridor Service.
 Manages ROI corridor configurations and rate generation using GlobalSettings.
 """
 
-from __future__ import annotations
-
 import random
 from datetime import datetime, timedelta
 from decimal import Decimal

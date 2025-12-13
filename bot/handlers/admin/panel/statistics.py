@@ -83,15 +83,25 @@ async def handle_admin_stats(
         # Show up to 15 recent deposits
         show_limit = 15
         for d in detailed_deposits[:show_limit]:
-            next_accrual = d["next_accrual_at"].strftime("%d.%m %H:%M") if d["next_accrual_at"] else "Н/Д"
+            if d["next_accrual_at"]:
+                next_accrual = d["next_accrual_at"].strftime("%d.%m %H:%M")
+            else:
+                next_accrual = "Н/Д"
 
             # Escape username for Markdown
             username = str(d['username'])
-            safe_username = username.replace("_", "\\_").replace("*", "\\*").replace("`", "\\`").replace("[", "\\[")
+            safe_username = (
+                username.replace("_", "\\_")
+                .replace("*", "\\*")
+                .replace("`", "\\`")
+                .replace("[", "\\[")
+            )
+            amount_fmt = format_usdt(d['amount'])
+            roi_paid_fmt = format_usdt(d['roi_paid'])
 
             text += (
                 f"👤 @{safe_username} (ID: {d['user_id']})\n"
-                f"   💵 Деп: {format_usdt(d['amount'])} | Начислено: {format_usdt(d['roi_paid'])}\n"
+                f"   💵 Деп: {amount_fmt} | Начислено: {roi_paid_fmt}\n"
                 f"   ⏳ След. нач: {next_accrual}\n\n"
             )
 
@@ -111,6 +121,8 @@ async def handle_admin_stats(
     lvl3_count = lvl3.get("count", 0)
     lvl3_earn = format_usdt(lvl3.get("earnings", 0))
 
+    total_confirmed = format_usdt(withdrawal_stats["total_confirmed_amount"])
+    total_failed = format_usdt(withdrawal_stats["total_failed_amount"])
     text += f"""
 **Рефералы:**
 🤝 Всего связей: {referral_stats["total_referrals"]}
@@ -124,8 +136,8 @@ async def handle_admin_stats(
 • Уровень 3: {lvl3_count} ({lvl3_earn} USDT)
 
 **💸 Выводы на кошельки:**
-✅ Выведено: {format_usdt(withdrawal_stats["total_confirmed_amount"])} USDT ({withdrawal_stats["total_confirmed"]} транз.)
-❌ Неудачных: {withdrawal_stats["total_failed"]} ({format_usdt(withdrawal_stats["total_failed_amount"])} USDT)
+✅ Выведено: {total_confirmed} USDT ({withdrawal_stats["total_confirmed"]} транз.)
+❌ Неудачных: {withdrawal_stats["total_failed"]} ({total_failed} USDT)
 """
 
     # Add per-user withdrawal summary
@@ -157,7 +169,8 @@ async def handle_admin_stats(
             text += f"• @{safe_wd_username}: {format_usdt(wd['amount'])} | `{tx_short}`\n"
 
         if detailed_wd["total_pages"] > 1:
-            text += f"\n_Стр. {detailed_wd['page']}/{detailed_wd['total_pages']}_ | Нажми 📋 для навигации"
+            page_info = f"{detailed_wd['page']}/{detailed_wd['total_pages']}"
+            text += f"\n_Стр. {page_info}_ | Нажми 📋 для навигации"
 
     text = text.strip()
 

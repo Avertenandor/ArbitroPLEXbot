@@ -47,7 +47,9 @@ def validate_wallet_address(address: str) -> tuple[bool, str | None]:
     try:
         Web3.to_checksum_address(address)
         return True, None
-    except Exception:
+    except (ValueError, TypeError) as e:
+        from loguru import logger
+        logger.debug(f"Address validation failed for {address}: {e}")
         return False, "Invalid address format"
 
 

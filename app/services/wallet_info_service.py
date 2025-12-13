@@ -16,6 +16,7 @@ from typing import Any
 import aiohttp
 from loguru import logger
 
+from app.config.business_constants import PLEX_CONTRACT_ADDRESS
 from app.config.settings import settings
 from app.services.blockchain.rpc_rate_limiter import RPCRateLimiter
 from app.services.blockchain_service import get_blockchain_service
@@ -29,7 +30,6 @@ TX_TYPE_TRANSFER_OUT = "out"
 
 # Token contract addresses
 USDT_CONTRACT = "0x55d398326f99059fF775485246999027B3197955"
-PLEX_CONTRACT = "0xdf179b6cadbc61ffd86a3d2e55f6d6e083ade6c1"
 
 
 @dataclass
@@ -369,7 +369,7 @@ class WalletInfoService:
         """Get PLEX transaction history."""
         return await self.get_token_transactions(
             wallet_address=wallet_address,
-            contract_address=PLEX_CONTRACT,
+            contract_address=PLEX_CONTRACT_ADDRESS,
             token_symbol="PLEX",
             token_name="PLEX Token",
             decimals=9,

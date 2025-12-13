@@ -181,7 +181,10 @@ def parse_content_block(block: Any) -> dict[str, Any]:
 
 def get_unavailable_message() -> str:
     """Get standard unavailable message."""
-    return f"🤖 К сожалению, {AI_NAME} сейчас недоступна. Попробуй позже или обратись напрямую к команде."
+    return (
+        f"🤖 К сожалению, {AI_NAME} сейчас недоступна. "
+        "Попробуй позже или обратись напрямую к команде."
+    )
 
 
 def format_tool_error(tool_name: str, error: str) -> str:

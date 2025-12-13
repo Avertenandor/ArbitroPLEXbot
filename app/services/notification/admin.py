@@ -89,7 +89,10 @@ class AdminNotificationMixin:
                     },
                 )
             except TimeoutError:
-                logger.warning(f"Timeout notifying admin {admin.telegram_id} about ticket {ticket_id}")
+                logger.warning(
+                    f"Timeout notifying admin {admin.telegram_id} "
+                    f"about ticket {ticket_id}"
+                )
                 await self._save_failed_notification(
                     admin.telegram_id,
                     "admin_notification",

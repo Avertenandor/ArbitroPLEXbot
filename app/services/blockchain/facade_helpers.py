@@ -58,7 +58,10 @@ class BlockchainServiceMixin:
                 return self.balance_manager.get_usdt_balance(w3, address)
 
             return await self.async_executor.run_with_failover(_get_bal)
-        except (Web3Exception, ValueError, TimeoutError, ConnectionError, OSError) as error:
+        except (
+            Web3Exception, ValueError, TimeoutError,
+            ConnectionError, OSError
+        ) as error:
             logger.error(f"Get USDT balance failed for {address}: {error}")
             return None
 
@@ -77,7 +80,10 @@ class BlockchainServiceMixin:
                 return self.balance_manager.get_plex_balance(w3, address)
 
             return await self.async_executor.run_with_failover(_get_bal)
-        except (Web3Exception, ValueError, TimeoutError, ConnectionError, OSError) as error:
+        except (
+            Web3Exception, ValueError, TimeoutError,
+            ConnectionError, OSError
+        ) as error:
             logger.error(f"Get PLEX balance failed for {address}: {error}")
             return None
 
@@ -278,8 +284,14 @@ class BlockchainServiceMixin:
 
         try:
             return await self.async_executor.run_with_failover(_verify)
-        except (Web3Exception, ValueError, TimeoutError, ConnectionError, OSError) as error:
-            logger.error(f"[PLEX Verify] Failed for sender {sender_address} amount {target_amount}: {error}")
+        except (
+            Web3Exception, ValueError, TimeoutError,
+            ConnectionError, OSError
+        ) as error:
+            logger.error(
+                f"[PLEX Verify] Failed for sender {sender_address} "
+                f"amount {target_amount}: {error}"
+            )
             return {"success": False, "error": str(error)}
 
     async def get_user_usdt_deposits(
@@ -340,8 +352,14 @@ class BlockchainServiceMixin:
 
         try:
             return await self.async_executor.run_with_failover(_verify)
-        except (Web3Exception, ValueError, TimeoutError, ConnectionError, OSError) as error:
-            logger.error(f"[PLEX Transfer Verify] Failed for sender {from_address} amount {amount}: {error}")
+        except (
+            Web3Exception, ValueError, TimeoutError,
+            ConnectionError, OSError
+        ) as error:
+            logger.error(
+                f"[PLEX Transfer Verify] Failed for sender "
+                f"{from_address} amount {amount}: {error}"
+            )
             return {"success": False, "error": str(error)}
 
     async def scan_plex_payments(

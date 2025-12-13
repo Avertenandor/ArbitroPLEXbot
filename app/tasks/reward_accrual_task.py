@@ -5,8 +5,6 @@ Automatic individual reward calculation for deposits and bonus credits.
 Runs periodically to process deposits that are due for accrual.
 """
 
-from __future__ import annotations
-
 from loguru import logger
 
 from app.config.database import async_session_maker

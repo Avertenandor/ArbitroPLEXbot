@@ -145,7 +145,9 @@ def admin_roi_corridor_menu_keyboard() -> ReplyKeyboardMarkup:
     builder.row(KeyboardButton(text="📊 Текущие настройки"))
     builder.row(KeyboardButton(text="📜 История изменений"))
     builder.row(KeyboardButton(text="⏱ Настроить период начисления"))
-    builder.row(KeyboardButton(text="◀️ Назад в управление депозитами"))
+    builder.row(
+        KeyboardButton(text="◀️ Назад в управление депозитами")
+    )
     builder.row(KeyboardButton(text="👑 Админ-панель"))
     return builder.as_markup(resize_keyboard=True)
 
@@ -176,7 +178,9 @@ def admin_roi_mode_select_keyboard() -> ReplyKeyboardMarkup:
     """
     builder = ReplyKeyboardBuilder()
     builder.row(KeyboardButton(text="🎲 Custom (случайный из коридора)"))
-    builder.row(KeyboardButton(text="📊 Поровну (фиксированный для всех)"))
+    builder.row(
+        KeyboardButton(text="📊 Поровну (фиксированный для всех)")
+    )
     builder.row(
         KeyboardButton(text="◀️ Отмена"),
         KeyboardButton(text="👑 Админ-панель"),

@@ -228,7 +228,8 @@ async def run_task_manually(
     await callback.answer("⏳ Запускаю задачу...")
 
     user: User | None = data.get("user")
-    logger.info(f"[ADMIN] Manual task trigger: {task_id} by {user.telegram_id if user else 'unknown'}")
+    user_tid = user.telegram_id if user else 'unknown'
+    logger.info(f"[ADMIN] Manual task trigger: {task_id} by {user_tid}")
 
     try:
         # Dynamically import and run the task

@@ -29,7 +29,8 @@ LEVELS = {
 }
 
 # Deposit levels configuration with amount corridors
-# Импортировано из единого источника истины: app.config.deposit_levels
+# Импортировано из единого источника истины:
+# app.config.deposit_levels
 DEPOSIT_LEVELS = {
     level_type.value: {
         "min": int(config.min_amount),
@@ -53,8 +54,11 @@ MAX_DEPOSITS_PER_USER = 5
 PLEX_CONTRACT_ADDRESS = "0xdf179b6cadbc61ffd86a3d2e55f6d6e083ade6c1"
 
 # Deposit level order for sequential validation
-# Импортировано из единого источника истины: app.config.deposit_levels
-DEPOSIT_LEVEL_ORDER = [level_type.value for level_type in DEPOSIT_LEVEL_ORDER_TYPES]
+# Импортировано из единого источника истины:
+# app.config.deposit_levels
+DEPOSIT_LEVEL_ORDER = [
+    level_type.value for level_type in DEPOSIT_LEVEL_ORDER_TYPES
+]
 
 # System wallet for PLEX payments (from settings)
 SYSTEM_WALLET = settings.auth_system_wallet_address

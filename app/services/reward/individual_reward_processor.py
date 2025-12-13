@@ -108,12 +108,16 @@ class IndividualRewardProcessor:
 
                 # Determine rate
                 if config["mode"] == "custom":
-                    rate = corridor_service.generate_rate_from_corridor(config["roi_min"], config["roi_max"])
+                    rate = corridor_service.generate_rate_from_corridor(
+                        config["roi_min"], config["roi_max"]
+                    )
                 else:  # equal
                     rate = config["roi_fixed"]
 
                 # Calculate reward using RewardCalculator
-                reward_amount = self.calculator.calculate_reward_amount(deposit.amount, rate, days=1)
+                reward_amount = self.calculator.calculate_reward_amount(
+                    deposit.amount, rate, days=1
+                )
 
                 # Check ROI cap using RewardCalculator
                 reward_amount = self.calculator.cap_reward_to_remaining_roi(reward_amount, deposit)
@@ -149,7 +153,9 @@ class IndividualRewardProcessor:
                 )
 
                 # R19: Process referral rewards from ROI
-                await referral_service.process_roi_referral_rewards(deposit.user_id, reward_amount)
+                await referral_service.process_roi_referral_rewards(
+                    deposit.user_id, reward_amount
+                )
 
                 # Check if ROI completed using RewardCalculator
                 if self.calculator.is_roi_cap_reached(deposit, total_earned=new_roi_paid):

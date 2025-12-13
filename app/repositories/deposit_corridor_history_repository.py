@@ -4,8 +4,6 @@ Deposit corridor history repository.
 Handles database operations for corridor history tracking.
 """
 
-from __future__ import annotations
-
 from decimal import Decimal
 
 from sqlalchemy import select

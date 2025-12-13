@@ -84,7 +84,9 @@ class RateLimiter:
         except (RedisError, ConnectionError, TimeoutError) as e:
             # R11-2: Redis failed, continue without rate limiting
             logger.warning(
-                f"R11-2: Redis error tracking failed login for telegram_id={telegram_id}: {type(e).__name__}: {e}. "
+                f"R11-2: Redis error tracking failed login "
+                f"for telegram_id={telegram_id}: "
+                f"{type(e).__name__}: {e}. "
                 "Continuing without rate limiting (degraded mode).",
                 exc_info=True
             )
@@ -111,7 +113,9 @@ class RateLimiter:
         except (RedisError, ConnectionError, TimeoutError) as e:
             # R11-2: Redis failed, continue without clearing
             logger.warning(
-                f"R11-2: Redis error clearing failed login attempts for telegram_id={telegram_id}: {type(e).__name__}: {e}. "
+                f"R11-2: Redis error clearing failed login attempts "
+                f"for telegram_id={telegram_id}: "
+                f"{type(e).__name__}: {e}. "
                 "Continuing without clearing (degraded mode).",
                 exc_info=True
             )
@@ -173,19 +177,22 @@ class RateLimiter:
 
         except SQLAlchemyError as e:
             logger.error(
-                f"Database error blocking telegram_id={telegram_id} for failed logins: {type(e).__name__}: {e}",
+                f"Database error blocking telegram_id={telegram_id} "
+                f"for failed logins: {type(e).__name__}: {e}",
                 exc_info=True
             )
             await self.session.rollback()
         except (ImportError, AttributeError) as e:
             logger.error(
-                f"Module/attribute error while blocking telegram_id={telegram_id}: {type(e).__name__}: {e}",
+                f"Module/attribute error while blocking "
+                f"telegram_id={telegram_id}: {type(e).__name__}: {e}",
                 exc_info=True
             )
             await self.session.rollback()
         except TelegramAPIError as e:
             logger.error(
-                f"Telegram API error while notifying about blocking telegram_id={telegram_id}: {type(e).__name__}: {e}",
+                f"Telegram API error while notifying about blocking "
+                f"telegram_id={telegram_id}: {type(e).__name__}: {e}",
                 exc_info=True
             )
 

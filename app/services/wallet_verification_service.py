@@ -4,8 +4,6 @@ Wallet verification service.
 Performs on-chain checks for PLEX/USDT balances and basic level detection.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from decimal import Decimal
 

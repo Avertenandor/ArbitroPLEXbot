@@ -68,7 +68,9 @@ def admin_keyboard(
     # Referral stats
     builder.row(KeyboardButton(text="📊 Реферальная статистика"))
 
-    builder.row(KeyboardButton(text="📝 Просмотр сообщений пользователей"))
+    builder.row(
+        KeyboardButton(text="📝 Просмотр сообщений пользователей")
+    )
 
     # AI Assistant - available for all admins
     builder.row(KeyboardButton(text="🤖 AI Помощник"))

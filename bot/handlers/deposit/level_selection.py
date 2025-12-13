@@ -12,8 +12,15 @@ from aiogram.types import Message
 from loguru import logger
 
 from app.models.user import User
-from app.repositories.deposit_level_config_repository import DepositLevelConfigRepository
+from app.repositories.deposit_level_config_repository import (
+    DepositLevelConfigRepository,
+)
 from bot.keyboards.reply import cancel_keyboard
+from bot.messages.error_constants import (
+    ERROR_SYSTEM_DOT,
+    ERROR_SYSTEM_TRY_START,
+    ERROR_USER_NOT_FOUND,
+)
 from bot.states.deposit import DepositStates, update_deposit_state_data
 from bot.utils.formatters import format_balance
 from bot.utils.menu_buttons import is_menu_button
@@ -63,12 +70,12 @@ async def select_deposit_level(
     # Get session for user loading
     session = data.get("session")
     if not session:
-        await message.answer("❌ Системная ошибка.")
+        await message.answer(ERROR_SYSTEM_DOT)
         return
 
     user = await get_user_from_context(message, session, data)
     if not user:
-        await message.answer("❌ Ошибка: пользователь не найден")
+        await message.answer(ERROR_USER_NOT_FOUND)
         return
 
     # Check if message is a menu button - if so, ignore and let menu handlers process it
@@ -133,11 +140,7 @@ async def select_deposit_level(
         # Fallback to old session
         session = data.get("session")
         if not session:
-            error_msg = (
-                "❌ Системная ошибка. "
-                "Отправьте /start или обратитесь в поддержку."
-            )
-            await message.answer(error_msg)
+            await message.answer(ERROR_SYSTEM_TRY_START)
             return
 
         config_repo = DepositLevelConfigRepository(session)

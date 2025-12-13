@@ -138,7 +138,11 @@ async def process_balance_change(
     admin_id = admin.id if admin else None
 
     # Security log (simplified usage)
-    logger.warning(f"Admin {admin_id} changed balance for user {user_id} by {amount}. New: {new_balance}")
+    log_msg = (
+        f"Admin {admin_id} changed balance for user {user_id} "
+        f"by {amount}. New: {new_balance}"
+    )
+    logger.warning(log_msg)
 
     admin_log = AdminLogService(session)
     action = "Начисление" if amount > 0 else "Списание"
@@ -147,11 +151,19 @@ async def process_balance_change(
         action=f"balance_change_{'credit' if amount > 0 else 'debit'}",
         entity_type="user",
         entity_id=user_id,
-        details={"amount": float(amount), "old_balance": float(old_balance), "new_balance": float(new_balance)},
+        details={
+            "amount": float(amount),
+            "old_balance": float(old_balance),
+            "new_balance": float(new_balance)
+        },
         ip_address=None,
     )
 
-    await message.answer(f"✅ Баланс успешно изменен.\n{action}: {amount} USDT\nНовый баланс: {new_balance} USDT")
+    await message.answer(
+        f"✅ Баланс успешно изменен.\n"
+        f"{action}: {amount} USDT\n"
+        f"Новый баланс: {new_balance} USDT"
+    )
 
     # Reload user to show updated profile
     user = await user_service.get_by_id(user_id)

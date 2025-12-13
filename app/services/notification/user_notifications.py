@@ -24,7 +24,9 @@ class UserNotificationMixin:
         """Initialize user notification mixin."""
         self.session = session
 
-    async def notify_withdrawal_processed(self, telegram_id: int, amount: float, tx_hash: str) -> bool:
+    async def notify_withdrawal_processed(
+        self, telegram_id: int, amount: float, tx_hash: str
+    ) -> bool:
         """
         Notify user about withdrawal being processed.
 
@@ -36,25 +38,11 @@ class UserNotificationMixin:
         Returns:
             True if notification sent successfully
         """
-        from aiogram.client.default import DefaultBotProperties
-        from aiogram.enums import ParseMode
+        from app.utils.telegram_utils import get_or_create_bot
 
-        from app.config.settings import settings
-        from app.services.bot_provider import get_bot
-
-        bot = get_bot()
-        should_close = False
-
-        if not bot:
-            try:
-                bot = Bot(
-                    token=settings.telegram_bot_token,
-                    default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN),
-                )
-                should_close = True
-            except Exception as e:
-                logger.error(f"Failed to create fallback bot instance: {e}")
-                return False
+        bot, should_close = await get_or_create_bot()
+        if bot is None:
+            return False
 
         message = (
             f"✅ **Выплата отправлена!**\n\n"
@@ -66,7 +54,10 @@ class UserNotificationMixin:
         try:
             await asyncio.wait_for(
                 bot.send_message(
-                    chat_id=telegram_id, text=message, parse_mode="Markdown", disable_web_page_preview=True
+                    chat_id=telegram_id,
+                    text=message,
+                    parse_mode="Markdown",
+                    disable_web_page_preview=True
                 ),
                 timeout=TELEGRAM_TIMEOUT,
             )
@@ -95,25 +86,11 @@ class UserNotificationMixin:
         Returns:
             True if notification sent successfully
         """
-        from aiogram.client.default import DefaultBotProperties
-        from aiogram.enums import ParseMode
+        from app.utils.telegram_utils import get_or_create_bot
 
-        from app.config.settings import settings
-        from app.services.bot_provider import get_bot
-
-        bot = get_bot()
-        should_close = False
-
-        if not bot:
-            try:
-                bot = Bot(
-                    token=settings.telegram_bot_token,
-                    default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN),
-                )
-                should_close = True
-            except Exception as e:
-                logger.error(f"Failed to create fallback bot instance: {e}")
-                return False
+        bot, should_close = await get_or_create_bot()
+        if bot is None:
+            return False
 
         message = (
             f"❌ **Ваша заявка на вывод средств отклонена**\n\n"
@@ -132,7 +109,10 @@ class UserNotificationMixin:
             )
             return True
         except TimeoutError:
-            logger.warning(f"Timeout notifying user {telegram_id} about withdrawal rejection")
+            logger.warning(
+                f"Timeout notifying user {telegram_id} "
+                "about withdrawal rejection"
+            )
             return False
         except Exception as e:
             logger.error(
@@ -163,26 +143,11 @@ class UserNotificationMixin:
         Returns:
             True if notification sent successfully
         """
-        from aiogram import Bot
-        from aiogram.client.default import DefaultBotProperties
-        from aiogram.enums import ParseMode
+        from app.utils.telegram_utils import get_or_create_bot
 
-        from app.config.settings import settings
-        from app.services.bot_provider import get_bot
-
-        bot = get_bot()
-        should_close = False
-
-        if not bot:
-            try:
-                bot = Bot(
-                    token=settings.telegram_bot_token,
-                    default=DefaultBotProperties(parse_mode=ParseMode.MARKDOWN),
-                )
-                should_close = True
-            except Exception as e:
-                logger.error(f"Failed to create fallback bot instance: {e}")
-                return False
+        bot, should_close = await get_or_create_bot()
+        if bot is None:
+            return False
 
         # Progress bar (10 blocks for 100% progress)
         filled = int(roi_progress_percent / 10)  # 10 blocks for 100%

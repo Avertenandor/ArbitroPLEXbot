@@ -13,7 +13,7 @@ class SystemHandlersMixin:
 
     async def _execute_system_tool(self, name: str, inp: dict) -> Any:
         """Execute system administration tools."""
-        from app.services.ai_system_service import AISystemService
+        from app.services.ai_system import AISystemService
 
         system_service = AISystemService(self.session, self.admin_data)
 

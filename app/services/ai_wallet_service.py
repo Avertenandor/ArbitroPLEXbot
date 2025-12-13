@@ -24,9 +24,6 @@ from app.services.wallet_info_service import WalletInfoService
 # PLEX token economics (from bot/utils/constants.py)
 PLEX_PER_DOLLAR_DAILY = 10  # User receives 10 PLEX per $1 deposited per day
 
-# PLEX token contract
-PLEX_CONTRACT = "0xdf179b6cadbc61ffd86a3d2e55f6d6e083ade6c1"
-
 # Recommended minimums for comfortable operation
 RECOMMENDED_PLEX_MIN = 1000  # Minimum PLEX for basic operations
 RECOMMENDED_BNB_MIN = Decimal("0.005")  # Minimum BNB for gas fees

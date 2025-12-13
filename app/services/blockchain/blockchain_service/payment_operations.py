@@ -4,8 +4,6 @@ Payment Operations Module.
 Contains all payment-related functionality for the BlockchainService.
 """
 
-from __future__ import annotations
-
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 

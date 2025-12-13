@@ -30,6 +30,7 @@ from app.services.deposit import (
 )
 
 # Additional Services
+from app.services.ai_system import AISystemService
 from app.services.finpass_recovery_service import (
     FinpassRecoveryService,
 )
@@ -112,6 +113,7 @@ __all__ = [
     "get_blockchain_service",
     "init_blockchain_service",
     # Additional
+    "AISystemService",
     "FinpassRecoveryService",
     "WalletAdminService",
 ]

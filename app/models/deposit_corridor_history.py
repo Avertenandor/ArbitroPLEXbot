@@ -4,8 +4,6 @@ Deposit corridor history model.
 Tracks changes to ROI corridors for each deposit level.
 """
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING

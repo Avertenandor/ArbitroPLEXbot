@@ -102,7 +102,10 @@ async def cmd_admin_panel(
     await message.answer(
         text,
         parse_mode="Markdown",
-        reply_markup=admin_keyboard(is_super_admin=admin.is_super_admin, is_extended_admin=admin.is_extended_admin),
+        reply_markup=admin_keyboard(
+            is_super_admin=admin.is_super_admin,
+            is_extended_admin=admin.is_extended_admin
+        ),
     )
 
 

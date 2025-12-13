@@ -95,8 +95,10 @@ class ErrorHandlerMiddleware(BaseMiddleware):
                                 chat_id=user.id,
                                 text=("⚠️ Произошла ошибка форматирования.\nПопробуйте ещё раз."),
                             )
-                        except Exception:
-                            pass
+                        except (TelegramNetworkError, TelegramBadRequest) as send_error:
+                            logger.warning(f"Failed to send format error msg: {send_error}")
+                        except Exception as send_error:
+                            logger.error(f"Unexpected error sending message: {send_error}")
                     return None
                 # Other TelegramBadRequest errors - handle normally
                 raise
@@ -119,8 +121,12 @@ class ErrorHandlerMiddleware(BaseMiddleware):
                                 "Пожалуйста, попробуйте позже или обратитесь в поддержку."
                             ),
                         )
-                    except Exception as user_notify_error:
+                    except (TelegramNetworkError, TelegramBadRequest) as user_notify_error:
                         logger.warning(f"Failed to notify user: {user_notify_error}")
+                    except Exception as user_notify_error:
+                        logger.error(
+                            f"Unexpected error notifying user: {user_notify_error}"
+                        )
 
                 # 2. Notify admins with technical details
                 admin_ids = settings.get_admin_ids()
@@ -129,15 +135,19 @@ class ErrorHandlerMiddleware(BaseMiddleware):
                         error_trace = traceback.format_exc()[-800:]
                         # Escape special characters for HTML
                         error_trace_escaped = (
-                            error_trace.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                            error_trace.replace("&", "&amp;")
+                            .replace("<", "&lt;")
+                            .replace(">", "&gt;")
                         )
 
                         # Get user info for context
                         user_info = "Unknown"
                         if user:
-                            user_info = f"@{user.username}" if user.username else f"ID: {user.id}"
+                            username = user.username
+                            user_info = f"@{username}" if username else f"ID: {user.id}"
 
-                        error_msg = str(error)[:200].replace("<", "&lt;").replace(">", "&gt;")
+                        error_msg = str(error)[:200]
+                        error_msg = error_msg.replace("<", "&lt;").replace(">", "&gt;")
                         text = (
                             f"🚨 <b>CRITICAL ERROR</b>\n\n"
                             f"👤 User: {user_info}\n"
@@ -151,8 +161,12 @@ class ErrorHandlerMiddleware(BaseMiddleware):
                             text=text[:4096],
                             parse_mode="HTML",
                         )
-                    except Exception as notify_error:
+                    except (TelegramNetworkError, TelegramBadRequest) as notify_error:
                         logger.error(f"Failed to notify admin: {notify_error}")
+                    except Exception as notify_error:
+                        logger.error(
+                            f"Unexpected error notifying admin: {notify_error}"
+                        )
 
                 # Return None to prevent crash
                 return None

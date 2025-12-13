@@ -64,7 +64,10 @@ class DepositCreator:
         lock_key = f"user:{user_id}:create_deposit"
 
         async with lock.lock(
-            lock_key, timeout=DISTRIBUTED_LOCK_TIMEOUT, blocking=True, blocking_timeout=DISTRIBUTED_LOCK_BLOCKING_TIMEOUT
+            lock_key,
+            timeout=DISTRIBUTED_LOCK_TIMEOUT,
+            blocking=True,
+            blocking_timeout=DISTRIBUTED_LOCK_BLOCKING_TIMEOUT
         ) as acquired:
             if not acquired:
                 logger.warning(

@@ -1,6 +1,6 @@
 # Core Framework
 aiogram==3.4.1  # CRITICAL: Do not update without testing - major API changes in newer versions
-aiohttp~=3.9.0  # Must match aiogram 3.4.1 requirements
+aiohttp==3.9.2  # Security fix: CVE-2024-23334, CVE-2024-23829
 
 # Database
 sqlalchemy[asyncio]==2.0.36  # CRITICAL: Core database ORM
@@ -8,8 +8,8 @@ alembic==1.13.1
 asyncpg==0.29.0
 
 # Settings & Configuration
-pydantic>=2.4.1,<2.6  # Must match aiogram 3.4.1 requirements
-pydantic-settings>=2.0,<2.3  # Compatible with pydantic <2.6
+pydantic==2.5.3  # Pinned for stability
+pydantic-settings==2.2.1  # Pinned for stability
 
 # Blockchain & Web3
 web3==6.15.0  # CRITICAL: Do not update without extensive blockchain testing
@@ -19,7 +19,7 @@ mnemonic==0.20
 
 # Security & Encryption
 bcrypt==4.1.2
-cryptography==42.0.7
+cryptography==44.0.1  # Security fix: CVE-2024-12797
 
 # Task Queue & Background Jobs
 dramatiq[redis]==1.15.0
@@ -35,6 +35,6 @@ anthropic==0.40.0  # CRITICAL: Do not update without testing AI features
 # Utilities
 python-dateutil==2.8.2
 qrcode[pil]==7.4.2
-Pillow>=10.0.0,<12.0.0
-openpyxl>=3.1.0  # Excel file support
+Pillow==10.3.0  # Security fix: CVE-2023-50447, CVE-2024-28219
+openpyxl>=3.1.0,<4.0.0  # Excel file support
 

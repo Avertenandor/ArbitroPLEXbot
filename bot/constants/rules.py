@@ -30,8 +30,6 @@ from app.config.business_constants import (
 )
 from app.config.settings import settings
 
-# PLEX token address (from settings)
-PLEX_TOKEN_ADDRESS = settings.auth_plex_token_address
 
 # Levels table for display
 LEVELS_TABLE = """
@@ -60,7 +58,6 @@ __all__ = [
     "SYSTEM_WALLET",
     "WorkStatus",
     # Local constants
-    "PLEX_TOKEN_ADDRESS",
     "LEVELS_TABLE",
     "RULES_SHORT_TEXT",
     "RULES_BRIEF_VERSION",

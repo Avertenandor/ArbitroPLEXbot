@@ -191,7 +191,8 @@ class NotificationService:
                         )
                 except (ConnectionError, TimeoutError) as update_error:
                     logger.error(
-                        f"Failed to mark user as bot_blocked due to connection error: {update_error}"
+                        f"Failed to mark user as bot_blocked "
+                        f"due to connection error: {update_error}"
                     )
                 except Exception as update_error:
                     logger.error(

@@ -12,6 +12,10 @@ from loguru import logger
 
 from app.models.user import User
 from bot.keyboards.reply import support_keyboard
+from bot.messages.error_constants import (
+    ERROR_SYSTEM_TRY_START,
+    ERROR_USER_ID_NOT_FOUND,
+)
 from bot.states.support_states import SupportStates
 from bot.utils.formatters import escape_md
 
@@ -54,12 +58,8 @@ async def handle_create_ticket(
 
     # R1-7: Разрешаем гостевые тикеты
     if not telegram_id:
-        error_msg = (
-            "❌ Системная ошибка. "
-            "Отправьте /start или попробуйте позже."
-        )
         await message.answer(
-            error_msg,
+            ERROR_SYSTEM_TRY_START,
             reply_markup=support_keyboard(),
         )
         return
@@ -106,10 +106,7 @@ async def process_ticket_message(
 
     if not telegram_id:
         await state.clear()
-        error_msg = (
-            "❌ Ошибка: не удалось определить пользователя"
-        )
-        await message.answer(error_msg)
+        await message.answer(ERROR_USER_ID_NOT_FOUND)
         return
 
     try:
@@ -118,10 +115,7 @@ async def process_ticket_message(
             session = data.get("session")
             if not session:
                 await state.clear()
-                await message.answer(
-                    "❌ Системная ошибка. Отправьте /start или "
-                    "обратитесь в поддержку."
-                )
+                await message.answer(ERROR_SYSTEM_TRY_START)
                 return
 
             support_service = SupportService(session)
@@ -230,12 +224,8 @@ async def handle_my_tickets(
     from app.services.support_service import SupportService
 
     if not telegram_id:
-        error_msg = (
-            "❌ Системная ошибка. "
-            "Отправьте /start или попробуйте позже."
-        )
         await message.answer(
-            error_msg,
+            ERROR_SYSTEM_TRY_START,
             reply_markup=support_keyboard(),
         )
         return
@@ -246,12 +236,8 @@ async def handle_my_tickets(
         # Fallback to old session
         session = data.get("session")
         if not session:
-            error_msg = (
-                "❌ Системная ошибка. "
-                "Отправьте /start или попробуйте позже."
-            )
             await message.answer(
-                error_msg,
+                ERROR_SYSTEM_TRY_START,
                 reply_markup=support_keyboard(),
             )
             return

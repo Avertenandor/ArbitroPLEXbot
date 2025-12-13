@@ -11,7 +11,6 @@ Note: This is separate from the async provider_manager.py which handles AsyncWeb
 """
 
 import asyncio
-import threading
 import time
 from collections.abc import Callable
 from typing import Any
@@ -50,7 +49,7 @@ class SyncProviderManager:
 
         # Providers storage
         self.providers: dict[str, Web3] = {}
-        self._provider_lock = threading.Lock()
+        self._async_lock = asyncio.Lock()
         self.active_provider_name = "quicknode"
         self.is_auto_switch_enabled = True
 
@@ -137,20 +136,23 @@ class SyncProviderManager:
 
         Raises:
             ConnectionError: If no providers are available
+
+        Note:
+            Thread-safe due to Python's GIL for attribute reads.
+            providers dict is only modified in __init__.
         """
-        with self._provider_lock:
-            provider = self.providers.get(self.active_provider_name)
-            if not provider:
-                # Fallback to any available
-                if self.providers:
-                    fallback_name = next(iter(self.providers))
-                    logger.warning(
-                        f"Active provider '{self.active_provider_name}' not found, "
-                        f"falling back to '{fallback_name}'"
-                    )
-                    return self.providers[fallback_name]
-                raise ConnectionError("No blockchain providers available")
-            return provider
+        provider = self.providers.get(self.active_provider_name)
+        if not provider:
+            # Fallback to any available
+            if self.providers:
+                fallback_name = next(iter(self.providers))
+                logger.warning(
+                    f"Active provider '{self.active_provider_name}' not found, "
+                    f"falling back to '{fallback_name}'"
+                )
+                return self.providers[fallback_name]
+            raise ConnectionError("No blockchain providers available")
+        return provider
 
     async def _update_settings_from_db(self) -> None:
         """Update active provider and auto-switch settings from DB."""
@@ -165,7 +167,7 @@ class SyncProviderManager:
             async with self.session_factory() as session:
                 repo = GlobalSettingsRepository(session)
                 settings = await repo.get_settings()
-                with self._provider_lock:
+                async with self._async_lock:
                     self.active_provider_name = settings.active_rpc_provider
                     self.is_auto_switch_enabled = settings.is_auto_switch_enabled
                     self._last_settings_update = now
@@ -187,16 +189,19 @@ class SyncProviderManager:
         """
         await self._update_settings_from_db()
 
-        with self._provider_lock:
-            current_name = self.active_provider_name
-            is_auto_switch = self.is_auto_switch_enabled
+        # Read current settings (atomic in Python due to GIL)
+        current_name = self.active_provider_name
+        is_auto_switch = self.is_auto_switch_enabled
         providers_list = list(self.providers.keys())
 
         # Try current provider first
         try:
             w3 = self.get_active_web3()
             return func(w3)
-        except (ConnectionError, TimeoutError, aiohttp.ClientError, ValueError, KeyError, TypeError) as e:
+        except (
+            ConnectionError, TimeoutError, aiohttp.ClientError,
+            ValueError, KeyError, TypeError
+        ) as e:
             if not is_auto_switch:
                 raise e
 
@@ -223,8 +228,8 @@ class SyncProviderManager:
 
             logger.info(f"Switching to backup provider: {backup_name}")
             try:
-                with self._provider_lock:
-                    self.active_provider_name = backup_name
+                # Atomic write in Python due to GIL
+                self.active_provider_name = backup_name
                 w3_backup = self.providers[backup_name]
                 result = func(w3_backup)
 
@@ -293,35 +298,37 @@ class SyncProviderManager:
                             ),
                             timeout=BLOCKCHAIN_EXECUTOR_TIMEOUT,
                         )
-                        with self._provider_lock:
-                            is_active = name == self.active_provider_name
+                        is_active = name == self.active_provider_name
                         status[name] = {
                             "connected": True,
                             "block": bn,
                             "active": is_active
                         }
                     except TimeoutError:
-                        logger.warning(f"Timeout checking provider '{name}' status")
-                        with self._provider_lock:
-                            is_active = name == self.active_provider_name
+                        logger.warning(
+                            f"Timeout checking provider '{name}' status"
+                        )
+                        is_active = name == self.active_provider_name
                         status[name] = {
                             "connected": False,
                             "error": "Timeout",
                             "active": is_active
                         }
                 except (ConnectionError, aiohttp.ClientError) as e:
-                    logger.warning(f"Network error checking provider '{name}' status: {e}")
-                    with self._provider_lock:
-                        is_active = name == self.active_provider_name
+                    logger.warning(
+                        f"Network error checking provider '{name}' status: {e}"
+                    )
+                    is_active = name == self.active_provider_name
                     status[name] = {
                         "connected": False,
                         "error": f"Network error: {str(e)}",
                         "active": is_active
                     }
                 except (ValueError, KeyError, TypeError) as e:
-                    logger.warning(f"Data error checking provider '{name}' status: {e}")
-                    with self._provider_lock:
-                        is_active = name == self.active_provider_name
+                    logger.warning(
+                        f"Data error checking provider '{name}' status: {e}"
+                    )
+                    is_active = name == self.active_provider_name
                     status[name] = {
                         "connected": False,
                         "error": f"Data error: {str(e)}",

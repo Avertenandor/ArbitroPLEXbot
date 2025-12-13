@@ -40,10 +40,17 @@ def format_user_financial_detail(dto: UserDetailedFinancialDTO) -> str:
         text += "📊 **Последние депозиты** (топ-5):\n"
         for i, dep in enumerate(dto.deposits[:5], 1):
             status_emoji = "✅" if dep.is_completed else "⏳"
-            tx_link = format_tx_hash_with_link(dep.tx_hash) if dep.tx_hash else "—"
+            tx_link = (
+                format_tx_hash_with_link(dep.tx_hash)
+                if dep.tx_hash else "—"
+            )
+            roi_paid_fmt = format_balance(dep.roi_paid, decimals=2)
+            roi_cap_fmt = format_balance(dep.roi_cap, decimals=2)
+            amount_fmt = format_balance(dep.amount, decimals=2)
             text += (
-                f"{i}. {status_emoji} Lvl {dep.level}: `{format_balance(dep.amount, decimals=2)}` USDT\n"
-                f"   ROI: `{format_balance(dep.roi_paid, decimals=2)}`/`{format_balance(dep.roi_cap, decimals=2)}` | TX: {tx_link}\n"
+                f"{i}. {status_emoji} Lvl {dep.level}: "
+                f"`{amount_fmt}` USDT\n"
+                f"   ROI: `{roi_paid_fmt}`/`{roi_cap_fmt}` | TX: {tx_link}\n"
             )
         text += f"\n_Всего депозитов: {len(dto.deposits)}_\n\n"
     else:
@@ -86,13 +93,20 @@ def format_deposits_page(
 
     for i, dep in enumerate(page_deposits, start=start_idx + 1):
         status_emoji = "✅" if dep.is_completed else "⏳"
-        tx_link = format_tx_hash_with_link(dep.tx_hash) if dep.tx_hash else "—"
+        tx_link = (
+            format_tx_hash_with_link(dep.tx_hash)
+            if dep.tx_hash else "—"
+        )
         date_str = dep.created_at.strftime("%Y-%m-%d %H:%M")
+        amount_fmt = format_balance(dep.amount, decimals=2)
+        roi_paid_fmt = format_balance(dep.roi_paid, decimals=2)
+        roi_cap_fmt = format_balance(dep.roi_cap, decimals=2)
 
         text += (
-            f"{i}. {status_emoji} **Lvl {dep.level}** | `{format_balance(dep.amount, decimals=2)}` USDT\n"
+            f"{i}. {status_emoji} **Lvl {dep.level}** | "
+            f"`{amount_fmt}` USDT\n"
             f"   Дата: {date_str}\n"
-            f"   ROI: `{format_balance(dep.roi_paid, decimals=2)}`/`{format_balance(dep.roi_cap, decimals=2)}` USDT"
+            f"   ROI: `{roi_paid_fmt}`/`{roi_cap_fmt}` USDT"
         )
 
         if dep.roi_percent:
