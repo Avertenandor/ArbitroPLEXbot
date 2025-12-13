@@ -23,6 +23,7 @@ from app.models.base import Base
 
 
 if TYPE_CHECKING:
+    from app.models.bonus_credit import BonusCredit
     from app.models.deposit import Deposit
     from app.models.user import User
 
@@ -58,7 +59,13 @@ class PlexPaymentRequirement(Base):
     """
 
     __tablename__ = "plex_payment_requirements"
-    __table_args__ = (CheckConstraint("daily_plex_required > 0", name="check_plex_daily_required_positive"),)
+    __table_args__ = (
+        CheckConstraint("daily_plex_required > 0", name="check_plex_daily_required_positive"),
+        CheckConstraint(
+            "deposit_id IS NOT NULL OR bonus_credit_id IS NOT NULL",
+            name="check_deposit_or_bonus"
+        ),
+    )
 
     # Primary key
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -66,9 +73,15 @@ class PlexPaymentRequirement(Base):
     # User reference
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
-    # Deposit reference
-    deposit_id: Mapped[int] = mapped_column(
-        ForeignKey("deposits.id", ondelete="CASCADE"), nullable=False, unique=True, index=True
+    # Deposit reference (nullable - can be None if bonus_credit_id is set)
+    deposit_id: Mapped[int | None] = mapped_column(
+        ForeignKey("deposits.id", ondelete="CASCADE"), nullable=True, unique=True, index=True
+    )
+
+    # Bonus credit reference (nullable - can be None if deposit_id is set)
+    bonus_credit_id: Mapped[int | None] = mapped_column(
+        ForeignKey("bonus_credits.id", ondelete="CASCADE"), nullable=True, unique=True, index=True,
+        comment="Reference to bonus credit if this is a bonus payment requirement"
     )
 
     # Requirements
@@ -151,15 +164,18 @@ class PlexPaymentRequirement(Base):
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="plex_payments", lazy="selectin")
 
-    deposit: Mapped["Deposit"] = relationship("Deposit", back_populates="plex_payment", lazy="selectin")
+    deposit: Mapped["Deposit | None"] = relationship("Deposit", back_populates="plex_payment", lazy="selectin")
+
+    bonus_credit: Mapped["BonusCredit | None"] = relationship("BonusCredit", back_populates="plex_payment", lazy="selectin")
 
     def __repr__(self) -> str:
         """String representation."""
+        source = f"deposit_id={self.deposit_id}" if self.deposit_id else f"bonus_credit_id={self.bonus_credit_id}"
         return (
             f"<PlexPaymentRequirement("
             f"id={self.id}, "
             f"user_id={self.user_id}, "
-            f"deposit_id={self.deposit_id}, "
+            f"{source}, "
             f"daily_plex={self.daily_plex_required}, "
             f"status={self.status}"
             f")>"

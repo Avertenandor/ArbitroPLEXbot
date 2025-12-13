@@ -198,9 +198,7 @@ class RoiCorridorService:
 
         return True, None
 
-    def generate_rate_from_corridor(
-        self, roi_min: Decimal, roi_max: Decimal
-    ) -> Decimal:
+    def generate_rate_from_corridor(self, roi_min: Decimal, roi_max: Decimal) -> Decimal:
         """
         Generate random rate from corridor with bias to lower values.
         """
@@ -216,9 +214,7 @@ class RoiCorridorService:
 
         return rate.quantize(Decimal("0.01"))
 
-    async def calculate_next_accrual_time(
-        self, deposit_created_at: datetime
-    ) -> datetime:
+    async def calculate_next_accrual_time(self, deposit_created_at: datetime) -> datetime:
         """
         Calculate next accrual time based on period setting.
         """
@@ -263,9 +259,7 @@ class RoiCorridorService:
         """
         return int(await self._get_roi_setting("REWARD_ACCRUAL_PERIOD_HOURS", "6"))
 
-    async def set_accrual_period_hours(
-        self, hours: int, admin_id: int
-    ) -> tuple[bool, str | None]:
+    async def set_accrual_period_hours(self, hours: int, admin_id: int) -> tuple[bool, str | None]:
         """
         Set accrual period in hours.
         """
@@ -300,6 +294,7 @@ class RoiCorridorService:
         from app.repositories.deposit_level_version_repository import (
             DepositLevelVersionRepository,
         )
+
         version_repo = DepositLevelVersionRepository(self.session)
         current_version = await version_repo.get_current_version(level)
 
@@ -349,20 +344,13 @@ class RoiCorridorService:
         warnings = []
 
         if roi_min < Decimal("0.5"):
-            warnings.append(
-                f"⚠️ Очень низкий минимум: {roi_min}% (рекомендуется >= 0.5%)"
-            )
+            warnings.append(f"⚠️ Очень низкий минимум: {roi_min}% (рекомендуется >= 0.5%)")
 
         if roi_max > Decimal("20"):
-            warnings.append(
-                f"⚠️ Очень высокий максимум: {roi_max}% (рекомендуется <= 20%)"
-            )
+            warnings.append(f"⚠️ Очень высокий максимум: {roi_max}% (рекомендуется <= 20%)")
 
         if roi_max - roi_min < Decimal("1"):
-            warnings.append(
-                f"⚠️ Узкий коридор: {roi_max - roi_min}% "
-                "(рекомендуется >= 1%)"
-            )
+            warnings.append(f"⚠️ Узкий коридор: {roi_max - roi_min}% (рекомендуется >= 1%)")
 
         if warnings:
             return True, "\n".join(warnings)

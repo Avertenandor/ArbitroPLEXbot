@@ -24,6 +24,7 @@ from app.models.base import Base
 
 if TYPE_CHECKING:
     from app.models.admin import Admin
+    from app.models.plex_payment import PlexPaymentRequirement
     from app.models.user import User
 
 
@@ -180,6 +181,11 @@ class BonusCredit(Base):
     canceller: Mapped["Admin | None"] = relationship(
         "Admin",
         foreign_keys=[cancelled_by],
+    )
+    plex_payment: Mapped["PlexPaymentRequirement | None"] = relationship(
+        "PlexPaymentRequirement",
+        back_populates="bonus_credit",
+        uselist=False,
     )
 
     def __repr__(self) -> str:

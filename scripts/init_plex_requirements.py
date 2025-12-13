@@ -9,11 +9,11 @@ import asyncio
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import select
 from loguru import logger
+from sqlalchemy import select
 
-from app.config.database import async_session_maker
 from app.config.business_constants import PLEX_PER_DOLLAR_DAILY
+from app.config.database import async_session_maker
 from app.models.deposit import Deposit
 from app.models.plex_payment import PlexPaymentRequirement
 
@@ -24,14 +24,8 @@ async def init_plex_requirements():
         # Get all confirmed deposits without PLEX requirements
         stmt = (
             select(Deposit)
-            .outerjoin(
-                PlexPaymentRequirement,
-                Deposit.id == PlexPaymentRequirement.deposit_id
-            )
-            .where(
-                Deposit.status == "confirmed",
-                PlexPaymentRequirement.id.is_(None)
-            )
+            .outerjoin(PlexPaymentRequirement, Deposit.id == PlexPaymentRequirement.deposit_id)
+            .where(Deposit.status == "confirmed", PlexPaymentRequirement.id.is_(None))
         )
         result = await session.execute(stmt)
         deposits = result.scalars().all()
@@ -68,8 +62,7 @@ async def init_plex_requirements():
                 session.add(plex_req)
                 created_count += 1
                 logger.info(
-                    f"Created PLEX requirement for deposit {deposit.id}: "
-                    f"{daily_plex} PLEX/day (user {deposit.user_id})"
+                    f"Created PLEX requirement for deposit {deposit.id}: {daily_plex} PLEX/day (user {deposit.user_id})"
                 )
             except Exception as e:
                 logger.error(f"Failed to create PLEX requirement for deposit {deposit.id}: {e}")

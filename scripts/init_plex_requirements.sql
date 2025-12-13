@@ -5,9 +5,9 @@ INSERT INTO plex_payment_requirements (
     status, total_paid_plex, days_paid, warning_count, is_work_active,
     created_at, updated_at
 )
-SELECT 
-    d.user_id, 
-    d.id, 
+SELECT
+    d.user_id,
+    d.id,
     d.amount * 10,
     NOW(), NOW(), NOW(),
     'active', 0, 0, 0, true,
