@@ -42,9 +42,7 @@ class PaymentVerifier:
             system_wallet_address: System wallet address for receiving payments
         """
         self.usdt_contract_address = to_checksum_address(usdt_contract_address)
-        self.plex_token_address = (
-            to_checksum_address(plex_token_address) if plex_token_address else None
-        )
+        self.plex_token_address = to_checksum_address(plex_token_address) if plex_token_address else None
         self.system_wallet_address = to_checksum_address(system_wallet_address)
 
     def verify_plex_payment_sync(
@@ -84,7 +82,7 @@ class PaymentVerifier:
 
         # PLEX uses 9 decimals
         decimals = PLEX_DECIMALS
-        target_wei = int(amount_plex * (10 ** decimals))
+        target_wei = int(amount_plex * (10**decimals))
 
         logger.info(
             f"[PLEX Verify] Searching: sender={mask_address(sender)}, "
@@ -100,9 +98,7 @@ class PaymentVerifier:
         total_blocks = lookback_blocks
         all_logs = []
 
-        logger.info(
-            f"[PLEX Verify] Scanning {total_blocks} blocks in chunks of {chunk_size}"
-        )
+        logger.info(f"[PLEX Verify] Scanning {total_blocks} blocks in chunks of {chunk_size}")
 
         for offset in range(0, total_blocks, chunk_size):
             from_blk = max(0, latest - offset - chunk_size)
@@ -113,33 +109,27 @@ class PaymentVerifier:
 
             try:
                 logs = contract.events.Transfer.get_logs(
-                    fromBlock=from_blk,
-                    toBlock=to_blk,
-                    argument_filters={'to': receiver}
+                    fromBlock=from_blk, toBlock=to_blk, argument_filters={"to": receiver}
                 )
                 chunk_logs = list(logs)
                 all_logs.extend(chunk_logs)
-                logger.debug(
-                    f"[PLEX Verify] Chunk {from_blk}-{to_blk}: {len(chunk_logs)} logs"
-                )
+                logger.debug(f"[PLEX Verify] Chunk {from_blk}-{to_blk}: {len(chunk_logs)} logs")
             except Exception as chunk_err:
                 # Log error but continue with other chunks
-                logger.warning(
-                    f"[PLEX Verify] Chunk {from_blk}-{to_blk} failed: {chunk_err}"
-                )
+                logger.warning(f"[PLEX Verify] Chunk {from_blk}-{to_blk} failed: {chunk_err}")
                 continue
 
         logger.info(f"[PLEX Verify] Total found: {len(all_logs)} incoming transfers")
 
         # Sort by block number (newest first)
-        all_logs.sort(key=lambda x: x.get('blockNumber', 0), reverse=True)
+        all_logs.sort(key=lambda x: x.get("blockNumber", 0), reverse=True)
 
         for log in all_logs:
-            args = log.get('args', {})
-            tx_from = str(args.get('from', ''))
-            value = args.get('value', 0)
-            tx_hash = log.get('transactionHash', b'').hex()
-            block_num = log.get('blockNumber', 0)
+            args = log.get("args", {})
+            tx_from = str(args.get("from", ""))
+            value = args.get("value", 0)
+            tx_hash = log.get("transactionHash", b"").hex()
+            block_num = log.get("blockNumber", 0)
 
             # Compare addresses case-insensitive
             if tx_from.lower() == sender.lower():
@@ -147,20 +137,10 @@ class PaymentVerifier:
 
                 if value >= target_wei:
                     amount_found = Decimal(value) / Decimal(10**decimals)
-                    logger.success(
-                        f"[PLEX Verify] VERIFIED! TX={tx_hash}, "
-                        f"amount={amount_found} PLEX"
-                    )
-                    return {
-                        "success": True,
-                        "tx_hash": tx_hash,
-                        "amount": amount_found,
-                        "block": block_num
-                    }
+                    logger.success(f"[PLEX Verify] VERIFIED! TX={tx_hash}, amount={amount_found} PLEX")
+                    return {"success": True, "tx_hash": tx_hash, "amount": amount_found, "block": block_num}
                 else:
-                    logger.warning(
-                        f"[PLEX Verify] Amount insufficient: {value} < {target_wei}"
-                    )
+                    logger.warning(f"[PLEX Verify] Amount insufficient: {value} < {target_wei}")
 
         logger.warning(f"[PLEX Verify] No payment found from {sender[:10]}...")
         return {"success": False, "error": "Transaction not found"}
@@ -199,15 +179,16 @@ class PaymentVerifier:
             if not user_wallet or not validate_bsc_address(user_wallet, checksum=False):
                 error_msg = (
                     f"Invalid wallet address format: {user_wallet[:30] if user_wallet else 'None'}..."
-                    if user_wallet else "Wallet address is empty"
+                    if user_wallet
+                    else "Wallet address is empty"
                 )
                 logger.warning(f"[USDT Scan] {error_msg}")
                 return {
-                    'success': False,
-                    'error': error_msg,
-                    'total_amount': Decimal("0"),
-                    'tx_count': 0,
-                    'transactions': [],
+                    "success": False,
+                    "error": error_msg,
+                    "total_amount": Decimal("0"),
+                    "tx_count": 0,
+                    "transactions": [],
                 }
 
             sender = to_checksum_address(user_wallet)
@@ -239,50 +220,43 @@ class PaymentVerifier:
 
                 try:
                     logs = contract.events.Transfer.get_logs(
-                        fromBlock=current_start,
-                        toBlock=current_end,
-                        argument_filters={
-                            'from': sender,
-                            'to': receiver
-                        }
+                        fromBlock=current_start, toBlock=current_end, argument_filters={"from": sender, "to": receiver}
                     )
 
-                    logger.debug(
-                        f"[USDT Scan] Chunk {current_start}-{current_end}: {len(logs)} logs"
-                    )
+                    logger.debug(f"[USDT Scan] Chunk {current_start}-{current_end}: {len(logs)} logs")
 
                     for log in logs:
-                        args = log.get('args', {})
-                        value = args.get('value', 0)
+                        args = log.get("args", {})
+                        value = args.get("value", 0)
                         total_wei += value
 
-                        transactions.append({
-                            'tx_hash': log['transactionHash'].hex(),
-                            'amount': Decimal(value) / Decimal(10 ** USDT_DECIMALS),
-                            'block': log['blockNumber'],
-                        })
+                        transactions.append(
+                            {
+                                "tx_hash": log["transactionHash"].hex(),
+                                "amount": Decimal(value) / Decimal(10**USDT_DECIMALS),
+                                "block": log["blockNumber"],
+                            }
+                        )
 
                 except Exception as chunk_error:
-                    logger.warning(
-                        f"[USDT Scan] Chunk {current_start}-{current_end} failed: {chunk_error}"
-                    )
+                    logger.warning(f"[USDT Scan] Chunk {current_start}-{current_end} failed: {chunk_error}")
 
                 current_end = current_start
 
             # Sort by block number (oldest first)
-            transactions.sort(key=lambda x: x['block'])
+            transactions.sort(key=lambda x: x["block"])
 
             result = {
-                'total_amount': Decimal(total_wei) / Decimal(10 ** USDT_DECIMALS),
-                'tx_count': len(transactions),
-                'transactions': transactions,
-                'from_block': from_block,
-                'to_block': latest,
-                'success': True,
+                "total_amount": Decimal(total_wei) / Decimal(10**USDT_DECIMALS),
+                "tx_count": len(transactions),
+                "transactions": transactions,
+                "from_block": from_block,
+                "to_block": latest,
+                "success": True,
             }
 
             # Detailed result logging
-            if result['tx_count'] > 0:
+            if result["tx_count"] > 0:
                 logger.success(
                     f"[USDT Scan] Found deposits for {mask_address(user_wallet)}:\n"
                     f"  Total amount: {result['total_amount']} USDT\n"
@@ -290,10 +264,7 @@ class PaymentVerifier:
                     f"  Block range scanned: {from_block} - {latest}"
                 )
                 for tx in transactions:
-                    logger.info(
-                        f"  -> TX: {tx['tx_hash'][:16]}..., "
-                        f"Amount: {tx['amount']} USDT, Block: {tx['block']}"
-                    )
+                    logger.info(f"  -> TX: {tx['tx_hash'][:16]}..., Amount: {tx['amount']} USDT, Block: {tx['block']}")
             else:
                 logger.warning(
                     f"[USDT Scan] No deposits found for {mask_address(user_wallet)}:\n"
@@ -307,11 +278,11 @@ class PaymentVerifier:
         except Exception as e:
             logger.error(f"Deposit scan failed for {mask_address(user_wallet)}: {e}")
             return {
-                'success': False,
-                'error': str(e),
-                'total_amount': Decimal("0"),
-                'tx_count': 0,
-                'transactions': [],
+                "success": False,
+                "error": str(e),
+                "total_amount": Decimal("0"),
+                "tx_count": 0,
+                "transactions": [],
             }
 
     def verify_plex_transfer(
@@ -347,11 +318,10 @@ class PaymentVerifier:
             return {"success": False, "error": f"Invalid address format: {e}"}
 
         # Convert Decimal to wei (PLEX uses 9 decimals)
-        target_wei = int(amount * Decimal(10 ** PLEX_DECIMALS))
+        target_wei = int(amount * Decimal(10**PLEX_DECIMALS))
 
         logger.info(
-            f"[PLEX Transfer Verify] from={mask_address(sender)}, "
-            f"to={mask_address(receiver)}, amount={amount} PLEX"
+            f"[PLEX Transfer Verify] from={mask_address(sender)}, to={mask_address(receiver)}, amount={amount} PLEX"
         )
 
         latest = w3.eth.block_number
@@ -362,9 +332,7 @@ class PaymentVerifier:
         total_blocks = lookback_blocks
         all_logs = []
 
-        logger.info(
-            f"[PLEX Transfer Verify] Scanning {total_blocks} blocks in chunks of {chunk_size}"
-        )
+        logger.info(f"[PLEX Transfer Verify] Scanning {total_blocks} blocks in chunks of {chunk_size}")
 
         for offset in range(0, total_blocks, chunk_size):
             from_blk = max(0, latest - offset - chunk_size)
@@ -375,31 +343,25 @@ class PaymentVerifier:
 
             try:
                 logs = contract.events.Transfer.get_logs(
-                    fromBlock=from_blk,
-                    toBlock=to_blk,
-                    argument_filters={'from': sender, 'to': receiver}
+                    fromBlock=from_blk, toBlock=to_blk, argument_filters={"from": sender, "to": receiver}
                 )
                 chunk_logs = list(logs)
                 all_logs.extend(chunk_logs)
-                logger.debug(
-                    f"[PLEX Transfer Verify] Chunk {from_blk}-{to_blk}: {len(chunk_logs)} logs"
-                )
+                logger.debug(f"[PLEX Transfer Verify] Chunk {from_blk}-{to_blk}: {len(chunk_logs)} logs")
             except Exception as chunk_err:
-                logger.warning(
-                    f"[PLEX Transfer Verify] Chunk {from_blk}-{to_blk} failed: {chunk_err}"
-                )
+                logger.warning(f"[PLEX Transfer Verify] Chunk {from_blk}-{to_blk} failed: {chunk_err}")
                 continue
 
         logger.info(f"[PLEX Transfer Verify] Total found: {len(all_logs)} transfers")
 
         # Sort by block number (newest first)
-        all_logs.sort(key=lambda x: x.get('blockNumber', 0), reverse=True)
+        all_logs.sort(key=lambda x: x.get("blockNumber", 0), reverse=True)
 
         for log in all_logs:
-            args = log.get('args', {})
-            value = args.get('value', 0)
-            tx_hash = log.get('transactionHash', b'').hex()
-            block_num = log.get('blockNumber', 0)
+            args = log.get("args", {})
+            value = args.get("value", 0)
+            tx_hash = log.get("transactionHash", b"").hex()
+            block_num = log.get("blockNumber", 0)
 
             if value >= target_wei:
                 amount_found = Decimal(value) / Decimal(10**PLEX_DECIMALS)
@@ -407,14 +369,13 @@ class PaymentVerifier:
                 # Get block timestamp
                 try:
                     block = w3.eth.get_block(block_num)
-                    timestamp = block.get('timestamp', 0)
+                    timestamp = block.get("timestamp", 0)
                 except Exception as e:
                     logger.warning(f"Failed to get block timestamp: {e}")
                     timestamp = 0
 
                 logger.success(
-                    f"[PLEX Transfer Verify] VERIFIED! TX={tx_hash}, "
-                    f"amount={amount_found} PLEX, block={block_num}"
+                    f"[PLEX Transfer Verify] VERIFIED! TX={tx_hash}, amount={amount_found} PLEX, block={block_num}"
                 )
                 return {
                     "success": True,
@@ -425,8 +386,7 @@ class PaymentVerifier:
                 }
 
         logger.warning(
-            f"[PLEX Transfer Verify] No transfer found from {mask_address(sender)} "
-            f"with amount >= {amount} PLEX"
+            f"[PLEX Transfer Verify] No transfer found from {mask_address(sender)} with amount >= {amount} PLEX"
         )
         return {"success": False, "error": "Transfer not found or amount insufficient"}
 
@@ -479,43 +439,38 @@ class PaymentVerifier:
 
             # Get all Transfer events from user to system wallet
             logs = contract.events.Transfer.get_logs(
-                fromBlock=from_block,
-                toBlock='latest',
-                argument_filters={
-                    'from': sender,
-                    'to': receiver
-                }
+                fromBlock=from_block, toBlock="latest", argument_filters={"from": sender, "to": receiver}
             )
 
             payments = []
 
             for log in logs:
-                args = log.get('args', {})
-                value = args.get('value', 0)
-                tx_hash = log['transactionHash'].hex()
-                block_num = log['blockNumber']
+                args = log.get("args", {})
+                value = args.get("value", 0)
+                tx_hash = log["transactionHash"].hex()
+                block_num = log["blockNumber"]
 
                 # Get block timestamp
                 try:
                     block = w3.eth.get_block(block_num)
-                    timestamp = block.get('timestamp', 0)
+                    timestamp = block.get("timestamp", 0)
                 except Exception as e:
                     logger.warning(f"Failed to get block {block_num} timestamp: {e}")
                     timestamp = 0
 
-                payments.append({
-                    'tx_hash': tx_hash,
-                    'amount': Decimal(value) / Decimal(10 ** PLEX_DECIMALS),
-                    'block': block_num,
-                    'timestamp': timestamp,
-                })
+                payments.append(
+                    {
+                        "tx_hash": tx_hash,
+                        "amount": Decimal(value) / Decimal(10**PLEX_DECIMALS),
+                        "block": block_num,
+                        "timestamp": timestamp,
+                    }
+                )
 
             # Sort by block number (oldest first)
-            payments.sort(key=lambda x: x['block'])
+            payments.sort(key=lambda x: x["block"])
 
-            logger.info(
-                f"[PLEX Scan] Found {len(payments)} PLEX payments from {mask_address(sender)}"
-            )
+            logger.info(f"[PLEX Scan] Found {len(payments)} PLEX payments from {mask_address(sender)}")
 
             return payments
 

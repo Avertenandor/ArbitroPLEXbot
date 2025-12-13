@@ -57,17 +57,11 @@ class DepositReward(Base):
     __tablename__ = "deposit_rewards"
 
     # Primary key
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
 
     # References
-    user_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("users.id"), nullable=False, index=True
-    )
-    deposit_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("deposits.id"), nullable=False, index=True
-    )
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    deposit_id: Mapped[int] = mapped_column(Integer, ForeignKey("deposits.id"), nullable=False, index=True)
     # reward_session_id is nullable for individual accruals (no session-based rewards)
     reward_session_id: Mapped[int | None] = mapped_column(
         Integer,
@@ -77,44 +71,26 @@ class DepositReward(Base):
     )
 
     # Denormalized data (for efficiency)
-    deposit_level: Mapped[int] = mapped_column(
-        Integer, nullable=False
-    )
-    deposit_amount: Mapped[Decimal] = mapped_column(
-        Numeric(precision=20, scale=8), nullable=False
-    )
+    deposit_level: Mapped[int] = mapped_column(Integer, nullable=False)
+    deposit_amount: Mapped[Decimal] = mapped_column(Numeric(precision=20, scale=8), nullable=False)
 
     # Reward calculation
-    reward_rate: Mapped[Decimal] = mapped_column(
-        Numeric(precision=10, scale=4), nullable=False
-    )
-    reward_amount: Mapped[Decimal] = mapped_column(
-        Numeric(precision=20, scale=8), nullable=False
-    )
+    reward_rate: Mapped[Decimal] = mapped_column(Numeric(precision=10, scale=4), nullable=False)
+    reward_amount: Mapped[Decimal] = mapped_column(Numeric(precision=20, scale=8), nullable=False)
 
     # Payment tracking
-    paid: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False, index=True
-    )
-    paid_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    tx_hash: Mapped[str | None] = mapped_column(
-        String(255), nullable=True
-    )
+    paid: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, index=True)
+    paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    tx_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # Timestamps
-    calculated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    calculated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     # updated_at inherited from Base
 
     # Relationships
     user: Mapped["User"] = relationship("User", lazy="joined")
     deposit: Mapped["Deposit"] = relationship("Deposit", lazy="joined")
-    reward_session: Mapped["RewardSession | None"] = relationship(
-        "RewardSession", lazy="joined"
-    )
+    reward_session: Mapped["RewardSession | None"] = relationship("RewardSession", lazy="joined")
 
     # Properties
 
@@ -135,12 +111,7 @@ class DepositReward(Base):
 
     def __repr__(self) -> str:
         """String representation."""
-        return (
-            f"DepositReward(id={self.id}, "
-            f"user_id={self.user_id}, "
-            f"deposit_id={self.deposit_id}, "
-            f"paid={self.paid})"
-        )
+        return f"DepositReward(id={self.id}, user_id={self.user_id}, deposit_id={self.deposit_id}, paid={self.paid})"
 
 
 # Composite indexes

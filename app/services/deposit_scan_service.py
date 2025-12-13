@@ -86,24 +86,18 @@ class DepositScanService:
             return {
                 "success": False,
                 "error": "У пользователя нет реального кошелька (временный адрес). "
-                         "Попросите пользователя привязать свой кошелёк.",
+                "Попросите пользователя привязать свой кошелёк.",
             }
 
         if not is_valid_wallet_for_transactions(wallet):
-            logger.warning(
-                f"[Deposit Scan] User {user_id} has invalid wallet address: "
-                f"{wallet[:20]}..."
-            )
+            logger.warning(f"[Deposit Scan] User {user_id} has invalid wallet address: {wallet[:20]}...")
             return {
                 "success": False,
                 "error": "Некорректный формат адреса кошелька. "
-                         "Адрес должен быть валидным BSC-адресом (0x + 40 hex символов).",
+                "Адрес должен быть валидным BSC-адресом (0x + 40 hex символов).",
             }
 
-        logger.info(
-            f"[Deposit Scan] Starting scan for user {user_id}, "
-            f"wallet: {user.wallet_address}"
-        )
+        logger.info(f"[Deposit Scan] Starting scan for user {user_id}, wallet: {user.wallet_address}")
 
         # Try cache first
         try:
@@ -134,8 +128,7 @@ class DepositScanService:
                     await self._session.flush()
 
                     logger.info(
-                        f"[CACHE HIT] Deposit data for user {user_id}: "
-                        f"total={total_amount} USDT, txs={tx_count}"
+                        f"[CACHE HIT] Deposit data for user {user_id}: total={total_amount} USDT, txs={tx_count}"
                     )
 
                     return {
@@ -163,10 +156,7 @@ class DepositScanService:
         )
 
         if not scan_result.get("success"):
-            logger.error(
-                f"Deposit scan failed for user {user_id}: "
-                f"{scan_result.get('error')}"
-            )
+            logger.error(f"Deposit scan failed for user {user_id}: {scan_result.get('error')}")
             return {
                 "success": False,
                 "error": scan_result.get("error", "Scan failed"),

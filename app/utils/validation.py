@@ -13,49 +13,49 @@ ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 def is_placeholder_wallet(address: str) -> bool:
     """
     Check if wallet address is a placeholder (not a real wallet).
-    
+
     Placeholder addresses are generated for users without wallets
     during import and should not be used for blockchain operations.
-    
+
     Args:
         address: Wallet address to check
-        
+
     Returns:
         True if address is a placeholder
     """
     if not address:
         return True
-    
+
     address_lower = address.lower()
-    
+
     # Check for explicit placeholder pattern
     if "placeholder" in address_lower:
         return True
-    
+
     # Check for zero address (no wallet bound)
     if address_lower == ZERO_ADDRESS.lower():
         return True
-    
+
     return False
 
 
 def is_valid_wallet_for_transactions(address: str) -> bool:
     """
     Check if wallet address is valid for financial transactions.
-    
+
     This is stricter than validate_bsc_address - it also rejects
     placeholder and zero addresses.
-    
+
     Args:
         address: Wallet address to check
-        
+
     Returns:
         True if address can be used for transactions
     """
     # First check if it's a placeholder
     if is_placeholder_wallet(address):
         return False
-    
+
     # Then validate format
     return validate_bsc_address(address, checksum=False)
 

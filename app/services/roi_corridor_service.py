@@ -65,10 +65,11 @@ class RoiCorridorService:
         Returns:
             Dictionary with corridor configuration
         """
+        # Default values: 0.01% - 0.03% per hour (same for all levels)
         mode = await self._get_roi_setting(f"LEVEL_{level}_ROI_MODE", "custom")
-        roi_min = Decimal(await self._get_roi_setting(f"LEVEL_{level}_ROI_MIN", "0.8"))
-        roi_max = Decimal(await self._get_roi_setting(f"LEVEL_{level}_ROI_MAX", "10.0"))
-        roi_fixed = Decimal(await self._get_roi_setting(f"LEVEL_{level}_ROI_FIXED", "5.0"))
+        roi_min = Decimal(await self._get_roi_setting(f"LEVEL_{level}_ROI_MIN", "0.01"))
+        roi_max = Decimal(await self._get_roi_setting(f"LEVEL_{level}_ROI_MAX", "0.03"))
+        roi_fixed = Decimal(await self._get_roi_setting(f"LEVEL_{level}_ROI_FIXED", "0.02"))
 
         return {
             "mode": mode,
