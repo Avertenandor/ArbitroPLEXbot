@@ -20,7 +20,7 @@ class BalanceOperations:
     - BNB balance queries
     """
 
-    def __init__(self, payment_sender: PaymentSender) -> None:
+    def __init__(self, payment_sender: "PaymentSender") -> None:
         """
         Initialize balance operations.
 

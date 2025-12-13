@@ -20,7 +20,7 @@ class PaymentOperations:
     - Gas cost estimation
     """
 
-    def __init__(self, payment_sender: PaymentSender) -> None:
+    def __init__(self, payment_sender: "PaymentSender") -> None:
         """
         Initialize payment operations.
 
