@@ -11,6 +11,7 @@ Note: This is separate from the async provider_manager.py which handles AsyncWeb
 """
 
 import asyncio
+import threading
 import time
 from collections.abc import Callable
 from typing import Any
@@ -48,6 +49,7 @@ class SyncProviderManager:
 
         # Providers storage
         self.providers: dict[str, Web3] = {}
+        self._provider_lock = threading.Lock()
         self.active_provider_name = "quicknode"
         self.is_auto_switch_enabled = True
 
@@ -127,18 +129,19 @@ class SyncProviderManager:
         Raises:
             ConnectionError: If no providers are available
         """
-        provider = self.providers.get(self.active_provider_name)
-        if not provider:
-            # Fallback to any available
-            if self.providers:
-                fallback_name = next(iter(self.providers))
-                logger.warning(
-                    f"Active provider '{self.active_provider_name}' not found, "
-                    f"falling back to '{fallback_name}'"
-                )
-                return self.providers[fallback_name]
-            raise ConnectionError("No blockchain providers available")
-        return provider
+        with self._provider_lock:
+            provider = self.providers.get(self.active_provider_name)
+            if not provider:
+                # Fallback to any available
+                if self.providers:
+                    fallback_name = next(iter(self.providers))
+                    logger.warning(
+                        f"Active provider '{self.active_provider_name}' not found, "
+                        f"falling back to '{fallback_name}'"
+                    )
+                    return self.providers[fallback_name]
+                raise ConnectionError("No blockchain providers available")
+            return provider
 
     async def _update_settings_from_db(self) -> None:
         """Update active provider and auto-switch settings from DB."""
@@ -153,9 +156,10 @@ class SyncProviderManager:
             async with self.session_factory() as session:
                 repo = GlobalSettingsRepository(session)
                 settings = await repo.get_settings()
-                self.active_provider_name = settings.active_rpc_provider
-                self.is_auto_switch_enabled = settings.is_auto_switch_enabled
-                self._last_settings_update = now
+                with self._provider_lock:
+                    self.active_provider_name = settings.active_rpc_provider
+                    self.is_auto_switch_enabled = settings.is_auto_switch_enabled
+                    self._last_settings_update = now
         except Exception as e:
             logger.warning(f"Failed to update blockchain settings from DB: {e}")
 
@@ -174,7 +178,9 @@ class SyncProviderManager:
         """
         await self._update_settings_from_db()
 
-        current_name = self.active_provider_name
+        with self._provider_lock:
+            current_name = self.active_provider_name
+            is_auto_switch = self.is_auto_switch_enabled
         providers_list = list(self.providers.keys())
 
         # Try current provider first
@@ -182,7 +188,7 @@ class SyncProviderManager:
             w3 = self.get_active_web3()
             return func(w3)
         except Exception as e:
-            if not self.is_auto_switch_enabled:
+            if not is_auto_switch:
                 raise e
 
             logger.warning(
@@ -202,7 +208,8 @@ class SyncProviderManager:
 
             logger.info(f"Switching to backup provider: {backup_name}")
             try:
-                self.active_provider_name = backup_name
+                with self._provider_lock:
+                    self.active_provider_name = backup_name
                 w3_backup = self.providers[backup_name]
                 result = func(w3_backup)
 
@@ -268,22 +275,28 @@ class SyncProviderManager:
                             ),
                             timeout=BLOCKCHAIN_EXECUTOR_TIMEOUT,
                         )
+                        with self._provider_lock:
+                            is_active = name == self.active_provider_name
                         status[name] = {
                             "connected": True,
                             "block": bn,
-                            "active": name == self.active_provider_name
+                            "active": is_active
                         }
                     except TimeoutError:
                         logger.warning(f"Timeout checking provider '{name}' status")
+                        with self._provider_lock:
+                            is_active = name == self.active_provider_name
                         status[name] = {
                             "connected": False,
                             "error": "Timeout",
-                            "active": name == self.active_provider_name
+                            "active": is_active
                         }
                 except Exception as e:
+                    with self._provider_lock:
+                        is_active = name == self.active_provider_name
                     status[name] = {
                         "connected": False,
                         "error": str(e),
-                        "active": name == self.active_provider_name
+                        "active": is_active
                     }
         return status

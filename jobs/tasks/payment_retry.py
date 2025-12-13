@@ -5,6 +5,8 @@ Processes pending payment retries with exponential backoff.
 Runs every minute to check for retries ready for processing.
 """
 
+import asyncio
+
 import dramatiq
 from loguru import logger
 
@@ -85,6 +87,9 @@ async def _process_payment_retries_async() -> None:
                     blockchain_service
                 )
 
+    except asyncio.CancelledError:
+        logger.warning("Payment retry processing cancelled, performing cleanup")
+        raise  # Always re-raise CancelledError
     finally:
         # Close Redis client
         if redis_client:

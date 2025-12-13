@@ -993,7 +993,7 @@ async def handle_chat_message(
         return
 
     # ========== SECURITY CHECKS ==========
-    from app.services.admin_security_service import VERIFIED_ADMIN_IDS
+    from app.config.admin_config import VERIFIED_ADMIN_IDS
     from app.services.aria_security_defense import (
         SECURITY_RESPONSE_BLOCKED,
         SECURITY_RESPONSE_FORWARDED,

@@ -11,6 +11,8 @@ This module contains all constants used in the bonus management system including
 
 from decimal import Decimal
 
+from app.config.settings import settings
+
 
 # ============ BONUS TEMPLATES ============
 
@@ -28,7 +30,8 @@ QUICK_AMOUNTS = [5, 10, 30, 50, 70, 100]
 
 # ============ BONUS LIMITS AND VALIDATION ============
 
-BONUS_ROI_CAP_MULTIPLIER = 5  # 500% ROI cap
+# ROI cap multiplier (from settings)
+BONUS_ROI_CAP_MULTIPLIER = Decimal(str(settings.roi_cap_multiplier))  # 500% ROI cap
 BONUS_AMOUNT_MIN = Decimal("1")
 BONUS_AMOUNT_MAX = Decimal("100000")
 

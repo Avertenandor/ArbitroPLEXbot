@@ -4,10 +4,18 @@ User repository.
 Data access layer for User model.
 """
 
+from typing import Any
 
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
+try:
+    from redis.asyncio import Redis
+except ImportError:
+    import redis.asyncio as redis
+    Redis = redis.Redis
 
 from app.models.user import User
 from app.repositories.base import BaseRepository
@@ -216,3 +224,52 @@ class UserRepository(BaseRepository[User]):
         )
         result = await self.session.execute(stmt)
         return result.scalar() or 0
+
+    async def update(
+        self,
+        id: int,
+        for_update: bool = False,
+        redis_client: Redis | None = None,
+        **data: Any,
+    ) -> User | None:
+        """
+        Update user by ID with cache invalidation.
+
+        Overrides BaseRepository.update() to add Redis cache invalidation.
+        When user data is updated, corresponding cache keys are removed.
+
+        Args:
+            id: User ID
+            for_update: Use SELECT FOR UPDATE to lock row
+            redis_client: Optional Redis client for cache invalidation
+            **data: Updated data
+
+        Returns:
+            Updated user or None if not found
+
+        Example:
+            >>> from app.utils.redis_utils import get_redis_client
+            >>> redis = await get_redis_client()
+            >>> user = await user_repo.update(
+            ...     123,
+            ...     redis_client=redis,
+            ...     is_verified=True
+            ... )
+            >>> await redis.close()
+        """
+        # Call parent update method
+        user = await super().update(id, for_update=for_update, **data)
+
+        # Invalidate cache if update succeeded and redis client provided
+        if user and redis_client:
+            try:
+                from app.utils.cache_invalidation import invalidate_user_cache_from_model
+                await invalidate_user_cache_from_model(redis_client, user)
+            except Exception as e:
+                # Don't fail the update if cache invalidation fails
+                logger.warning(
+                    f"Failed to invalidate cache for user {id}: {e}",
+                    extra={"user_id": id},
+                )
+
+        return user

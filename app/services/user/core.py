@@ -7,6 +7,12 @@ Handles basic user retrieval operations and profile management.
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+try:
+    from redis.asyncio import Redis
+except ImportError:
+    import redis.asyncio as redis
+    Redis = redis.Redis
+
 from app.models.user import User
 from app.repositories.blacklist_repository import BlacklistRepository
 from app.repositories.user_repository import UserRepository
@@ -151,13 +157,17 @@ class UserServiceCore:
         return await self.user_repo.get_by_wallet_address(wallet_address)
 
     async def update_profile(
-        self, user_id: int, **data
+        self,
+        user_id: int,
+        redis_client: Redis | None = None,
+        **data,
     ) -> User | None:
         """
         Update user profile.
 
         Args:
             user_id: User ID
+            redis_client: Optional Redis client for cache invalidation
             **data: Fields to update
 
         Returns:
@@ -170,7 +180,9 @@ class UserServiceCore:
             if existing and existing.id != user_id:
                 raise ValueError("Wallet address is already used by another user")
 
-        user = await self.user_repo.update(user_id, **data)
+        user = await self.user_repo.update(
+            user_id, redis_client=redis_client, **data
+        )
 
         if user:
             await self.session.commit()
@@ -182,7 +194,10 @@ class UserServiceCore:
         return user
 
     async def block_earnings(
-        self, user_id: int, block: bool = True
+        self,
+        user_id: int,
+        block: bool = True,
+        redis_client: Redis | None = None,
     ) -> User | None:
         """
         Block/unblock user earnings.
@@ -192,16 +207,20 @@ class UserServiceCore:
         Args:
             user_id: User ID
             block: True to block, False to unblock
+            redis_client: Optional Redis client for cache invalidation
 
         Returns:
             Updated user or None
         """
         return await self.update_profile(
-            user_id, earnings_blocked=block
+            user_id, redis_client=redis_client, earnings_blocked=block
         )
 
     async def ban_user(
-        self, user_id: int, ban: bool = True
+        self,
+        user_id: int,
+        ban: bool = True,
+        redis_client: Redis | None = None,
     ) -> User | None:
         """
         Ban/unban user.
@@ -209,23 +228,31 @@ class UserServiceCore:
         Args:
             user_id: User ID
             ban: True to ban, False to unban
+            redis_client: Optional Redis client for cache invalidation
 
         Returns:
             Updated user or None
         """
-        return await self.update_profile(user_id, is_banned=ban)
+        return await self.update_profile(
+            user_id, redis_client=redis_client, is_banned=ban
+        )
 
-    async def unban_user(self, user_id: int) -> dict:
+    async def unban_user(
+        self, user_id: int, redis_client: Redis | None = None
+    ) -> dict:
         """
         Unban user.
 
         Args:
             user_id: User ID
+            redis_client: Optional Redis client for cache invalidation
 
         Returns:
             Result dict with success status
         """
-        user = await self.ban_user(user_id, ban=False)
+        user = await self.ban_user(
+            user_id, ban=False, redis_client=redis_client
+        )
         if user:
             return {"success": True}
         return {"success": False, "error": "User not found"}

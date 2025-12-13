@@ -144,7 +144,8 @@ async def set_max_deposit_level(
         )
         return
 
-    settings_repo = GlobalSettingsRepository(session)
+    redis_client = data.get("redis_client")
+    settings_repo = GlobalSettingsRepository(session, redis_client)
     await settings_repo.update_settings(max_open_deposit_level=level)
     await session.commit()
 

@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.global_settings_repository import (
     GlobalSettingsRepository,
 )
+from app.utils.cache_invalidation import invalidate_global_settings_cache
 from bot.keyboards.admin.emergency_keyboards import emergency_stops_keyboard
 from bot.keyboards.reply import get_admin_keyboard_from_data
 
@@ -92,7 +93,8 @@ async def handle_toggle_deposits(
         await message.answer("❌ Доступ только для супер-админа")
         return
 
-    repo = GlobalSettingsRepository(session)
+    redis_client = data.get("redis_client")
+    repo = GlobalSettingsRepository(session, redis_client)
     settings = await repo.get_settings()
 
     new_value = not settings.emergency_stop_deposits
@@ -115,7 +117,8 @@ async def handle_toggle_withdrawals(
         await message.answer("❌ Доступ только для супер-админа")
         return
 
-    repo = GlobalSettingsRepository(session)
+    redis_client = data.get("redis_client")
+    repo = GlobalSettingsRepository(session, redis_client)
     settings = await repo.get_settings()
 
     new_value = not settings.emergency_stop_withdrawals
@@ -138,7 +141,8 @@ async def handle_toggle_roi(
         await message.answer("❌ Доступ только для супер-админа")
         return
 
-    repo = GlobalSettingsRepository(session)
+    redis_client = data.get("redis_client")
+    repo = GlobalSettingsRepository(session, redis_client)
     settings = await repo.get_settings()
 
     new_value = not settings.emergency_stop_roi

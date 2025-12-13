@@ -7,6 +7,12 @@ Handles wallet address changes with verification and history tracking.
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+try:
+    from redis.asyncio import Redis
+except ImportError:
+    import redis.asyncio as redis
+    Redis = redis.Redis
+
 from app.repositories.user_repository import UserRepository
 
 
@@ -23,7 +29,11 @@ class UserWalletMixin:
         self.user_repo = UserRepository(session)
 
     async def change_wallet(
-        self, user_id: int, new_wallet_address: str, financial_password: str
+        self,
+        user_id: int,
+        new_wallet_address: str,
+        financial_password: str,
+        redis_client: Redis | None = None,
     ) -> tuple[bool, str]:
         """
         Change user wallet address with financial password verification.
@@ -32,6 +42,7 @@ class UserWalletMixin:
             user_id: User ID
             new_wallet_address: New wallet address
             financial_password: Financial password for verification
+            redis_client: Optional Redis client for cache invalidation
 
         Returns:
             Tuple (success, error_message)
@@ -80,6 +91,18 @@ class UserWalletMixin:
 
         try:
             await self.session.commit()
+
+            # Invalidate cache after successful commit
+            if redis_client:
+                try:
+                    from app.utils.cache_invalidation import invalidate_user_cache_from_model
+                    await invalidate_user_cache_from_model(redis_client, user)
+                except Exception as cache_error:
+                    # Don't fail the operation if cache invalidation fails
+                    logger.warning(
+                        f"Failed to invalidate cache for user {user_id} after wallet change: {cache_error}"
+                    )
+
             logger.info(
                 f"User {user_id} changed wallet from {old_wallet} to {new_wallet_address}"
             )

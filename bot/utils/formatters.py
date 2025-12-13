@@ -5,6 +5,9 @@ Utility functions for formatting data
 
 from decimal import Decimal
 
+# Import shared formatters from app layer (re-exported for bot usage)
+from app.utils.formatters import escape_md, format_user_identifier
+
 
 def format_usdt(amount: Decimal | float | int) -> str:
     """

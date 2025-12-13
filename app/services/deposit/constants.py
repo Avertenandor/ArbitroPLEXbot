@@ -2,10 +2,13 @@
 Deposit levels configuration and constants.
 
 Defines deposit level types, amounts, and helper functions.
+Single source of truth: app.config.business_constants.DEPOSIT_LEVELS
 """
 
 from decimal import Decimal
 from typing import NamedTuple
+
+from app.config.business_constants import DEPOSIT_LEVELS as BUSINESS_DEPOSIT_LEVELS
 
 
 # Deposit level type constants
@@ -37,60 +40,60 @@ class DepositLevelConfig(NamedTuple):
     display_name: str
 
 
-# Deposit levels configuration with corridors (extended with test level)
+# Build DEPOSIT_LEVEL_CONFIGS from business constants (single source of truth)
 DEPOSIT_LEVEL_CONFIGS = {
     LEVEL_TYPE_TEST: DepositLevelConfig(
         level_type=LEVEL_TYPE_TEST,
         db_level=0,
-        min_amount=Decimal("30"),
-        max_amount=Decimal("100"),
-        display_name="Тестовый",
+        min_amount=Decimal(str(BUSINESS_DEPOSIT_LEVELS["test"]["min"])),
+        max_amount=Decimal(str(BUSINESS_DEPOSIT_LEVELS["test"]["max"])),
+        display_name=BUSINESS_DEPOSIT_LEVELS["test"]["name"],
     ),
     LEVEL_TYPE_LEVEL_1: DepositLevelConfig(
         level_type=LEVEL_TYPE_LEVEL_1,
         db_level=1,
-        min_amount=Decimal("100"),
-        max_amount=Decimal("500"),
-        display_name="Уровень 1",
+        min_amount=Decimal(str(BUSINESS_DEPOSIT_LEVELS["level_1"]["min"])),
+        max_amount=Decimal(str(BUSINESS_DEPOSIT_LEVELS["level_1"]["max"])),
+        display_name=BUSINESS_DEPOSIT_LEVELS["level_1"]["name"],
     ),
     LEVEL_TYPE_LEVEL_2: DepositLevelConfig(
         level_type=LEVEL_TYPE_LEVEL_2,
         db_level=2,
-        min_amount=Decimal("700"),
-        max_amount=Decimal("1200"),
-        display_name="Уровень 2",
+        min_amount=Decimal(str(BUSINESS_DEPOSIT_LEVELS["level_2"]["min"])),
+        max_amount=Decimal(str(BUSINESS_DEPOSIT_LEVELS["level_2"]["max"])),
+        display_name=BUSINESS_DEPOSIT_LEVELS["level_2"]["name"],
     ),
     LEVEL_TYPE_LEVEL_3: DepositLevelConfig(
         level_type=LEVEL_TYPE_LEVEL_3,
         db_level=3,
-        min_amount=Decimal("1400"),
-        max_amount=Decimal("2200"),
-        display_name="Уровень 3",
+        min_amount=Decimal(str(BUSINESS_DEPOSIT_LEVELS["level_3"]["min"])),
+        max_amount=Decimal(str(BUSINESS_DEPOSIT_LEVELS["level_3"]["max"])),
+        display_name=BUSINESS_DEPOSIT_LEVELS["level_3"]["name"],
     ),
     LEVEL_TYPE_LEVEL_4: DepositLevelConfig(
         level_type=LEVEL_TYPE_LEVEL_4,
         db_level=4,
-        min_amount=Decimal("2500"),
-        max_amount=Decimal("3500"),
-        display_name="Уровень 4",
+        min_amount=Decimal(str(BUSINESS_DEPOSIT_LEVELS["level_4"]["min"])),
+        max_amount=Decimal(str(BUSINESS_DEPOSIT_LEVELS["level_4"]["max"])),
+        display_name=BUSINESS_DEPOSIT_LEVELS["level_4"]["name"],
     ),
     LEVEL_TYPE_LEVEL_5: DepositLevelConfig(
         level_type=LEVEL_TYPE_LEVEL_5,
         db_level=5,
-        min_amount=Decimal("4000"),
-        max_amount=Decimal("7000"),
-        display_name="Уровень 5",
+        min_amount=Decimal(str(BUSINESS_DEPOSIT_LEVELS["level_5"]["min"])),
+        max_amount=Decimal(str(BUSINESS_DEPOSIT_LEVELS["level_5"]["max"])),
+        display_name=BUSINESS_DEPOSIT_LEVELS["level_5"]["name"],
     ),
 }
 
 # Legacy DEPOSIT_LEVELS for backward compatibility (maps db_level -> min_amount)
 DEPOSIT_LEVELS = {
-    0: Decimal("30"),
-    1: Decimal("100"),
-    2: Decimal("700"),
-    3: Decimal("1400"),
-    4: Decimal("2500"),
-    5: Decimal("4000"),
+    0: Decimal(str(BUSINESS_DEPOSIT_LEVELS["test"]["min"])),
+    1: Decimal(str(BUSINESS_DEPOSIT_LEVELS["level_1"]["min"])),
+    2: Decimal(str(BUSINESS_DEPOSIT_LEVELS["level_2"]["min"])),
+    3: Decimal(str(BUSINESS_DEPOSIT_LEVELS["level_3"]["min"])),
+    4: Decimal(str(BUSINESS_DEPOSIT_LEVELS["level_4"]["min"])),
+    5: Decimal(str(BUSINESS_DEPOSIT_LEVELS["level_5"]["min"])),
 }
 
 # Partner requirements (DISABLED - no partners required)

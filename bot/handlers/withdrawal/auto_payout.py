@@ -5,6 +5,7 @@ This module handles automatic withdrawal payouts, including blockchain transacti
 and user notifications.
 """
 
+import asyncio
 from decimal import Decimal
 
 from aiogram import Bot
@@ -26,6 +27,9 @@ async def _safe_process_auto_payout(
     """Wrapper for safe auto-payout execution."""
     try:
         await process_auto_payout(tx_id, amount, to_address, bot, telegram_id)
+    except asyncio.CancelledError:
+        logger.warning(f"Auto-payout task cancelled for tx {tx_id}, performing cleanup")
+        raise  # Always re-raise CancelledError
     except Exception as e:
         logger.error(f"Auto-payout task failed for tx {tx_id}: {e}", exc_info=True)
 

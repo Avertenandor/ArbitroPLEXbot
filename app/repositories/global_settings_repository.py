@@ -8,15 +8,24 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+try:
+    from redis.asyncio import Redis as AsyncRedis
+except ImportError:
+    import redis.asyncio as aioredis
+
+    AsyncRedis = aioredis.Redis
+
 from app.models.global_settings import GlobalSettings
+from app.utils.cache_invalidation import invalidate_global_settings_cache
 
 
 class GlobalSettingsRepository:
     """Repository for GlobalSettings."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, redis: AsyncRedis | None = None) -> None:
         """Initialize repository."""
         self.session = session
+        self.redis = redis
 
     async def get_settings(self) -> GlobalSettings:
         """
@@ -127,4 +136,9 @@ class GlobalSettingsRepository:
 
         await self.session.commit()
         await self.session.refresh(settings)
+
+        # Invalidate cache after update
+        if self.redis:
+            await invalidate_global_settings_cache(self.redis)
+
         return settings

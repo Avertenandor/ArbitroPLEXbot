@@ -20,15 +20,7 @@ from app.repositories.referral_earning_repository import (
 )
 from app.repositories.referral_repository import ReferralRepository
 from app.repositories.user_repository import UserRepository
-
-
-# Referral system configuration
-REFERRAL_DEPTH = 3
-REFERRAL_RATES = {
-    1: Decimal("0.05"),  # 5% for level 1 (direct referrals)
-    2: Decimal("0.05"),  # 5% for level 2
-    3: Decimal("0.05"),  # 5% for level 3
-}
+from app.services.referral.config import REFERRAL_DEPTH, REFERRAL_RATES
 
 # Type alias for reward types
 RewardType = Literal["deposit", "roi"]

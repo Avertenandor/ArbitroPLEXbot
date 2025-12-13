@@ -10,6 +10,7 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+from sqlalchemy.exc import OperationalError
 
 # revision identifiers, used by Alembic.
 revision: str = 'add_blacklist_action_type'
@@ -28,15 +29,15 @@ def upgrade() -> None:
     # Add is_active column if it doesn't exist
     try:
         op.add_column('blacklist', sa.Column('is_active', sa.Integer(), nullable=False, server_default='1'))
-    except Exception:
-        # Column might already exist
+    except OperationalError:
+        # Column already exists
         pass
     
     # Add created_at column if it doesn't exist
     try:
         op.add_column('blacklist', sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()))
-    except Exception:
-        # Column might already exist
+    except OperationalError:
+        # Column already exists
         pass
     
     # Create index on action_type

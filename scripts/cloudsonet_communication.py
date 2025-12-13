@@ -20,6 +20,7 @@ from pathlib import Path
 sys.path.insert(0, '/app')
 
 from aiogram import Bot  # noqa: E402
+from loguru import logger  # noqa: E402
 
 
 # Конфигурация админов
@@ -55,7 +56,7 @@ async def send_to_all_admins(message: str, category: str = "info"):
     """Отправить сообщение всем админам."""
     token = os.getenv('TELEGRAM_BOT_TOKEN')
     if not token:
-        print('❌ TELEGRAM_BOT_TOKEN not set!')
+        logger.error('❌ TELEGRAM_BOT_TOKEN not set!')
         return
     bot = Bot(token=token)
 
@@ -82,9 +83,9 @@ async def send_to_all_admins(message: str, category: str = "info"):
                 f"{get_signature()}"
             )
             await bot.send_message(admin_id, full_message, parse_mode='Markdown')
-            print(f"✅ Отправлено: {admin_info['name']}")
+            logger.info(f"✅ Отправлено: {admin_info['name']}")
         except Exception as e:
-            print(f"❌ Ошибка {admin_info['name']}: {e}")
+            logger.error(f"❌ Ошибка {admin_info['name']}: {e}")
 
     await bot.session.close()
 
@@ -93,7 +94,7 @@ async def send_to_tech_lead(message: str):
     """Отправить сообщение только техническому заместителю (Александру)."""
     token = os.getenv('TELEGRAM_BOT_TOKEN')
     if not token:
-        print('❌ TELEGRAM_BOT_TOKEN not set!')
+        logger.error('❌ TELEGRAM_BOT_TOKEN not set!')
         return
     bot = Bot(token=token)
 
@@ -110,9 +111,9 @@ async def send_to_tech_lead(message: str):
 
     try:
         await bot.send_message(tech_lead_id, full_message, parse_mode='Markdown')
-        print("✅ Отправлено техническому заместителю")
+        logger.info("✅ Отправлено техническому заместителю")
     except Exception as e:
-        print(f"❌ Ошибка: {e}")
+        logger.error(f"❌ Ошибка: {e}")
 
     await bot.session.close()
 
@@ -125,7 +126,8 @@ def save_admin_message(admin_id: int, message: str):
     if MESSAGES_FILE.exists():
         try:
             messages = json.loads(MESSAGES_FILE.read_text())
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Failed to read messages file: {e}")
             messages = []
 
     admin_info = ADMINS.get(admin_id, {"name": f"Admin {admin_id}"})
@@ -149,7 +151,8 @@ def get_unread_messages() -> list:
     try:
         messages = json.loads(MESSAGES_FILE.read_text())
         return [m for m in messages if not m.get("read")]
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to read unread messages: {e}")
         return []
 
 
@@ -163,8 +166,8 @@ def mark_messages_read():
         for m in messages:
             m["read"] = True
         MESSAGES_FILE.write_text(json.dumps(messages, ensure_ascii=False, indent=2))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"Failed to mark messages as read: {e}")
 
 
 # Предустановленные сообщения
@@ -236,12 +239,12 @@ async def main():
     elif command == "read":
         messages = get_unread_messages()
         if not messages:
-            print("📭 Нет новых сообщений от админов")
+            logger.info("📭 Нет новых сообщений от админов")
         else:
-            print(f"📬 Новых сообщений: {len(messages)}\n")
+            logger.info(f"📬 Новых сообщений: {len(messages)}")
             for m in messages:
-                print(f"[{m['timestamp']}] {m['admin_name']}:")
-                print(f"  {m['message']}\n")
+                logger.info(f"[{m['timestamp']}] {m['admin_name']}:")
+                logger.info(f"  {m['message']}")
             mark_messages_read()
 
     elif command == "status":
@@ -259,7 +262,7 @@ async def main():
         await send_to_all_admins(msg, "fix")
 
     else:
-        print(f"Неизвестная команда: {command}")
+        logger.error(f"Неизвестная команда: {command}")
 
 
 if __name__ == '__main__':

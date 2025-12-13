@@ -20,19 +20,19 @@ async def main():
     """Test PLEX verification."""
     from app.config.settings import settings
 
-    print("=" * 60)
-    print("PLEX Payment Verification Debug")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("PLEX Payment Verification Debug")
+    logger.info("=" * 60)
 
-    print(f"\nPLEX Token Address: {settings.auth_plex_token_address}")
-    print(f"System Wallet Address: {settings.auth_system_wallet_address}")
-    print(f"Auth Price PLEX: {settings.auth_price_plex}")
+    logger.info(f"\nPLEX Token Address: {settings.auth_plex_token_address}")
+    logger.info(f"System Wallet Address: {settings.auth_system_wallet_address}")
+    logger.info(f"Auth Price PLEX: {settings.auth_price_plex}")
 
     # Direct Web3 test
-    print("\n--- Direct Web3 Test ---")
+    logger.info("\n--- Direct Web3 Test ---")
     w3 = Web3(Web3.HTTPProvider('https://bsc-dataseed1.binance.org'))
-    print(f"Connected: {w3.is_connected()}")
-    print(f"Latest block: {w3.eth.block_number}")
+    logger.info(f"Connected: {w3.is_connected()}")
+    logger.info(f"Latest block: {w3.eth.block_number}")
 
     # Check PLEX token contract
     PLEX = w3.to_checksum_address(settings.auth_plex_token_address)
@@ -72,23 +72,23 @@ async def main():
     # Check decimals
     try:
         decimals = contract.functions.decimals().call()
-        print(f"PLEX Decimals: {decimals}")
+        logger.info(f"PLEX Decimals: {decimals}")
     except Exception as e:
-        print(f"Error getting decimals: {e}")
+        logger.error(f"Error getting decimals: {e}")
         decimals = 9
 
     # Check system wallet balance
     try:
         balance = contract.functions.balanceOf(SYSTEM).call()
         balance_formatted = balance / (10 ** decimals)
-        print(f"System Wallet PLEX Balance: {balance_formatted}")
+        logger.info(f"System Wallet PLEX Balance: {balance_formatted}")
     except Exception as e:
-        print(f"Error getting balance: {e}")
+        logger.error(f"Error getting balance: {e}")
 
     latest = w3.eth.block_number
 
     # Check recent transfers TO system wallet - scan in chunks
-    print("\n--- Scanning for transfers to system wallet (in chunks) ---")
+    logger.info("\n--- Scanning for transfers to system wallet (in chunks) ---")
     chunk_size = 100
     total_blocks = 1000
 
@@ -106,26 +106,26 @@ async def main():
             )
             chunk_logs = list(logs)
             all_logs.extend(chunk_logs)
-            print(f"  Blocks {from_blk}-{to_blk}: {len(chunk_logs)} logs")
+            logger.debug(f"  Blocks {from_blk}-{to_blk}: {len(chunk_logs)} logs")
         except Exception as e:
-            print(f"  Blocks {from_blk}-{to_blk}: Error - {e}")
+            logger.error(f"  Blocks {from_blk}-{to_blk}: Error - {e}")
 
-    print(f"\nTotal found: {len(all_logs)} transfers TO system wallet")
+    logger.info(f"\nTotal found: {len(all_logs)} transfers TO system wallet")
 
     if all_logs:
-        print("\nRecent transfers:")
+        logger.info("\nRecent transfers:")
         for log in all_logs[:5]:
             args = log.get('args', {})
             from_addr = args.get('from', '')
             value = args.get('value', 0)
             tx_hash = log.get('transactionHash', b'').hex()
             amount = value / (10 ** decimals)
-            print(f"  - From: {from_addr[:10]}... Amount: {amount} PLEX")
-            print(f"    TX: {tx_hash}")
+            logger.info(f"  - From: {from_addr[:10]}... Amount: {amount} PLEX")
+            logger.info(f"    TX: {tx_hash}")
 
-    print("\n" + "=" * 60)
-    print("Debug complete")
-    print("=" * 60)
+    logger.info("\n" + "=" * 60)
+    logger.info("Debug complete")
+    logger.info("=" * 60)
 
 
 if __name__ == "__main__":

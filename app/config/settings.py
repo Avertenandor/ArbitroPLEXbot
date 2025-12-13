@@ -60,13 +60,15 @@ class Settings(BaseSettings):
     bsc_rpc_url: str | None = None
 
     # PLEX Token Configuration
+    # DEPRECATED: Use PLEX_CONTRACT_ADDRESS from app.config.business_constants instead
     plex_contract_address: str = Field(
         default="0xdf179b6cadbc61ffd86a3d2e55f6d6e083ade6c1",
-        description="PLEX token smart contract address on BSC"
+        description="[DEPRECATED] PLEX token smart contract address on BSC. Use business_constants.PLEX_CONTRACT_ADDRESS"
     )
+    # DEPRECATED: Use PLEX_PER_DOLLAR_DAILY from app.config.business_constants instead
     plex_per_dollar_daily: int = Field(
         default=10,
-        description="PLEX tokens required per $1 of deposit per day"
+        description="[DEPRECATED] PLEX tokens required per $1 of deposit per day. Use business_constants.PLEX_PER_DOLLAR_DAILY"
     )
     plex_decimals: int = Field(
         default=9,
@@ -81,23 +83,9 @@ class Settings(BaseSettings):
     # Payout wallet (optional, defaults to wallet_address)
     payout_wallet_address: str | None = None
 
-    # Deposit levels (USDT amounts)
-    # NOTE: Values must match app/services/deposit_validation_service.py and bot/utils/constants.py
-    deposit_level_1: float = Field(
-        default=10.0, gt=0, description="Deposit level 1 amount"
-    )
-    deposit_level_2: float = Field(
-        default=50.0, gt=0, description="Deposit level 2 amount"
-    )
-    deposit_level_3: float = Field(
-        default=100.0, gt=0, description="Deposit level 3 amount"
-    )
-    deposit_level_4: float = Field(
-        default=150.0, gt=0, description="Deposit level 4 amount"
-    )
-    deposit_level_5: float = Field(
-        default=300.0, gt=0, description="Deposit level 5 amount"
-    )
+    # NOTE: Deposit levels configuration moved to app/config/business_constants.py
+    # This is the single source of truth for deposit corridors and amounts.
+    # Use DEPOSIT_LEVELS from business_constants.py instead.
 
     # Redis (for FSM storage and Dramatiq)
     redis_host: str = "localhost"

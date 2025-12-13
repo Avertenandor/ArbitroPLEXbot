@@ -112,7 +112,7 @@ class WithdrawalRequestHandler:
 
                 # Calculate Fee using balance manager
                 fee_amount = await self.balance_manager.calculate_fee(amount)
-                amount - fee_amount
+                net_amount = amount - fee_amount
 
                 # CRITICAL: Validate that fee is less than amount
                 if fee_amount >= amount:
