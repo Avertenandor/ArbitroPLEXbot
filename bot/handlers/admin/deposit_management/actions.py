@@ -22,6 +22,10 @@ from app.repositories.deposit_level_version_repository import (
 from app.repositories.global_settings_repository import (
     GlobalSettingsRepository,
 )
+from app.utils.cache_invalidation import (
+    invalidate_deposit_level_cache,
+    invalidate_global_settings_cache,
+)
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
 from bot.keyboards.reply import (
     admin_deposit_level_actions_keyboard,
@@ -109,7 +113,8 @@ async def process_max_level_change(
     admin = data.get("admin")
     admin_info = f"admin {admin.telegram_id}" if admin else "unknown admin"
 
-    global_settings_repo = GlobalSettingsRepository(session)
+    redis_client = data.get("redis_client")
+    global_settings_repo = GlobalSettingsRepository(session, redis_client)
     await global_settings_repo.update_settings(max_open_deposit_level=new_max)
     await session.commit()
 
@@ -293,6 +298,11 @@ async def confirm_level_status_change(
         notify_action = "отключён"
 
     await session.commit()
+
+    # Invalidate cache for this deposit level
+    redis_client = data.get("redis_client")
+    if redis_client:
+        await invalidate_deposit_level_cache(redis_client, level)
 
     await message.answer(
         status_msg.format(level=level),

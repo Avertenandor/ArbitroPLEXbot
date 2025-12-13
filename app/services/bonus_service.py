@@ -12,6 +12,7 @@ from loguru import logger
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config.settings import settings
 from app.models.bonus_credit import BonusCredit
 from app.repositories.bonus_credit_repository import BonusCreditRepository
 from app.repositories.global_settings_repository import GlobalSettingsRepository
@@ -29,9 +30,6 @@ class BonusService(BaseService):
     - Participate in the same reward accrual system as deposits
     - Are tracked separately from regular deposits
     """
-
-    # Default ROI cap multiplier (500%)
-    DEFAULT_ROI_CAP_MULTIPLIER = Decimal("5.00")
 
     # Default accrual period (hours)
     DEFAULT_ACCRUAL_PERIOD_HOURS = 1
@@ -73,7 +71,7 @@ class BonusService(BaseService):
             return None, "Пользователь не найден"
 
         # Calculate ROI cap
-        cap_multiplier = roi_cap_multiplier or self.DEFAULT_ROI_CAP_MULTIPLIER
+        cap_multiplier = roi_cap_multiplier or Decimal(str(settings.roi_cap_multiplier))
         roi_cap_amount = amount * cap_multiplier
 
         # Set first accrual time

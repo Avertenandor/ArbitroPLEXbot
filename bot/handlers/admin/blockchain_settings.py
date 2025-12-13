@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.global_settings_repository import (
     GlobalSettingsRepository,
 )
+from app.utils.cache_invalidation import invalidate_global_settings_cache
 from app.services.blockchain_service import get_blockchain_service
 from bot.keyboards.admin.blockchain_keyboards import blockchain_settings_keyboard
 from bot.keyboards.reply import get_admin_keyboard_from_data
@@ -88,7 +89,8 @@ async def handle_set_quicknode(
     **data: Any,
 ) -> None:
     """Set QuickNode as active provider."""
-    repo = GlobalSettingsRepository(session)
+    redis_client = data.get("redis_client")
+    repo = GlobalSettingsRepository(session, redis_client)
     bs = get_blockchain_service()
 
     await repo.update_settings(active_rpc_provider="quicknode")
@@ -107,7 +109,8 @@ async def handle_set_nodereal(
     **data: Any,
 ) -> None:
     """Set NodeReal as active provider."""
-    repo = GlobalSettingsRepository(session)
+    redis_client = data.get("redis_client")
+    repo = GlobalSettingsRepository(session, redis_client)
     bs = get_blockchain_service()
 
     await repo.update_settings(active_rpc_provider="nodereal")
@@ -156,6 +159,9 @@ async def handle_set_nodereal2(
         await show_blockchain_menu(message, session, is_super_admin=True)
         return
 
+    redis_client = data.get("redis_client")
+    repo = GlobalSettingsRepository(session, redis_client)
+
     await repo.update_settings(active_rpc_provider="nodereal2")
     await session.commit()
     await bs.force_refresh_settings()
@@ -175,7 +181,8 @@ async def handle_toggle_auto_switch(
     **data: Any,
 ) -> None:
     """Toggle auto-switch setting."""
-    repo = GlobalSettingsRepository(session)
+    redis_client = data.get("redis_client")
+    repo = GlobalSettingsRepository(session, redis_client)
     bs = get_blockchain_service()
 
     # First ensure we have latest settings

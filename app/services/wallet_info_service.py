@@ -17,6 +17,7 @@ import aiohttp
 from loguru import logger
 
 from app.config.settings import settings
+from app.services.blockchain.rpc_rate_limiter import RPCRateLimiter
 from app.services.blockchain_service import get_blockchain_service
 from app.utils.security import mask_address
 
@@ -112,6 +113,7 @@ class WalletInfoService:
         """Initialize wallet info service."""
         self.rpc_url = settings.rpc_url
         self._session: aiohttp.ClientSession | None = None
+        self._rate_limiter = RPCRateLimiter(max_rps=25)
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session."""
@@ -121,7 +123,7 @@ class WalletInfoService:
 
     async def _rpc_call(self, method: str, params: list) -> Any:
         """
-        Make JSON-RPC call.
+        Make JSON-RPC call with rate limiting.
 
         Args:
             method: RPC method name
@@ -138,22 +140,23 @@ class WalletInfoService:
         }
 
         try:
-            session = await self._get_session()
-            async with session.post(
-                self.rpc_url,
-                json=payload,
-                timeout=aiohttp.ClientTimeout(total=30),
-                headers={"Content-Type": "application/json"},
-            ) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    if "error" in data:
-                        logger.debug(f"RPC error: {data['error']}")
+            async with self._rate_limiter:
+                session = await self._get_session()
+                async with session.post(
+                    self.rpc_url,
+                    json=payload,
+                    timeout=aiohttp.ClientTimeout(total=30),
+                    headers={"Content-Type": "application/json"},
+                ) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if "error" in data:
+                            logger.debug(f"RPC error: {data['error']}")
+                            return None
+                        return data.get("result")
+                    else:
+                        logger.warning(f"RPC error: HTTP {response.status}")
                         return None
-                    return data.get("result")
-                else:
-                    logger.warning(f"RPC error: HTTP {response.status}")
-                    return None
         except Exception as e:
             logger.error(f"RPC request failed: {e}")
             return None

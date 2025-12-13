@@ -78,7 +78,7 @@ class OperationRateLimiter:
         - 20 requests per day
         - 10 requests per hour
 
-        Uses atomic Redis operations to prevent race conditions.
+        Uses atomic Redis Lua script to prevent race conditions.
 
         Args:
             telegram_id: Telegram user ID
@@ -93,38 +93,69 @@ class OperationRateLimiter:
             daily_key = f"op_limit:withdraw:day:{telegram_id}"
             hourly_key = f"op_limit:withdraw:hour:{telegram_id}"
 
-            # Атомарная операция через pipeline: инкремент + установка TTL
-            pipe = self.redis_client.pipeline()
-            pipe.incr(daily_key)
-            pipe.expire(daily_key, 86400)  # 24 hours
-            pipe.incr(hourly_key)
-            pipe.expire(hourly_key, 3600)  # 1 hour
-            results = await pipe.execute()
+            # Lua скрипт для атомарной проверки и инкремента обоих лимитов
+            # Возвращает: {"daily": count, "hourly": count, "allowed": 0|1}
+            lua_script = """
+            local daily_key = KEYS[1]
+            local hourly_key = KEYS[2]
+            local daily_limit = tonumber(ARGV[1])
+            local hourly_limit = tonumber(ARGV[2])
+            local daily_ttl = tonumber(ARGV[3])
+            local hourly_ttl = tonumber(ARGV[4])
 
-            daily_count = results[0]
-            hourly_count = results[2]
+            -- Получить текущие значения
+            local daily_count = tonumber(redis.call('GET', daily_key) or '0')
+            local hourly_count = tonumber(redis.call('GET', hourly_key) or '0')
 
-            # Проверка дневного лимита (20 per day)
-            if daily_count > 20:
-                # Откатить инкремент, если превышен лимит
-                await self.redis_client.decr(daily_key)
-                await self.redis_client.decr(hourly_key)
-                return (
-                    False,
-                    "Превышен дневной лимит заявок на вывод (20/день). "
-                    "Попробуйте завтра.",
-                )
+            -- Проверить лимиты ПЕРЕД инкрементом
+            if daily_count >= daily_limit then
+                return {daily_count, hourly_count, 0, 'daily'}
+            end
+            if hourly_count >= hourly_limit then
+                return {daily_count, hourly_count, 0, 'hourly'}
+            end
 
-            # Проверка часового лимита (10 per hour)
-            if hourly_count > 10:
-                # Откатить инкремент, если превышен лимит
-                await self.redis_client.decr(daily_key)
-                await self.redis_client.decr(hourly_key)
-                return (
-                    False,
-                    "Превышен часовой лимит заявок на вывод (10/час). "
-                    "Попробуйте позже.",
-                )
+            -- Инкрементировать только если лимиты не превышены
+            daily_count = redis.call('INCR', daily_key)
+            if daily_count == 1 then
+                redis.call('EXPIRE', daily_key, daily_ttl)
+            end
+
+            hourly_count = redis.call('INCR', hourly_key)
+            if hourly_count == 1 then
+                redis.call('EXPIRE', hourly_key, hourly_ttl)
+            end
+
+            return {daily_count, hourly_count, 1, 'ok'}
+            """
+
+            # Выполнить атомарную операцию
+            result = await self.redis_client.eval(
+                lua_script,
+                2,  # 2 keys
+                daily_key,
+                hourly_key,
+                20,  # daily_limit
+                10,  # hourly_limit
+                86400,  # daily_ttl (24 hours)
+                3600,  # hourly_ttl (1 hour)
+            )
+
+            daily_count, hourly_count, allowed, limit_type = result
+
+            if not allowed:
+                if limit_type == b'daily' or limit_type == 'daily':
+                    return (
+                        False,
+                        "Превышен дневной лимит заявок на вывод (20/день). "
+                        "Попробуйте завтра.",
+                    )
+                else:  # hourly
+                    return (
+                        False,
+                        "Превышен часовой лимит заявок на вывод (10/час). "
+                        "Попробуйте позже.",
+                    )
 
             return True, None
 
@@ -162,25 +193,40 @@ class OperationRateLimiter:
         try:
             key = f"op_limit:{operation}:{telegram_id}"
 
-            # Lua скрипт для атомарного инкремента с установкой TTL
-            # Возвращает текущее значение счетчика после инкремента
+            # Lua скрипт для атомарной проверки и инкремента
+            # Проверяет лимит ПЕРЕД инкрементом, инкрементирует только если разрешено
+            # Возвращает: {count, allowed} где allowed = 0|1
             lua_script = """
-            local current = redis.call('INCR', KEYS[1])
-            if current == 1 then
-                redis.call('EXPIRE', KEYS[1], ARGV[1])
+            local key = KEYS[1]
+            local max_attempts = tonumber(ARGV[1])
+            local ttl = tonumber(ARGV[2])
+
+            -- Получить текущее значение
+            local current = tonumber(redis.call('GET', key) or '0')
+
+            -- Проверить лимит ПЕРЕД инкрементом
+            if current >= max_attempts then
+                return {current, 0}
             end
-            return current
+
+            -- Инкрементировать только если лимит не превышен
+            current = redis.call('INCR', key)
+            if current == 1 then
+                redis.call('EXPIRE', key, ttl)
+            end
+
+            return {current, 1}
             """
 
             # Выполнить атомарную операцию
-            current_count = await self.redis_client.eval(
-                lua_script, 1, key, window_seconds
+            result = await self.redis_client.eval(
+                lua_script, 1, key, max_attempts, window_seconds
             )
 
-            # Проверить лимит
-            if current_count > max_attempts:
-                # Откатить инкремент, если превышен лимит
-                await self.redis_client.decr(key)
+            current_count, allowed = result
+
+            # Проверить результат
+            if not allowed:
                 minutes = window_seconds // 60
                 return (
                     False,

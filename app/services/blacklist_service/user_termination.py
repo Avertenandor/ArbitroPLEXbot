@@ -7,6 +7,7 @@ Manages the complete termination flow with all consequences.
 """
 
 from datetime import UTC, datetime
+from typing import Any
 
 from loguru import logger
 from sqlalchemy import select, update
@@ -24,7 +25,11 @@ class UserTerminationManager:
         self.repository = blacklist_core.repository
 
     async def terminate_user(
-        self, user_id: int, reason: str, admin_id: int | None = None
+        self,
+        user_id: int,
+        reason: str,
+        admin_id: int | None = None,
+        redis_client: Any | None = None,
     ) -> dict:
         """
         Terminate user account (R15-2): BLOCKED → TERMINATED.
@@ -40,6 +45,7 @@ class UserTerminationManager:
             user_id: User ID
             reason: Termination reason
             admin_id: Admin ID (optional)
+            redis_client: Optional Redis client for cache invalidation
 
         Returns:
             Dict with success status and actions taken
@@ -136,7 +142,9 @@ class UserTerminationManager:
 
         # 6. Mark user as banned (already done, but ensure it's set)
         user.is_banned = True
-        await user_repo.update(user_id, is_banned=True)
+        await user_repo.update(
+            user_id, is_banned=True, redis_client=redis_client
+        )
 
         await self.session.commit()
 

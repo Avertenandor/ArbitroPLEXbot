@@ -1,0 +1,37 @@
+СПИСОК ИЗМЕНЕННЫХ ФАЙЛОВ
+========================
+
+СОЗДАННЫЕ ФАЙЛЫ (3):
+-------------------
+1. /home/user/ArbitroPLEXbot/app/utils/cache_invalidation.py
+   - Функции инвалидации кэша для User, deposit_level, global_settings
+
+2. /home/user/ArbitroPLEXbot/CACHE_INVALIDATION_README.md
+   - Детальная документация по использованию
+
+3. /home/user/ArbitroPLEXbot/CHANGES_SUMMARY.md
+   - Краткая сводка изменений
+
+ИЗМЕНЕННЫЕ ФАЙЛЫ (6):
+--------------------
+4. /home/user/ArbitroPLEXbot/app/repositories/user_repository.py
+   - Переопределен метод update() с параметром redis_client
+   - Автоматическая инвалидация кэша
+
+5. /home/user/ArbitroPLEXbot/app/services/user/core.py
+   - Методы update_profile(), block_earnings(), ban_user(), unban_user()
+   - Добавлен параметр redis_client
+
+6. /home/user/ArbitroPLEXbot/app/services/user/wallet.py
+   - Метод change_wallet() с инвалидацией кэша
+
+7. /home/user/ArbitroPLEXbot/app/services/account_recovery_service.py
+   - Метод initiate_recovery() инвалидирует оба telegram_id
+
+8. /home/user/ArbitroPLEXbot/app/services/blacklist_service/user_blocking.py
+   - Передача redis_client в user_repo.update()
+
+9. /home/user/ArbitroPLEXbot/app/services/blacklist_service/user_termination.py
+   - Передача redis_client в user_repo.update()
+
+ВСЕГО: 9 файлов (3 созданы, 6 изменены)

@@ -7,6 +7,7 @@ Data access layer for cached blockchain transactions.
 from datetime import UTC, datetime
 from decimal import Decimal
 
+from loguru import logger
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -319,9 +320,9 @@ class BlockchainTxCacheRepository(BaseRepository[BlockchainTxCache]):
             if inserted is not None:
                 return inserted
 
-        except Exception:
+        except Exception as e:
+            logger.error(f"PostgreSQL insert failed: {e}", exc_info=True)
             # Fall back to the ORM path (may still race on unique constraint).
-            pass
 
         existing = await self.get_by_tx_hash(normalized_hash)
         if existing:

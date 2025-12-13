@@ -10,6 +10,7 @@ from typing import Any
 
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from loguru import logger
 
 
 class DepositStates(StatesGroup):
@@ -139,7 +140,8 @@ def _to_decimal(value: Any) -> Decimal:
     if isinstance(value, str):
         try:
             return Decimal(value)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Decimal conversion failed for value '{value}': {e}")
             return Decimal("0")
     return Decimal("0")
 

@@ -17,10 +17,18 @@ from typing import Any
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+try:
+    from redis.asyncio import Redis as AsyncRedis
+except ImportError:
+    import redis.asyncio as aioredis
+
+    AsyncRedis = aioredis.Redis
+
 from app.repositories.admin_repository import AdminRepository
 from app.repositories.deposit_level_config_repository import DepositLevelConfigRepository
 from app.repositories.global_settings_repository import GlobalSettingsRepository
 from app.services.ai.commons import verify_admin
+from app.utils.cache_invalidation import invalidate_global_settings_cache
 
 
 """NOTE: Access control
@@ -40,11 +48,13 @@ class AISettingsService:
         self,
         session: AsyncSession,
         admin_data: dict[str, Any] | None = None,
+        redis_client: AsyncRedis | None = None,
     ):
         self.session = session
         self.admin_data = admin_data or {}
         self.admin_telegram_id = self.admin_data.get("ID")
         self.admin_username = self.admin_data.get("username")
+        self.redis_client = redis_client
 
     async def _verify_admin(self) -> tuple[Any | None, str | None]:
         """Verify admin credentials."""
@@ -106,7 +116,7 @@ class AISettingsService:
             return "❌ Минимальная сумма не может быть больше 1000 USDT"
 
         try:
-            repo = GlobalSettingsRepository(self.session)
+            repo = GlobalSettingsRepository(self.session, self.redis_client)
             await repo.update_settings(min_withdrawal_amount=amount)
             await self.session.commit()
 
@@ -127,7 +137,7 @@ class AISettingsService:
             return "❌ Только доверенные админы могут изменять настройки выводов"
 
         try:
-            repo = GlobalSettingsRepository(self.session)
+            repo = GlobalSettingsRepository(self.session, self.redis_client)
             await repo.update_settings(is_daily_limit_enabled=enabled)
             await self.session.commit()
 
@@ -152,7 +162,7 @@ class AISettingsService:
             return "❌ Дневной лимит не может быть меньше 10 USDT"
 
         try:
-            repo = GlobalSettingsRepository(self.session)
+            repo = GlobalSettingsRepository(self.session, self.redis_client)
             await repo.update_settings(daily_withdrawal_limit=amount)
             await self.session.commit()
 
@@ -173,7 +183,7 @@ class AISettingsService:
             return "❌ Только доверенные админы могут изменять настройки выводов"
 
         try:
-            repo = GlobalSettingsRepository(self.session)
+            repo = GlobalSettingsRepository(self.session, self.redis_client)
             await repo.update_settings(auto_withdrawal_enabled=enabled)
             await self.session.commit()
 
@@ -198,7 +208,7 @@ class AISettingsService:
             return "❌ Комиссия должна быть от 0% до 50%"
 
         try:
-            repo = GlobalSettingsRepository(self.session)
+            repo = GlobalSettingsRepository(self.session, self.redis_client)
             await repo.update_settings(withdrawal_service_fee=fee)
             await self.session.commit()
 

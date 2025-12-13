@@ -204,8 +204,8 @@ class WithdrawalBalanceManager:
 
         except Exception as e:
             logger.error(f"Failed to calculate fee: {e}", exc_info=True)
-            # Return zero fee on error to prevent blocking withdrawals
-            return Decimal("0")
+            # CRITICAL: Re-raise exception to prevent withdrawal without fee
+            raise ValueError(f"Failed to calculate withdrawal fee: {e}") from e
 
     async def get_available_balance(self, user_id: int) -> Decimal:
         """

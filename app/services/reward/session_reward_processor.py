@@ -231,7 +231,7 @@ class SessionRewardProcessor:
                         telegram_id=user.telegram_id,
                         amount=float(reward_amount),
                         deposit_level=deposit.level,
-                        roi_progress_percent=min(float(roi_progress), 100.0),
+                        roi_progress_percent=float(min(roi_progress, Decimal("100.0"))),
                     )
             except Exception as e:
                 logger.warning(f"Failed to send ROI notification: {e}")

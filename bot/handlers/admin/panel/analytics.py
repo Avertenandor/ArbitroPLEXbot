@@ -16,7 +16,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.deposit import Deposit
-from app.models.enums import TransactionStatus, TransactionType
+from app.models.enums import DepositStatus, TransactionStatus, TransactionType
 from app.models.transaction import Transaction
 from app.models.user import User
 from bot.handlers.admin.utils.admin_checks import get_admin_or_deny
@@ -97,7 +97,7 @@ async def cmd_dashboard(
     stmt = select(func.count(Deposit.id), func.coalesce(func.sum(Deposit.amount), 0)).where(
         and_(
             Deposit.created_at >= cutoff_24h,
-            Deposit.status == "ACTIVE",
+            Deposit.status == DepositStatus.ACTIVE.value,
         )
     )
     result = await session.execute(stmt)

@@ -12,7 +12,7 @@ MAX_OPEN_TICKETS_PER_USER = 5
 # Blockchain operation timeouts (in seconds)
 BLOCKCHAIN_TIMEOUT = 30.0  # Standard blockchain operations (get_transaction, etc.)
 BLOCKCHAIN_LONG_TIMEOUT = 120.0  # Long-running operations (scanning, large filters)
-BLOCKCHAIN_EXECUTOR_TIMEOUT = 60.0  # Timeout for run_in_executor operations
+BLOCKCHAIN_EXECUTOR_TIMEOUT = 20.0  # Timeout for run_in_executor operations (reduced from 60s)
 
 # Telegram bot timeouts (in seconds)
 TELEGRAM_TIMEOUT = 10.0  # Telegram API operations timeout

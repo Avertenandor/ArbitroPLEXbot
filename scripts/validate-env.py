@@ -60,7 +60,8 @@ def validate_database_url(url: str) -> tuple[bool, str]:
             # Only check for exact insecure passwords, not substrings
             if password in ['changeme', 'password', 'admin', 'root', '']:
                 return False, f"Password cannot be '{password}'"
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to parse URL: {e}")
         # If parsing fails, just check for obvious placeholders
         if "your_" in url.lower() or "placeholder" in url.lower():
             return False, "Contains placeholder values"

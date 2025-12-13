@@ -5,6 +5,7 @@ Monitors blockchain for deposit confirmations and updates deposit status.
 Runs every minute to check pending deposits.
 """
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 
 import dramatiq
@@ -395,6 +396,9 @@ async def _monitor_deposits_async() -> None:
             finally:
                 # Always close bot session to prevent memory leak
                 await bot.session.close()
+    except asyncio.CancelledError:
+        logger.warning("Deposit monitoring cancelled, performing cleanup")
+        raise  # Always re-raise CancelledError
     finally:
         # Close Redis client
         if redis_client:

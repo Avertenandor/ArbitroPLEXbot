@@ -16,6 +16,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.deposit import Deposit
+from app.models.enums import DepositStatus, TransactionStatus
 from app.models.transaction import Transaction
 from app.models.user import User
 
@@ -55,7 +56,7 @@ class EarningsStatsService:
             stmt = select(func.coalesce(func.sum(Transaction.amount), 0)).where(
                 and_(
                     Transaction.user_id == user_id,
-                    Transaction.status == "confirmed",
+                    Transaction.status == TransactionStatus.CONFIRMED.value,
                     Transaction.type.in_(
                         ["deposit_reward", "referral_reward", "system_payout"]
                     ),
@@ -131,7 +132,7 @@ class EarningsStatsService:
                 .where(
                     and_(
                         Deposit.user_id == user_id,
-                        Deposit.status == "confirmed",
+                        Deposit.status == DepositStatus.CONFIRMED.value,
                         Deposit.is_roi_completed == False,  # noqa: E712
                     )
                 )
@@ -213,7 +214,7 @@ class EarningsStatsService:
             ).where(
                 and_(
                     Transaction.user_id == user_id,
-                    Transaction.status == "confirmed",
+                    Transaction.status == TransactionStatus.CONFIRMED.value,
                     Transaction.type == "withdrawal",
                 )
             )
@@ -261,7 +262,7 @@ class EarningsStatsService:
             # Build base query
             conditions = [
                 Transaction.user_id == user_id,
-                Transaction.status == "confirmed",
+                Transaction.status == TransactionStatus.CONFIRMED.value,
                 Transaction.type.in_(
                     ["deposit_reward", "referral_reward", "system_payout"]
                 ),

@@ -9,6 +9,12 @@ from typing import Any
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+try:
+    from redis.asyncio import Redis
+except ImportError:
+    import redis.asyncio as redis
+    Redis = redis.Redis
+
 from app.models.blacklist import BlacklistActionType
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
@@ -91,6 +97,7 @@ class AccountRecoveryService:
         signature: str,
         message: str,
         additional_info: dict[str, Any] | None = None,
+        redis_client: Redis | None = None,
     ) -> tuple[bool, User | None, str | None]:
         """
         Initiate account recovery process.
@@ -103,6 +110,7 @@ class AccountRecoveryService:
             signature: Signature proving wallet ownership
             message: Message that was signed
             additional_info: Additional verification info (email, phone, etc.)
+            redis_client: Optional Redis client for cache invalidation
 
         Returns:
             Tuple of (success, user, error_message)
@@ -172,6 +180,29 @@ class AccountRecoveryService:
         self.session.add(user)
 
         await self.session.commit()
+
+        # Invalidate cache for both old and new telegram_id
+        if redis_client:
+            try:
+                from app.utils.cache_invalidation import invalidate_user_cache
+
+                # Invalidate old telegram_id cache
+                await invalidate_user_cache(
+                    redis_client=redis_client,
+                    user_id=user.id,
+                    telegram_id=old_telegram_id,
+                )
+                # Invalidate new telegram_id cache
+                await invalidate_user_cache(
+                    redis_client=redis_client,
+                    user_id=user.id,
+                    telegram_id=new_telegram_id,
+                )
+            except Exception as cache_error:
+                # Don't fail the operation if cache invalidation fails
+                logger.warning(
+                    f"Failed to invalidate cache for user {user.id} after account recovery: {cache_error}"
+                )
 
         logger.info(
             f"R16-3: Account recovery completed successfully: "

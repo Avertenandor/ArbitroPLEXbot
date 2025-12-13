@@ -15,18 +15,11 @@ from app.config.business_constants import (
     get_previous_level,
     is_amount_in_corridor,
 )
+from app.config.settings import settings
+from app.services.referral.config import REFERRAL_RATES
 
-
-# Referral commission rates by level
-# 3-level referral program: 5% from deposits AND earnings at each level
-REFERRAL_RATES = {
-    1: 0.05,  # 5% for level 1 (direct referrals)
-    2: 0.05,  # 5% for level 2
-    3: 0.05,  # 5% for level 3
-}
-
-# ROI cap for level 1 deposits
-ROI_CAP_MULTIPLIER = 5.0  # 500% (5x)
+# ROI cap for level 1 deposits (from settings)
+ROI_CAP_MULTIPLIER = settings.roi_cap_multiplier  # 500% (5x)
 
 # Error messages
 ERROR_MESSAGES = {

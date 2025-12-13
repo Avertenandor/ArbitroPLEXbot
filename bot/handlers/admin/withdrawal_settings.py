@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.global_settings_repository import (
     GlobalSettingsRepository,
 )
+from app.utils.cache_invalidation import invalidate_global_settings_cache
 from bot.keyboards.reply import (
     admin_withdrawal_settings_keyboard,
     admin_withdrawals_keyboard,
@@ -43,9 +44,11 @@ async def show_withdrawal_settings(
     await _show_settings_menu(message, session)
 
 
-async def _show_settings_menu(message: Message, session: AsyncSession) -> None:
+async def _show_settings_menu(
+    message: Message, session: AsyncSession, redis_client=None
+) -> None:
     """Show current settings and Reply keyboard."""
-    repo = GlobalSettingsRepository(session)
+    repo = GlobalSettingsRepository(session, redis_client)
     settings = await repo.get_settings()
 
     limit_status = "✅ Включено" if settings.is_daily_limit_enabled else "❌ Выключено"
@@ -92,13 +95,14 @@ async def toggle_limit(
     if not data.get("is_admin"):
         return
 
-    repo = GlobalSettingsRepository(session)
+    redis_client = data.get("redis_client")
+    repo = GlobalSettingsRepository(session, redis_client)
     settings = await repo.get_settings()
     await repo.update_settings(is_daily_limit_enabled=not settings.is_daily_limit_enabled)
 
     status = "выключен" if settings.is_daily_limit_enabled else "включен"
     await message.answer(f"✅ Дневной лимит {status}")
-    await _show_settings_menu(message, session)
+    await _show_settings_menu(message, session, redis_client)
 
 
 @router.message(F.text.in_({"🔴 Выключить Авто-вывод", "🟢 Включить Авто-вывод"}))
@@ -111,13 +115,14 @@ async def toggle_auto(
     if not data.get("is_admin"):
         return
 
-    repo = GlobalSettingsRepository(session)
+    redis_client = data.get("redis_client")
+    repo = GlobalSettingsRepository(session, redis_client)
     settings = await repo.get_settings()
     await repo.update_settings(auto_withdrawal_enabled=not settings.auto_withdrawal_enabled)
 
     status = "выключен" if settings.auto_withdrawal_enabled else "включен"
     await message.answer(f"✅ Авто-вывод {status}")
-    await _show_settings_menu(message, session)
+    await _show_settings_menu(message, session, redis_client)
 
 
 # ============================================================================
@@ -186,6 +191,7 @@ async def set_service_fee(
     message: Message,
     session: AsyncSession,
     state: FSMContext,
+    **data: Any,
 ) -> None:
     """Set service fee."""
     if message.text == "❌ Отмена":
@@ -201,12 +207,13 @@ async def set_service_fee(
         await message.answer("❌ Введите корректное число от 0 до 100")
         return
 
-    repo = GlobalSettingsRepository(session)
+    redis_client = data.get("redis_client")
+    repo = GlobalSettingsRepository(session, redis_client)
     await repo.update_settings(withdrawal_service_fee=val)
 
     await message.answer(f"✅ Комиссия сервиса установлена: {val}%")
     await clear_state_preserve_admin_token(state)
-    await _show_settings_menu(message, session)
+    await _show_settings_menu(message, session, redis_client)
 
 
 @router.message(AdminWithdrawalSettingsStates.waiting_for_min_amount)
@@ -214,6 +221,7 @@ async def set_min_amount(
     message: Message,
     session: AsyncSession,
     state: FSMContext,
+    **data: Any,
 ) -> None:
     """Set min withdrawal amount."""
     if message.text == "❌ Отмена":
@@ -229,12 +237,13 @@ async def set_min_amount(
         await message.answer("❌ Введите корректное положительное число")
         return
 
-    repo = GlobalSettingsRepository(session)
+    redis_client = data.get("redis_client")
+    repo = GlobalSettingsRepository(session, redis_client)
     await repo.update_settings(min_withdrawal_amount=val)
 
     await message.answer(f"✅ Минимальный вывод установлен: {val} USDT")
     await clear_state_preserve_admin_token(state)
-    await _show_settings_menu(message, session)
+    await _show_settings_menu(message, session, redis_client)
 
 
 @router.message(AdminWithdrawalSettingsStates.waiting_for_daily_limit)
@@ -242,6 +251,7 @@ async def set_daily_limit(
     message: Message,
     session: AsyncSession,
     state: FSMContext,
+    **data: Any,
 ) -> None:
     """Set daily limit."""
     if message.text == "❌ Отмена":
@@ -257,12 +267,13 @@ async def set_daily_limit(
         await message.answer("❌ Введите корректное положительное число")
         return
 
-    repo = GlobalSettingsRepository(session)
+    redis_client = data.get("redis_client")
+    repo = GlobalSettingsRepository(session, redis_client)
     await repo.update_settings(daily_withdrawal_limit=val)
 
     await message.answer(f"✅ Дневной лимит установлен: {val} USDT")
     await clear_state_preserve_admin_token(state)
-    await _show_settings_menu(message, session)
+    await _show_settings_menu(message, session, redis_client)
 
 
 @router.message(F.text == "◀️ Назад к выводам")

@@ -30,6 +30,7 @@ class BroadcastService:
         self.session = session
         self.bot = bot
         self._cancel_event = asyncio.Event()
+        self._broadcasts_lock = asyncio.Lock()
         self._active_broadcasts: dict[str, dict] = {}
 
     async def start_broadcast(
@@ -74,11 +75,12 @@ class BroadcastService:
         Returns:
             True if broadcast was cancelled, False if not found
         """
-        if broadcast_id in self._active_broadcasts:
-            self._active_broadcasts[broadcast_id]["cancelled"] = True
-            logger.info(f"Broadcast {broadcast_id} marked for cancellation")
-            return True
-        return False
+        async with self._broadcasts_lock:
+            if broadcast_id in self._active_broadcasts:
+                self._active_broadcasts[broadcast_id]["cancelled"] = True
+                logger.info(f"Broadcast {broadcast_id} marked for cancellation")
+                return True
+            return False
 
     async def get_broadcast_progress(self, broadcast_id: str) -> dict | None:
         """
@@ -90,7 +92,10 @@ class BroadcastService:
         Returns:
             Progress dict with keys: progress, total, cancelled, or None if not found
         """
-        return self._active_broadcasts.get(broadcast_id)
+        async with self._broadcasts_lock:
+            # Return a copy to prevent external modification
+            broadcast_data = self._active_broadcasts.get(broadcast_id)
+            return broadcast_data.copy() if broadcast_data else None
 
     async def send_broadcast_with_progress(
         self,
@@ -354,18 +359,20 @@ class BroadcastService:
         logger.info(f"Starting broadcast {broadcast_id}")
 
         # Track active broadcast
-        self._active_broadcasts[broadcast_id] = {
-            "cancelled": False,
-            "progress": 0,
-            "total": 0,
-        }
+        async with self._broadcasts_lock:
+            self._active_broadcasts[broadcast_id] = {
+                "cancelled": False,
+                "progress": 0,
+                "total": 0,
+            }
 
         try:
             user_service = UserService(self.session)
 
             # Count total users for progress tracking
             total_users = await user_service.count_verified_users()
-            self._active_broadcasts[broadcast_id]["total"] = total_users
+            async with self._broadcasts_lock:
+                self._active_broadcasts[broadcast_id]["total"] = total_users
 
             if total_users == 0:
                 logger.info(f"No users to broadcast to for {broadcast_id}")
@@ -389,7 +396,9 @@ class BroadcastService:
             batch_num = 0
             async for batch in user_service.get_telegram_ids_batched(TELEGRAM_BATCH_SIZE):
                 # Check for cancellation
-                if self._active_broadcasts[broadcast_id].get("cancelled", False):
+                async with self._broadcasts_lock:
+                    is_cancelled = self._active_broadcasts[broadcast_id].get("cancelled", False)
+                if is_cancelled:
                     logger.info(f"Broadcast {broadcast_id} cancelled by request")
                     break
 
@@ -423,7 +432,8 @@ class BroadcastService:
 
                 # Update progress
                 total_sent = sum(stats.values())
-                self._active_broadcasts[broadcast_id]["progress"] = total_sent
+                async with self._broadcasts_lock:
+                    self._active_broadcasts[broadcast_id]["progress"] = total_sent
 
                 # Log progress every 100 messages
                 if total_sent % 100 == 0:
@@ -441,7 +451,9 @@ class BroadcastService:
 
             # Notify admin about completion
             try:
-                status_text = "отменена" if self._active_broadcasts[broadcast_id].get("cancelled") else "завершена"
+                async with self._broadcasts_lock:
+                    is_cancelled = self._active_broadcasts[broadcast_id].get("cancelled", False)
+                status_text = "отменена" if is_cancelled else "завершена"
                 await asyncio.wait_for(
                     self.bot.send_message(
                         admin_telegram_id,
@@ -461,6 +473,13 @@ class BroadcastService:
             except Exception as e:
                 logger.error(f"Failed to notify admin: {e}")
 
+        except asyncio.CancelledError:
+            logger.warning(f"Broadcast {broadcast_id} cancelled, performing cleanup")
+            # Mark as cancelled in tracking
+            async with self._broadcasts_lock:
+                if broadcast_id in self._active_broadcasts:
+                    self._active_broadcasts[broadcast_id]["cancelled"] = True
+            raise  # Always re-raise CancelledError
         except Exception as e:
             logger.error(f"Broadcast {broadcast_id} failed: {e}", exc_info=True)
             try:
@@ -480,5 +499,6 @@ class BroadcastService:
                 logger.error(f"Failed to notify admin about error: {notify_error}")
         finally:
             # Clean up active broadcast tracking
-            if broadcast_id in self._active_broadcasts:
-                del self._active_broadcasts[broadcast_id]
+            async with self._broadcasts_lock:
+                if broadcast_id in self._active_broadcasts:
+                    del self._active_broadcasts[broadcast_id]

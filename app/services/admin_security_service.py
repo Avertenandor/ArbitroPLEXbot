@@ -18,16 +18,7 @@ from typing import Any
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
-
-# Known admin telegram IDs - authoritative source
-# SECURITY: This is the ONLY source of truth for admin verification
-# Admins are identified ONLY by telegram_id, NEVER by username!
-VERIFIED_ADMIN_IDS = {
-    1040687384: {"username": "VladarevInvestBrok", "role": "super_admin", "name": "Командир"},
-    1691026253: {"username": "AI_XAN", "role": "extended_admin", "name": "Саша (Tech Deputy)"},
-    241568583: {"username": "natder", "role": "extended_admin", "name": "Наташа"},
-    6540613027: {"username": "ded_vtapkax", "role": "extended_admin", "name": "Влад"},
-}
+from app.config.admin_config import VERIFIED_ADMIN_IDS
 
 # Homoglyphs - characters that look similar
 HOMOGLYPHS = {
@@ -320,17 +311,17 @@ def test_similarity():
         ("natder", "nаtder", "Cyrillic а"),  # а is Cyrillic!
     ]
 
-    print("Username Similarity Tests:")
-    print("-" * 60)
+    logger.debug("Username Similarity Tests:")
+    logger.debug("-" * 60)
     for original, spoofed, description in test_cases:
         sim = username_similarity(original, spoofed)
         norm_orig = normalize_username(original)
         norm_spoof = normalize_username(spoofed)
-        print(f"{description}:")
-        print(f"  Original: {original} -> {norm_orig}")
-        print(f"  Spoofed:  {spoofed} -> {norm_spoof}")
-        print(f"  Similarity: {sim * 100:.1f}%")
-        print()
+        logger.debug(f"{description}:")
+        logger.debug(f"  Original: {original} -> {norm_orig}")
+        logger.debug(f"  Spoofed:  {spoofed} -> {norm_spoof}")
+        logger.debug(f"  Similarity: {sim * 100:.1f}%")
+        logger.debug("")
 
 
 if __name__ == "__main__":

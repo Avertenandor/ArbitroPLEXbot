@@ -60,78 +60,82 @@ class AsyncBlockchainExecutor:
         Raises:
             Exception: If all providers fail
         """
-        await self.provider_manager._update_settings_from_db()
-        loop = asyncio.get_running_loop()
-
-        current_name = self.provider_manager.active_provider_name
-
-        # Try primary provider
         try:
-            # Check primary provider exists
-            if current_name not in self.provider_manager.providers and self.provider_manager.providers:
-                current_name = next(iter(self.provider_manager.providers))
+            await self.provider_manager._update_settings_from_db()
+            loop = asyncio.get_running_loop()
 
-            if current_name not in self.provider_manager.providers:
-                raise ConnectionError("No providers available")
+            current_name = self.provider_manager.active_provider_name
 
-            w3 = self.provider_manager.providers[current_name]
-
-            async with self.rpc_limiter:
-                try:
-                    return await asyncio.wait_for(
-                        loop.run_in_executor(
-                            self._executor,
-                            lambda: sync_func(w3)
-                        ),
-                        timeout=BLOCKCHAIN_EXECUTOR_TIMEOUT,
-                    )
-                except TimeoutError:
-                    logger.error(f"Timeout in blockchain operation on provider '{current_name}'")
-                    raise TimeoutError(f"Blockchain operation timeout on {current_name}")
-        except Exception as e:
-            if not self.provider_manager.is_auto_switch_enabled:
-                raise e
-
-            logger.warning(f"Primary provider '{current_name}' failed: {e}. Trying failover...")
-
-            # Find backup provider
-            backup_name = next(
-                (n for n in self.provider_manager.providers if n != current_name), None
-            )
-            if not backup_name:
-                raise e
-
-            # Try backup provider
+            # Try primary provider
             try:
-                logger.info(f"Switching to backup: {backup_name}")
-                w3_backup = self.provider_manager.providers[backup_name]
+                # Check primary provider exists
+                if current_name not in self.provider_manager.providers and self.provider_manager.providers:
+                    current_name = next(iter(self.provider_manager.providers))
+
+                if current_name not in self.provider_manager.providers:
+                    raise ConnectionError("No providers available")
+
+                w3 = self.provider_manager.providers[current_name]
 
                 async with self.rpc_limiter:
                     try:
-                        result = await asyncio.wait_for(
+                        return await asyncio.wait_for(
                             loop.run_in_executor(
                                 self._executor,
-                                lambda: sync_func(w3_backup)
+                                lambda: sync_func(w3)
                             ),
                             timeout=BLOCKCHAIN_EXECUTOR_TIMEOUT,
                         )
                     except TimeoutError:
-                        logger.error(
-                            f"Timeout in blockchain operation on backup provider '{backup_name}'"
+                        logger.error(f"Timeout in blockchain operation on provider '{current_name}'")
+                        raise TimeoutError(f"Blockchain operation timeout on {current_name}")
+            except Exception as e:
+                if not self.provider_manager.is_auto_switch_enabled:
+                    raise e
+
+                logger.warning(f"Primary provider '{current_name}' failed: {e}. Trying failover...")
+
+                # Find backup provider
+                backup_name = next(
+                    (n for n in self.provider_manager.providers if n != current_name), None
+                )
+                if not backup_name:
+                    raise e
+
+                # Try backup provider
+                try:
+                    logger.info(f"Switching to backup: {backup_name}")
+                    w3_backup = self.provider_manager.providers[backup_name]
+
+                    async with self.rpc_limiter:
+                        try:
+                            result = await asyncio.wait_for(
+                                loop.run_in_executor(
+                                    self._executor,
+                                    lambda: sync_func(w3_backup)
+                                ),
+                                timeout=BLOCKCHAIN_EXECUTOR_TIMEOUT,
+                            )
+                        except TimeoutError:
+                            logger.error(
+                                f"Timeout in blockchain operation on backup provider '{backup_name}'"
+                            )
+                            raise TimeoutError(f"Blockchain operation timeout on backup {backup_name}")
+
+                    # If success, switch permanent
+                    self.provider_manager.active_provider_name = backup_name
+                    if self.provider_manager.session_factory:
+                        asyncio.create_task(
+                            self.provider_manager._safe_persist_provider_switch(backup_name)
                         )
-                        raise TimeoutError(f"Blockchain operation timeout on backup {backup_name}")
 
-                # If success, switch permanent
-                self.provider_manager.active_provider_name = backup_name
-                if self.provider_manager.session_factory:
-                    asyncio.create_task(
-                        self.provider_manager._safe_persist_provider_switch(backup_name)
-                    )
-
-                return result
-            except Exception as e2:
-                logger.error(f"Backup provider failed: {e2}")
-                raise e
+                    return result
+                except Exception as e2:
+                    logger.error(f"Backup provider failed: {e2}")
+                    raise e
+        except asyncio.CancelledError:
+            logger.warning("Blockchain operation cancelled, performing cleanup")
+            raise  # Always re-raise CancelledError
 
     def cleanup(self) -> None:
         """Clean up thread pool executor."""

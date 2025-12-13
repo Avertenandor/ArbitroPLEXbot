@@ -1074,8 +1074,8 @@ class ToolExecutor:
 
     async def _execute_security_tool(self, name: str, inp: dict) -> Any:
         """Execute security tools."""
+        from app.config.admin_config import VERIFIED_ADMIN_IDS
         from app.services.admin_security_service import (
-            VERIFIED_ADMIN_IDS,
             AdminSecurityService,
             username_similarity,
         )

@@ -34,6 +34,9 @@ def get_redis_url() -> str:
     """
     Build Redis URL from settings.
 
+    WARNING: This URL contains the password in plaintext. Use get_redis_url_masked()
+    for logging or displaying the URL.
+
     Returns:
         str: Redis connection URL in format redis://[:[password]@]host:port/db
 
@@ -43,4 +46,23 @@ def get_redis_url() -> str:
     """
     if settings.redis_password:
         return f"redis://:{settings.redis_password}@{settings.redis_host}:{settings.redis_port}/{settings.redis_db}"
+    return f"redis://{settings.redis_host}:{settings.redis_port}/{settings.redis_db}"
+
+
+def get_redis_url_masked() -> str:
+    """
+    Build Redis URL with masked password for safe logging.
+
+    This function returns a Redis URL with the password replaced by asterisks,
+    safe for logging and displaying without exposing credentials.
+
+    Returns:
+        str: Redis connection URL with masked password
+
+    Example:
+        >>> url = get_redis_url_masked()
+        >>> # Returns: "redis://:****@localhost:6379/0"
+    """
+    if settings.redis_password:
+        return f"redis://:****@{settings.redis_host}:{settings.redis_port}/{settings.redis_db}"
     return f"redis://{settings.redis_host}:{settings.redis_port}/{settings.redis_db}"

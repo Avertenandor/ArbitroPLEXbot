@@ -105,7 +105,10 @@ class UserBlockingManager:
             # 2. Mark user as banned and block earnings (stop ROI distribution)
             user.is_banned = True
             await user_repo.update(
-                user_id, is_banned=True, earnings_blocked=True
+                user_id,
+                is_banned=True,
+                earnings_blocked=True,
+                redis_client=redis_client,
             )
 
             # 3. Add to blacklist
