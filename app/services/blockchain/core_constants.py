@@ -11,6 +11,8 @@ This module contains all blockchain-related constants including:
 from decimal import Decimal
 from typing import TypeVar
 
+from app.config.business_constants import PLEX_CONTRACT_ADDRESS
+
 
 # USDT contract ABI (ERC-20 standard functions)
 USDT_ABI = [
@@ -69,7 +71,7 @@ PLEX_ABI = [
 USDT_DECIMALS = 18
 
 # PLEX Token Configuration
-PLEX_CONTRACT_ADDRESS = "0xdf179b6cadbc61ffd86a3d2e55f6d6e083ade6c1"
+# PLEX_CONTRACT_ADDRESS imported from app.config.business_constants
 PLEX_DECIMALS = 9
 PLEX_PER_DOLLAR_DAILY = 10
 

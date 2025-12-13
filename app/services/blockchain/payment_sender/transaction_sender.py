@@ -154,7 +154,10 @@ class TransactionSender:
 
         # Convert amount to wei (18 decimals for BSC USDT)
         # Use Decimal arithmetic throughout to avoid float precision errors
-        amount_wei = int((Decimal(str(amount_usdt)) * Decimal(10 ** USDT_DECIMALS)).to_integral_value(ROUND_DOWN))
+        amount_wei = int(
+            (Decimal(str(amount_usdt)) * Decimal(10 ** USDT_DECIMALS))
+            .to_integral_value(ROUND_DOWN)
+        )
 
         logger.info(
             f"Sending {amount_usdt} USDT to {to_address_checksum}\n"

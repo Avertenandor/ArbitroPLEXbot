@@ -9,14 +9,44 @@ Provides user inquiry management tools for AI assistant with STRICT security:
 SECURITY: This service is ONLY accessible through the AI assistant
 when a verified admin is in an authenticated admin session.
 """
-from datetime import UTC, datetime
 from typing import Any
-from loguru import logger
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import joinedload
-from app.models.user_inquiry import InquiryMessage, InquiryStatus, UserInquiry
+from app.models.user_inquiry import InquiryStatus
 from app.services.ai.commons import verify_admin
+from app.services.ai_inquiries_formatter import (
+    format_admin_name,
+    format_inquiry_details,
+    format_inquiry_list_item,
+    format_inquiry_reply,
+    format_text_preview,
+    format_user_info,
+)
+from app.services.ai_inquiries_repository import (
+    get_inquiries_counts,
+    get_inquiries_with_filter,
+    get_inquiry_by_id,
+    validate_inquiry_assignment,
+    validate_inquiry_status,
+    validate_message,
+    validate_status,
+)
+from app.services.ai_inquiries_operations import (
+    assign_inquiry_to_admin,
+    auto_assign_if_needed,
+    close_inquiry_with_reason,
+    create_admin_message,
+    log_inquiry_action,
+    send_message_to_user,
+)
+from app.services.ai_inquiries_responses import (
+    close_inquiry_response,
+    empty_inquiries_response,
+    error_response,
+    inquiries_list_response,
+    inquiry_details_response,
+    reply_inquiry_response,
+    take_inquiry_response,
+)
 
 class AIInquiriesService:
     """
@@ -49,290 +79,103 @@ class AIInquiriesService:
         status: str | None = None,
         limit: int = 20,
     ) -> dict[str, Any]:
-        """
-        Get list of user inquiries with optional status filter.
-
-        Args:
-            status: Filter by status (new, in_progress, closed)
-            limit: Maximum number of inquiries to return
-
-        Returns:
-            Result dict with inquiries list
-        """
+        """Get list of inquiries with optional status filter."""
         # Verify admin
         admin, error = await self._verify_admin()
         if error:
-            return {"success": False, "error": error}
+            return error_response(error)
 
-        # Build query with relationships
-        stmt = ( select(UserInquiry)
-            .options(joinedload(UserInquiry.user))
-            .options(joinedload(UserInquiry.assigned_admin))
-            .order_by(UserInquiry.created_at.desc())
-            .limit(limit)
+        # Validate status
+        is_valid, error_msg = validate_status(status)
+        if not is_valid:
+            return error_response(error_msg)
+
+        # Get inquiries from repository
+        inquiries = await get_inquiries_with_filter(
+            self.session,
+            status,
+            limit
         )
-
-        if status:
-            valid_statuses = ["new", "in_progress", "closed"]
-            if status.lower() not in valid_statuses:
-                error_msg = (
-                    f"❌ Неверный статус. "
-                    f"Допустимые: {', '.join(valid_statuses)}"
-                )
-                return {
-                    "success": False,
-                    "error": error_msg
-                }
-            stmt = stmt.where(UserInquiry.status == status.lower())
-
-        result = await self.session.execute(stmt)
-        inquiries = list(result.scalars().unique().all())
 
         if not inquiries:
-            status_text = f" со статусом '{status}'" if status else ""
-            return {
-                "success": True,
-                "inquiries": [],
-                "message": f"ℹ️ Обращений{status_text} не найдено"
-            }
+            return empty_inquiries_response(status)
 
         # Format inquiries
-        inquiries_list = []
-        for inq in inquiries:
-            # Get user info
-            user_info = "Неизвестен"
-            if inq.user:
-                user_info = (
-                    f"@{inq.user.username}"
-                    if inq.user.username
-                    else f"ID:{inq.user.telegram_id}"
-                )
+        inquiries_list = [
+            format_inquiry_list_item(inq)
+            for inq in inquiries
+        ]
 
-            # Get admin info
-            admin_info = None
-            if inq.assigned_admin:
-                admin_info = (
-                    f"@{inq.assigned_admin.username}"
-                    if inq.assigned_admin.username
-                    else f"Admin#{inq.assigned_admin_id}"
-                )
+        # Get counts by status
+        counts = await get_inquiries_counts(self.session)
 
-            status_emoji = {
-                "new": "🆕",
-                "in_progress": "🔵",
-                "closed": "✅"
-            }.get(inq.status, "⚪")
-
-            inquiries_list.append({
-                "id": inq.id,
-                "user": user_info,
-                "user_id": inq.user_id,
-                "telegram_id": inq.telegram_id,
-                "status": f"{status_emoji} {inq.status}",
-                "question_preview": (
-                    (inq.initial_question or "")[:100] +
-                    ("..." if len(inq.initial_question or "") > 100 else "")
-                ),
-                "assigned_to": admin_info,
-                "created": ( inq.created_at.strftime("%d.%m.%Y %H:%M")
-                    if inq.created_at else "—"
-                ),
-            })
-
-        # Count by status
-        count_stmt = ( select(UserInquiry.status, func.count(UserInquiry.id))
-            .group_by(UserInquiry.status)
-        )
-        count_result = await self.session.execute(count_stmt)
-        counts = {row[0]: row[1] for row in count_result.all()}
-        return {
-            "success": True,
-            "total_count": len(inquiries_list),
-            "counts": {
-                "new": counts.get("new", 0),
-                "in_progress": counts.get("in_progress", 0),
-                "closed": counts.get("closed", 0),
-            },
-            "inquiries": inquiries_list,
-            "message": f"📋 Найдено {len(inquiries_list)} обращений"
-        }
+        return inquiries_list_response(inquiries_list, counts)
 
     async def get_inquiry_details(
         self,
         inquiry_id: int,
     ) -> dict[str, Any]:
-        """
-        Get detailed information about a specific inquiry with messages.
-
-        Args:
-            inquiry_id: Inquiry ID
-
-        Returns:
-            Result dict with inquiry details and messages
-        """
+        """Get detailed information about inquiry with messages."""
         # Verify admin
         admin, error = await self._verify_admin()
         if error:
-            return {"success": False, "error": error}
+            return error_response(error)
 
-        # Get inquiry with relationships
-        stmt = ( select(UserInquiry)
-            .options(joinedload(UserInquiry.user))
-            .options(joinedload(UserInquiry.assigned_admin))
-            .options(joinedload(UserInquiry.messages))
-            .where(UserInquiry.id == inquiry_id)
+        # Get inquiry from repository
+        inquiry = await get_inquiry_by_id(
+            self.session,
+            inquiry_id,
+            with_messages=True
         )
-        result = await self.session.execute(stmt)
-        inquiry = result.scalar_one_or_none()
 
         if not inquiry:
-            error_msg = f"❌ Обращение ID {inquiry_id} не найдено"
-            return {"success": False, "error": error_msg}
+            return error_response(f"❌ Обращение ID {inquiry_id} не найдено")
 
-        # Get user info
-        user_info = "Неизвестен"
-        if inquiry.user:
-            user_info = (
-                f"@{inquiry.user.username}"
-                if inquiry.user.username
-                else f"ID:{inquiry.user.telegram_id}"
-            )
+        # Format inquiry details
+        inquiry_data = format_inquiry_details(inquiry)
 
-        # Get admin info
-        admin_info = None
-        if inquiry.assigned_admin:
-            admin_info = (
-                f"@{inquiry.assigned_admin.username}"
-                if inquiry.assigned_admin.username
-                else f"Admin#{inquiry.assigned_admin_id}"
-            )
-
-        status_emoji = {
-            "new": "🆕 Новое",
-            "in_progress": "🔵 В работе",
-            "closed": "✅ Закрыто"
-        }.get(inquiry.status, inquiry.status)
-
-        # Format messages
-        messages_list = []
-        for msg in (inquiry.messages or []):
-            sender = (
-                "👤 Пользователь"
-                if msg.sender_type == "user"
-                else "👨‍💼 Админ"
-            )
-            text_preview = (
-                msg.message_text[:200] +
-                ("..." if len(msg.message_text) > 200 else "")
-            )
-            time_str = (
-                msg.created_at.strftime("%d.%m %H:%M")
-                if msg.created_at else "—"
-            )
-            messages_list.append({
-                "sender": sender,
-                "text": text_preview,
-                "time": time_str,
-            })
-        return {
-            "success": True,
-            "inquiry": {
-                "id": inquiry.id,
-                "user": user_info,
-                "user_id": inquiry.user_id,
-                "telegram_id": inquiry.telegram_id,
-                "status": status_emoji,
-                "question": inquiry.initial_question,
-                "assigned_to": admin_info,
-                "created": ( inquiry.created_at.strftime("%d.%m.%Y %H:%M")
-                    if inquiry.created_at else "—"
-                ),
-                "assigned_at": ( inquiry.assigned_at.strftime("%d.%m.%Y %H:%M")
-                    if inquiry.assigned_at else None
-                ),
-                "closed_at": ( inquiry.closed_at.strftime("%d.%m.%Y %H:%M")
-                    if inquiry.closed_at else None
-                ),
-                "messages_count": len(messages_list),
-                "messages": messages_list[-10:],  # Last 10 messages
-            },
-            "message": f"📋 Обращение #{inquiry.id}"
-        }
+        return inquiry_details_response(inquiry_data, inquiry_id)
 
     async def take_inquiry(
         self,
         inquiry_id: int,
     ) -> dict[str, Any]:
-        """
-        Take inquiry for processing (assign to current admin).
-
-        Args:
-            inquiry_id: Inquiry ID
-
-        Returns:
-            Result dict
-        """
+        """Take inquiry for processing (assign to current admin)."""
         # Verify admin
         admin, error = await self._verify_admin()
         if error:
-            return {"success": False, "error": error}
+            return error_response(error)
 
-        # Get inquiry
-        stmt = ( select(UserInquiry)
-            .options(joinedload(UserInquiry.user))
-            .where(UserInquiry.id == inquiry_id)
-        )
-        result = await self.session.execute(stmt)
-        inquiry = result.scalar_one_or_none()
+        # Get inquiry from repository
+        inquiry = await get_inquiry_by_id(self.session, inquiry_id)
 
-        if not inquiry:
-            error_msg = f"❌ Обращение ID {inquiry_id} не найдено"
-            return {"success": False, "error": error_msg}
-        if inquiry.status == InquiryStatus.CLOSED:
-            error_msg = "❌ Это обращение уже закрыто"
-            return {"success": False, "error": error_msg}
+        # Validate inquiry
+        is_valid, error_msg = validate_inquiry_status(inquiry, inquiry_id)
+        if not is_valid:
+            return error_response(error_msg)
 
-        if (inquiry.assigned_admin_id and
-                inquiry.assigned_admin_id != admin.id):
-            error_msg = (
-                "❌ Обращение уже назначено другому админу"
-            )
-            return {"success": False, "error": error_msg}
+        # Validate assignment
+        is_valid, error_msg = validate_inquiry_assignment(inquiry, admin.id)
+        if not is_valid:
+            return error_response(error_msg)
 
         # Assign to admin
-        inquiry.status = InquiryStatus.IN_PROGRESS
-        inquiry.assigned_admin_id = admin.id
-        inquiry.assigned_at = datetime.now(UTC)
+        await assign_inquiry_to_admin(self.session, inquiry, admin)
 
-        await self.session.commit()
+        # Format response data
+        user_info = format_user_info(inquiry.user)
+        admin_name = format_admin_name(admin)
+        question = format_text_preview(inquiry.initial_question, 100)
 
-        # Get user info
-        user_info = "Неизвестен"
-        if inquiry.user:
-            user_info = (
-                f"@{inquiry.user.username}"
-                if inquiry.user.username
-                else f"ID:{inquiry.user.telegram_id}"
-            )
+        # Log action
+        log_inquiry_action("took", admin.telegram_id, inquiry_id, user_info)
 
-        log_msg = (
-            f"AI INQUIRIES: Admin {admin.telegram_id} "
-            f"(@{admin.username}) took inquiry {inquiry_id} "
-            f"from {user_info}"
+        return take_inquiry_response(
+            inquiry_id,
+            user_info,
+            question,
+            admin_name
         )
-        logger.info(log_msg)
-        return {
-            "success": True,
-            "inquiry_id": inquiry_id,
-            "user": user_info,
-            "question": inquiry.initial_question[:100] + "...",
-            "admin": (
-                f"@{admin.username}"
-                if admin.username
-                else str(admin.telegram_id)
-            ),
-            "message": f"✅ Обращение #{inquiry_id} взято в работу"
-        }
 
     async def reply_to_inquiry(
         self,
@@ -340,190 +183,97 @@ class AIInquiriesService:
         message: str,
         bot: Any = None,
     ) -> dict[str, Any]:
-        """
-        Send reply to user's inquiry.
-
-        Args:
-            inquiry_id: Inquiry ID
-            message: Message text to send
-            bot: Bot instance for sending
-
-        Returns:
-            Result dict
-        """
+        """Send reply to user's inquiry."""
         # Verify admin
         admin, error = await self._verify_admin()
         if error:
-            return {"success": False, "error": error}
+            return error_response(error)
         if not bot:
-            return {"success": False, "error": "❌ Бот не инициализирован"}
+            return error_response("❌ Бот не инициализирован")
 
-        if not message or len(message) < 3:
-            error_msg = (
-                "❌ Сообщение должно содержать "
-                "минимум 3 символа"
-            )
-            return {
-                "success": False,
-                "error": error_msg
-            }
+        # Validate message
+        is_valid, error_msg = validate_message(message)
+        if not is_valid:
+            return error_response(error_msg)
 
-        # Get inquiry
-        stmt = ( select(UserInquiry)
-            .options(joinedload(UserInquiry.user))
-            .where(UserInquiry.id == inquiry_id)
-        )
-        result = await self.session.execute(stmt)
-        inquiry = result.scalar_one_or_none()
+        # Get inquiry from repository
+        inquiry = await get_inquiry_by_id(self.session, inquiry_id)
 
-        if not inquiry:
-            error_msg = f"❌ Обращение ID {inquiry_id} не найдено"
-            return {"success": False, "error": error_msg}
-        if inquiry.status == InquiryStatus.CLOSED:
-            error_msg = "❌ Нельзя ответить на закрытое обращение"
-            return {"success": False, "error": error_msg}
+        # Validate inquiry
+        is_valid, error_msg = validate_inquiry_status(inquiry, inquiry_id)
+        if not is_valid:
+            return error_response(error_msg)
 
         # Auto-assign if not assigned
-        if not inquiry.assigned_admin_id:
-            inquiry.status = InquiryStatus.IN_PROGRESS
-            inquiry.assigned_admin_id = admin.id
-            inquiry.assigned_at = datetime.now(UTC)
+        await auto_assign_if_needed(self.session, inquiry, admin)
 
         # Create message record
-        new_message = InquiryMessage(
-            inquiry_id=inquiry_id,
-            sender_type="admin",
-            sender_id=admin.id,
-            message_text=f"[АРЬЯ] {message}",
-            created_at=datetime.now(UTC), )
-        self.session.add(new_message)
-
+        await create_admin_message(self.session, inquiry_id, admin, message)
         await self.session.commit()
 
         # Send message to user
-        admin_name = (
-            f"@{admin.username}"
-            if admin.username
-            else "Администратор"
+        admin_name = format_admin_name(admin)
+        formatted_msg = format_inquiry_reply(message, admin_name)
+        success, error = await send_message_to_user(
+            bot,
+            inquiry.telegram_id,
+            formatted_msg
         )
-        formatted_message = (
-            f"📬 **Ответ на ваше обращение**\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"{message}\n\n"
-            f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
-            f"_От: {admin_name}_"
+        if not success:
+            return error_response(error)
+
+        # Format response data
+        user_info = format_user_info(inquiry.user)
+        msg_preview = format_text_preview(message, 100)
+
+        # Log action
+        log_inquiry_action(
+            "replied to",
+            admin.telegram_id,
+            inquiry_id,
+            format_text_preview(message, 50)
         )
 
-        try:
-            await bot.send_message(
-                chat_id=inquiry.telegram_id,
-                text=formatted_message,
-                parse_mode="Markdown",
-            )
-        except Exception as e:
-            error_log = f"Failed to send reply to inquiry {inquiry_id}: {e}"
-            logger.error(error_log)
-            error_msg = f"❌ Не удалось отправить: {str(e)}"
-            return {"success": False, "error": error_msg}
-
-        # Get user info
-        user_info = "Неизвестен"
-        if inquiry.user:
-            user_info = (
-                f"@{inquiry.user.username}"
-                if inquiry.user.username
-                else f"ID:{inquiry.user.telegram_id}"
-            )
-
-        log_msg = (
-            f"AI INQUIRIES: Admin {admin.telegram_id} "
-            f"replied to inquiry {inquiry_id}: {message[:50]}..."
-        )
-        logger.info(log_msg)
-        return {
-            "success": True,
-            "inquiry_id": inquiry_id,
-            "user": user_info,
-            "message_sent": (
-                message[:100] + ("..." if len(message) > 100 else "")
-            ),
-            "message": "✅ Ответ отправлен пользователю"
-        }
+        return reply_inquiry_response(inquiry_id, user_info, msg_preview)
 
     async def close_inquiry(
         self,
         inquiry_id: int,
         reason: str | None = None,
     ) -> dict[str, Any]:
-        """
-        Close an inquiry.
-
-        Args:
-            inquiry_id: Inquiry ID
-            reason: Optional closing reason
-
-        Returns:
-            Result dict
-        """
+        """Close an inquiry with optional reason."""
         # Verify admin
         admin, error = await self._verify_admin()
         if error:
-            return {"success": False, "error": error}
+            return error_response(error)
 
-        # Get inquiry
-        stmt = ( select(UserInquiry)
-            .options(joinedload(UserInquiry.user))
-            .where(UserInquiry.id == inquiry_id)
-        )
-        result = await self.session.execute(stmt)
-        inquiry = result.scalar_one_or_none()
+        # Get inquiry from repository
+        inquiry = await get_inquiry_by_id(self.session, inquiry_id)
 
+        # Validate inquiry exists
         if not inquiry:
-            error_msg = f"❌ Обращение ID {inquiry_id} не найдено"
-            return {"success": False, "error": error_msg}
+            return error_response(f"❌ Обращение ID {inquiry_id} не найдено")
         if inquiry.status == InquiryStatus.CLOSED:
-            return {"success": False, "error": "❌ Обращение уже закрыто"}
+            return error_response("❌ Обращение уже закрыто")
 
         # Close inquiry
-        inquiry.status = InquiryStatus.CLOSED
-        inquiry.closed_at = datetime.now(UTC)
-        inquiry.closed_by = "admin"
+        await close_inquiry_with_reason(self.session, inquiry, admin, reason)
 
-        # Add closing message if reason provided
-        if reason:
-            new_message = InquiryMessage(
-                inquiry_id=inquiry_id,
-                sender_type="admin",
-                sender_id=admin.id,
-                message_text=f"[АРЬЯ] Обращение закрыто: {reason}",
-                created_at=datetime.now(UTC), )
-            self.session.add(new_message)
+        # Format response data
+        user_info = format_user_info(inquiry.user)
+        admin_name = format_admin_name(admin)
 
-        await self.session.commit()
-
-        # Get user info
-        user_info = "Неизвестен"
-        if inquiry.user:
-            user_info = (
-                f"@{inquiry.user.username}"
-                if inquiry.user.username
-                else f"ID:{inquiry.user.telegram_id}"
-            )
-
-        log_msg = (
-            f"AI INQUIRIES: Admin {admin.telegram_id} "
-            f"closed inquiry {inquiry_id}: {reason or 'no reason'}"
+        # Log action
+        log_inquiry_action(
+            "closed",
+            admin.telegram_id,
+            inquiry_id,
+            reason or "no reason"
         )
-        logger.info(log_msg)
-        return {
-            "success": True,
-            "inquiry_id": inquiry_id,
-            "user": user_info,
-            "reason": reason,
-            "admin": (
-                f"@{admin.username}"
-                if admin.username
-                else str(admin.telegram_id)
-            ),
-            "message": f"✅ Обращение #{inquiry_id} закрыто"
-        }
+
+        return close_inquiry_response(
+            inquiry_id,
+            user_info,
+            admin_name,
+            reason
+        )

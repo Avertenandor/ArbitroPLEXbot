@@ -165,7 +165,10 @@ async def process_level_action(
         level = state_data.get("managing_level")
         if level:
             await clear_state_preserve_admin_token(state)
-            await show_level_roi_config(message, session, state, level, from_level_management=True, **data)
+            await show_level_roi_config(
+                message, session, state, level,
+                from_level_management=True, **data
+            )
         return
 
     # Get level from state

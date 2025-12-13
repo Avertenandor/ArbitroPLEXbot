@@ -46,7 +46,10 @@ class MetricsMonitorCore:
 
         # Import data fetchers to avoid circular dependency
         from .data_fetchers import MetricsDataFetcher
-        fetcher = MetricsDataFetcher(self.session, self.transaction_repo, self.deposit_repo, self.user_repo)
+        fetcher = MetricsDataFetcher(
+            self.session, self.transaction_repo,
+            self.deposit_repo, self.user_repo
+        )
 
         # Withdrawal metrics
         pending_withdrawals = await self.transaction_repo.find_by(

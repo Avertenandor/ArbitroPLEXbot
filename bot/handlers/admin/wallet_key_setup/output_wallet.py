@@ -12,6 +12,7 @@ from aiogram import F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
 from eth_account import Account
+from loguru import logger
 from mnemonic import Mnemonic
 
 from app.config.settings import settings
@@ -67,8 +68,8 @@ async def process_output_key(message: Message, state: FSMContext):
     # Delete message immediately
     try:
         await message.delete()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to delete message: {e}")
 
     private_key = None
     wallet_address = None
@@ -86,8 +87,8 @@ async def process_output_key(message: Message, state: FSMContext):
             account = Account.from_key(pk_candidate)
             private_key = pk_candidate
             wallet_address = account.address
-    except Exception:
-        pass
+    except (ValueError, TypeError) as e:
+        logger.debug(f"Private key validation failed: {e}")
     finally:
         # SECURITY: Clear Account object immediately
         if account:
@@ -156,8 +157,8 @@ async def process_output_key(message: Message, state: FSMContext):
                     reply_markup=cancel_keyboard(),
                 )
                 return
-        except Exception:
-            pass
+        except (ValueError, TypeError) as e:
+            logger.debug(f"Seed phrase validation failed: {e}")
 
     if not private_key or not wallet_address:
         await message.answer(
@@ -303,8 +304,8 @@ async def process_derivation_index(message: Message, state: FSMContext):
         if hasattr(Account, "enable_unaudited_hdwallet_features"):
             try:
                 Account.enable_unaudited_hdwallet_features()
-            except Exception:
-                pass
+            except (AttributeError, RuntimeError) as e:
+                logger.debug(f"HD wallet features already enabled: {e}")
 
         # Derive account
         # Standard Ethereum/BSC path: m/44'/60'/0'/0/{index}

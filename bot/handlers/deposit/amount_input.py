@@ -19,6 +19,10 @@ from bot.keyboards.reply import (
     cancel_keyboard,
     main_menu_reply_keyboard,
 )
+from bot.messages.error_constants import (
+    ERROR_SYSTEM_DOT,
+    ERROR_USER_NOT_FOUND,
+)
 from bot.states.deposit import (
     DepositStates,
     get_deposit_state_data,
@@ -59,13 +63,13 @@ async def process_deposit_amount(
     # Get session for user loading
     session = data.get("session")
     if not session:
-        await message.answer("❌ Системная ошибка.")
+        await message.answer(ERROR_SYSTEM_DOT)
         await state.clear()
         return
 
     user = await get_user_from_context(message, session, data)
     if not user:
-        await message.answer("❌ Ошибка: пользователь не найден")
+        await message.answer(ERROR_USER_NOT_FOUND)
         await state.clear()
         return
 
@@ -134,7 +138,7 @@ async def process_deposit_amount(
         # Fallback to old session
         session = data.get("session")
         if not session:
-            await message.answer("❌ Системная ошибка.")
+            await message.answer(ERROR_SYSTEM_DOT)
             await state.clear()
             return
 

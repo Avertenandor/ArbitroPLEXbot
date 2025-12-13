@@ -57,10 +57,14 @@ async def show_withdrawal_page(
 ) -> None:
     """Show withdrawal history page with optional search."""
     if search_query:
-        detailed = await withdrawal_service.search_withdrawals(query=search_query, page=page, per_page=5)
+        detailed = await withdrawal_service.search_withdrawals(
+            query=search_query, page=page, per_page=5
+        )
         text = f"🔍 **Поиск: {search_query}**\n\n"
     else:
-        detailed = await withdrawal_service.get_detailed_withdrawals(page=page, per_page=5)
+        detailed = await withdrawal_service.get_detailed_withdrawals(
+            page=page, per_page=5
+        )
         text = "📋 **История выводов на кошельки**\n\n"
 
     if not detailed["withdrawals"]:
@@ -72,7 +76,10 @@ async def show_withdrawal_page(
         for wd in detailed["withdrawals"]:
             wd_username = str(wd["username"] or "Без имени")
             safe_wd_username = (
-                wd_username.replace("_", "\\_").replace("*", "\\*").replace("`", "\\`").replace("[", "\\[")
+                wd_username.replace("_", "\\_")
+                .replace("*", "\\*")
+                .replace("`", "\\`")
+                .replace("[", "\\[")
             )
             tx_hash = wd["tx_hash"] or "N/A"
             tx_short = tx_hash[:16] + "..." if len(tx_hash) > 16 else tx_hash
@@ -159,7 +166,8 @@ async def handle_search_query(
     # Check for empty query
     if not query:
         await message.answer(
-            "❌ Поисковый запрос не может быть пустым.\nВведите username, telegram ID или хеш транзакции.",
+            "❌ Поисковый запрос не может быть пустым.\n"
+            "Введите username, telegram ID или хеш транзакции.",
             parse_mode="Markdown",
         )
         return
@@ -212,7 +220,10 @@ async def handle_wd_prev_page(
     await state.update_data(wd_history_page=new_page)
 
     withdrawal_service = WithdrawalService(session)
-    await show_withdrawal_page(message, withdrawal_service, page=new_page, search_query=search_query)
+    await show_withdrawal_page(
+        message, withdrawal_service,
+        page=new_page, search_query=search_query
+    )
 
 
 @router.message(F.text == "Вперёд страница выводов ➡️")
@@ -236,4 +247,7 @@ async def handle_wd_next_page(
     await state.update_data(wd_history_page=new_page)
 
     withdrawal_service = WithdrawalService(session)
-    await show_withdrawal_page(message, withdrawal_service, page=new_page, search_query=search_query)
+    await show_withdrawal_page(
+        message, withdrawal_service,
+        page=new_page, search_query=search_query
+    )

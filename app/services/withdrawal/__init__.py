@@ -3,9 +3,13 @@ Withdrawal services package.
 
 This package provides modular withdrawal management functionality:
 - withdrawal_validator: Validation logic for withdrawal requests
+  - withdrawal_validator_core: Main validation logic
+  - withdrawal_basic_checks: Basic validation checks
+  - withdrawal_plex_checks: PLEX-specific checks
+  - withdrawal_security_checks: Security checks (fraud, finpass)
 - withdrawal_balance_manager: Balance deduction and restoration
 - withdrawal_request_handler: Withdrawal request creation
-- withdrawal_lifecycle_handler: Approval, rejection, and cancellation
+- withdrawal_lifecycle_handler: Approval, rejection, cancellation
 - withdrawal_query_service: Queries and history
 - withdrawal_statistics_service: Statistics and reporting
 - withdrawal_helpers: Utility functions

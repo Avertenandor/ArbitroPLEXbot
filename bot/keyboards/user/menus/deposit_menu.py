@@ -18,7 +18,8 @@ def deposit_menu_keyboard(
     Deposit menu reply keyboard with status indicators and corridors.
 
     Args:
-        levels_status: Optional dict with level statuses from DepositValidationService.get_available_levels()
+        levels_status: Optional dict with level statuses from
+            DepositValidationService.get_available_levels()
 
     Returns:
         ReplyKeyboardMarkup with deposit options
@@ -39,7 +40,14 @@ def deposit_menu_keyboard(
     level_emojis = {0: "🎯", 1: "💰", 2: "💎", 3: "🏆", 4: "👑", 5: "🚀"}
 
     # Level display names
-    level_names = {0: "Тестовый", 1: "Уровень 1", 2: "Уровень 2", 3: "Уровень 3", 4: "Уровень 4", 5: "Уровень 5"}
+    level_names = {
+        0: "Тестовый",
+        1: "Уровень 1",
+        2: "Уровень 2",
+        3: "Уровень 3",
+        4: "Уровень 4",
+        5: "Уровень 5"
+    }
 
     # All levels including test (0)
     for level in [0, 1, 2, 3, 4, 5]:
@@ -61,9 +69,15 @@ def deposit_menu_keyboard(
             else:
                 # unavailable - show reason in button
                 error = level_info.get("error", "")
-                if "уже приобретен" in error.lower() or "уже куплен" in error.lower():
+                if (
+                    "уже приобретен" in error.lower()
+                    or "уже куплен" in error.lower()
+                ):
                     button_text = f"✅ {emoji} {display_name} ({corridor_str}) - Куплен"
-                elif "необходимо сначала" in error.lower() or "предыдущ" in error.lower():
+                elif (
+                    "необходимо сначала" in error.lower()
+                    or "предыдущ" in error.lower()
+                ):
                     button_text = f"🔒 {emoji} {display_name} ({corridor_str})"
                 elif "временно недоступен" in error.lower():
                     button_text = f"🔒 {emoji} {display_name} ({corridor_str}) - Закрыт"
@@ -94,7 +108,8 @@ def instructions_keyboard(
     Instructions keyboard with deposit levels and detail option.
 
     Args:
-        levels_status: Optional dict with level statuses from DepositValidationService.get_available_levels()
+        levels_status: Optional dict with level statuses from
+            DepositValidationService.get_available_levels()
 
     Returns:
         ReplyKeyboardMarkup with instructions options
@@ -128,11 +143,20 @@ def instructions_keyboard(
                 # unavailable - show reason in button
                 error = level_info.get("error", "")
                 if "необходимо сначала купить" in error:
-                    button_text = f"🔒 {emoji} Уровень {level} ({amount} USDT) - Нет предыдущего"
+                    button_text = (
+                        f"🔒 {emoji} Уровень {level} "
+                        f"({amount} USDT) - Нет предыдущего"
+                    )
                 elif "временно недоступен" in error:
-                    button_text = f"🔒 {emoji} Уровень {level} ({amount} USDT) - Закрыт"
+                    button_text = (
+                        f"🔒 {emoji} Уровень {level} "
+                        f"({amount} USDT) - Закрыт"
+                    )
                 else:
-                    button_text = f"🔒 {emoji} Уровень {level} ({amount} USDT) - Недоступен"
+                    button_text = (
+                        f"🔒 {emoji} Уровень {level} "
+                        f"({amount} USDT) - Недоступен"
+                    )
         else:
             # Fallback to default
             amount = default_amounts[level]
@@ -150,15 +174,23 @@ def instructions_keyboard(
     return builder.as_markup(resize_keyboard=True)
 
 
-def deposit_levels_keyboard(levels_status: dict | None = None) -> ReplyKeyboardMarkup:
+def deposit_levels_keyboard(
+    levels_status: dict | None = None
+) -> ReplyKeyboardMarkup:
     """
-    Клавиатура выбора уровня депозита с коридорами сумм.
+    Клавиатура выбора уровня депозита
+    с коридорами сумм.
 
     Args:
         levels_status: Словарь со статусами уровней депозита.
             Пример: {
                 "test": {"status": "available", "min": 30, "max": 100},
-                "level_1": {"status": "locked", "min": 100, "max": 500, "reason": "Нужен тестовый"},
+                "level_1": {
+                    "status": "locked",
+                    "min": 100,
+                    "max": 500,
+                    "reason": "Нужен тестовый"
+                },
                 "level_2": {"status": "active", "min": 500, "max": 1000},
                 ...
             }

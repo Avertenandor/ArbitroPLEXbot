@@ -21,6 +21,7 @@ from app.services.withdrawal.withdrawal_lifecycle_handler import (
 )
 from app.services.withdrawal_service import WithdrawalService
 from bot.keyboards.user.menus.financial_menu import withdrawal_menu_keyboard
+from bot.messages.error_constants import ERROR_SYSTEM, ERROR_SYSTEM_DOT
 from bot.utils.formatters import format_balance
 from bot.utils.user_context import get_user_from_context
 
@@ -59,7 +60,7 @@ async def _show_withdrawal_history(
     if not session_factory:
         session = data.get("session")
         if not session:
-            await message.answer("❌ Системная ошибка.")
+            await message.answer(ERROR_SYSTEM_DOT)
             return
         withdrawal_service = WithdrawalService(session)
         result = await withdrawal_service.get_user_withdrawals(user.id, page=page, limit=10)
@@ -99,9 +100,12 @@ async def _show_withdrawal_history(
 
         date = tx.created_at.strftime("%d.%m.%Y %H:%M")
         net_amount = tx.amount - tx.fee
+        amount_fmt = format_balance(tx.amount, decimals=2)
+        fee_fmt = format_balance(tx.fee, decimals=2)
+        net_fmt = format_balance(net_amount, decimals=2)
         text += (
-            f"{status_icon} *{format_balance(tx.amount, decimals=2)} USDT* "
-            f"(комиссия: {format_balance(tx.fee, decimals=2)}, получено: {format_balance(net_amount, decimals=2)}) | {date}\n"
+            f"{status_icon} *{amount_fmt} USDT* "
+            f"(комиссия: {fee_fmt}, получено: {net_fmt}) | {date}\n"
         )
         text += f"ID: `{tx.id}`\n"
         if tx.tx_hash:
@@ -203,7 +207,7 @@ async def handle_confirm_cancel_withdrawal(
     session_factory = data.get("session_factory")
 
     if not session and not session_factory:
-        await callback.answer("❌ Системная ошибка")
+        await callback.answer(ERROR_SYSTEM)
         return
 
     # Process cancellation
@@ -241,14 +245,14 @@ async def handle_confirm_cancel_withdrawal(
 
     except Exception:
         system_error_text = (
-            "❌ *Системная ошибка*\n\n"
+            f"{ERROR_SYSTEM}\n\n"
             "Не удалось отменить вывод. Попробуйте позже."
         )
         await callback.message.edit_text(
             system_error_text,
             parse_mode="Markdown"
         )
-        await callback.answer("❌ Системная ошибка")
+        await callback.answer(ERROR_SYSTEM)
 
 
 @router.callback_query(F.data.startswith("reject_cancel_"))

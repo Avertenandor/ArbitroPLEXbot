@@ -4,7 +4,7 @@ Admin model.
 Represents bot administrators with role-based permissions.
 """
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from sqlalchemy import BigInteger, Boolean, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -75,7 +75,7 @@ class Admin(Base):
     # Relationships
 
     # Self-referencing: creator admin
-    creator: Mapped[Optional["Admin"]] = relationship(
+    creator: Mapped["Admin" | None] = relationship(
         "Admin",
         remote_side="Admin.id",
         foreign_keys=[created_by],

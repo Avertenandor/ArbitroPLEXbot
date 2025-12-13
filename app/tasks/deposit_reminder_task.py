@@ -4,8 +4,6 @@ Deposit reminder task.
 Sends reminders to users who started but didn't complete deposits.
 """
 
-from __future__ import annotations
-
 from datetime import UTC, datetime, timedelta
 
 from loguru import logger

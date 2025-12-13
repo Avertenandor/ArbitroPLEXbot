@@ -137,14 +137,20 @@ async def process_grant_user(
         target_telegram_id=user.telegram_id,
     )
 
+    bonus_balance_str = format_balance(
+        user_stats['total_bonus_balance'], decimals=2
+    )
+    roi_earned_str = format_balance(
+        user_stats['total_bonus_roi_earned'], decimals=2
+    )
     text = (
         f"✅ **Пользователь найден**\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
         f"👤 Username: @{safe_username}\n"
         f"🆔 Telegram ID: `{user.telegram_id}`\n"
         f"📊 Внутренний ID: `{user.id}`\n\n"
-        f"💰 **Бонусный баланс:** {format_balance(user_stats['total_bonus_balance'], decimals=2)} USDT\n"
-        f"📈 **Заработано ROI:** {format_balance(user_stats['total_bonus_roi_earned'], decimals=2)} USDT\n"
+        f"💰 **Бонусный баланс:** {bonus_balance_str} USDT\n"
+        f"📈 **Заработано ROI:** {roi_earned_str} USDT\n"
         f"🟢 **Активных бонусов:** {user_stats['active_bonuses_count']}\n\n"
         f"━━━━━━━━━━━━━━━━━━━━━━━━━\n"
         f"**Шаг 2 из 4:** Выберите сумму бонуса"

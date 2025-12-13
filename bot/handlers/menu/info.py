@@ -14,6 +14,15 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config.partner_urls import (
+    ARBITRAGE_BOT_URL,
+    BESTTRADE_URL,
+    DATAPLEX_URL,
+    DEXRABBIT_BOT_URL,
+    DEXRABBIT_SITE_URL,
+    FREETUBE_URL,
+    ROYALKETA_URL,
+)
 from app.models.user import User
 from app.repositories.blacklist_repository import BlacklistRepository
 from bot.constants.rules import RULES_BRIEF_VERSION, RULES_FULL_TEXT
@@ -24,7 +33,10 @@ from bot.keyboards.user.menus.main_menu import help_submenu_keyboard
 router = Router()
 
 
-@router.message(StateFilter("*"), F.text.in_({"🐰 Купить кролика", "🐰 DEXRabbit"}))
+@router.message(
+    StateFilter("*"),
+    F.text.in_({"🐰 Купить кролика", "🐰 DEXRabbit"}),
+)
 async def show_rabbit_partner(
     message: Message,
     session: AsyncSession,
@@ -52,7 +64,7 @@ async def show_rabbit_partner(
             [
                 InlineKeyboardButton(
                     text="🐰 Перейти к покупке кролика",
-                    url="https://t.me/dexrabbit_bot?start=ref_9",
+                    url=DEXRABBIT_BOT_URL,
                 )
             ],
         ]
@@ -163,7 +175,9 @@ async def show_brief_rules_callback(
 
 @router.message(
     StateFilter("*"),
-    F.text.in_({"🌐 Инструменты нашей экосистемы", "🌐 Экосистема"}),
+    F.text.in_(
+        {"🌐 Инструменты нашей экосистемы", "🌐 Экосистема"}
+    ),
 )
 async def show_ecosystem_tools(
     message: Message,
@@ -188,37 +202,37 @@ async def show_ecosystem_tools(
             [
                 InlineKeyboardButton(
                     text="🤖 ArbitroPLEXbot — Торговый бот",
-                    url="https://arbitrage-bot.com/",
+                    url=ARBITRAGE_BOT_URL,
                 )
             ],
             [
                 InlineKeyboardButton(
                     text="🐰 DEXRabbit — Ферма кроликов",
-                    url="https://xn--80apagbbfxgmuj4j.site/",
+                    url=DEXRABBIT_SITE_URL,
                 )
             ],
             [
                 InlineKeyboardButton(
                     text="👑 RoyalKeta — Premium сервис",
-                    url="https://royalketa.com/",
+                    url=ROYALKETA_URL,
                 )
             ],
             [
                 InlineKeyboardButton(
                     text="🎬 FreeTube — Видео платформа",
-                    url="https://freetube.online/",
+                    url=FREETUBE_URL,
                 )
             ],
             [
                 InlineKeyboardButton(
                     text="🛒 BestTrade Store — Магазин ботов",
-                    url="https://best-trade.store/bots/",
+                    url=BESTTRADE_URL,
                 )
             ],
             [
                 InlineKeyboardButton(
                     text="📊 DataPLEX — Аналитика",
-                    url="https://data-plex.net/",
+                    url=DATAPLEX_URL,
                 )
             ],
         ]

@@ -18,6 +18,7 @@ from app.repositories.blacklist_repository import BlacklistRepository
 from app.services.deposit import DepositService
 from bot.keyboards.inline import deposit_status_keyboard
 from bot.keyboards.reply import main_menu_reply_keyboard
+from bot.messages.error_constants import ERROR_USER_NOT_FOUND
 from bot.utils.formatters import format_deposit_status, format_usdt
 
 
@@ -40,7 +41,7 @@ async def show_my_deposits(
     """
     user: User | None = data.get("user")
     if not user:
-        await message.answer("❌ Ошибка: пользователь не найден")
+        await message.answer(ERROR_USER_NOT_FOUND)
         return
 
     deposit_service = DepositService(session)

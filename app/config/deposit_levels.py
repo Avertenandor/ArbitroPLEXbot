@@ -1,8 +1,10 @@
 """
-Единственный источник истины для конфигурации уровней депозитов.
+Единственный источник истины для конфигурации
+уровней депозитов.
 
-Этот модуль содержит все константы и конфигурации для уровней депозитов.
-Все другие модули должны импортировать из этого файла.
+Этот модуль содержит все константы и конфигурации
+для уровней депозитов. Все другие модули должны
+импортировать из этого файла.
 """
 
 from decimal import Decimal
@@ -37,7 +39,8 @@ class DepositLevelConfig(NamedTuple):
     rabbits_required: int  # Требуемое количество рефералов
 
 
-# Конфигурация уровней депозитов (значения из app/config/business_constants.py)
+# Конфигурация уровней депозитов
+# (значения из app/config/business_constants.py)
 DEPOSIT_LEVELS: dict[DepositLevelType, DepositLevelConfig] = {
     DepositLevelType.TEST: DepositLevelConfig(
         level_type=DepositLevelType.TEST,
@@ -131,8 +134,12 @@ DEPOSIT_LEVEL_ORDER = [
 ]
 
 
-# Legacy словарь для обратной совместимости (level_number -> min_amount)
-DEPOSIT_LEVELS_LEGACY = {config.level_number: config.min_amount for config in DEPOSIT_LEVELS.values()}
+# Legacy словарь для обратной совместимости
+# (level_number -> min_amount)
+DEPOSIT_LEVELS_LEGACY = {
+    config.level_number: config.min_amount
+    for config in DEPOSIT_LEVELS.values()
+}
 
 
 def get_level_config(level_type: str | DepositLevelType) -> DepositLevelConfig | None:
@@ -209,7 +216,8 @@ def get_next_level(level_type: str | DepositLevelType) -> DepositLevelConfig | N
         level_type: Текущий тип уровня
 
     Returns:
-        Следующий уровень или None если это последний уровень
+        Следующий уровень или None если это последний
+        уровень
     """
     config = get_level_config(level_type)
     if not config:
@@ -315,7 +323,8 @@ def get_next_level_type(current_level_type: str | DepositLevelType) -> str | Non
         current_level_type: Текущий тип уровня
 
     Returns:
-        Строка типа следующего уровня или None если это последний уровень
+        Строка типа следующего уровня или None если это
+        последний уровень
     """
     next_level = get_next_level(current_level_type)
     return next_level.level_type.value if next_level else None
@@ -329,7 +338,8 @@ def get_previous_level_type(current_level_type: str | DepositLevelType) -> str |
         current_level_type: Текущий тип уровня
 
     Returns:
-        Строка типа предыдущего уровня или None если это первый уровень
+        Строка типа предыдущего уровня или None если это
+        первый уровень
     """
     prev_level = get_previous_level(current_level_type)
     return prev_level.level_type.value if prev_level else None

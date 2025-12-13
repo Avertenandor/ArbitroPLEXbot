@@ -128,15 +128,20 @@ async def handle_dev_chat_message(
 
                     from bot.keyboards.reply import get_admin_keyboard_from_data
 
+                    preview_text = response_text[:200]
+                    if len(response_text) > 200:
+                        preview_text += '...'
                     await message.answer(
                         "✅ **Сообщение отправлено Дарье!**\n\n"
-                        f"Ваше сообщение:\n_{response_text[:200]}{'...' if len(response_text) > 200 else ''}_\n\n"
-                        "Я прочитаю его при следующем мониторинге и отвечу или внесу изменения. "
+                        f"Ваше сообщение:\n_{preview_text}_\n\n"
+                        "Я прочитаю его при следующем мониторинге и отвечу "
+                        "или внесу изменения. "
                         "Если нужен быстрый ответ — напишите через 🤖 AI Помощник.",
                         parse_mode="Markdown",
                         reply_markup=get_admin_keyboard_from_data(kwargs),
                     )
-                logger.info(f"DevChat: @{admin_username} sent message to Darya: {response_text[:50]}...")
+                log_msg = f"DevChat: @{admin_username} sent message to Darya"
+                logger.info(f"{log_msg}: {response_text[:50]}...")
             else:
                 await message.answer("❌ Ошибка отправки. Попробуйте ещё раз.")
         else:

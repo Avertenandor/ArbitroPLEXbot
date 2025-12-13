@@ -15,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.user import User
 from app.services.user_notification_service import UserNotificationService
 from bot.keyboards.reply import notification_settings_reply_keyboard
+from bot.messages.error_constants import ERROR_USER_NOT_FOUND
 
 
 router = Router()
@@ -38,7 +39,7 @@ async def show_notification_settings(
     """
     user: User | None = data.get("user")
     if not user:
-        await message.answer("❌ Ошибка: пользователь не найден")
+        await message.answer(ERROR_USER_NOT_FOUND)
         return
 
     notification_service = UserNotificationService(session)
@@ -145,7 +146,7 @@ async def toggle_deposit_notification(
     """Toggle deposit notifications."""
     user: User | None = data.get("user")
     if not user:
-        await message.answer("❌ Ошибка: пользователь не найден")
+        await message.answer(ERROR_USER_NOT_FOUND)
         return
     await _toggle_notification_setting(message, session, user, "deposit_notifications")
 
@@ -162,7 +163,7 @@ async def toggle_withdrawal_notification(
     """Toggle withdrawal notifications."""
     user: User | None = data.get("user")
     if not user:
-        await message.answer("❌ Ошибка: пользователь не найден")
+        await message.answer(ERROR_USER_NOT_FOUND)
         return
     await _toggle_notification_setting(message, session, user, "withdrawal_notifications")
 
@@ -179,7 +180,7 @@ async def toggle_roi_notification(
     """Toggle ROI notifications."""
     user: User | None = data.get("user")
     if not user:
-        await message.answer("❌ Ошибка: пользователь не найден")
+        await message.answer(ERROR_USER_NOT_FOUND)
         return
     await _toggle_notification_setting(message, session, user, "roi_notifications")
 
@@ -196,6 +197,6 @@ async def toggle_marketing_notification(
     """Toggle marketing notifications."""
     user: User | None = data.get("user")
     if not user:
-        await message.answer("❌ Ошибка: пользователь не найден")
+        await message.answer(ERROR_USER_NOT_FOUND)
         return
     await _toggle_notification_setting(message, session, user, "marketing_notifications")

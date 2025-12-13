@@ -138,7 +138,11 @@ class WithdrawalRequestHandler:
                     user_id, amount
                 )
 
-                status = TransactionStatus.PROCESSING.value if is_auto else TransactionStatus.PENDING.value
+                status = (
+                    TransactionStatus.PROCESSING.value
+                    if is_auto
+                    else TransactionStatus.PENDING.value
+                )
 
                 # Create withdrawal transaction
                 transaction = await self.transaction_repo.create(

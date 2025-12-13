@@ -8,8 +8,6 @@
 Business logic for managing financial password recovery requests.
 """
 
-from __future__ import annotations
-
 from collections.abc import Iterable
 from datetime import UTC, datetime
 
@@ -54,10 +52,13 @@ class FinpassRecoveryService:
 
     async def has_active_recovery(self, user_id: int) -> bool:
         """Check whether a user already has an active recovery process."""
+        active_statuses = [
+            status.value for status in ACTIVE_USER_STATUSES
+        ]
         stmt = (
             select(FinancialPasswordRecovery.id)
             .where(FinancialPasswordRecovery.user_id == user_id)
-            .where(FinancialPasswordRecovery.status.in_([status.value for status in ACTIVE_USER_STATUSES]))
+            .where(FinancialPasswordRecovery.status.in_(active_statuses))
             .limit(1)
         )
         result = await self.session.execute(stmt)

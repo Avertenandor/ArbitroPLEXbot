@@ -147,9 +147,13 @@ def withdrawal_history_keyboard(
     if has_withdrawals and total_pages > 1:
         nav_buttons = []
         if page > 1:
-            nav_buttons.append(KeyboardButton(text="⬅ Предыдущая страница выводов"))
+            nav_buttons.append(
+                KeyboardButton(text="⬅ Предыдущая страница выводов")
+            )
         if page < total_pages:
-            nav_buttons.append(KeyboardButton(text="➡ Следующая страница выводов"))
+            nav_buttons.append(
+                KeyboardButton(text="➡ Следующая страница выводов")
+            )
 
         if nav_buttons:
             builder.row(*nav_buttons)

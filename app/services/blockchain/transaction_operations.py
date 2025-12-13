@@ -209,8 +209,12 @@ class TransactionManager:
                     })
 
                     logger.info(
-                        f"Sending USDT tx: to={mask_address(to_address)}, amount={amount}, "
-                        f"nonce={nonce}, gas_price={gas_price} wei ({gas_price / 10**9} Gwei), "
+                        f"Sending USDT tx: "
+                        f"to={mask_address(to_address)}, "
+                        f"amount={amount}, "
+                        f"nonce={nonce}, "
+                        f"gas_price={gas_price} wei "
+                        f"({gas_price / 10**9} Gwei), "
                         f"gas_limit={int(gas_est * GAS_LIMIT_MULTIPLIER)}"
                     )
 
@@ -298,8 +302,12 @@ class TransactionManager:
                     }
 
                     logger.info(
-                        f"Sending BNB tx: to={mask_address(to_address)}, amount={amount}, "
-                        f"nonce={nonce}, gas_price={gas_price} wei ({gas_price / 10**9} Gwei)"
+                        f"Sending BNB tx: "
+                        f"to={mask_address(to_address)}, "
+                        f"amount={amount}, "
+                        f"nonce={nonce}, "
+                        f"gas_price={gas_price} wei "
+                        f"({gas_price / 10**9} Gwei)"
                     )
 
                     signed = self.wallet_account.sign_transaction(txn)
@@ -354,7 +362,11 @@ class TransactionManager:
                 return {"status": TransactionStatus.PENDING.value, "confirmations": 0}
 
             confirmations = max(0, current - receipt.blockNumber)
-            status = TransactionStatus.CONFIRMED.value if receipt.status == 1 else TransactionStatus.FAILED.value
+            status = (
+                TransactionStatus.CONFIRMED.value
+                if receipt.status == 1
+                else TransactionStatus.FAILED.value
+            )
 
             return {
                 "status": status,
@@ -401,11 +413,16 @@ class TransactionManager:
                 except Exception:
                     pass
 
+            status = (
+                TransactionStatus.CONFIRMED.value
+                if receipt and receipt.status == 1
+                else TransactionStatus.PENDING.value
+            )
             return {
                 "from_address": from_address,
                 "to_address": to_address,
                 "value": value,
-                "status": TransactionStatus.CONFIRMED.value if receipt and receipt.status == 1 else TransactionStatus.PENDING.value,
+                "status": status,
             }
         except (Web3Exception, ValueError) as e:
             logger.debug(f"Could not fetch transaction details: {e}")

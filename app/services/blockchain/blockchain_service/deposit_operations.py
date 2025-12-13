@@ -4,8 +4,6 @@ Deposit Operations Module.
 Contains all deposit-related functionality for the BlockchainService.
 """
 
-from __future__ import annotations
-
 from decimal import ROUND_DOWN, Decimal
 from typing import TYPE_CHECKING, Any
 

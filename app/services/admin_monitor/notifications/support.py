@@ -44,6 +44,11 @@ async def notify_new_inquiry(
     question_preview: str,
 ) -> int:
     """Уведомление о новом вопросе пользователя."""
+    question_text = (
+        question_preview[:80] + "..."
+        if len(question_preview) > 80
+        else question_preview
+    )
     return await monitor.notify(
         category=EventCategory.INQUIRY,
         priority=EventPriority.MEDIUM,
@@ -51,7 +56,7 @@ async def notify_new_inquiry(
         details={
             "ID обращения": inquiry_id,
             "Пользователь": f"{user_id} (@{username or 'нет'})",
-            "Вопрос": question_preview[:80] + "..." if len(question_preview) > 80 else question_preview,
+            "Вопрос": question_text,
         },
         footer="Нажмите «❓ Вопросы пользователей» в админ-панели",
     )

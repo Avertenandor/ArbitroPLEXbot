@@ -64,7 +64,10 @@ class GasEstimator:
         try:
             to_address_checksum = self.web3.to_checksum_address(to_address)
             # Convert Decimal to wei using proper precision handling
-            amount_wei = int((Decimal(str(amount_usdt)) * Decimal(10 ** USDT_DECIMALS)).to_integral_value(ROUND_DOWN))
+            amount_wei = int(
+                (Decimal(str(amount_usdt)) * Decimal(10 ** USDT_DECIMALS))
+                .to_integral_value(ROUND_DOWN)
+            )
 
             # Estimate gas with timeout
             transfer_function = self.usdt_contract.functions.transfer(

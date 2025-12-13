@@ -140,7 +140,9 @@ class SessionRewardProcessor:
                 continue
 
             # Check if reward already calculated
-            existing = await self.reward_repo.find_by(deposit_id=deposit.id, reward_session_id=session_id)
+            existing = await self.reward_repo.find_by(
+                deposit_id=deposit.id, reward_session_id=session_id
+            )
 
             if existing:
                 continue
@@ -159,7 +161,9 @@ class SessionRewardProcessor:
                 continue
 
             # R17-1: Get reward rate using RewardCalculator
-            reward_rate = await self.calculator.get_rate_for_level(deposit.level, session_id=session_id)
+            reward_rate = await self.calculator.get_rate_for_level(
+                deposit.level, session_id=session_id
+            )
 
             # If RewardSession rate is 0 or deposit has version, use version's roi_percent
             has_version_roi = deposit.deposit_version and deposit.deposit_version.roi_percent
@@ -182,7 +186,9 @@ class SessionRewardProcessor:
                     continue
 
             # Calculate reward using RewardCalculator
-            reward_amount = self.calculator.calculate_reward_amount(deposit.amount, reward_rate, days=1)
+            reward_amount = self.calculator.calculate_reward_amount(
+                deposit.amount, reward_rate, days=1
+            )
 
             # R12-1: For all levels, cap to remaining ROI space using RewardCalculator
             if deposit.roi_cap_amount:
@@ -223,7 +229,11 @@ class SessionRewardProcessor:
                     # Calculate ROI progress as percentage (0-100)
                     # ROI cap = 500% = deposit.amount * 5
                     roi_cap_amount = deposit.roi_cap_amount or (deposit.amount * 5)
-                    roi_progress = (new_roi_paid / roi_cap_amount * 100) if roi_cap_amount > 0 else Decimal("0")
+                    roi_progress = (
+                        (new_roi_paid / roi_cap_amount * 100)
+                        if roi_cap_amount > 0
+                        else Decimal("0")
+                    )
 
                     # Note: Convert to float only at display layer for Telegram API
                     # Financial calculations above remain in Decimal

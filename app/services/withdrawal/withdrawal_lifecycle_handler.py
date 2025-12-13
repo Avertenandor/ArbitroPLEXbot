@@ -130,21 +130,26 @@ class WithdrawalLifecycleHandler:
                 Transaction.id == transaction_id,
                 Transaction.type == TransactionType.WITHDRAWAL.value,
                 # Can approve PENDING or PROCESSING (if auto-withdrawal failed or stuck)
-                Transaction.status.in_([TransactionStatus.PENDING.value, TransactionStatus.PROCESSING.value]),
+                Transaction.status.in_([
+                    TransactionStatus.PENDING.value,
+                    TransactionStatus.PROCESSING.value
+                ]),
             ).with_for_update()
 
             result = await self.session.execute(stmt)
             withdrawal = result.scalar_one_or_none()
 
             if not withdrawal:
-                return (
-                    False,
-                    "Заявка на вывод не найдена или уже обработана",
+                error_msg = (
+                    "Заявка на вывод не найдена или уже обработана"
                 )
+                return False, error_msg
 
-            # Update withdrawal status to PROCESSING (or COMPLETED? Logic says approve means we HAVE tx_hash)
+            # Update withdrawal status to PROCESSING
+            # (or COMPLETED? Logic says approve means we HAVE tx_hash)
             # If we pass tx_hash, it means it is DONE (or submitted).
-            # Usually approve_withdrawal marks it as PROCESSING, and blockchain callback marks as COMPLETED.
+            # Usually approve_withdrawal marks it as PROCESSING,
+            # and blockchain callback marks as COMPLETED.
             # But here we pass tx_hash, so it means it was sent.
 
             # Let's keep it PROCESSING for now, background job will check receipt.
@@ -296,7 +301,8 @@ class WithdrawalLifecycleHandler:
             withdrawal = result_tx.scalar_one_or_none()
 
             if not withdrawal:
-                return (False, "Заявка на вывод не найдена или уже обработана")
+                error_msg = "Заявка на вывод не найдена или уже обработана"
+                return False, error_msg
 
             # CRITICAL: Return balance to user using balance manager
             success = await self.balance_manager.restore_balance(

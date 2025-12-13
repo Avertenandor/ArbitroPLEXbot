@@ -4,8 +4,6 @@ Blockchain Service - Main Service Class.
 Orchestrates all blockchain operations using component services.
 """
 
-from __future__ import annotations
-
 from collections.abc import Callable
 from decimal import Decimal
 from typing import Any

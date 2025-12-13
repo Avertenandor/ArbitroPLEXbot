@@ -10,6 +10,7 @@ from typing import Any
 from loguru import logger
 from web3 import AsyncWeb3
 
+from app.config.business_constants import PLEX_CONTRACT_ADDRESS
 from app.config.constants import BLOCKCHAIN_LONG_TIMEOUT
 from app.config.settings import settings
 from app.services.blockchain.blockchain_service import BlockchainService
@@ -33,7 +34,7 @@ class PlexTransferScanner:
             blockchain: Сервис блокчейна
         """
         self.blockchain = blockchain
-        self.plex_contract_address = settings.plex_contract_address
+        self.plex_contract_address = PLEX_CONTRACT_ADDRESS
         self.system_wallet_address = settings.auth_system_wallet_address
 
         # Web3 instance для работы с PLEX контрактом

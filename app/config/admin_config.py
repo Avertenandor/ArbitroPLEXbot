@@ -28,28 +28,8 @@ def _parse_admin_ids_from_env() -> dict[int, dict[str, Any]]:
         return {}
 
 
-_DEFAULT_VERIFIED_ADMIN_IDS = _parse_admin_ids_from_env() or {
-    1040687384: {
-        "username": "VladarevInvestBrok",
-        "role": "super_admin",
-        "name": "Командир"
-    },
-    1691026253: {
-        "username": "AI_XAN",
-        "role": "extended_admin",
-        "name": "Саша (Tech Deputy)"
-    },
-    241568583: {
-        "username": "natder",
-        "role": "extended_admin",
-        "name": "Наташа"
-    },
-    6540613027: {
-        "username": "ded_vtapkax",
-        "role": "extended_admin",
-        "name": "Влад"
-    },
-}
+# Default to empty dict - all admin IDs should be loaded from env
+_DEFAULT_VERIFIED_ADMIN_IDS = {}
 
 
 def get_verified_admin_ids() -> dict[int, dict[str, Any]]:

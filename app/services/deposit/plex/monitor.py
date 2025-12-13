@@ -411,7 +411,9 @@ class PlexPaymentMonitor:
                 from .notifier import PlexPaymentNotifier
 
                 # Получаем telegram_id
-                stmt = select(PlexPaymentRequirement).where(PlexPaymentRequirement.deposit_id == deposit_id)
+                stmt = select(PlexPaymentRequirement).where(
+                    PlexPaymentRequirement.deposit_id == deposit_id
+                )
                 result = await self.session.execute(stmt)
                 requirement = result.scalar_one_or_none()
 

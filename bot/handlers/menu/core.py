@@ -58,7 +58,10 @@ async def show_main_menu(
 
     # Get is_admin from middleware data (set by AuthMiddleware)
     is_admin = data.get("is_admin", False)
-    logger.info(f"[MENU] is_admin from data for user {user.telegram_id}: {is_admin}, data keys: {list(data.keys())}")
+    logger.info(
+        f"[MENU] is_admin from data for user {user.telegram_id}: "
+        f"{is_admin}, data keys: {list(data.keys())}"
+    )
 
     # R13-3: Get user language for i18n
     user_language = await get_user_language(session, user.id)
@@ -114,7 +117,9 @@ async def show_main_menu(
         f"[MENU] Creating keyboard for user {user.telegram_id} with "
         f"is_admin={is_admin}, blacklist_entry={blacklist_entry is not None}"
     )
-    keyboard = main_menu_reply_keyboard(user=user, blacklist_entry=blacklist_entry, is_admin=is_admin)
+    keyboard = main_menu_reply_keyboard(
+        user=user, blacklist_entry=blacklist_entry, is_admin=is_admin
+    )
     logger.info(f"[MENU] Sending main menu to user {user.telegram_id}")
 
     await message.answer(
@@ -148,8 +153,10 @@ async def handle_main_menu(
 
     user: User | None = data.get("user")
     is_admin = data.get("is_admin")
+    user_id_log = user.id if user else None
     logger.info(
-        f"[MENU] User from data: {user.id if user else None}, is_admin={is_admin}, data keys: {list(data.keys())}"
+        f"[MENU] User from data: {user_id_log}, "
+        f"is_admin={is_admin}, data keys: {list(data.keys())}"
     )
 
     if not user:
@@ -161,7 +168,9 @@ async def handle_main_menu(
         logger.info(f"[MENU] Fallback menu with is_admin={is_admin}")
         await message.answer(
             "📊 *ГЛАВНОЕ МЕНЮ*\n━━━━━━━━━━━━━━━━━━\n\nВыберите раздел:",
-            reply_markup=main_menu_reply_keyboard(user=None, blacklist_entry=None, is_admin=is_admin),
+            reply_markup=main_menu_reply_keyboard(
+                user=None, blacklist_entry=None, is_admin=is_admin
+            ),
             parse_mode="Markdown",
         )
         return

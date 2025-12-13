@@ -100,7 +100,10 @@ def admin_user_profile_keyboard(user_is_blocked: bool) -> ReplyKeyboardMarkup:
     """
     builder = ReplyKeyboardBuilder()
 
-    block_text = "✅ Разблокировать" if user_is_blocked else "🚫 Заблокировать"
+    block_text = (
+        "✅ Разблокировать" if user_is_blocked
+        else "🚫 Заблокировать"
+    )
 
     builder.row(
         KeyboardButton(text="💳 Изменить баланс"),

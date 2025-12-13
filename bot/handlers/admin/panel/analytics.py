@@ -154,11 +154,14 @@ async def cmd_dashboard(
             f"📤 Выв: `{wd_bar}` {int(withdrawals_24h_amount)}$\n"
         )
 
+    deposits_usdt = format_balance(deposits_24h_amount, decimals=2)
+    withdrawals_usdt = format_balance(withdrawals_24h_amount, decimals=2)
     text = (
         f"📊 *Дашборд (за 24ч)*\n\n"
         f"👥 Новых пользователей: *{new_users_24h}*\n"
-        f"💰 Депозитов: *{deposits_24h_count}* ({format_balance(deposits_24h_amount, decimals=2)} USDT)\n"
-        f"💸 Выводов: *{withdrawals_24h_count}* ({format_balance(withdrawals_24h_amount, decimals=2)} USDT)\n"
+        f"💰 Депозитов: *{deposits_24h_count}* ({deposits_usdt} USDT)\n"
+        f"💸 Выводов: *{withdrawals_24h_count}* "
+        f"({withdrawals_usdt} USDT)\n"
         f"⏳ Ожидают одобрения: *{pending_withdrawals}*\n"
         f"🚨 Заблокировано: *{fraud_alerts}*\n"
         f"{chart}\n"

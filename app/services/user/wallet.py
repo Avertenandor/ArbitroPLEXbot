@@ -60,7 +60,8 @@ class UserWalletMixin:
         blacklisted = await blacklist_repo.find_by_wallet(new_wallet_address)
         if blacklisted:
             logger.warning(
-                f"User {user_id} tried to change wallet to blacklisted address: {new_wallet_address}"
+                f"User {user_id} tried to change wallet to "
+                f"blacklisted address: {new_wallet_address}"
             )
             return False, "Этот адрес кошелька заблокирован в системе"
 
@@ -101,7 +102,8 @@ class UserWalletMixin:
                 except Exception as cache_error:
                     # Don't fail the operation if cache invalidation fails
                     logger.warning(
-                        f"Failed to invalidate cache for user {user_id} after wallet change: {cache_error}"
+                        f"Failed to invalidate cache for user {user_id} "
+                        f"after wallet change: {cache_error}"
                     )
 
             logger.info(
@@ -114,7 +116,11 @@ class UserWalletMixin:
                 f"Integrity constraint violation when changing wallet for user {user_id}: {e}",
                 exc_info=True
             )
-            return False, "Wallet address is already in use or violates database constraints"
+            error_msg = (
+                "Wallet address is already in use or "
+                "violates database constraints"
+            )
+            return False, error_msg
         except SQLAlchemyError as e:
             await self.session.rollback()
             logger.error(

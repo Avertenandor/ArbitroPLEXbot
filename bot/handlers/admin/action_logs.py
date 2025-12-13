@@ -156,7 +156,11 @@ async def handle_action_logs(
         # Target user info (if applicable)
         target_info = ""
         if action.target_user_id and action.target_user:
-            target_name = escape_markdown(action.target_user.username or f"ID:{action.target_user.telegram_id}")
+            target_username = (
+                action.target_user.username or
+                f"ID:{action.target_user.telegram_id}"
+            )
+            target_name = escape_markdown(target_username)
             target_info = f"\n🎯 Цель: @{target_name}"
 
         # Format action
@@ -184,7 +188,11 @@ async def handle_action_logs(
 
             target_info = ""
             if action.target_user_id and action.target_user:
-                target_name = escape_markdown(action.target_user.username or f"ID:{action.target_user.telegram_id}")
+                target_username = (
+                    action.target_user.username or
+                    f"ID:{action.target_user.telegram_id}"
+                )
+                target_name = escape_markdown(target_username)
                 target_info = f"\n🎯 Цель: @{target_name}"
 
             action_text = (
