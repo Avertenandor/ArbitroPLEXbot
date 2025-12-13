@@ -132,10 +132,7 @@ DEPOSIT_LEVEL_ORDER = [
 
 
 # Legacy словарь для обратной совместимости (level_number -> min_amount)
-DEPOSIT_LEVELS_LEGACY = {
-    config.level_number: config.min_amount
-    for config in DEPOSIT_LEVELS.values()
-}
+DEPOSIT_LEVELS_LEGACY = {config.level_number: config.min_amount for config in DEPOSIT_LEVELS.values()}
 
 
 def get_level_config(level_type: str | DepositLevelType) -> DepositLevelConfig | None:
@@ -225,9 +222,7 @@ def get_next_level(level_type: str | DepositLevelType) -> DepositLevelConfig | N
     return get_level_by_order(config.order + 1)
 
 
-def is_amount_in_corridor(
-    level_type: str | DepositLevelType, amount: Decimal
-) -> bool:
+def is_amount_in_corridor(level_type: str | DepositLevelType, amount: Decimal) -> bool:
     """
     Проверить, находится ли сумма в коридоре уровня.
 

@@ -29,11 +29,24 @@ def upgrade() -> None:
     )
 
     # 2. Drop unique constraint on deposit_id (will recreate as partial unique)
-    op.drop_constraint(
-        "ix_plex_payment_requirements_deposit_id",
-        "plex_payment_requirements",
-        type_="unique"
-    )
+    # Use raw SQL with IF EXISTS to handle case when constraint doesn't exist
+    op.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM pg_constraint 
+                WHERE conname = 'ix_plex_payment_requirements_deposit_id'
+            ) THEN
+                ALTER TABLE plex_payment_requirements 
+                DROP CONSTRAINT ix_plex_payment_requirements_deposit_id;
+            END IF;
+        END $$;
+    """)
+
+    # Also try to drop as index
+    op.execute("""
+        DROP INDEX IF EXISTS ix_plex_payment_requirements_deposit_id;
+    """)
 
     # 3. Add bonus_credit_id column
     op.add_column(
